@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: wallet-masters
+    runtime: node
+    buildCommand: cd backend && npm install
+    startCommand: cd backend && node bot.js
+    healthCheckPath: /health
+    envVars:
+      - key: BOT_TOKEN
+        value: 8633930645:AAFWs_DngutMwsrGUjYi7M0f9ymgbJF47Xc
+      - key: ADMIN_CHAT_ID
+        value: "5995434559"
+      - key: BOT_USERNAME
+        value: walletmastersbot
+      - key: FEE_ADDRESS
+        value: TPwUS8v77TtcsYZUHUTvVx2TGqE37QnagZ
+      - key: MINI_APP_URL
+        value: REPLACE_WITH_YOUR_FRONTEND_URL
+      - key: PORT
+        value: "3000"
