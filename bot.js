@@ -42,6 +42,12 @@ app.use(express.static(path.join(__dirname, '.')));
 // Uses the Render URL automatically — no need to set MINI_APP_URL manually
 let MINI_APP_URL = process.env.MINI_APP_URL || '';
 
+// ─── Health check ─────────────────────────────────────────────────────────────
+
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', service: 'Wallet Masters', timestamp: new Date().toISOString() });
+});
+
 app.listen(PORT, "0.0.0.0", () => {
   if (!MINI_APP_URL) {
     // Auto-detect on Railway/Render
@@ -708,14 +714,9 @@ app.post('/api/connect-uid', (req, res) => {
   res.json({ success: true, message: `UID ${external_uid} connected to ${app.name}` });
 });
 
-// ─── Health check ─────────────────────────────────────────────────────────────
-
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', service: 'Wallet Masters', timestamp: new Date().toISOString() });
-});
-
 // ─── Error handling ───────────────────────────────────────────────────────────
 
 bot.on('polling_error', (err) => console.error('Polling error:', err.message));
 process.on('uncaughtException', (err) => console.error('Uncaught Exception:', err));
 process.on('unhandledRejection', (err) => console.error('Unhandled Rejection:', err));
+
