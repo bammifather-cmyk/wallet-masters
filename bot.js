@@ -36,7 +36,7 @@ const app = express();
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
-app.use(express.static(path.join(__dirname, '../frontend')));
+app.use(express.static(path.join(__dirname, '.')));
 
 // ─── Dynamic Mini App URL ─────────────────────────────────────────────────────
 // Uses the Render URL automatically — no need to set MINI_APP_URL manually
