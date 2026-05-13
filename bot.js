@@ -31,32 +31,37 @@ const PORT          = parseInt(process.env.PORT) || 3000;
 if (!BOT_TOKEN)     { console.error('❌ BOT_TOKEN missing'); process.exit(1); }
 if (!ADMIN_CHAT_ID) { console.error('❌ ADMIN_CHAT_ID missing'); process.exit(1); }
 
-const bot = new TelegramBot(BOT_TOKEN, { polling: true });
+// ─── Express starts FIRST (Railway healthcheck needs this immediately) ───────
 const app = express();
-
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, '.')));
 
-// ─── Dynamic Mini App URL ─────────────────────────────────────────────────────
-// Uses the Render URL automatically — no need to set MINI_APP_URL manually
 let MINI_APP_URL = process.env.MINI_APP_URL || '';
 
-// ─── Health check ─────────────────────────────────────────────────────────────
-
+// Health check — must be registered before app.listen
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', service: 'Wallet Masters', timestamp: new Date().toISOString() });
+  res.status(200).json({ status: 'ok', service: 'Wallet Masters', timestamp: new Date().toISOString() });
 });
 
-app.listen(PORT, "0.0.0.0", () => {
-  if (!MINI_APP_URL) {
-    // Auto-detect on Railway/Render
-    const host = process.env.RENDER_EXTERNAL_URL || process.env.RAILWAY_STATIC_URL || '';
-    if (host) MINI_APP_URL = host.startsWith('http') ? host : `https://${host}`;
+app.listen(PORT, '0.0.0.0', () => {
+  const host = process.env.RENDER_EXTERNAL_URL || process.env.RAILWAY_STATIC_URL || '';
+  if (!MINI_APP_URL && host) {
+    MINI_APP_URL = host.startsWith('http') ? host : `https://${host}`;
   }
   console.log(`🚀 Wallet Masters running on port ${PORT}`);
   console.log(`🌐 Mini App URL: ${MINI_APP_URL || 'Not set yet'}`);
 });
+
+// ─── Telegram Bot (started after Express so healthcheck always works) ─────────
+let bot;
+try {
+  bot = new TelegramBot(BOT_TOKEN, { polling: true });
+  console.log('🤖 Telegram bot started successfully');
+} catch (err) {
+  console.error('❌ Failed to start Telegram bot:', err.message);
+  // Express still running — healthcheck will pass
+}
 
 // ─── Keyboards ────────────────────────────────────────────────────────────────
 
@@ -719,4 +724,5 @@ app.post('/api/connect-uid', (req, res) => {
 bot.on('polling_error', (err) => console.error('Polling error:', err.message));
 process.on('uncaughtException', (err) => console.error('Uncaught Exception:', err));
 process.on('unhandledRejection', (err) => console.error('Unhandled Rejection:', err));
+
 
