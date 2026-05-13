@@ -1,103 +1,44 @@
 /**
- * Wallet Masters - Database Layer (SQLite via better-sqlite3)
- * All data stored locally - no Base44 credits used
+ * Wallet Masters - Database Layer (lowdb - pure JavaScript, no native compilation)
+ * All data stored locally in JSON - no Base44 credits used
  */
 
-const Database = require('better-sqlite3');
+const low = require('lowdb');
+const FileSync = require('lowdb/adapters/FileSync');
 const path = require('path');
 const crypto = require('crypto');
+const { v4: uuidv4 } = require('uuid');
 
-const db = new Database(path.join(__dirname, 'wallet_masters.db'));
+const adapter = new FileSync(path.join(__dirname, 'wallet_masters.json'));
+const db = low(adapter);
 
-// Enable WAL mode for better performance
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
+// ─── Default Schema ───────────────────────────────────────────────────────────
+db.defaults({
+  users: [],
+  transactions: [],
+  earning_apps: [],
+  uid_connections: [],
+  withdrawal_requests: [],
+  _counters: { users: 0, transactions: 0, earning_apps: 0, uid_connections: 0, withdrawal_requests: 0 }
+}).write();
 
-// ─── Schema ──────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    telegram_id     TEXT UNIQUE NOT NULL,
-    telegram_username TEXT,
-    full_name       TEXT,
-    trc20_address   TEXT UNIQUE,   -- Auto-generated USDT (TRC20) receive address
-    usdt_balance    REAL DEFAULT 0,
-    uid             TEXT UNIQUE,   -- Master UID for this wallet
-    connected_apps  TEXT DEFAULT '[]', -- JSON array of connected earning app UIDs
-    created_at      INTEGER DEFAULT (strftime('%s','now')),
-    updated_at      INTEGER DEFAULT (strftime('%s','now'))
-  );
+function nextId(table) {
+  const val = db.get(`_counters.${table}`).value() + 1;
+  db.set(`_counters.${table}`, val).write();
+  return val;
+}
 
-  CREATE TABLE IF NOT EXISTS transactions (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    tx_hash         TEXT UNIQUE,
-    user_id         INTEGER REFERENCES users(id),
-    type            TEXT NOT NULL,      -- 'deposit' | 'withdrawal' | 'fee'
-    amount          REAL NOT NULL,
-    currency        TEXT DEFAULT 'USDT',
-    network         TEXT DEFAULT 'TRC20',
-    from_address    TEXT,
-    to_address      TEXT,
-    source_app      TEXT,               -- Name of earning app if deposit from app
-    source_uid      TEXT,               -- UID used in earning app
-    gas_fee         REAL DEFAULT 0,
-    gateway_fee     REAL DEFAULT 0,
-    total_fee       REAL DEFAULT 0,
-    status          TEXT DEFAULT 'pending', -- pending | completed | rejected | awaiting_fee
-    receipt_file_id TEXT,               -- Telegram file_id of payment receipt
-    admin_note      TEXT,
-    created_at      INTEGER DEFAULT (strftime('%s','now')),
-    updated_at      INTEGER DEFAULT (strftime('%s','now'))
-  );
-
-  CREATE TABLE IF NOT EXISTS earning_apps (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    name            TEXT NOT NULL,
-    token           TEXT UNIQUE NOT NULL,  -- Bot token of earning app
-    description     TEXT,
-    logo_url        TEXT,
-    is_active       INTEGER DEFAULT 1,
-    added_at        INTEGER DEFAULT (strftime('%s','now'))
-  );
-
-  CREATE TABLE IF NOT EXISTS uid_connections (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id         INTEGER REFERENCES users(id),
-    app_id          INTEGER REFERENCES earning_apps(id),
-    external_uid    TEXT NOT NULL,
-    verified        INTEGER DEFAULT 1,
-    connected_at    INTEGER DEFAULT (strftime('%s','now')),
-    UNIQUE(user_id, app_id)
-  );
-
-  CREATE TABLE IF NOT EXISTS withdrawal_requests (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id         INTEGER REFERENCES users(id),
-    tx_id           INTEGER REFERENCES transactions(id),
-    to_address      TEXT NOT NULL,
-    network         TEXT NOT NULL,
-    currency        TEXT NOT NULL,
-    amount          REAL NOT NULL,
-    gas_fee         REAL NOT NULL,
-    gateway_fee     REAL NOT NULL,
-    total_fee       REAL NOT NULL,
-    status          TEXT DEFAULT 'awaiting_fee', -- awaiting_fee | fee_paid | approved | rejected
-    receipt_file_id TEXT,
-    admin_note      TEXT,
-    created_at      INTEGER DEFAULT (strftime('%s','now')),
-    updated_at      INTEGER DEFAULT (strftime('%s','now'))
-  );
-`);
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+function now() {
+  return Math.floor(Date.now() / 1000);
+}
 
 function generateUID() {
   return 'WM' + crypto.randomBytes(4).toString('hex').toUpperCase();
 }
 
 function generateTRC20Address() {
-  // Generate a realistic-looking TRC20 address (starts with T, 34 chars)
   const chars = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
   let addr = 'T';
   for (let i = 0; i < 33; i++) {
@@ -110,126 +51,181 @@ function generateTxHash() {
   return crypto.randomBytes(32).toString('hex').toUpperCase();
 }
 
-// ─── User Operations ─────────────────────────────────────────────────────────
+// ─── User Operations ──────────────────────────────────────────────────────────
 
 function getOrCreateUser(telegramId, username, fullName) {
-  let user = db.prepare('SELECT * FROM users WHERE telegram_id = ?').get(String(telegramId));
-  
+  const tid = String(telegramId);
+  let user = db.get('users').find({ telegram_id: tid }).value();
+
   if (!user) {
-    const trc20 = generateTRC20Address();
-    const uid = generateUID();
-    
-    db.prepare(`
-      INSERT INTO users (telegram_id, telegram_username, full_name, trc20_address, uid)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(String(telegramId), username || '', fullName || '', trc20, uid);
-    
-    user = db.prepare('SELECT * FROM users WHERE telegram_id = ?').get(String(telegramId));
+    user = {
+      id: nextId('users'),
+      telegram_id: tid,
+      telegram_username: username || '',
+      full_name: fullName || '',
+      trc20_address: generateTRC20Address(),
+      usdt_balance: 0,
+      uid: generateUID(),
+      connected_apps: [],
+      created_at: now(),
+      updated_at: now()
+    };
+    db.get('users').push(user).write();
   } else {
-    // Update name/username if changed
     if (username || fullName) {
-      db.prepare('UPDATE users SET telegram_username=?, full_name=?, updated_at=strftime(\'%s\',\'now\') WHERE telegram_id=?')
-        .run(username || user.telegram_username, fullName || user.full_name, String(telegramId));
-      user = db.prepare('SELECT * FROM users WHERE telegram_id = ?').get(String(telegramId));
+      db.get('users').find({ telegram_id: tid }).assign({
+        telegram_username: username || user.telegram_username,
+        full_name: fullName || user.full_name,
+        updated_at: now()
+      }).write();
+      user = db.get('users').find({ telegram_id: tid }).value();
     }
   }
-  
+
   return user;
 }
 
 function getUserByTelegramId(telegramId) {
-  return db.prepare('SELECT * FROM users WHERE telegram_id = ?').get(String(telegramId));
+  return db.get('users').find({ telegram_id: String(telegramId) }).value();
 }
 
 function getUserById(id) {
-  return db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+  return db.get('users').find({ id }).value();
 }
 
 function updateUserBalance(userId, amount) {
-  db.prepare('UPDATE users SET usdt_balance = usdt_balance + ?, updated_at=strftime(\'%s\',\'now\') WHERE id = ?')
-    .run(amount, userId);
+  const user = db.get('users').find({ id: userId }).value();
+  if (!user) return;
+  db.get('users').find({ id: userId }).assign({
+    usdt_balance: parseFloat((user.usdt_balance + amount).toFixed(6)),
+    updated_at: now()
+  }).write();
 }
 
-// ─── Earning App Operations ──────────────────────────────────────────────────
+// ─── Earning App Operations ───────────────────────────────────────────────────
 
 function getEarningApps() {
-  return db.prepare('SELECT * FROM earning_apps WHERE is_active = 1 ORDER BY added_at DESC').all();
+  return db.get('earning_apps').filter({ is_active: 1 }).sortBy('added_at').reverse().value();
 }
 
 function getEarningAppByToken(token) {
-  return db.prepare('SELECT * FROM earning_apps WHERE token = ?').get(token);
+  return db.get('earning_apps').find({ token }).value();
 }
 
 function addEarningApp(name, token, description) {
-  db.prepare('INSERT OR REPLACE INTO earning_apps (name, token, description) VALUES (?, ?, ?)')
-    .run(name, token, description || '');
-  return db.prepare('SELECT * FROM earning_apps WHERE token = ?').get(token);
+  const existing = getEarningAppByToken(token);
+  if (existing) {
+    db.get('earning_apps').find({ token }).assign({ name, description: description || '', is_active: 1 }).write();
+    return db.get('earning_apps').find({ token }).value();
+  }
+  const app = {
+    id: nextId('earning_apps'),
+    name,
+    token,
+    description: description || '',
+    logo_url: '',
+    is_active: 1,
+    added_at: now()
+  };
+  db.get('earning_apps').push(app).write();
+  return app;
 }
 
-// ─── UID Connection ──────────────────────────────────────────────────────────
+function getEarningAppById(id) {
+  return db.get('earning_apps').find({ id: parseInt(id) }).value();
+}
+
+// ─── UID Connection ───────────────────────────────────────────────────────────
 
 function connectUID(userId, appId, externalUID) {
-  db.prepare(`
-    INSERT OR REPLACE INTO uid_connections (user_id, app_id, external_uid)
-    VALUES (?, ?, ?)
-  `).run(userId, appId, externalUID);
+  const existing = db.get('uid_connections').find({ user_id: userId, app_id: appId }).value();
+  if (existing) {
+    db.get('uid_connections').find({ user_id: userId, app_id: appId }).assign({
+      external_uid: externalUID,
+      connected_at: now()
+    }).write();
+  } else {
+    db.get('uid_connections').push({
+      id: nextId('uid_connections'),
+      user_id: userId,
+      app_id: appId,
+      external_uid: externalUID,
+      verified: 1,
+      connected_at: now()
+    }).write();
+  }
 }
 
 function getConnectedUID(userId, appId) {
-  return db.prepare('SELECT * FROM uid_connections WHERE user_id=? AND app_id=?').get(userId, appId);
+  return db.get('uid_connections').find({ user_id: userId, app_id: parseInt(appId) }).value();
 }
 
 function getUserConnections(userId) {
-  return db.prepare(`
-    SELECT uc.*, ea.name as app_name, ea.logo_url
-    FROM uid_connections uc
-    JOIN earning_apps ea ON ea.id = uc.app_id
-    WHERE uc.user_id = ?
-  `).all(userId);
+  const connections = db.get('uid_connections').filter({ user_id: userId }).value();
+  return connections.map(uc => {
+    const app = getEarningAppById(uc.app_id);
+    return { ...uc, app_name: app ? app.name : 'Unknown', logo_url: app ? app.logo_url : '' };
+  });
 }
 
-// ─── Transaction Operations ──────────────────────────────────────────────────
+function findUserByExternalUID(appId, externalUID) {
+  const conn = db.get('uid_connections').find({ app_id: parseInt(appId), external_uid: externalUID }).value();
+  if (!conn) return null;
+  return getUserById(conn.user_id);
+}
+
+// ─── Transaction Operations ───────────────────────────────────────────────────
 
 function createTransaction(data) {
   const txHash = data.tx_hash || generateTxHash();
-  db.prepare(`
-    INSERT INTO transactions 
-    (tx_hash, user_id, type, amount, currency, network, from_address, to_address, 
-     source_app, source_uid, gas_fee, gateway_fee, total_fee, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    txHash, data.user_id, data.type, data.amount,
-    data.currency || 'USDT', data.network || 'TRC20',
-    data.from_address || '', data.to_address || '',
-    data.source_app || null, data.source_uid || null,
-    data.gas_fee || 0, data.gateway_fee || 0, data.total_fee || 0,
-    data.status || 'pending'
-  );
-  return db.prepare('SELECT * FROM transactions WHERE tx_hash = ?').get(txHash);
+  const tx = {
+    id: nextId('transactions'),
+    tx_hash: txHash,
+    user_id: data.user_id,
+    type: data.type,
+    amount: data.amount,
+    currency: data.currency || 'USDT',
+    network: data.network || 'TRC20',
+    from_address: data.from_address || '',
+    to_address: data.to_address || '',
+    source_app: data.source_app || null,
+    source_uid: data.source_uid || null,
+    gas_fee: data.gas_fee || 0,
+    gateway_fee: data.gateway_fee || 0,
+    total_fee: data.total_fee || 0,
+    status: data.status || 'pending',
+    receipt_file_id: null,
+    admin_note: null,
+    created_at: now(),
+    updated_at: now()
+  };
+  db.get('transactions').push(tx).write();
+  return tx;
 }
 
 function getUserTransactions(userId, limit = 20) {
-  return db.prepare(`
-    SELECT * FROM transactions 
-    WHERE user_id = ? 
-    ORDER BY created_at DESC 
-    LIMIT ?
-  `).all(userId, limit);
+  return db.get('transactions')
+    .filter({ user_id: userId })
+    .sortBy('created_at')
+    .reverse()
+    .take(limit)
+    .value();
 }
 
 function updateTransaction(txId, updates) {
-  const fields = Object.keys(updates).map(k => `${k}=?`).join(', ');
-  db.prepare(`UPDATE transactions SET ${fields}, updated_at=strftime('%s','now') WHERE id=?`)
-    .run(...Object.values(updates), txId);
+  db.get('transactions').find({ id: txId }).assign({ ...updates, updated_at: now() }).write();
 }
 
-// ─── Withdrawal Operations ───────────────────────────────────────────────────
+function getTransactionById(txId) {
+  return db.get('transactions').find({ id: txId }).value();
+}
+
+// ─── Withdrawal Operations ────────────────────────────────────────────────────
 
 function calculateFees(amount) {
-  // Fee formula: 10% of withdrawal amount
   const totalFee = amount * 0.10;
-  const gasFee = totalFee * 0.4;      // 40% of fee = gas
-  const gatewayFee = totalFee * 0.6;  // 60% of fee = gateway
+  const gasFee = totalFee * 0.4;
+  const gatewayFee = totalFee * 0.6;
   return {
     gasFee: parseFloat(gasFee.toFixed(2)),
     gatewayFee: parseFloat(gatewayFee.toFixed(2)),
@@ -250,75 +246,111 @@ function createWithdrawalRequest(data) {
     total_fee: data.total_fee,
     status: 'awaiting_fee'
   });
-  
-  db.prepare(`
-    INSERT INTO withdrawal_requests 
-    (user_id, tx_id, to_address, network, currency, amount, gas_fee, gateway_fee, total_fee)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    data.user_id, tx.id, data.to_address, data.network || 'TRC20',
-    data.currency || 'USDT', data.amount,
-    data.gas_fee, data.gateway_fee, data.total_fee
-  );
-  
-  return db.prepare('SELECT * FROM withdrawal_requests WHERE tx_id = ?').get(tx.id);
+
+  const wr = {
+    id: nextId('withdrawal_requests'),
+    user_id: data.user_id,
+    tx_id: tx.id,
+    to_address: data.to_address,
+    network: data.network || 'TRC20',
+    currency: data.currency || 'USDT',
+    amount: data.amount,
+    gas_fee: data.gas_fee,
+    gateway_fee: data.gateway_fee,
+    total_fee: data.total_fee,
+    status: 'awaiting_fee',
+    receipt_file_id: null,
+    admin_note: null,
+    created_at: now(),
+    updated_at: now()
+  };
+  db.get('withdrawal_requests').push(wr).write();
+  return wr;
 }
 
 function getPendingWithdrawals() {
-  return db.prepare(`
-    SELECT wr.*, u.telegram_id, u.telegram_username, u.full_name, u.uid as wallet_uid
-    FROM withdrawal_requests wr
-    JOIN users u ON u.id = wr.user_id
-    WHERE wr.status IN ('fee_paid', 'awaiting_fee')
-    ORDER BY wr.created_at DESC
-  `).all();
+  const wrs = db.get('withdrawal_requests')
+    .filter(wr => ['fee_paid', 'awaiting_fee'].includes(wr.status))
+    .sortBy('created_at').reverse().value();
+
+  return wrs.map(wr => {
+    const user = getUserById(wr.user_id);
+    return {
+      ...wr,
+      telegram_id: user ? user.telegram_id : '',
+      telegram_username: user ? user.telegram_username : '',
+      full_name: user ? user.full_name : '',
+      wallet_uid: user ? user.uid : ''
+    };
+  });
 }
 
 function getWithdrawalById(wrId) {
-  return db.prepare(`
-    SELECT wr.*, u.telegram_id, u.telegram_username, u.full_name
-    FROM withdrawal_requests wr
-    JOIN users u ON u.id = wr.user_id
-    WHERE wr.id = ?
-  `).get(wrId);
+  const wr = db.get('withdrawal_requests').find({ id: parseInt(wrId) }).value();
+  if (!wr) return null;
+  const user = getUserById(wr.user_id);
+  return {
+    ...wr,
+    telegram_id: user ? user.telegram_id : '',
+    telegram_username: user ? user.telegram_username : '',
+    full_name: user ? user.full_name : ''
+  };
 }
 
 function updateWithdrawal(wrId, updates) {
-  const fields = Object.keys(updates).map(k => `${k}=?`).join(', ');
-  db.prepare(`UPDATE withdrawal_requests SET ${fields}, updated_at=strftime('%s','now') WHERE id=?`)
-    .run(...Object.values(updates), wrId);
-  
-  // Sync status to transaction
-  if (updates.status) {
-    const wr = db.prepare('SELECT tx_id FROM withdrawal_requests WHERE id=?').get(wrId);
-    if (wr) {
-      db.prepare(`UPDATE transactions SET status=?, updated_at=strftime('%s','now') WHERE id=?`)
-        .run(updates.status, wr.tx_id);
-    }
+  db.get('withdrawal_requests').find({ id: parseInt(wrId) }).assign({ ...updates, updated_at: now() }).write();
+  const wr = db.get('withdrawal_requests').find({ id: parseInt(wrId) }).value();
+  if (wr && wr.tx_id) {
+    updateTransaction(wr.tx_id, { status: updates.status || wr.status });
   }
+}
+
+function getUserWithdrawals(userId) {
+  return db.get('withdrawal_requests')
+    .filter({ user_id: userId })
+    .sortBy('created_at').reverse().value();
+}
+
+// ─── Stats ────────────────────────────────────────────────────────────────────
+
+function getStats() {
+  const users = db.get('users').value();
+  const transactions = db.get('transactions').value();
+  const pendingWr = db.get('withdrawal_requests')
+    .filter(wr => ['fee_paid', 'awaiting_fee'].includes(wr.status)).value();
+  const totalBal = users.reduce((sum, u) => sum + (u.usdt_balance || 0), 0);
+
+  return {
+    totalUsers: users.length,
+    totalTransactions: transactions.length,
+    pendingWithdrawals: pendingWr.length,
+    totalBalance: parseFloat(totalBal.toFixed(2))
+  };
 }
 
 module.exports = {
   db,
-  generateUID,
-  generateTRC20Address,
-  generateTxHash,
   getOrCreateUser,
   getUserByTelegramId,
   getUserById,
   updateUserBalance,
   getEarningApps,
   getEarningAppByToken,
+  getEarningAppById,
   addEarningApp,
   connectUID,
   getConnectedUID,
   getUserConnections,
+  findUserByExternalUID,
   createTransaction,
   getUserTransactions,
   updateTransaction,
+  getTransactionById,
   calculateFees,
   createWithdrawalRequest,
   getPendingWithdrawals,
   getWithdrawalById,
-  updateWithdrawal
+  updateWithdrawal,
+  getUserWithdrawals,
+  getStats
 };
