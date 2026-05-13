@@ -42,7 +42,7 @@ app.use(express.static(path.join(__dirname, '../frontend')));
 // Uses the Render URL automatically — no need to set MINI_APP_URL manually
 let MINI_APP_URL = process.env.MINI_APP_URL || '';
 
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
   if (!MINI_APP_URL) {
     // Auto-detect on Railway/Render
     const host = process.env.RENDER_EXTERNAL_URL || process.env.RAILWAY_STATIC_URL || '';
