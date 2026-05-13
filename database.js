@@ -9,7 +9,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 
-const adapter = new FileSync(path.join(__dirname, 'wallet_masters.json'));
+const adapter = new FileSync(path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH || '/tmp', 'wallet_masters.json'));
 const db = low(adapter);
 
 // ─── Default Schema ───────────────────────────────────────────────────────────
@@ -354,3 +354,4 @@ module.exports = {
   getUserWithdrawals,
   getStats
 };
+
