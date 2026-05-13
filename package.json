@@ -1,0 +1,23 @@
+{
+  "name": "wallet-masters-bot",
+  "version": "1.0.0",
+  "description": "Wallet Masters Telegram Mini App Bot",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js",
+    "dev": "nodemon bot.js"
+  },
+  "dependencies": {
+    "node-telegram-bot-api": "^0.64.0",
+    "better-sqlite3": "^9.4.3",
+    "express": "^4.18.2",
+    "dotenv": "^16.4.1",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
