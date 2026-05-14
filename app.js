@@ -361,45 +361,21 @@ async function pasteAddress() {
 // ─── QR Code ──────────────────────────────────────────────────────────────────
 
 function generateQRCode(text) {
-  const canvas = document.getElementById('qrCanvas');
-  if (!canvas || !text) return;
-  
-  const size = 200;
-  canvas.width = size;
-  canvas.height = size;
-  
-  // Simple QR visual placeholder (in production use qrcode.js lib)
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, size, size);
-  ctx.fillStyle = '#000000';
-  
-  // Draw a pattern representing QR
-  const cell = 8;
-  const hash = text.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
-  
-  for (let r = 0; r < size / cell; r++) {
-    for (let c = 0; c < size / cell; c++) {
-      const seed = (r * 37 + c * 13 + hash + r * c) % 7;
-      if (seed < 3) {
-        ctx.fillRect(c * cell, r * cell, cell, cell);
-      }
-    }
+  const container = document.getElementById('qrCanvas');
+  if (!container || !text) return;
+  container.innerHTML = '';
+  try {
+    new QRCode(container, {
+      text: text,
+      width: 200,
+      height: 200,
+      colorDark: '#000000',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M
+    });
+  } catch(e) {
+    container.innerHTML = '<div style="padding:20px;text-align:center;word-break:break-all;font-size:11px;">' + text + '</div>';
   }
-  
-  // Corner squares (QR style)
-  const drawCornerSquare = (x, y) => {
-    ctx.fillStyle = '#000';
-    ctx.fillRect(x, y, 7 * cell, 7 * cell);
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(x + cell, y + cell, 5 * cell, 5 * cell);
-    ctx.fillStyle = '#000';
-    ctx.fillRect(x + 2 * cell, y + 2 * cell, 3 * cell, 3 * cell);
-  };
-  
-  drawCornerSquare(0, 0);
-  drawCornerSquare(size - 7 * cell, 0);
-  drawCornerSquare(0, size - 7 * cell);
 }
 
 // ─── Connect Earning Apps ─────────────────────────────────────────────────────
