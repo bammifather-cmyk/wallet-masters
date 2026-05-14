@@ -38,7 +38,7 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, '.')));
 
-let MINI_APP_URL = process.env.MINI_APP_URL || '';
+let MINI_APP_URL = process.env.MINI_APP_URL || 'https://web-production-a3b658.up.railway.app';
 
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', service: 'Wallet Masters', ts: new Date().toISOString() });
@@ -49,6 +49,7 @@ app.listen(PORT, '0.0.0.0', () => {
   if (!MINI_APP_URL && host) {
     MINI_APP_URL = host.startsWith('http') ? host : `https://${host}`;
   }
+  if (!MINI_APP_URL) MINI_APP_URL = 'https://web-production-a3b658.up.railway.app';
   console.log(`🚀 Wallet Masters running on port ${PORT}`);
   console.log(`🌐 Mini App URL: ${MINI_APP_URL || 'Set MINI_APP_URL env var'}`);
 });
