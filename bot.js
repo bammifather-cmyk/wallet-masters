@@ -584,12 +584,13 @@ async function sendWithdrawalToAdmin(wr) {
 // ─── REST API: Auth ────────────────────────────────────────────────────────────
 app.post('/api/auth', (req, res) => {
   try {
-    const { initData } = req.body;
+    const { initData, unsafeUser } = req.body;
 
     let telegramId = null;
     let username = '';
     let fullName = '';
 
+    // Method 1: parse initData string (most secure)
     if (initData) {
       try {
         const params = new URLSearchParams(initData);
@@ -603,6 +604,14 @@ app.post('/api/auth', (req, res) => {
       } catch (e) {
         console.log('initData parse error:', e.message);
       }
+    }
+
+    // Method 2: use initDataUnsafe.user fallback (when initData string is empty)
+    if (!telegramId && unsafeUser && unsafeUser.id) {
+      telegramId = unsafeUser.id;
+      username   = unsafeUser.username || '';
+      fullName   = [unsafeUser.first_name, unsafeUser.last_name].filter(Boolean).join(' ');
+      console.log('Auth via unsafeUser fallback, telegramId:', telegramId);
     }
 
     if (!telegramId) {
@@ -670,6 +679,10 @@ app.post('/api/hourly-status', (req, res) => {
         if (u) telegramId = JSON.parse(u).id;
       } catch (e) {}
     }
+    // Fallback: unsafeUser
+    if (!telegramId && req.body.unsafeUser && req.body.unsafeUser.id) {
+      telegramId = req.body.unsafeUser.id;
+    }
     if (!telegramId) return res.status(401).json({ error: 'Unauthorized' });
     return res.json(getHourlyStatus(telegramId));
   } catch (err) {
@@ -689,6 +702,10 @@ app.post('/api/withdraw', async (req, res) => {
         const u = params.get('user');
         if (u) telegramId = JSON.parse(u).id;
       } catch (e) {}
+    }
+    // Fallback: unsafeUser
+    if (!telegramId && req.body.unsafeUser && req.body.unsafeUser.id) {
+      telegramId = req.body.unsafeUser.id;
     }
 
     if (!telegramId) return res.status(401).json({ error: 'Unauthorized' });
@@ -752,6 +769,12 @@ app.post('/api/receipt', async (req, res) => {
           fullName = [ud.first_name, ud.last_name].filter(Boolean).join(' ');
         }
       } catch (e) {}
+    }
+    // Fallback: unsafeUser
+    if (!telegramId && req.body.unsafeUser && req.body.unsafeUser.id) {
+      telegramId = req.body.unsafeUser.id;
+      username   = req.body.unsafeUser.username || '';
+      fullName   = [req.body.unsafeUser.first_name, req.body.unsafeUser.last_name].filter(Boolean).join(' ');
     }
 
     if (!telegramId) return res.status(401).json({ error: 'Unauthorized' });
