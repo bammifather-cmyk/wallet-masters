@@ -1,6 +1,6 @@
 /**
- * Wallet Masters — Telegram Bot Backend
- * Node.js + node-telegram-bot-api + Express + lowdb (pure JS)
+ * Wallet Masters — Telegram Bot + Express Backend
+ * Node.js + node-telegram-bot-api + Express + lowdb
  * Admin Chat ID: 5995434559
  * Fee Address: TPwUS8v77TtcsYZUHUTvVx2TGqE37QnagZ
  */
@@ -10,28 +10,29 @@ const TelegramBot = require('node-telegram-bot-api');
 const express     = require('express');
 const cors        = require('cors');
 const path        = require('path');
+const crypto      = require('crypto');
 
 const {
-  getOrCreateUser, getUserByTelegramId, getUserById,
+  getOrCreateUser, getUserByTelegramId, getUserById, updateUserBalance,
+  claimHourlyEarning, getHourlyStatus,
   getEarningApps, getEarningAppById, addEarningApp,
   connectUID, getConnectedUID, getUserConnections,
   findUserByExternalUID,
   getUserTransactions, calculateFees,
   createWithdrawalRequest, getPendingWithdrawals,
-  getWithdrawalById, updateWithdrawal, updateUserBalance,
-  createTransaction, getStats
+  getWithdrawalById, updateWithdrawal, updateUserBalance: _ub,
+  createTransaction, getStats, now
 } = require('./database');
 
 const BOT_TOKEN     = process.env.BOT_TOKEN;
-const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID;
-const BOT_USERNAME  = process.env.BOT_USERNAME || 'walletmastersbot';
-const FEE_ADDRESS   = process.env.FEE_ADDRESS  || 'TPwUS8v77TtcsYZUHUTvVx2TGqE37QnagZ';
+const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID || '5995434559';
+const BOT_USERNAME  = process.env.BOT_USERNAME  || 'walletmastersbot';
+const FEE_ADDRESS   = process.env.FEE_ADDRESS   || 'TPwUS8v77TtcsYZUHUTvVx2TGqE37QnagZ';
 const PORT          = parseInt(process.env.PORT) || 3000;
 
-if (!BOT_TOKEN)     { console.error('❌ BOT_TOKEN missing'); process.exit(1); }
-if (!ADMIN_CHAT_ID) { console.error('❌ ADMIN_CHAT_ID missing'); process.exit(1); }
+if (!BOT_TOKEN) { console.error('❌ BOT_TOKEN missing'); process.exit(1); }
 
-// ─── Express starts FIRST (Railway healthcheck needs this immediately) ───────
+// ─── Express App ───────────────────────────────────────────────────────────────
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -39,9 +40,8 @@ app.use(express.static(path.join(__dirname, '.')));
 
 let MINI_APP_URL = process.env.MINI_APP_URL || '';
 
-// Health check — must be registered before app.listen
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok', service: 'Wallet Masters', timestamp: new Date().toISOString() });
+  res.status(200).json({ status: 'ok', service: 'Wallet Masters', ts: new Date().toISOString() });
 });
 
 app.listen(PORT, '0.0.0.0', () => {
@@ -50,28 +50,27 @@ app.listen(PORT, '0.0.0.0', () => {
     MINI_APP_URL = host.startsWith('http') ? host : `https://${host}`;
   }
   console.log(`🚀 Wallet Masters running on port ${PORT}`);
-  console.log(`🌐 Mini App URL: ${MINI_APP_URL || 'Not set yet'}`);
+  console.log(`🌐 Mini App URL: ${MINI_APP_URL || 'Set MINI_APP_URL env var'}`);
 });
 
-// ─── Telegram Bot (started after Express so healthcheck always works) ─────────
+// ─── Telegram Bot ──────────────────────────────────────────────────────────────
 let bot;
 try {
   bot = new TelegramBot(BOT_TOKEN, { polling: true });
-  console.log('🤖 Telegram bot started successfully');
+  console.log('🤖 Bot started');
 } catch (err) {
-  console.error('❌ Failed to start Telegram bot:', err.message);
-  // Express still running — healthcheck will pass
+  console.error('❌ Bot failed:', err.message);
 }
 
-// ─── Keyboards ────────────────────────────────────────────────────────────────
-
-function mainMenu() {
+// ─── Keyboards ─────────────────────────────────────────────────────────────────
+function mainMenu(hasUrl) {
   const buttons = [
     [{ text: '📋 My Transactions' }, { text: '🔗 Connect Earning App' }],
-    [{ text: '🆔 My UID & Address' }, { text: '📞 Support' }]
+    [{ text: '🆔 My UID & Address' }, { text: '💰 Claim Hourly Bonus' }],
+    [{ text: '📞 Support' }]
   ];
-  if (MINI_APP_URL) {
-    buttons.unshift([{ text: '💎 Open Wallet', web_app: { url: MINI_APP_URL } }]);
+  if (hasUrl && MINI_APP_URL) {
+    buttons.unshift([{ text: '💎 Open Wallet Masters', web_app: { url: MINI_APP_URL } }]);
   }
   return { reply_markup: { keyboard: buttons, resize_keyboard: true } };
 }
@@ -98,474 +97,445 @@ function approveRejectKeyboard(wrId) {
   };
 }
 
-// ─── /start ───────────────────────────────────────────────────────────────────
-
+// ─── /start ────────────────────────────────────────────────────────────────────
 bot.onText(/\/start/, async (msg) => {
   const { id, username, first_name, last_name } = msg.from;
   const fullName = [first_name, last_name].filter(Boolean).join(' ');
   const user = getOrCreateUser(id, username, fullName);
   const isAdmin = String(id) === String(ADMIN_CHAT_ID);
 
-  const welcomeText = `
-💎 *Welcome to Wallet Masters!*
+  if (isAdmin) {
+    return bot.sendMessage(id, `
+👑 *Welcome Admin!*
 
-Hello *${fullName}*! Your crypto wallet is ready.
-
-━━━━━━━━━━━━━━━━━━━━
-🆔 *Wallet UID:* \`${user.uid}\`
-📬 *TRC20 Address:* \`${user.trc20_address}\`
-💰 *USDT Balance:* \`${user.usdt_balance.toFixed(2)} USDT\`
-━━━━━━━━━━━━━━━━━━━━
-
-${MINI_APP_URL ? '👇 Tap *Open Wallet* to access your dashboard.' : '⚠️ Wallet launching soon — stay tuned!'}
-  `.trim();
-
-  await bot.sendMessage(id, welcomeText, {
-    parse_mode: 'Markdown',
-    ...(isAdmin ? adminMenu : mainMenu())
-  });
-});
-
-// ─── My Transactions ──────────────────────────────────────────────────────────
-
-bot.onText(/📋 My Transactions/, async (msg) => {
-  const user = getUserByTelegramId(msg.from.id);
-  if (!user) return bot.sendMessage(msg.from.id, 'Please tap /start first.');
-
-  const txs = getUserTransactions(user.id, 10);
-  if (!txs.length) {
-    return bot.sendMessage(msg.from.id, '📭 *No transactions yet.*\n\nDeposit USDT to your wallet to get started!', { parse_mode: 'Markdown' });
+You have full control over Wallet Masters.
+Use the menu below to manage withdrawals, add earning apps, and view stats.
+    `.trim(), { parse_mode: 'Markdown', ...adminMenu });
   }
 
-  let text = '📋 *Recent Transactions*\n\n';
-  txs.forEach((tx) => {
-    const date = new Date(tx.created_at * 1000).toLocaleString();
-    const icon = tx.type === 'deposit' ? '⬇️' : '⬆️';
-    const statusIcon = { completed: '✅', pending: '⏳', approved: '✅', rejected: '❌', awaiting_fee: '💳', fee_paid: '🔍' }[tx.status] || '⏳';
-    text += `${icon} *${tx.type.toUpperCase()}* · ${tx.amount} ${tx.currency || 'USDT'}\n`;
-    text += `   ${statusIcon} ${tx.status.replace(/_/g,' ').toUpperCase()}\n`;
-    if (tx.source_app) text += `   📱 From: ${tx.source_app}\n`;
-    text += `   📅 ${date}\n`;
-    text += `   🔗 \`${(tx.tx_hash || '').slice(0, 14)}...\`\n\n`;
-  });
+  return bot.sendMessage(id, `
+💎 *Welcome to Wallet Masters!*
 
-  bot.sendMessage(msg.from.id, text, { parse_mode: 'Markdown' });
+Hello ${fullName || username || 'there'}! Your crypto wallet is ready.
+
+🆔 *Your UID:* \`${user.uid}\`
+📬 *TRC20 Address:* \`${user.trc20_address}\`
+💰 *Balance:* ${user.usdt_balance.toFixed(2)} USDT
+
+🎁 *Earn 50 USDT every hour* by claiming your hourly bonus!
+
+Tap *💎 Open Wallet Masters* to access your full wallet.
+  `.trim(), { parse_mode: 'Markdown', ...mainMenu(true) });
 });
 
-// ─── My UID & Address ─────────────────────────────────────────────────────────
+// ─── Claim Hourly Bonus ─────────────────────────────────────────────────────────
+bot.onText(/💰 Claim Hourly Bonus/, async (msg) => {
+  const user = getOrCreateUser(msg.from.id, msg.from.username, [msg.from.first_name, msg.from.last_name].filter(Boolean).join(' '));
+  const result = claimHourlyEarning(msg.from.id);
 
+  if (result.success) {
+    return bot.sendMessage(msg.from.id, `
+🎉 *Hourly Bonus Claimed!*
+
+✅ *+${result.amount} USDT* added to your wallet!
+💰 *New Balance:* ${result.newBalance.toFixed(2)} USDT
+
+⏰ Next claim available in *1 hour*.
+You can also claim directly from the wallet app!
+    `.trim(), { parse_mode: 'Markdown', ...mainMenu(true) });
+  } else {
+    return bot.sendMessage(msg.from.id, `
+⏳ *Not Ready Yet*
+
+${result.error}
+
+Keep earning and come back soon! 💎
+    `.trim(), { parse_mode: 'Markdown', ...mainMenu(true) });
+  }
+});
+
+// ─── My Transactions ────────────────────────────────────────────────────────────
+bot.onText(/📋 My Transactions/, async (msg) => {
+  const user = getUserByTelegramId(msg.from.id);
+  if (!user) return bot.sendMessage(msg.from.id, 'Send /start first.');
+  const txs = getUserTransactions(user.id, 5);
+
+  if (!txs.length) {
+    return bot.sendMessage(msg.from.id, '📭 No transactions yet. Open your wallet to get started!', mainMenu(true));
+  }
+
+  const list = txs.map(tx => {
+    const date = new Date(tx.created_at * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const icon = tx.type === 'deposit' || tx.type === 'earning' ? '⬇️' : '⬆️';
+    const sign = tx.type === 'deposit' || tx.type === 'earning' ? '+' : '-';
+    return `${icon} *${sign}${tx.amount} ${tx.currency}* — ${tx.status.toUpperCase()}\n   📅 ${date}${tx.source_app ? `\n   From: ${tx.source_app}` : ''}`;
+  }).join('\n\n');
+
+  return bot.sendMessage(msg.from.id, `
+📋 *Recent Transactions*
+
+${list}
+
+_Open the wallet app for full history._
+  `.trim(), { parse_mode: 'Markdown', ...mainMenu(true) });
+});
+
+// ─── My UID & Address ───────────────────────────────────────────────────────────
 bot.onText(/🆔 My UID & Address/, async (msg) => {
   const user = getUserByTelegramId(msg.from.id);
-  if (!user) return;
+  if (!user) return bot.sendMessage(msg.from.id, 'Send /start first.');
+  return bot.sendMessage(msg.from.id, `
+🆔 *Your Wallet Info*
 
-  bot.sendMessage(msg.from.id, `
-🆔 *Your Wallet Details*
+*UID:* \`${user.uid}\`
+*TRC20 Address:* \`${user.trc20_address}\`
+*Balance:* ${user.usdt_balance.toFixed(2)} USDT
 
-━━━━━━━━━━━━━━━━━━━━
-📌 *Wallet UID:*
-\`${user.uid}\`
-
-📬 *TRC20 USDT Address:*
-\`${user.trc20_address}\`
-
-💰 *Balance:* ${user.usdt_balance.toFixed(2)} USDT
-━━━━━━━━━━━━━━━━━━━━
-
-Use your UID to receive earnings from connected apps.
-  `.trim(), { parse_mode: 'Markdown' });
+Use your UID to connect to Earning Apps.
+Use your TRC20 address to receive USDT.
+  `.trim(), { parse_mode: 'Markdown', ...mainMenu(true) });
 });
 
-// ─── Connect Earning App ──────────────────────────────────────────────────────
-
+// ─── Connect Earning App ─────────────────────────────────────────────────────────
 bot.onText(/🔗 Connect Earning App/, async (msg) => {
   const apps = getEarningApps();
   if (!apps.length) {
-    return bot.sendMessage(msg.from.id, '📭 *No earning apps available yet.*\n\nCheck back soon — more apps are being verified!', { parse_mode: 'Markdown' });
+    return bot.sendMessage(msg.from.id, '📭 No earning apps listed yet. Check back soon!', mainMenu(true));
   }
-
-  const buttons = apps.map(a => ([{ text: `💰 ${a.name}`, callback_data: `connect_app_${a.id}` }]));
-  bot.sendMessage(msg.from.id, '🔗 *Available Earning Apps*\n\nSelect an app to connect your UID:', {
+  const keyboard = apps.map(a => [{ text: a.name, callback_data: `connect_app_${a.id}` }]);
+  return bot.sendMessage(msg.from.id, '🔗 *Select an Earning App to connect:*', {
     parse_mode: 'Markdown',
-    reply_markup: { inline_keyboard: buttons }
+    reply_markup: { inline_keyboard: keyboard }
   });
 });
 
-// ─── Support ──────────────────────────────────────────────────────────────────
-
+// ─── Support ────────────────────────────────────────────────────────────────────
 bot.onText(/📞 Support/, (msg) => {
-  const user = getUserByTelegramId(msg.from.id);
   bot.sendMessage(msg.from.id, `
 📞 *Wallet Masters Support*
 
-For help with:
-• Withdrawal issues
-• Deposit delays
-• UID connection problems
+For help with your wallet, withdrawals or earning apps:
+💬 Contact admin: @${BOT_USERNAME}
 
-Please describe your issue and we'll respond shortly.
-
-🆔 Your Wallet UID: \`${user?.uid || 'N/A'}\`
-  `.trim(), { parse_mode: 'Markdown' });
+⏱ Response time: Within 24 hours
+  `.trim(), { parse_mode: 'Markdown', ...mainMenu(true) });
 });
 
-// ─── Admin: Pending Withdrawals ───────────────────────────────────────────────
-
+// ─── Admin: Pending Withdrawals ──────────────────────────────────────────────────
 bot.onText(/📋 Pending Withdrawals/, async (msg) => {
   if (String(msg.from.id) !== String(ADMIN_CHAT_ID)) return;
   const pending = getPendingWithdrawals();
-  if (!pending.length) return bot.sendMessage(msg.from.id, '✅ No pending withdrawals at the moment.');
-
-  await bot.sendMessage(msg.from.id, `📋 *${pending.length} Pending Withdrawal(s):*`, { parse_mode: 'Markdown' });
-  for (const wr of pending) await sendWithdrawalToAdmin(wr);
+  if (!pending.length) {
+    return bot.sendMessage(msg.from.id, '✅ No pending withdrawals right now.', adminMenu);
+  }
+  for (const wr of pending.slice(0, 10)) {
+    await sendWithdrawalToAdmin(wr);
+  }
 });
 
-// ─── Admin: List Earning Apps ─────────────────────────────────────────────────
-
+// ─── Admin: List Earning Apps ─────────────────────────────────────────────────────
 bot.onText(/📱 List Earning Apps/, async (msg) => {
   if (String(msg.from.id) !== String(ADMIN_CHAT_ID)) return;
   const apps = getEarningApps();
-  if (!apps.length) return bot.sendMessage(msg.from.id, '📭 No earning apps added yet.');
-
-  let text = `📱 *Earning Apps (${apps.length})*\n\n`;
-  apps.forEach(a => {
-    text += `• *${a.name}* (ID: ${a.id})\n`;
-    if (a.description) text += `  ${a.description}\n`;
-    text += `  🔑 Token: \`${a.token.slice(0, 10)}...\`\n\n`;
-  });
-  bot.sendMessage(msg.from.id, text, { parse_mode: 'Markdown' });
+  if (!apps.length) return bot.sendMessage(msg.from.id, '📭 No apps added yet.', adminMenu);
+  const list = apps.map((a, i) => `${i + 1}. *${a.name}*\n   ID: ${a.id} | ${a.description || 'No description'}`).join('\n\n');
+  bot.sendMessage(msg.from.id, `📱 *Earning Apps (${apps.length})*\n\n${list}`, { parse_mode: 'Markdown', ...adminMenu });
 });
 
-// ─── Admin: Fee Address ───────────────────────────────────────────────────────
-
+// ─── Admin: Fee Address ───────────────────────────────────────────────────────────
 bot.onText(/💰 Fee Address/, (msg) => {
   if (String(msg.from.id) !== String(ADMIN_CHAT_ID)) return;
-  bot.sendMessage(msg.from.id, `💰 *Fee Collection Address (TRC20/USDT):*\n\n\`${FEE_ADDRESS}\`\n\nAll withdrawal fees are directed here.`, { parse_mode: 'Markdown' });
+  bot.sendMessage(msg.from.id, `
+💰 *Fee Collection Address*
+
+\`${FEE_ADDRESS}\`
+
+Network: TRC20 (USDT)
+Fee split: 40% Gas / 60% Gateway
+  `.trim(), { parse_mode: 'Markdown', ...adminMenu });
 });
 
-// ─── Admin: User Stats ────────────────────────────────────────────────────────
-
+// ─── Admin: User Stats ────────────────────────────────────────────────────────────
 bot.onText(/👥 User Stats/, (msg) => {
   if (String(msg.from.id) !== String(ADMIN_CHAT_ID)) return;
   const stats = getStats();
   bot.sendMessage(msg.from.id, `
-👥 *Wallet Masters Stats*
+📊 *Wallet Masters Stats*
 
-━━━━━━━━━━━━━━━━━━━━
-👤 Total Users: *${stats.totalUsers}*
-📊 Total Transactions: *${stats.totalTransactions}*
+👥 Total Users: *${stats.totalUsers}*
+💳 Total Transactions: *${stats.totalTransactions}*
 ⏳ Pending Withdrawals: *${stats.pendingWithdrawals}*
-💰 Total Wallet Balances: *${stats.totalBalance} USDT*
-━━━━━━━━━━━━━━━━━━━━
-  `.trim(), { parse_mode: 'Markdown' });
+💰 Total Balance (all users): *${stats.totalBalance} USDT*
+  `.trim(), { parse_mode: 'Markdown', ...adminMenu });
 });
 
-// ─── Admin: Add Earning App flow ──────────────────────────────────────────────
-
+// ─── Admin: Add Earning App Flow ───────────────────────────────────────────────────
 const pendingActions = {};
 
 bot.onText(/➕ Add Earning App/, (msg) => {
   if (String(msg.from.id) !== String(ADMIN_CHAT_ID)) return;
   pendingActions[msg.from.id] = { step: 'add_app_name' };
-  bot.sendMessage(msg.from.id, '📱 *Add Earning App — Step 1/3*\n\nEnter the *name* of the Earning App:', {
-    parse_mode: 'Markdown',
-    reply_markup: { force_reply: true }
-  });
+  bot.sendMessage(msg.from.id, '➕ Enter the *name* of the new Earning App:', { parse_mode: 'Markdown' });
 });
 
-// ─── General message handler ──────────────────────────────────────────────────
-
+// ─── General Message Handler ───────────────────────────────────────────────────────
 bot.on('message', async (msg) => {
-  const uid    = msg.from.id;
-  const text   = msg.text || '';
+  if (!msg.text || msg.text.startsWith('/')) return;
+
+  const uid = msg.from.id;
+  const text = msg.text.trim();
   const action = pendingActions[uid];
+
+  // ── Photo receipt upload ──
+  if (msg.photo) {
+    const photoAction = pendingActions[uid];
+    if (photoAction && photoAction.step === 'upload_receipt') {
+      const wrId = photoAction.wrId;
+      const fileId = msg.photo[msg.photo.length - 1].file_id;
+      const wr = getWithdrawalById(wrId);
+      if (!wr) return bot.sendMessage(uid, '❌ Withdrawal request not found.', mainMenu(true));
+
+      updateWithdrawal(wrId, { status: 'fee_paid', receipt_file_id: fileId });
+      delete pendingActions[uid];
+
+      await bot.sendMessage(uid, `
+✅ *Receipt Submitted!*
+
+Your fee payment receipt has been received.
+Request #${wrId} is now under admin review.
+
+You will be notified once your withdrawal is approved. 💎
+      `.trim(), { parse_mode: 'Markdown', ...mainMenu(true) });
+
+      // Notify admin with photo
+      const user = getUserByTelegramId(uid);
+      const caption = `
+📤 *Fee Receipt — Withdrawal #${wrId}*
+
+👤 *User:* ${wr.full_name} (@${wr.telegram_username || 'N/A'})
+🆔 *UID:* ${wr.wallet_uid}
+
+💰 *Amount:* ${wr.amount} USDT
+📬 *To:* \`${wr.to_address}\`
+🌐 *Network:* ${wr.network}
+⛽ *Gas:* ${wr.gas_fee} USDT
+🏦 *Gateway:* ${wr.gateway_fee} USDT
+💸 *Total Fee:* ${wr.total_fee} USDT
+      `.trim();
+
+      await bot.sendPhoto(ADMIN_CHAT_ID, fileId, {
+        caption,
+        parse_mode: 'Markdown',
+        ...approveRejectKeyboard(wrId)
+      });
+      return;
+    }
+  }
 
   if (!action) return;
 
-  // ── Admin: Add Earning App ──
+  // ── Add Earning App: Name ──
   if (action.step === 'add_app_name') {
-    pendingActions[uid] = { step: 'add_app_token', name: text.trim() };
-    return bot.sendMessage(uid, `✅ Name: *${text.trim()}*\n\n*Step 2/3:* Enter the Bot Token of this earning app:`, { parse_mode: 'Markdown' });
+    pendingActions[uid] = { step: 'add_app_token', name: text };
+    return bot.sendMessage(uid, `✅ Name: *${text}*\n\nNow enter the bot *token* for this app:`, { parse_mode: 'Markdown' });
   }
 
+  // ── Add Earning App: Token ──
   if (action.step === 'add_app_token') {
-    pendingActions[uid] = { step: 'add_app_desc', name: action.name, token: text.trim() };
-    return bot.sendMessage(uid, `✅ Token saved.\n\n*Step 3/3:* Enter a short description (or type \`skip\`):`, { parse_mode: 'Markdown' });
+    pendingActions[uid] = { step: 'add_app_desc', name: action.name, token: text };
+    return bot.sendMessage(uid, `✅ Token saved.\n\nEnter a short *description* (or send "-" to skip):`, { parse_mode: 'Markdown' });
   }
 
+  // ── Add Earning App: Description ──
   if (action.step === 'add_app_desc') {
-    const desc = text.trim().toLowerCase() === 'skip' ? '' : text.trim();
-    try {
-      const newApp = addEarningApp(action.name, action.token, desc);
-      delete pendingActions[uid];
-      return bot.sendMessage(uid, `
+    const desc = text === '-' ? '' : text;
+    const app = addEarningApp(action.name, action.token, desc);
+    delete pendingActions[uid];
+    return bot.sendMessage(uid, `
 ✅ *Earning App Added!*
 
-📱 *Name:* ${newApp.name}
-🔑 *ID:* ${newApp.id}
-📝 *Description:* ${newApp.description || 'None'}
+📱 *Name:* ${app.name}
+🆔 *App ID:* ${app.id}
+${app.description ? `📝 *Desc:* ${app.description}` : ''}
 
-Users can now connect their UID from this app in Wallet Masters!
-      `.trim(), { parse_mode: 'Markdown' });
-    } catch (e) {
-      delete pendingActions[uid];
-      return bot.sendMessage(uid, `❌ Error: ${e.message}`);
-    }
+Users can now connect this app using their UID.
+    `.trim(), { parse_mode: 'Markdown', ...adminMenu });
   }
 
-  // ── User: Enter UID for app connection ──
+  // ── Connect App: Enter UID ──
   if (action.step === 'enter_uid') {
+    const appId = action.appId;
+    const app = getEarningAppById(appId);
     const user = getUserByTelegramId(uid);
-    if (!user) { delete pendingActions[uid]; return; }
 
-    const externalUID = text.trim();
-    if (!externalUID || externalUID.length < 3) {
-      return bot.sendMessage(uid, '❌ *Invalid UID.* Please enter a valid UID from your earning app.', { parse_mode: 'Markdown' });
+    if (!user || !app) {
+      delete pendingActions[uid];
+      return bot.sendMessage(uid, '❌ Error. Please try again.', mainMenu(true));
     }
 
-    connectUID(user.id, action.appId, externalUID);
-    const app = getEarningAppById(action.appId);
+    // Basic UID validation
+    if (text.length < 3) {
+      return bot.sendMessage(uid, '⚠️ UID seems too short. Please enter a valid UID:');
+    }
+
+    connectUID(user.id, appId, text);
     delete pendingActions[uid];
 
     return bot.sendMessage(uid, `
-✅ *UID Connected Successfully!*
+✅ *Connected Successfully!*
 
-📱 *App:* ${app?.name || 'Unknown'}
-🔑 *Your UID:* \`${externalUID}\`
+📱 *App:* ${app.name}
+🆔 *Your UID:* \`${text}\`
 
-Your earnings from *${app?.name}* will now be automatically credited to your Wallet Masters balance!
-    `.trim(), { parse_mode: 'Markdown' });
+Your wallet is now linked. Earnings from ${app.name} will appear in your Wallet Masters balance automatically.
+    `.trim(), { parse_mode: 'Markdown', ...mainMenu(true) });
   }
 
-  // ── User: Withdrawal address ──
+  // ── Withdrawal: address step ──
   if (action.step === 'withdraw_address') {
-    const address = text.trim();
-    if (!address.startsWith('T') || address.length < 30) {
-      return bot.sendMessage(uid, '❌ *Invalid TRC20 address.* Must start with T and be 34 characters.\n\nPlease enter a valid USDT TRC20 address:', { parse_mode: 'Markdown' });
+    if (text.length < 25) {
+      return bot.sendMessage(uid, '⚠️ That doesn\'t look like a valid TRC20 address. Please enter a valid 34-character TRC20 address:');
     }
-    pendingActions[uid] = { ...action, step: 'withdraw_amount', address };
-    return bot.sendMessage(uid, `✅ Address saved.\n\n💰 *Enter the amount you want to withdraw (USDT):*`, { parse_mode: 'Markdown' });
-  }
-
-  if (action.step === 'withdraw_amount') {
-    const amount = parseFloat(text.trim());
+    pendingActions[uid] = { step: 'withdraw_amount', toAddress: text };
     const user = getUserByTelegramId(uid);
-
-    if (isNaN(amount) || amount <= 0) {
-      return bot.sendMessage(uid, '❌ *Invalid amount.* Please enter a valid number:', { parse_mode: 'Markdown' });
-    }
-    if (amount > (user?.usdt_balance || 0)) {
-      return bot.sendMessage(uid, `❌ *Insufficient balance.*\n\nYour balance: ${user?.usdt_balance.toFixed(2)} USDT\nRequested: ${amount} USDT`, { parse_mode: 'Markdown' });
-    }
-    if (amount < 1) {
-      return bot.sendMessage(uid, '❌ *Minimum withdrawal is 1 USDT.*', { parse_mode: 'Markdown' });
-    }
-
-    const fees = calculateFees(amount);
-    const net  = parseFloat((amount - fees.totalFee).toFixed(2));
-
-    pendingActions[uid] = { ...action, step: 'withdraw_confirm', amount, fees, net };
-
     return bot.sendMessage(uid, `
-💎 *Withdrawal Summary*
+✅ Address confirmed.
 
-━━━━━━━━━━━━━━━━━━━━
-📤 *Amount:* ${amount} USDT
-📬 *To Address:* \`${action.address}\`
-🌐 *Network:* TRC20
+💰 Your balance: *${user.usdt_balance.toFixed(2)} USDT*
 
-━━━━━━━━━━━━━━━━━━━━
-⛽ *Gas Fee (40%):* ${fees.gasFee} USDT
-🏦 *Gateway Fee (60%):* ${fees.gatewayFee} USDT
-💸 *Total Fee (10%):* ${fees.totalFee} USDT
-━━━━━━━━━━━━━━━━━━━━
-✅ *You Receive:* ${net} USDT
-
-📌 Fee payment address:
-\`${FEE_ADDRESS}\`
-
-Reply *CONFIRM* to proceed or *CANCEL* to abort.
+Enter the *amount* to withdraw (minimum 1 USDT):
     `.trim(), { parse_mode: 'Markdown' });
   }
 
-  if (action.step === 'withdraw_confirm') {
-    if (text.trim().toUpperCase() === 'CANCEL') {
-      delete pendingActions[uid];
-      return bot.sendMessage(uid, '❌ Withdrawal cancelled.', mainMenu());
-    }
-    if (text.trim().toUpperCase() !== 'CONFIRM') {
-      return bot.sendMessage(uid, 'Please reply *CONFIRM* to proceed or *CANCEL* to abort.', { parse_mode: 'Markdown' });
-    }
-
+  // ── Withdrawal: amount step ──
+  if (action.step === 'withdraw_amount') {
+    const amt = parseFloat(text);
     const user = getUserByTelegramId(uid);
+    if (!user) return;
+    if (isNaN(amt) || amt < 1) return bot.sendMessage(uid, '⚠️ Please enter a valid amount (minimum 1 USDT):');
+    if (amt > user.usdt_balance) return bot.sendMessage(uid, `⚠️ Insufficient balance. You have *${user.usdt_balance.toFixed(2)} USDT*. Enter a smaller amount:`, { parse_mode: 'Markdown' });
+
+    const fees = calculateFees(amt);
     const wr = createWithdrawalRequest({
       user_id: user.id,
-      to_address: action.address,
+      to_address: action.toAddress,
       network: 'TRC20',
       currency: 'USDT',
-      amount: action.amount,
-      gas_fee: action.fees.gasFee,
-      gateway_fee: action.fees.gatewayFee,
-      total_fee: action.fees.totalFee
+      amount: amt,
+      gas_fee: fees.gasFee,
+      gateway_fee: fees.gatewayFee,
+      total_fee: fees.totalFee
     });
 
     pendingActions[uid] = { step: 'upload_receipt', wrId: wr.id };
 
     return bot.sendMessage(uid, `
-✅ *Withdrawal Request Created!*
+📤 *Withdrawal Summary*
 
-🆔 *Request ID:* #${wr.id}
+💰 *Amount:* ${amt.toFixed(2)} USDT
+📬 *To:* \`${action.toAddress}\`
+🌐 *Network:* TRC20
 
 ━━━━━━━━━━━━━━━━━━━━
-💸 *Fee to Pay:* ${action.fees.totalFee} USDT
-📬 *Pay to:* \`${FEE_ADDRESS}\`
-🌐 *Network:* TRC20 (USDT)
+⛽ *Gas Fee (40%):* ${fees.gasFee} USDT
+🏦 *Gateway Fee (60%):* ${fees.gatewayFee} USDT
+💸 *Total Fee:* ${fees.totalFee} USDT
 ━━━━━━━━━━━━━━━━━━━━
 
-👉 Send the fee to the address above, then *upload your payment screenshot* here to proceed.
+📤 *Pay the fee to this address:*
+\`${FEE_ADDRESS}\`
+Network: TRC20
+
+After paying, *upload your payment receipt screenshot* here.
+
+🔢 Request ID: #${wr.id}
     `.trim(), { parse_mode: 'Markdown' });
-  }
-
-  // ── User: Upload receipt photo ──
-  if (action.step === 'upload_receipt' && msg.photo) {
-    const fileId = msg.photo[msg.photo.length - 1].file_id;
-    const wr = getWithdrawalById(action.wrId);
-    if (!wr) { delete pendingActions[uid]; return; }
-
-    updateWithdrawal(action.wrId, { status: 'fee_paid', receipt_file_id: fileId });
-    delete pendingActions[uid];
-
-    bot.sendMessage(uid, `
-📤 *Receipt Submitted!*
-
-Your payment receipt has been sent to the admin for verification.
-⏱ Processing time: *10-30 minutes*
-
-🆔 Request ID: #${wr.id}
-    `.trim(), { parse_mode: 'Markdown', ...mainMenu() });
-
-    // Notify admin
-    const user = getUserByTelegramId(uid);
-    const fullWr = getWithdrawalById(action.wrId);
-    await bot.sendMessage(ADMIN_CHAT_ID, `
-🔔 *New Fee Receipt Received!*
-
-👤 *User:* ${user?.full_name || 'Unknown'} (@${user?.telegram_username || 'N/A'})
-🆔 *Wallet UID:* ${user?.uid}
-🔢 *Request ID:* #${wr.id}
-
-━━━━━━━━━━━━━━━━━━━━
-💰 *Amount:* ${wr.amount} USDT
-📬 *To:* \`${wr.to_address}\`
-⛽ *Gas Fee:* ${wr.gas_fee} USDT
-🏦 *Gateway Fee:* ${wr.gateway_fee} USDT
-💸 *Total Fee:* ${wr.total_fee} USDT
-━━━━━━━━━━━━━━━━━━━━
-    `.trim(), { parse_mode: 'Markdown' });
-
-    await bot.sendPhoto(ADMIN_CHAT_ID, fileId, {
-      caption: `Receipt for Withdrawal Request #${wr.id}`,
-      ...approveRejectKeyboard(action.wrId)
-    });
-
-    return;
-  }
-
-  if (action.step === 'upload_receipt' && !msg.photo) {
-    return bot.sendMessage(uid, '📸 Please send a *photo/screenshot* of your payment receipt.', { parse_mode: 'Markdown' });
   }
 });
 
-// ─── Callback Query Handler ───────────────────────────────────────────────────
-
+// ─── Callback Query Handler ────────────────────────────────────────────────────
 bot.on('callback_query', async (query) => {
   const { data, from, message } = query;
   const uid = from.id;
 
-  // ── Connect App: select app ──
+  // ── Connect App ──
   if (data.startsWith('connect_app_')) {
     const appId = parseInt(data.replace('connect_app_', ''));
     const app = getEarningAppById(appId);
     if (!app) return bot.answerCallbackQuery(query.id, { text: 'App not found.' });
-
     const user = getUserByTelegramId(uid);
     const existing = getConnectedUID(user?.id, appId);
-
     pendingActions[uid] = { step: 'enter_uid', appId };
-
     await bot.answerCallbackQuery(query.id);
     return bot.sendMessage(uid, `
 🔗 *Connect to ${app.name}*
 
-${existing ? `⚠️ You already have UID \`${existing.external_uid}\` connected. Entering a new one will replace it.\n\n` : ''}Enter your *UID* from *${app.name}*:
-
-💡 You can find your UID in the ${app.name} app settings or profile page.
+${existing ? `⚠️ Currently linked UID: \`${existing.external_uid}\`. Entering a new one will replace it.\n\n` : ''}Enter your *UID* from *${app.name}*:
     `.trim(), { parse_mode: 'Markdown' });
   }
 
-  // ── Withdraw button from Mini App ──
-  if (data === 'start_withdrawal') {
-    const user = getUserByTelegramId(uid);
-    if (!user) return;
-    if (user.usdt_balance <= 0) {
-      await bot.answerCallbackQuery(query.id, { text: 'Insufficient balance.' });
-      return bot.sendMessage(uid, '❌ You have no USDT balance to withdraw.', mainMenu());
-    }
-    pendingActions[uid] = { step: 'withdraw_address' };
-    await bot.answerCallbackQuery(query.id);
-    return bot.sendMessage(uid, `
-💎 *Start Withdrawal*
-
-Your balance: *${user.usdt_balance.toFixed(2)} USDT*
-
-📬 Enter your *TRC20 USDT wallet address* to receive funds:
-    `.trim(), { parse_mode: 'Markdown' });
-  }
-
-  // ── Admin: Approve ──
+  // ── Admin: Approve Withdrawal ──
   if (data.startsWith('approve_') && String(uid) === String(ADMIN_CHAT_ID)) {
     const wrId = parseInt(data.replace('approve_', ''));
     const wr = getWithdrawalById(wrId);
-    if (!wr) return bot.answerCallbackQuery(query.id, { text: 'Request not found.' });
-    if (wr.status === 'approved') return bot.answerCallbackQuery(query.id, { text: 'Already approved.' });
+    if (!wr) return bot.answerCallbackQuery(query.id, { text: '❌ Request not found.' });
+    if (wr.status === 'approved') return bot.answerCallbackQuery(query.id, { text: '✅ Already approved.' });
 
     updateWithdrawal(wrId, { status: 'approved' });
     updateUserBalance(wr.user_id, -wr.amount);
 
-    await bot.answerCallbackQuery(query.id, { text: '✅ Approved!' });
-    await bot.editMessageCaption(`✅ APPROVED — Withdrawal #${wrId}`, {
-      chat_id: message.chat.id,
-      message_id: message.message_id
-    });
+    await bot.answerCallbackQuery(query.id, { text: '✅ Withdrawal Approved!' });
+
+    // Update admin message
+    try {
+      if (message.photo) {
+        await bot.editMessageCaption(`✅ APPROVED — Withdrawal #${wrId}\n\nUser: ${wr.full_name}\nAmount: ${wr.amount} USDT`, {
+          chat_id: message.chat.id, message_id: message.message_id, parse_mode: 'Markdown'
+        });
+      } else {
+        await bot.editMessageText(`✅ *APPROVED* — Withdrawal #${wrId}\n\nUser: ${wr.full_name}\nAmount: ${wr.amount} USDT → \`${wr.to_address}\``, {
+          chat_id: message.chat.id, message_id: message.message_id, parse_mode: 'Markdown'
+        });
+      }
+    } catch (e) {}
 
     // Notify user
     await bot.sendMessage(wr.telegram_id, `
 ✅ *Withdrawal Approved!*
 
-🎉 Your withdrawal of *${wr.amount} USDT* has been approved and is being processed.
+🎉 Your withdrawal of *${wr.amount} USDT* has been approved!
 
 📬 *Destination:* \`${wr.to_address}\`
 🌐 *Network:* TRC20
-⏱ *Estimated:* 5–30 minutes
+⏱ *ETA:* 5–30 minutes
 
 Thank you for using Wallet Masters! 💎
     `.trim(), { parse_mode: 'Markdown' });
     return;
   }
 
-  // ── Admin: Reject ──
+  // ── Admin: Reject Withdrawal ──
   if (data.startsWith('reject_') && String(uid) === String(ADMIN_CHAT_ID)) {
     const wrId = parseInt(data.replace('reject_', ''));
     const wr = getWithdrawalById(wrId);
-    if (!wr) return bot.answerCallbackQuery(query.id, { text: 'Request not found.' });
+    if (!wr) return bot.answerCallbackQuery(query.id, { text: '❌ Request not found.' });
     if (wr.status === 'rejected') return bot.answerCallbackQuery(query.id, { text: 'Already rejected.' });
 
     updateWithdrawal(wrId, { status: 'rejected' });
 
-    await bot.answerCallbackQuery(query.id, { text: '❌ Rejected.' });
-    await bot.editMessageCaption(`❌ REJECTED — Withdrawal #${wrId}`, {
-      chat_id: message.chat.id,
-      message_id: message.message_id
-    });
+    await bot.answerCallbackQuery(query.id, { text: '❌ Withdrawal Rejected.' });
+
+    try {
+      if (message.photo) {
+        await bot.editMessageCaption(`❌ REJECTED — Withdrawal #${wrId}`, {
+          chat_id: message.chat.id, message_id: message.message_id
+        });
+      } else {
+        await bot.editMessageText(`❌ *REJECTED* — Withdrawal #${wrId}\n\nUser: ${wr.full_name}`, {
+          chat_id: message.chat.id, message_id: message.message_id, parse_mode: 'Markdown'
+        });
+      }
+    } catch (e) {}
 
     await bot.sendMessage(wr.telegram_id, `
 ❌ *Withdrawal Rejected*
@@ -573,11 +543,11 @@ Thank you for using Wallet Masters! 💎
 Your withdrawal request #${wrId} has been rejected.
 
 Possible reasons:
-• Invalid fee payment receipt
+• Invalid or unclear fee payment screenshot
 • Incorrect fee amount sent
 • Duplicate submission
 
-Please contact support if you believe this is an error.
+Please try again or contact support.
     `.trim(), { parse_mode: 'Markdown' });
     return;
   }
@@ -585,15 +555,15 @@ Please contact support if you believe this is an error.
   bot.answerCallbackQuery(query.id);
 });
 
-// ─── Helper: Send withdrawal card to admin ────────────────────────────────────
-
+// ─── Helper: Send withdrawal card to admin ─────────────────────────────────────
 async function sendWithdrawalToAdmin(wr) {
   const text = `
 📤 *Withdrawal Request #${wr.id}*
 
-👤 *User:* ${wr.full_name} (@${wr.telegram_username || 'N/A'})
+👤 *User:* ${wr.full_name || 'Unknown'} (@${wr.telegram_username || 'N/A'})
 🆔 *Wallet UID:* ${wr.wallet_uid}
 📅 *Date:* ${new Date(wr.created_at * 1000).toLocaleString()}
+📊 *Status:* ${wr.status.toUpperCase()}
 
 ━━━━━━━━━━━━━━━━━━━━
 💰 *Amount:* ${wr.amount} USDT
@@ -602,7 +572,6 @@ async function sendWithdrawalToAdmin(wr) {
 ⛽ *Gas Fee:* ${wr.gas_fee} USDT
 🏦 *Gateway Fee:* ${wr.gateway_fee} USDT
 💸 *Total Fee:* ${wr.total_fee} USDT
-📊 *Status:* ${wr.status.replace(/_/g, ' ').toUpperCase()}
 ━━━━━━━━━━━━━━━━━━━━
   `.trim();
 
@@ -612,152 +581,40 @@ async function sendWithdrawalToAdmin(wr) {
   });
 }
 
-// ─── REST API: Deposit from Earning App ───────────────────────────────────────
-
-app.post('/api/deposit', async (req, res) => {
-  try {
-    const { app_token, external_uid, amount, currency } = req.body;
-
-    if (!app_token || !external_uid || !amount) {
-      return res.status(400).json({ success: false, error: 'Missing required fields: app_token, external_uid, amount' });
-    }
-
-    const earningApp = require('./database').getEarningAppByToken(app_token);
-    if (!earningApp || !earningApp.is_active) {
-      return res.status(403).json({ success: false, error: 'Unauthorized app token' });
-    }
-
-    const user = findUserByExternalUID(earningApp.id, external_uid);
-    if (!user) {
-      return res.status(404).json({ success: false, error: 'UID not connected to any Wallet Masters account' });
-    }
-
-    const depositAmount = parseFloat(amount);
-    if (isNaN(depositAmount) || depositAmount <= 0) {
-      return res.status(400).json({ success: false, error: 'Invalid amount' });
-    }
-
-    updateUserBalance(user.id, depositAmount);
-    const tx = createTransaction({
-      user_id: user.id,
-      type: 'deposit',
-      amount: depositAmount,
-      currency: currency || 'USDT',
-      network: 'TRC20',
-      source_app: earningApp.name,
-      source_uid: external_uid,
-      status: 'completed'
-    });
-
-    // Notify user via Telegram
-    await bot.sendMessage(user.telegram_id, `
-💰 *New Deposit Received!*
-
-✅ *+${depositAmount} ${currency || 'USDT'}* credited to your wallet
-
-📱 *From:* ${earningApp.name}
-🔑 *Your UID:* ${external_uid}
-🔗 *TX:* \`${tx.tx_hash.slice(0, 20)}...\`
-
-💎 *New Balance:* ${(getUserByTelegramId(user.telegram_id)?.usdt_balance || 0).toFixed(2)} USDT
-    `.trim(), { parse_mode: 'Markdown' });
-
-    return res.json({
-      success: true,
-      tx_hash: tx.tx_hash,
-      credited_amount: depositAmount,
-      user_uid: user.uid,
-      message: `Deposit of ${depositAmount} ${currency || 'USDT'} credited to ${user.full_name || user.telegram_username}`
-    });
-
-  } catch (err) {
-    console.error('Deposit error:', err);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
-
-// ─── REST API: Get wallet info (for Mini App) ─────────────────────────────────
-
-app.get('/api/wallet/:telegramId', (req, res) => {
-  const user = getUserByTelegramId(req.params.telegramId);
-  if (!user) return res.status(404).json({ error: 'User not found' });
-
-  const txs = require('./database').getUserTransactions(user.id, 20);
-  const connections = getUserConnections(user.id);
-
-  res.json({
-    uid: user.uid,
-    trc20_address: user.trc20_address,
-    usdt_balance: user.usdt_balance,
-    full_name: user.full_name,
-    transactions: txs,
-    connections
-  });
-});
-
-// ─── REST API: Get earning apps (for Mini App) ────────────────────────────────
-
-app.get('/api/apps', (req, res) => {
-  res.json(getEarningApps());
-});
-
-// ─── REST API: Verify UID connection (for Mini App) ───────────────────────────
-
-app.post('/api/connect-uid', (req, res) => {
-  const { telegram_id, app_id, external_uid } = req.body;
-  if (!telegram_id || !app_id || !external_uid) {
-    return res.status(400).json({ success: false, error: 'Missing fields' });
-  }
-
-  const user = getUserByTelegramId(telegram_id);
-  if (!user) return res.status(404).json({ success: false, error: 'User not found' });
-
-  const app = getEarningAppById(app_id);
-  if (!app) return res.status(404).json({ success: false, error: 'App not found' });
-
-  connectUID(user.id, app_id, external_uid);
-  res.json({ success: true, message: `UID ${external_uid} connected to ${app.name}` });
-});
-
-// ─── Error handling ───────────────────────────────────────────────────────────
-
-bot.on('polling_error', (err) => console.error('Polling error:', err.message));
-
-// ─── REST API: Auth (for Mini App) ───────────────────────────────────────────
-
+// ─── REST API: Auth ────────────────────────────────────────────────────────────
 app.post('/api/auth', (req, res) => {
   try {
     const { initData } = req.body;
-    
-    // Parse Telegram initData
+
     let telegramId = null;
     let username = '';
     let fullName = '';
-    
+
     if (initData) {
       try {
         const params = new URLSearchParams(initData);
         const userStr = params.get('user');
         if (userStr) {
-          const userData = JSON.parse(userStr);
-          telegramId = userData.id;
-          username = userData.username || '';
-          fullName = [userData.first_name, userData.last_name].filter(Boolean).join(' ');
+          const u = JSON.parse(userStr);
+          telegramId = u.id;
+          username = u.username || '';
+          fullName = [u.first_name, u.last_name].filter(Boolean).join(' ');
         }
-      } catch(e) {
+      } catch (e) {
         console.log('initData parse error:', e.message);
       }
     }
-    
+
     if (!telegramId) {
-      return res.status(401).json({ error: 'No Telegram data found. Open this app through Telegram.' });
+      return res.status(401).json({ error: 'No Telegram identity. Please open this app through the Telegram bot.' });
     }
-    
+
     const user = getOrCreateUser(telegramId, username, fullName);
-    const txs = require('./database').getUserTransactions(user.id, 20);
+    const txs = getUserTransactions(user.id, 30);
     const connections = getUserConnections(user.id);
-    
-    res.json({
+    const hourlyStatus = getHourlyStatus(telegramId);
+
+    return res.json({
       success: true,
       user: {
         telegramId: user.telegram_id,
@@ -765,46 +622,85 @@ app.post('/api/auth', (req, res) => {
         username: user.telegram_username,
         uid: user.uid,
         trc20Address: user.trc20_address,
-        balance: user.usdt_balance
+        balance: user.usdt_balance,
+        hourlyStatus
       },
       transactions: txs,
       connections
     });
   } catch (err) {
     console.error('Auth error:', err);
-    res.status(500).json({ error: 'Server error' });
+    return res.status(500).json({ error: 'Server error: ' + err.message });
   }
 });
 
-// ─── REST API: Withdraw (for Mini App) ───────────────────────────────────────
-
-app.post('/api/withdraw', async (req, res) => {
+// ─── REST API: Claim Hourly Earning ───────────────────────────────────────────
+app.post('/api/claim-hourly', (req, res) => {
   try {
-    const { initData, toAddress, amount, currency, network } = req.body;
-    
-    // Parse telegram ID from initData
+    const { initData } = req.body;
     let telegramId = null;
+
     if (initData) {
       try {
         const params = new URLSearchParams(initData);
         const userStr = params.get('user');
-        if (userStr) {
-          const userData = JSON.parse(userStr);
-          telegramId = userData.id;
-        }
-      } catch(e) {}
+        if (userStr) telegramId = JSON.parse(userStr).id;
+      } catch (e) {}
     }
-    
+
     if (!telegramId) return res.status(401).json({ error: 'Unauthorized' });
-    
+
+    const result = claimHourlyEarning(telegramId);
+    return res.json(result);
+  } catch (err) {
+    console.error('Claim hourly error:', err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ─── REST API: Hourly Status ──────────────────────────────────────────────────
+app.post('/api/hourly-status', (req, res) => {
+  try {
+    const { initData } = req.body;
+    let telegramId = null;
+    if (initData) {
+      try {
+        const params = new URLSearchParams(initData);
+        const u = params.get('user');
+        if (u) telegramId = JSON.parse(u).id;
+      } catch (e) {}
+    }
+    if (!telegramId) return res.status(401).json({ error: 'Unauthorized' });
+    return res.json(getHourlyStatus(telegramId));
+  } catch (err) {
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ─── REST API: Withdraw ───────────────────────────────────────────────────────
+app.post('/api/withdraw', async (req, res) => {
+  try {
+    const { initData, toAddress, amount, currency, network } = req.body;
+
+    let telegramId = null;
+    if (initData) {
+      try {
+        const params = new URLSearchParams(initData);
+        const u = params.get('user');
+        if (u) telegramId = JSON.parse(u).id;
+      } catch (e) {}
+    }
+
+    if (!telegramId) return res.status(401).json({ error: 'Unauthorized' });
+
     const user = getUserByTelegramId(telegramId);
     if (!user) return res.status(404).json({ error: 'User not found' });
-    
+
     const withdrawAmt = parseFloat(amount);
     if (isNaN(withdrawAmt) || withdrawAmt <= 0) return res.status(400).json({ error: 'Invalid amount' });
     if (withdrawAmt > user.usdt_balance) return res.status(400).json({ error: 'Insufficient balance' });
     if (withdrawAmt < 1) return res.status(400).json({ error: 'Minimum withdrawal is 1 USDT' });
-    
+
     const fees = calculateFees(withdrawAmt);
     const wr = createWithdrawalRequest({
       user_id: user.id,
@@ -816,8 +712,8 @@ app.post('/api/withdraw', async (req, res) => {
       gateway_fee: fees.gatewayFee,
       total_fee: fees.totalFee
     });
-    
-    res.json({
+
+    return res.json({
       success: true,
       withdrawal: {
         id: wr.id,
@@ -834,71 +730,145 @@ app.post('/api/withdraw', async (req, res) => {
     });
   } catch (err) {
     console.error('Withdraw error:', err);
-    res.status(500).json({ error: 'Server error' });
+    return res.status(500).json({ error: 'Server error' });
   }
 });
 
-// ─── REST API: Upload receipt (for Mini App) ─────────────────────────────────
-
+// ─── REST API: Upload Receipt (base64 from web) ───────────────────────────────
 app.post('/api/receipt', async (req, res) => {
   try {
-    const { initData, withdrawalId, receiptUrl } = req.body;
-    
+    const { initData, withdrawalId, receiptBase64 } = req.body;
+
     let telegramId = null;
+    let fullName = '', username = '';
     if (initData) {
       try {
         const params = new URLSearchParams(initData);
-        const userStr = params.get('user');
-        if (userStr) telegramId = JSON.parse(userStr).id;
-      } catch(e) {}
+        const u = params.get('user');
+        if (u) {
+          const ud = JSON.parse(u);
+          telegramId = ud.id;
+          username = ud.username || '';
+          fullName = [ud.first_name, ud.last_name].filter(Boolean).join(' ');
+        }
+      } catch (e) {}
     }
-    
+
     if (!telegramId) return res.status(401).json({ error: 'Unauthorized' });
-    
+
     const wr = getWithdrawalById(parseInt(withdrawalId));
     if (!wr) return res.status(404).json({ error: 'Withdrawal not found' });
-    
-    updateWithdrawal(parseInt(withdrawalId), { status: 'fee_paid', receipt_file_id: receiptUrl || 'web_upload' });
-    
-    const user = getUserByTelegramId(telegramId);
-    
-    // Notify admin
-    await bot.sendMessage(ADMIN_CHAT_ID, `
-🔔 *New Fee Receipt (Web Upload)*
+    if (wr.status !== 'awaiting_fee') return res.status(400).json({ error: 'Receipt already submitted for this request' });
 
-👤 *User:* ${user?.full_name || 'Unknown'} (@${user?.telegram_username || 'N/A'})
-🆔 *Wallet UID:* ${user?.uid}
-🔢 *Request ID:* #${wr.id}
+    updateWithdrawal(parseInt(withdrawalId), { status: 'fee_paid', receipt_file_id: 'web_upload' });
 
-━━━━━━━━━━━━━━━━━━━━
+    // Send notification to admin
+    const caption = `
+📤 *Fee Receipt — Withdrawal #${withdrawalId}*
+
+👤 *User:* ${fullName || 'Unknown'} (@${username || 'N/A'})
+🆔 *UID:* ${wr.wallet_uid}
+
 💰 *Amount:* ${wr.amount} USDT
 📬 *To:* \`${wr.to_address}\`
-⛽ *Gas Fee:* ${wr.gas_fee} USDT
-🏦 *Gateway Fee:* ${wr.gateway_fee} USDT
+🌐 *Network:* ${wr.network}
+⛽ *Gas:* ${wr.gas_fee} USDT
+🏦 *Gateway:* ${wr.gateway_fee} USDT
 💸 *Total Fee:* ${wr.total_fee} USDT
-━━━━━━━━━━━━━━━━━━━━
+    `.trim();
 
-${receiptUrl ? `Receipt: ${receiptUrl}` : 'Receipt uploaded via web interface'}
-    `.trim(), {
-      parse_mode: 'Markdown',
-      reply_markup: {
-        inline_keyboard: [[
-          { text: '✅ APPROVE', callback_data: `approve_${wr.id}` },
-          { text: '❌ REJECT', callback_data: `reject_${wr.id}` }
-        ]]
-      }
-    });
-    
-    res.json({ success: true, message: 'Receipt submitted for review' });
+    if (receiptBase64) {
+      // Send base64 image to admin
+      const imgBuffer = Buffer.from(receiptBase64.replace(/^data:image\/\w+;base64,/, ''), 'base64');
+      await bot.sendPhoto(ADMIN_CHAT_ID, imgBuffer, {
+        caption,
+        parse_mode: 'Markdown',
+        ...approveRejectKeyboard(parseInt(withdrawalId))
+      });
+    } else {
+      await bot.sendMessage(ADMIN_CHAT_ID, caption + '\n\n_(No image attached)_', {
+        parse_mode: 'Markdown',
+        ...approveRejectKeyboard(parseInt(withdrawalId))
+      });
+    }
+
+    return res.json({ success: true, message: 'Receipt submitted. Awaiting admin review.' });
   } catch (err) {
     console.error('Receipt error:', err);
-    res.status(500).json({ error: 'Server error' });
+    return res.status(500).json({ error: 'Server error: ' + err.message });
   }
 });
 
+// ─── REST API: Deposit from Earning App ───────────────────────────────────────
+app.post('/api/deposit', async (req, res) => {
+  try {
+    const { app_token, external_uid, amount, currency, tx_ref } = req.body;
 
-// ─── Error handling ───────────────────────────────────────────────────────────
+    if (!app_token || !external_uid || !amount) {
+      return res.status(400).json({ success: false, error: 'Missing required fields' });
+    }
 
-bot.on('polling_error', (err) => console.error('Polling error:', err.message));
-process.on('uncaughtException', (err) => console.error('Uncaught Exception:', err));
+    const { getEarningAppByToken } = require('./database');
+    const app = getEarningAppByToken(app_token);
+    if (!app) return res.status(403).json({ success: false, error: 'Invalid app token' });
+
+    const user = findUserByExternalUID(app.id, external_uid);
+    if (!user) return res.status(404).json({ success: false, error: 'UID not connected to any wallet' });
+
+    const depositAmt = parseFloat(amount);
+    if (isNaN(depositAmt) || depositAmt <= 0) return res.status(400).json({ success: false, error: 'Invalid amount' });
+
+    updateUserBalance(user.id, depositAmt);
+    const tx = createTransaction({
+      user_id: user.id,
+      type: 'deposit',
+      amount: depositAmt,
+      currency: currency || 'USDT',
+      network: 'Internal',
+      source_app: app.name,
+      source_uid: external_uid,
+      tx_hash: tx_ref || undefined,
+      status: 'completed'
+    });
+
+    // Notify user
+    await bot.sendMessage(user.telegram_id, `
+💰 *New Deposit Received!*
+
++*${depositAmt} ${currency || 'USDT'}* from *${app.name}*
+🆔 Source UID: \`${external_uid}\`
+🔢 TX Ref: \`${tx.tx_hash.slice(0, 16)}...\`
+
+Open your wallet to view your updated balance! 💎
+    `.trim(), { parse_mode: 'Markdown' });
+
+    return res.json({ success: true, tx_id: tx.id, new_balance: (user.usdt_balance + depositAmt).toFixed(2) });
+  } catch (err) {
+    console.error('Deposit error:', err);
+    return res.status(500).json({ success: false, error: 'Server error' });
+  }
+});
+
+// ─── REST API: Get Earning Apps ───────────────────────────────────────────────
+app.get('/api/apps', (req, res) => {
+  res.json(getEarningApps());
+});
+
+// ─── REST API: Connect UID ────────────────────────────────────────────────────
+app.post('/api/connect-uid', (req, res) => {
+  const { telegram_id, app_id, external_uid } = req.body;
+  if (!telegram_id || !app_id || !external_uid) {
+    return res.status(400).json({ success: false, error: 'Missing fields' });
+  }
+  const user = getUserByTelegramId(telegram_id);
+  if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+  const app = getEarningAppById(app_id);
+  if (!app) return res.status(404).json({ success: false, error: 'App not found' });
+  connectUID(user.id, app_id, external_uid);
+  return res.json({ success: true, message: `UID ${external_uid} connected to ${app.name}` });
+});
+
+// ─── Error Handling ───────────────────────────────────────────────────────────
+if (bot) bot.on('polling_error', (err) => console.error('Polling error:', err.message));
+process.on('uncaughtException',  (err) => console.error('Uncaught Exception:', err));
 process.on('unhandledRejection', (err) => console.error('Unhandled Rejection:', err));
