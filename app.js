@@ -29,10 +29,13 @@ let state = {
 async function init() {
   try {
     const initData = tg.initData || '';
+    // Fallback: use initDataUnsafe.user if initData string is empty
+    const unsafeUser = tg.initDataUnsafe && tg.initDataUnsafe.user ? tg.initDataUnsafe.user : null;
+    
     const res  = await fetch(`${API_BASE}/auth`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ initData })
+      body: JSON.stringify({ initData, unsafeUser })
     });
     const data = await res.json();
 
@@ -166,7 +169,7 @@ async function claimHourly() {
     const res  = await fetch(`${API_BASE}/claim-hourly`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ initData: tg.initData || '' })
+      body: JSON.stringify({ initData: tg.initData || '', unsafeUser: (tg.initDataUnsafe && tg.initDataUnsafe.user) ? tg.initDataUnsafe.user : null })
     });
     const data = await res.json();
 
@@ -193,7 +196,7 @@ async function claimHourly() {
       const statusRes = await fetch(`${API_BASE}/hourly-status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ initData: tg.initData || '' })
+        body: JSON.stringify({ initData: tg.initData || '', unsafeUser: (tg.initDataUnsafe && tg.initDataUnsafe.user) ? tg.initDataUnsafe.user : null })
       });
       const statusData = await statusRes.json();
       state.hourlyStatus = statusData;
@@ -607,7 +610,7 @@ async function submitUID() {
       const authRes = await fetch(`${API_BASE}/auth`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ initData: tg.initData || '' })
+        body: JSON.stringify({ initData: tg.initData || '', unsafeUser: (tg.initDataUnsafe && tg.initDataUnsafe.user) ? tg.initDataUnsafe.user : null })
       });
       const authData = await authRes.json();
       if (authData.success) {
