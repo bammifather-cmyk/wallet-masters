@@ -118,12 +118,12 @@ bot.onText(/\/start/, async (msg) => {
   } catch(e) { console.log('Menu btn err:', e.message); }
 
   if (isAdmin) {
-    return bot.sendMessage(id, `Admin Panel — Wallet Masters\n\nUID: ${user.uid}\nUse the menu to manage the platform.`, adminMenu);
+    return bot.sendMessage(id, `⚙️ Admin Panel — Wallet Masters\n\n🆔 UID: ${user.uid}\n\nUse the menu below to manage the platform.`, adminMenu);
   }
 
   // First remove keyboard so menu button shows, then send inline open button
-  await bot.sendMessage(id, 'Wallet Masters', { reply_markup: { remove_keyboard: true } });
-  return bot.sendMessage(id, `Welcome back, ${fullName || 'User'}!\n\nUID: ${user.uid}\nBalance: ${user.usdt_balance.toFixed(2)} USDT${user.is_vip ? '\nStatus: VIP Member' : ''}\n\nTap the button below OR the button at the bottom-left corner to open your wallet.`, openWalletBtn());
+  await bot.sendMessage(id, '💎 Wallet Masters', { reply_markup: { remove_keyboard: true } });
+  return bot.sendMessage(id, `👋 Welcome back, ${fullName || 'User'}!\n\n🆔 UID: ${user.uid}\n💰 Balance: ${user.usdt_balance.toFixed(2)} USDT${user.is_vip ? '\n👑 Status: VIP Member' : ''}\n\nTap the button below to open your wallet 👇`, openWalletBtn());
 });
 
 // ─── Claim Hourly ──────────────────────────────────────────────────────────────
@@ -131,9 +131,9 @@ bot.onText(/Claim Hourly Bonus/, async (msg) => {
   const user = getOrCreateUser(msg.from.id, msg.from.username, [msg.from.first_name, msg.from.last_name].filter(Boolean).join(' '));
   const result = claimHourlyEarning(msg.from.id);
   if (result.success) {
-    return bot.sendMessage(msg.from.id, `Hourly Bonus Claimed\n\n+${result.amount} USDT credited!\nNew Balance: ${result.newBalance.toFixed(2)} USDT\n${result.isVIP ? 'VIP Bonus' : 'Standard Bonus'}\n\nNext claim in 1 hour.`, mainMenu());
+    return bot.sendMessage(msg.from.id, `✅ Hourly Bonus Claimed!\n\n💰 +${result.amount} USDT credited to your wallet!\n📊 New Balance: ${result.newBalance.toFixed(2)} USDT\n${result.isVIP ? '👑 VIP Bonus' : '⏱ Standard Bonus'}\n\n⏰ Next claim available in 1 hour.`, mainMenu());
   }
-  return bot.sendMessage(msg.from.id, `Not ready yet\n\n${result.error}`, mainMenu());
+  return bot.sendMessage(msg.from.id, `⏳ Not Ready Yet\n\n${result.error}`, mainMenu());
 });
 
 // ─── My Transactions ───────────────────────────────────────────────────────────
@@ -141,28 +141,28 @@ bot.onText(/My Transactions/, async (msg) => {
   const user = getUserByTelegramId(msg.from.id);
   if (!user) return bot.sendMessage(msg.from.id, 'Send /start first.');
   const txs = getUserTransactions(user.id, 5);
-  if (!txs.length) return bot.sendMessage(msg.from.id, 'No transactions yet.', mainMenu());
+  if (!txs.length) return bot.sendMessage(msg.from.id, '📭 No transactions yet.', mainMenu());
   const list = txs.map(tx => {
     const date = new Date(tx.created_at * 1000).toLocaleDateString();
     const sign = ['deposit','earning'].includes(tx.type) ? '+' : '-';
     return `${sign}${tx.amount} ${tx.currency} | ${tx.status.toUpperCase()} | ${date}`;
   }).join('\n');
-  return bot.sendMessage(msg.from.id, `Recent Transactions\n\n${list}`, mainMenu());
+  return bot.sendMessage(msg.from.id, `📋 Recent Transactions\n\n${list}`, mainMenu());
 });
 
 // ─── My UID ────────────────────────────────────────────────────────────────────
 bot.onText(/My UID & Address/, async (msg) => {
   const user = getUserByTelegramId(msg.from.id);
   if (!user) return bot.sendMessage(msg.from.id, 'Send /start first.');
-  return bot.sendMessage(msg.from.id, `Your Wallet Info\n\nUID: ${user.uid}\nDeposit Address: ${user.trc20_address}\nBalance: ${user.usdt_balance.toFixed(2)} USDT\nVIP: ${user.is_vip ? 'Yes' : 'No'}`, mainMenu());
+  return bot.sendMessage(msg.from.id, `💎 Your Wallet Info\n\n🆔 UID: ${user.uid}\n📬 Deposit Address:\n${user.trc20_address}\n💰 Balance: ${user.usdt_balance.toFixed(2)} USDT\n👑 VIP: ${user.is_vip ? 'Yes ✅' : 'No'}`, mainMenu());
 });
 
 // ─── Connect Earning App ────────────────────────────────────────────────────────
 bot.onText(/Connect Earning App/, async (msg) => {
   const apps = getEarningApps();
-  if (!apps.length) return bot.sendMessage(msg.from.id, 'No earning apps listed yet.', mainMenu());
+  if (!apps.length) return bot.sendMessage(msg.from.id, '📭 No earning apps listed yet. Check back soon!', mainMenu());
   const keyboard = apps.map(a => [{ text: a.name, callback_data: `connect_app_${a.id}` }]);
-  return bot.sendMessage(msg.from.id, 'Select an Earning App to connect:', { reply_markup: { inline_keyboard: keyboard } });
+  return bot.sendMessage(msg.from.id, '🔗 Select an Earning App to connect your UID:', { reply_markup: { inline_keyboard: keyboard } });
 });
 
 // ─── Support ───────────────────────────────────────────────────────────────────
@@ -170,14 +170,14 @@ bot.onText(/^Support$/, async (msg) => {
   const user = getUserByTelegramId(msg.from.id);
   if (!user) return bot.sendMessage(msg.from.id, 'Send /start first.');
   pendingActions[msg.from.id] = { step: 'support_message' };
-  return bot.sendMessage(msg.from.id, 'Support Team\n\nType your message and we will reply as soon as possible:', mainMenu());
+  return bot.sendMessage(msg.from.id, '💬 Support Team\n\nType your message below and we will reply as soon as possible:', mainMenu());
 });
 
 // ─── Admin: Pending Withdrawals ─────────────────────────────────────────────────
 bot.onText(/Pending Withdrawals/, async (msg) => {
   if (String(msg.from.id) !== String(ADMIN_CHAT_ID)) return;
   const pending = getPendingWithdrawals();
-  if (!pending.length) return bot.sendMessage(msg.from.id, 'No pending withdrawals.', adminMenu);
+  if (!pending.length) return bot.sendMessage(msg.from.id, '✅ No pending withdrawals at the moment.', adminMenu);
   for (const wr of pending.slice(0, 10)) await sendWithdrawalToAdmin(wr);
 });
 
@@ -185,22 +185,22 @@ bot.onText(/Pending Withdrawals/, async (msg) => {
 bot.onText(/List Earning Apps/, async (msg) => {
   if (String(msg.from.id) !== String(ADMIN_CHAT_ID)) return;
   const apps = getEarningApps();
-  if (!apps.length) return bot.sendMessage(msg.from.id, 'No apps added yet.', adminMenu);
+  if (!apps.length) return bot.sendMessage(msg.from.id, '📭 No earning apps added yet.', adminMenu);
   const list = apps.map((a, i) => `${i+1}. ${a.name} | ID: ${a.id}`).join('\n');
-  bot.sendMessage(msg.from.id, `Earning Apps (${apps.length})\n\n${list}`, adminMenu);
+  bot.sendMessage(msg.from.id, `📱 Earning Apps (${apps.length})\n\n${list}`, adminMenu);
 });
 
 // ─── Admin: Fee Address ─────────────────────────────────────────────────────────
 bot.onText(/Fee Address/, (msg) => {
   if (String(msg.from.id) !== String(ADMIN_CHAT_ID)) return;
-  bot.sendMessage(msg.from.id, `Fee Collection Address\n\n${FEE_ADDRESS}\n\nNetwork: TRC20\nFee: 4% gateway on all withdrawals`, adminMenu);
+  bot.sendMessage(msg.from.id, `💳 Fee Collection Address\n\n${FEE_ADDRESS}\n\n🌐 Network: TRC20\n💰 Fee: 4% gateway on all withdrawals`, adminMenu);
 });
 
 // ─── Admin: User Stats ──────────────────────────────────────────────────────────
 bot.onText(/User Stats/, (msg) => {
   if (String(msg.from.id) !== String(ADMIN_CHAT_ID)) return;
   const s = getStats();
-  bot.sendMessage(msg.from.id, `Platform Stats\n\nTotal Users: ${s.totalUsers}\nVIP Members: ${s.vipUsers}\nTransactions: ${s.totalTransactions}\nPending Withdrawals: ${s.pendingWithdrawals}\nTotal Balance (all users): ${s.totalBalance} USDT`, adminMenu);
+  bot.sendMessage(msg.from.id, `📊 Platform Stats\n\n👥 Total Users: ${s.totalUsers}\n👑 VIP Members: ${s.vipUsers}\n📋 Transactions: ${s.totalTransactions}\n⏳ Pending Withdrawals: ${s.pendingWithdrawals}\n💰 Total Balance: ${s.totalBalance} USDT`, adminMenu);
 });
 
 // ─── Admin: Support Threads ────────────────────────────────────────────────────
@@ -239,7 +239,7 @@ bot.on('message', async (msg) => {
     if (!wr) return bot.sendMessage(uid, 'Withdrawal not found.', mainMenu());
     updateWithdrawal(wrId, { status: 'fee_paid', receipt_file_id: fileId });
     delete pendingActions[uid];
-    await bot.sendMessage(uid, `Receipt submitted for Request #${wrId}. You will be notified once approved.`, mainMenu());
+    await bot.sendMessage(uid, `📤 Receipt Submitted!\n\nRequest #${wrId} is under review.\n\n✅ You will be notified once it is approved.`, mainMenu());
     const user = getUserByTelegramId(uid);
     const caption = buildReceiptCaption(wr, user);
     await bot.sendPhoto(ADMIN_CHAT_ID, fileId, { caption, parse_mode: 'Markdown', ...approveRejectKeyboard(wrId) });
@@ -254,9 +254,9 @@ bot.on('message', async (msg) => {
     if (!user) { delete pendingActions[uid]; return; }
     createSupportMessage({ user_id: user.id, telegram_id: String(uid), sender: 'user', sender_name: user.full_name || user.telegram_username || 'User', message: text });
     delete pendingActions[uid];
-    await bot.sendMessage(uid, 'Message sent to Support Team. We will reply soon.', mainMenu());
+    await bot.sendMessage(uid, '✅ Message sent to Support Team!\n\nWe will reply to you as soon as possible.', mainMenu());
     // Notify admin
-    await bot.sendMessage(ADMIN_CHAT_ID, `Support Message\n\nFrom: ${user.full_name || 'User'} (@${user.telegram_username || 'N/A'})\nUID: ${user.uid}\n\n"${text}"`, {
+    await bot.sendMessage(ADMIN_CHAT_ID, `💬 New Support Message\n\n👤 From: ${user.full_name || 'User'} (@${user.telegram_username || 'N/A'})\n🆔 UID: ${user.uid}\n\n"${text}"`, {
       reply_markup: { inline_keyboard: [[{ text: 'Reply', callback_data: `reply_support_${user.id}` }]] }
     });
     return;
@@ -269,8 +269,8 @@ bot.on('message', async (msg) => {
     if (!targetUser) { delete pendingActions[uid]; return; }
     createSupportMessage({ user_id: targetUserId, telegram_id: targetUser.telegram_id, sender: 'admin', sender_name: 'Support Team', message: text });
     delete pendingActions[uid];
-    await bot.sendMessage(uid, 'Reply sent.', adminMenu);
-    await bot.sendMessage(targetUser.telegram_id, `Support Team Reply\n\n${text}\n\n—Support Team`, {
+    await bot.sendMessage(uid, '✅ Reply sent to user.', adminMenu);
+    await bot.sendMessage(targetUser.telegram_id, `💬 Support Team\n\n${text}\n\n— Wallet Masters Support`, {
       reply_markup: { inline_keyboard: [[{ text: 'Reply', callback_data: `user_reply_support` }]] }
     });
     return;
@@ -282,8 +282,8 @@ bot.on('message', async (msg) => {
     if (!user) { delete pendingActions[uid]; return; }
     createSupportMessage({ user_id: user.id, telegram_id: String(uid), sender: 'user', sender_name: user.full_name || 'User', message: text });
     delete pendingActions[uid];
-    await bot.sendMessage(uid, 'Reply sent to Support Team.', mainMenu());
-    await bot.sendMessage(ADMIN_CHAT_ID, `Support Reply\n\nFrom: ${user.full_name || 'User'}\nUID: ${user.uid}\n\n"${text}"`, {
+    await bot.sendMessage(uid, '✅ Reply sent to Support Team!', mainMenu());
+    await bot.sendMessage(ADMIN_CHAT_ID, `💬 User Reply\n\n👤 From: ${user.full_name || 'User'}\n🆔 UID: ${user.uid}\n\n"${text}"`, {
       reply_markup: { inline_keyboard: [[{ text: 'Reply', callback_data: `reply_support_${user.id}` }]] }
     });
     return;
@@ -305,7 +305,7 @@ bot.on('message', async (msg) => {
   if (action.step === 'add_app_desc') {
     const app = addEarningApp(action.name, action.token, text === '-' ? '' : text);
     delete pendingActions[uid];
-    return bot.sendMessage(uid, `Earning App Added!\n\nName: ${app.name}\nID: ${app.id}\nUsers can now connect via their UID.`, adminMenu);
+    return bot.sendMessage(uid, `✅ Earning App Added!\n\n📱 Name: ${app.name}\n🆔 ID: ${app.id}\n\nUsers can now connect via their UID.`, adminMenu);
   }
 
   // ── Connect App: UID entry ──
@@ -317,7 +317,7 @@ bot.on('message', async (msg) => {
     if (text.length < 3) return bot.sendMessage(uid, 'UID too short. Enter a valid UID:');
     connectUID(user.id, appId, text);
     delete pendingActions[uid];
-    return bot.sendMessage(uid, `Connected!\n\nApp: ${app.name}\nUID: ${text}\n\nEarnings will appear in your wallet automatically.`, mainMenu());
+    return bot.sendMessage(uid, `✅ Connected Successfully!\n\n📱 App: ${app.name}\n🆔 UID: ${text}\n\n💰 Earnings from this app will appear in your wallet automatically.`, mainMenu());
   }
 
   // ── Withdrawal: address ──
@@ -371,7 +371,7 @@ bot.on('callback_query', async (query) => {
       if (message.photo) await bot.editMessageCaption(`APPROVED — #${wrId} | ${wr.amount} USDT`, { chat_id: message.chat.id, message_id: message.message_id });
       else await bot.editMessageText(`APPROVED — #${wrId} | ${wr.amount} USDT to ${wr.to_address}`, { chat_id: message.chat.id, message_id: message.message_id });
     } catch(e) {}
-    await bot.sendMessage(wr.telegram_id, `Withdrawal Approved\n\nYour withdrawal of ${wr.amount} USDT has been approved.\n\nDestination: ${wr.to_address || wr.bank_name}\nNetwork: ${wr.network}\nEstimated: 5-30 minutes\n\nThank you for using Wallet Masters!`);
+    await bot.sendMessage(wr.telegram_id, `✅ Withdrawal Approved!\n\n💰 Your withdrawal of ${wr.amount} USDT has been approved.\n\n📬 Destination: ${wr.to_address || wr.bank_name}\n🌐 Network: ${wr.network}\n⏱ Estimated: 5–30 minutes\n\n💎 Thank you for using Wallet Masters!`);
     return;
   }
 
@@ -387,7 +387,7 @@ bot.on('callback_query', async (query) => {
       if (message.photo) await bot.editMessageCaption(`REJECTED — #${wrId}`, { chat_id: message.chat.id, message_id: message.message_id });
       else await bot.editMessageText(`REJECTED — #${wrId}`, { chat_id: message.chat.id, message_id: message.message_id });
     } catch(e) {}
-    await bot.sendMessage(wr.telegram_id, `Withdrawal Rejected\n\nRequest #${wrId} has been rejected.\n\nReasons: Invalid receipt, wrong amount, or duplicate submission.\nContact support if you believe this is an error.`);
+    await bot.sendMessage(wr.telegram_id, `❌ Withdrawal Rejected\n\nRequest #${wrId} has been rejected.\n\n⚠️ Reasons: Invalid receipt, wrong amount, or duplicate submission.\n\nContact our Support Team if you believe this is an error.`);
     return;
   }
 
@@ -417,7 +417,7 @@ bot.on('callback_query', async (query) => {
     upgradeToVIP(targetUser.id);
     await bot.answerCallbackQuery(query.id, { text: 'VIP Approved!' });
     try { await bot.editMessageCaption(`VIP APPROVED — ${targetUser.full_name || 'User'} | UID: ${targetUser.uid}`, { chat_id: message.chat.id, message_id: message.message_id }); } catch(e) {}
-    await bot.sendMessage(targetUser.telegram_id, `VIP Activated!\n\nCongratulations ${targetUser.full_name || ''}! Your VIP membership has been approved.\n\nYou now earn 200 USDT every hour and have access to bank withdrawals.\n\nOpen your wallet to start enjoying VIP benefits!`);
+    await bot.sendMessage(targetUser.telegram_id, `💎 VIP Activated!\n\n🎉 Congratulations ${targetUser.full_name || ''}! Your VIP membership has been approved.\n\n✨ You now earn 200 USDT every hour and have access to bank withdrawals.\n\nOpen your wallet to start enjoying VIP benefits! 🚀`);
     return;
   }
 
@@ -428,7 +428,7 @@ bot.on('callback_query', async (query) => {
     if (!targetUser) return bot.answerCallbackQuery(query.id, { text: 'User not found.' });
     await bot.answerCallbackQuery(query.id, { text: 'VIP Rejected.' });
     try { await bot.editMessageCaption(`VIP REJECTED — ${targetUser.full_name || 'User'}`, { chat_id: message.chat.id, message_id: message.message_id }); } catch(e) {}
-    await bot.sendMessage(targetUser.telegram_id, `VIP Request Rejected\n\nYour VIP upgrade request was not approved.\n\nReason: Payment not confirmed or incorrect amount.\nPlease ensure you sent exactly 200 USDT on TRC20 and try again.\n\nContact Support Team if you believe this is an error.`);
+    await bot.sendMessage(targetUser.telegram_id, `❌ VIP Request Rejected\n\nYour VIP upgrade request was not approved.\n\n⚠️ Reason: Payment not confirmed or incorrect amount.\nPlease ensure you sent exactly 200 USDT on TRC20 and try again.\n\n💬 Contact our Support Team if you believe this is an error.`);
     return;
   }
 
@@ -578,7 +578,7 @@ app.post('/api/check-vip', async (req, res) => {
     const totalDeposited = txs.filter(t => t.type === 'deposit').reduce((s, t) => s + t.amount, 0);
     if (totalDeposited >= 200) {
       upgradeToVIP(user.id);
-      await bot.sendMessage(user.telegram_id, `VIP Upgrade!\n\nCongratulations! You have been upgraded to VIP Member.\n\nVIP Benefits:\n- Earn 200 USDT every hour\n- Bank withdrawal access\n- Priority support\n\nYour upgraded hourly earnings start now!`);
+      await bot.sendMessage(user.telegram_id, `💎 VIP Activated!\n\n🎉 Congratulations! You have been upgraded to VIP Member.\n\n✨ VIP Benefits:\n👑 Earn 200 USDT every hour\n🏦 Bank withdrawal access\n💬 Priority support\n\n🚀 Your upgraded earnings start right now!`);
       return res.json({ success: true, isVIP: true, message: 'Upgraded to VIP!' });
     }
     return res.json({ success: false, isVIP: false, totalDeposited, needed: 200 - totalDeposited });
@@ -604,9 +604,9 @@ app.post('/api/deposit', async (req, res) => {
     const totalDeposited = allTxs.filter(t => t.type === 'deposit').reduce((s, t) => s + t.amount, 0);
     if (!user.is_vip && totalDeposited >= 200) {
       upgradeToVIP(user.id);
-      await bot.sendMessage(user.telegram_id, `VIP Upgrade!\n\nYou've been upgraded to VIP Member after depositing 200+ USDT!\n\nEnjoy 200 USDT/hr and bank withdrawal access.`);
+      await bot.sendMessage(user.telegram_id, `💎 VIP Activated!\n\n👑 You've been upgraded to VIP Member after depositing 200+ USDT!\n\n🎉 Benefits unlocked:\n• Earn 200 USDT every hour\n• Bank & payment withdrawal\n• Priority support\n\nOpen your wallet to enjoy your VIP benefits!`);
     }
-    await bot.sendMessage(user.telegram_id, `New Deposit\n\n+${depositAmt} ${currency || 'USDT'} from ${appData.name}\nUID: ${external_uid}\nRef: ${tx.tx_hash.slice(0,16)}...`);
+    await bot.sendMessage(user.telegram_id, `💰 New Deposit!\n\n+${depositAmt} ${currency || 'USDT'} received from ${appData.name}\n🆔 UID: ${external_uid}\n🔗 Ref: ${tx.tx_hash.slice(0,16)}...`);
     return res.json({ success: true, tx_id: tx.id });
   } catch(err) { console.error('Deposit error:', err); return res.status(500).json({ success: false, error: 'Server error' }); }
 });
@@ -648,7 +648,7 @@ app.post('/api/support/send', async (req, res) => {
     const { message } = req.body;
     if (!message?.trim()) return res.status(400).json({ error: 'Empty message' });
     const msg = createSupportMessage({ user_id: user.id, telegram_id: String(telegramId), sender: 'user', sender_name: user.full_name || 'User', message: message.trim() });
-    await bot.sendMessage(ADMIN_CHAT_ID, `Support Message\n\n${user.full_name || 'User'} (@${user.telegram_username || 'N/A'}) | UID: ${user.uid}\n\n"${message.trim()}"`, {
+    await bot.sendMessage(ADMIN_CHAT_ID, `💬 Support Message\n\n👤 ${user.full_name || 'User'} (@${user.telegram_username || 'N/A'})\n🆔 UID: ${user.uid}\n\n"${message.trim()}"`, {
       reply_markup: { inline_keyboard: [[{ text: 'Reply', callback_data: `reply_support_${user.id}` }]] }
     });
     return res.json({ success: true, message: msg });
@@ -681,7 +681,7 @@ app.post('/api/vip-receipt', async (req, res) => {
     if (!receiptBase64) return res.status(400).json({ error: 'No receipt uploaded' });
 
     // Send to admin with Approve/Reject buttons
-    const caption = `VIP Upgrade Request\n\nUser: ${user.full_name || 'Unknown'} (@${user.telegram_username || 'N/A'})\nUID: ${user.uid}\nTelegram ID: ${telegramId}\n\nPayment receipt attached. Verify 200 USDT was received.`;
+    const caption = `👑 VIP Upgrade Request\n\n👤 User: ${user.full_name || 'Unknown'} (@${user.telegram_username || 'N/A'})\n🆔 UID: ${user.uid}\n📱 Telegram ID: ${telegramId}\n\n📸 Payment receipt attached.\n✅ Verify that 200 USDT was received before approving.`;
     const imgBuf = Buffer.from(receiptBase64.replace(/^data:image\/\w+;base64,/, ''), 'base64');
     const approveCb = `vip_approve_${user.id}`;
     const rejectCb  = `vip_reject_${user.id}`;
