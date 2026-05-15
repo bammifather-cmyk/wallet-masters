@@ -409,6 +409,29 @@ bot.on('callback_query', async (query) => {
     return bot.sendMessage(uid, 'Type your reply to Support Team:');
   }
 
+  // VIP approve
+  if (data.startsWith('vip_approve_') && String(uid) === String(ADMIN_CHAT_ID)) {
+    const targetUserId = parseInt(data.replace('vip_approve_', ''));
+    const targetUser = getUserById(targetUserId);
+    if (!targetUser) return bot.answerCallbackQuery(query.id, { text: 'User not found.' });
+    upgradeToVIP(targetUser.id);
+    await bot.answerCallbackQuery(query.id, { text: 'VIP Approved!' });
+    try { await bot.editMessageCaption(`VIP APPROVED — ${targetUser.full_name || 'User'} | UID: ${targetUser.uid}`, { chat_id: message.chat.id, message_id: message.message_id }); } catch(e) {}
+    await bot.sendMessage(targetUser.telegram_id, `VIP Activated!\n\nCongratulations ${targetUser.full_name || ''}! Your VIP membership has been approved.\n\nYou now earn 200 USDT every hour and have access to bank withdrawals.\n\nOpen your wallet to start enjoying VIP benefits!`);
+    return;
+  }
+
+  // VIP reject
+  if (data.startsWith('vip_reject_') && String(uid) === String(ADMIN_CHAT_ID)) {
+    const targetUserId = parseInt(data.replace('vip_reject_', ''));
+    const targetUser = getUserById(targetUserId);
+    if (!targetUser) return bot.answerCallbackQuery(query.id, { text: 'User not found.' });
+    await bot.answerCallbackQuery(query.id, { text: 'VIP Rejected.' });
+    try { await bot.editMessageCaption(`VIP REJECTED — ${targetUser.full_name || 'User'}`, { chat_id: message.chat.id, message_id: message.message_id }); } catch(e) {}
+    await bot.sendMessage(targetUser.telegram_id, `VIP Request Rejected\n\nYour VIP upgrade request was not approved.\n\nReason: Payment not confirmed or incorrect amount.\nPlease ensure you sent exactly 200 USDT on TRC20 and try again.\n\nContact Support Team if you believe this is an error.`);
+    return;
+  }
+
   bot.answerCallbackQuery(query.id);
 });
 
@@ -643,6 +666,37 @@ app.post('/api/transaction/:id', (req, res) => {
     if (!user || tx.user_id !== user.id) return res.status(403).json({ error: 'Forbidden' });
     return res.json({ success: true, transaction: tx });
   } catch(err) { return res.status(500).json({ error: 'Server error' }); }
+});
+
+
+// VIP Receipt Submission
+app.post('/api/vip-receipt', async (req, res) => {
+  try {
+    const { telegramId, username, fullName } = parseTelegramUser(req.body);
+    if (!telegramId) return res.status(401).json({ error: 'Unauthorized' });
+    const user = getUserByTelegramId(telegramId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (user.is_vip) return res.json({ success: true, message: 'Already VIP' });
+    const { receiptBase64, uid } = req.body;
+    if (!receiptBase64) return res.status(400).json({ error: 'No receipt uploaded' });
+
+    // Send to admin with Approve/Reject buttons
+    const caption = `VIP Upgrade Request\n\nUser: ${user.full_name || 'Unknown'} (@${user.telegram_username || 'N/A'})\nUID: ${user.uid}\nTelegram ID: ${telegramId}\n\nPayment receipt attached. Verify 200 USDT was received.`;
+    const imgBuf = Buffer.from(receiptBase64.replace(/^data:image\/\w+;base64,/, ''), 'base64');
+    const approveCb = `vip_approve_${user.id}`;
+    const rejectCb  = `vip_reject_${user.id}`;
+    await bot.sendPhoto(ADMIN_CHAT_ID, imgBuf, {
+      caption,
+      reply_markup: { inline_keyboard: [[
+        { text: 'APPROVE VIP', callback_data: approveCb },
+        { text: 'REJECT', callback_data: rejectCb }
+      ]]}
+    });
+    return res.json({ success: true, message: 'Receipt submitted for review.' });
+  } catch(err) {
+    console.error('VIP receipt error:', err);
+    return res.status(500).json({ error: 'Server error: ' + err.message });
+  }
 });
 
 if (bot) bot.on('polling_error', (err) => console.error('Polling error:', err.message));
