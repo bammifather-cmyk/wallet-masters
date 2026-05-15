@@ -46,10 +46,11 @@ try { bot = new TelegramBot(BOT_TOKEN, { polling: true }); console.log('Bot star
 catch (err) { console.error('Bot failed:', err.message); }
 
 // ─── Auto-set menu button on startup ──────────────────────────────────────────
+// Set global default menu button on startup
 setTimeout(async () => {
   try {
-    await bot.setChatMenuButton({ menu_button: { type: 'web_app', text: 'Open Wallet', web_app: { url: MINI_APP_URL } } });
-    console.log('Menu button set:', MINI_APP_URL);
+    await bot.setChatMenuButton({ menu_button: { type: 'web_app', text: 'Open Wallet Masters', web_app: { url: MINI_APP_URL } } });
+    console.log('Global menu button set:', MINI_APP_URL);
   } catch (e) { console.log('Menu button err:', e.message); }
 }, 3000);
 
@@ -58,7 +59,6 @@ function mainMenu() {
   return {
     reply_markup: {
       keyboard: [
-        [{ text: 'Open Wallet Masters', web_app: { url: MINI_APP_URL } }],
         [{ text: 'My Transactions' }, { text: 'My UID & Address' }],
         [{ text: 'Claim Hourly Bonus' }, { text: 'Connect Earning App' }],
         [{ text: 'Support' }]
@@ -90,11 +90,19 @@ bot.onText(/\/start/, async (msg) => {
   const user = getOrCreateUser(id, username, fullName);
   const isAdmin = String(id) === String(ADMIN_CHAT_ID);
 
+  // Set menu button for this specific user (ensures it always shows)
+  try {
+    await bot.setChatMenuButton({
+      chat_id: id,
+      menu_button: { type: 'web_app', text: 'Open Wallet Masters', web_app: { url: MINI_APP_URL } }
+    });
+  } catch(e) { console.log('Menu btn err:', e.message); }
+
   if (isAdmin) {
     return bot.sendMessage(id, `Admin Panel — Wallet Masters\n\nUID: ${user.uid}\nUse the menu to manage the platform.`, adminMenu);
   }
 
-  return bot.sendMessage(id, `Welcome to Wallet Masters\n\n${fullName || 'User'}, your wallet is ready.\n\nUID: ${user.uid}\nDeposit Address: ${user.trc20_address}\nBalance: ${user.usdt_balance.toFixed(2)} USDT${user.is_vip ? '\nStatus: VIP Member' : ''}\n\nTap "Open Wallet Masters" to access your wallet.`, mainMenu());
+  return bot.sendMessage(id, `Welcome to Wallet Masters\n\n${fullName || 'User'}, your wallet is ready.\n\nUID: ${user.uid}\nDeposit Address: ${user.trc20_address}\nBalance: ${user.usdt_balance.toFixed(2)} USDT${user.is_vip ? '\nStatus: VIP Member' : ''}\n\nOpen your wallet using the button at the bottom-left corner.`, mainMenu());
 });
 
 // ─── Claim Hourly ──────────────────────────────────────────────────────────────
