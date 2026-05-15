@@ -56,6 +56,14 @@ setTimeout(async () => {
 
 // ─── Keyboards ─────────────────────────────────────────────────────────────────
 function mainMenu() {
+  // Use remove_keyboard so the left-side menu button (web_app) stays visible
+  return {
+    reply_markup: { remove_keyboard: true }
+  };
+}
+
+function mainKeyboard() {
+  // Full keyboard for when we want to show options
   return {
     reply_markup: {
       keyboard: [
@@ -63,7 +71,18 @@ function mainMenu() {
         [{ text: 'Claim Hourly Bonus' }, { text: 'Connect Earning App' }],
         [{ text: 'Support' }]
       ],
-      resize_keyboard: true
+      resize_keyboard: true,
+      one_time_keyboard: false
+    }
+  };
+}
+
+function openWalletBtn() {
+  return {
+    reply_markup: {
+      inline_keyboard: [[
+        { text: 'Open Wallet Masters', web_app: { url: MINI_APP_URL } }
+      ]]
     }
   };
 }
@@ -102,7 +121,9 @@ bot.onText(/\/start/, async (msg) => {
     return bot.sendMessage(id, `Admin Panel — Wallet Masters\n\nUID: ${user.uid}\nUse the menu to manage the platform.`, adminMenu);
   }
 
-  return bot.sendMessage(id, `Welcome to Wallet Masters\n\n${fullName || 'User'}, your wallet is ready.\n\nUID: ${user.uid}\nDeposit Address: ${user.trc20_address}\nBalance: ${user.usdt_balance.toFixed(2)} USDT${user.is_vip ? '\nStatus: VIP Member' : ''}\n\nOpen your wallet using the button at the bottom-left corner.`, mainMenu());
+  // First remove keyboard so menu button shows, then send inline open button
+  await bot.sendMessage(id, 'Wallet Masters', { reply_markup: { remove_keyboard: true } });
+  return bot.sendMessage(id, `Welcome back, ${fullName || 'User'}!\n\nUID: ${user.uid}\nBalance: ${user.usdt_balance.toFixed(2)} USDT${user.is_vip ? '\nStatus: VIP Member' : ''}\n\nTap the button below OR the button at the bottom-left corner to open your wallet.`, openWalletBtn());
 });
 
 // ─── Claim Hourly ──────────────────────────────────────────────────────────────
