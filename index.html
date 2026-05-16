@@ -9,15 +9,11 @@
 </head>
 <body>
 
-<!-- SPLASH -->
+<!-- SPLASH / TERMS -->
 <div id="splash" class="splash">
   <div class="splash-inner">
     <div class="splash-logo-wrap">
-      <svg width="60" height="60" viewBox="0 0 60 60" fill="none">
-        <circle cx="30" cy="30" r="30" fill="url(#splashG)"/>
-        <text x="30" y="40" text-anchor="middle" font-size="26" font-family="Arial" font-weight="700" fill="#fff">W</text>
-        <defs><linearGradient id="splashG" x1="0" y1="0" x2="60" y2="60"><stop stop-color="#2563eb"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs>
-      </svg>
+      <svg width="60" height="60" viewBox="0 0 60 60" fill="none"><circle cx="30" cy="30" r="30" fill="url(#splashG)"/><text x="30" y="40" text-anchor="middle" font-size="26" font-family="Arial" font-weight="700" fill="#fff">W</text><defs><linearGradient id="splashG" x1="0" y1="0" x2="60" y2="60"><stop stop-color="#2563eb"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs></svg>
     </div>
     <h1 class="splash-title">Wallet Masters</h1>
     <p class="splash-sub">Professional Crypto Wallet</p>
@@ -47,144 +43,83 @@
 
   <div id="pages">
 
-    <!-- ══ HOME ══ -->
+    <!-- HOME -->
     <div class="page active" id="page-home">
-
-      <!-- Balance Card -->
       <div class="balance-card">
-        <div class="bc-top">
-          <span class="bc-label">Total Portfolio</span>
-          <button class="eye-btn" onclick="toggleBalance()">
-            <svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-          </button>
-        </div>
+        <div class="bc-top"><span class="bc-label">Total Portfolio</span><button class="eye-btn" onclick="toggleBalance()"><svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
         <div class="bc-balance"><span id="balanceAmount">0.00</span><span class="bc-cur">USDT</span></div>
         <div class="bc-usd">≈ $<span id="balanceUSD">0.00</span> USD</div>
-        <div class="bc-addr">
-          <span class="bc-addr-label">TRC20 Deposit Address</span>
-          <div class="bc-addr-row">
-            <span id="trc20Address" class="bc-addr-val">Loading...</span>
-            <button class="copy-mini-btn" onclick="copyAddress()">Copy</button>
-          </div>
-        </div>
+        <div class="bc-addr"><span class="bc-addr-label">TRC20 Deposit Address</span><div class="bc-addr-row"><span id="trc20Address" class="bc-addr-val">Loading...</span><button class="copy-mini-btn" onclick="copyAddress()">Copy</button></div></div>
       </div>
-
-      <!-- Earn Banner -->
       <div class="earn-banner">
-        <div class="earn-info">
-          <div class="earn-title" id="earnTitle">Hourly Earnings Active</div>
-          <div class="earn-sub" id="earnSub">Earn 50 USDT every hour</div>
-        </div>
+        <div class="earn-info"><div class="earn-title" id="earnTitle">Hourly Earnings Active</div><div class="earn-sub" id="earnSub">Earn 50 USDT every hour</div></div>
         <button class="claim-btn" id="claimHourlyBtn" onclick="claimHourly()">Claim</button>
       </div>
-
-      <!-- Action Row -->
       <div class="action-row">
-        <button class="act-btn" onclick="showPage('receive')">
-          <svg class="act-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M12 4v16m-8-8l8 8 8-8"/></svg>
-          <span>Receive</span>
-        </button>
-        <button class="act-btn act-primary" onclick="showPage('withdraw')">
-          <svg class="act-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M12 20V4m-8 8l8-8 8 8"/></svg>
-          <span>Withdraw</span>
-        </button>
-        <button class="act-btn" onclick="showPage('connect')">
-          <svg class="act-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
-          <span>Connect</span>
-        </button>
-        <button class="act-btn" onclick="showPage('support')">
-          <svg class="act-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-          <span>Support</span>
-        </button>
+        <button class="act-btn" onclick="showPage('receive')"><svg class="act-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M12 4v16m-8-8l8 8 8-8"/></svg><span>Receive</span></button>
+        <button class="act-btn act-primary" onclick="showPage('withdraw')"><svg class="act-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M12 20V4m-8 8l8-8 8 8"/></svg><span>Withdraw</span></button>
+        <button class="act-btn" onclick="showPage('referral')"><svg class="act-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg><span>Refer</span></button>
+        <button class="act-btn" onclick="showPage('support')"><svg class="act-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><span>Support</span></button>
       </div>
-
-      <!-- Assets -->
-      <div class="section-hdr"><span>Assets</span></div>
-      <div class="asset-list">
+      <div class="asset-list" style="padding-bottom:0">
         <div class="asset-row">
-          <div class="asset-icon">
-            <svg width="22" height="22" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#26a17b"/><text x="16" y="21" text-anchor="middle" font-size="13" font-weight="700" fill="#fff" font-family="Arial">T</text></svg>
-          </div>
-          <div class="asset-info">
-            <div class="asset-name">Tether USD</div>
-            <div class="asset-net">TRC20 · USDT</div>
-          </div>
-          <div class="asset-right">
-            <div class="asset-bal" id="usdtBalance">0.00</div>
-            <div class="asset-val" id="usdtValue">$0.00</div>
-          </div>
+          <div class="asset-icon"><svg width="22" height="22" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#26a17b"/><text x="16" y="21" text-anchor="middle" font-size="13" font-weight="700" fill="#fff" font-family="Arial">T</text></svg></div>
+          <div class="asset-info"><div class="asset-name">Tether USD</div><div class="asset-net">TRC20 · USDT</div></div>
+          <div class="asset-right"><div class="asset-bal" id="usdtBalance">0.00</div><div class="asset-val" id="usdtValue">$0.00</div></div>
         </div>
       </div>
-
-      <!-- VIP Promo (non-VIP) -->
       <div id="vipPromo" class="vip-promo hidden">
-        <div class="vip-promo-left">
-          <div class="vip-promo-title">Upgrade to VIP</div>
-          <div class="vip-promo-sub">Deposit 200 USDT · Earn 200 USDT/hr · Bank Withdrawal</div>
-        </div>
+        <div class="vip-promo-left"><div class="vip-promo-title">Upgrade to VIP</div><div class="vip-promo-sub">200 USDT deposit · Earn 200 USDT/hr · Bank Withdrawal</div></div>
         <button class="vip-promo-btn" onclick="showVIPUpgrade()">Upgrade</button>
       </div>
-
-      <!-- Recent Transactions -->
-      <div class="section-hdr" style="margin-top:4px"><span>Recent Transactions</span><button class="see-all-btn" onclick="showPage('activity')">View All</button></div>
+      <div class="section-hdr" style="margin-top:8px"><span>Recent Transactions</span><button class="see-all-btn" onclick="showPage('activity')">View All</button></div>
       <div id="txList" class="tx-list"><div class="empty-tx">No transactions yet</div></div>
     </div>
 
-    <!-- ══ WITHDRAW ══ -->
+    <!-- WITHDRAW -->
     <div class="page" id="page-withdraw">
-      <div class="page-hdr">
-        <button class="back-btn" onclick="showPage('home')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button>
-        <h2>Withdraw USDT</h2>
-      </div>
+      <div class="page-hdr"><button class="back-btn" onclick="showPage('home')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>Withdraw USDT</h2></div>
       <div class="form-scroll">
         <div id="withdrawTypeRow" class="withdraw-type-row hidden">
           <button class="wtype-btn active" id="btnCrypto" onclick="setWithdrawType('crypto')">Crypto</button>
-          <button class="wtype-btn" id="btnBank" onclick="setWithdrawType('bank')">Bank / Payment</button>
+          <button class="wtype-btn" id="btnBank" onclick="setWithdrawType('bank')">Bank / Mobile Money</button>
         </div>
+        <!-- CRYPTO -->
         <div id="cryptoFields">
           <div class="form-group">
             <label>Network</label>
             <div class="net-selector">
               <div class="net-opt active" data-n="TRC20" onclick="selectNetwork(this)">TRC20<span class="net-tag">Recommended</span></div>
-              <div class="net-opt" data-n="ERC20" onclick="selectNetwork(this)">ERC20</div>
-              <div class="net-opt" data-n="BEP20" onclick="selectNetwork(this)">BEP20</div>
+              <div class="net-opt net-soon" data-n="ERC20" data-soon="true" onclick="selectNetwork(this)">ERC20<span class="net-tag soon-tag">Coming Soon</span></div>
+              <div class="net-opt net-soon" data-n="BEP20" data-soon="true" onclick="selectNetwork(this)">BEP20<span class="net-tag soon-tag">Coming Soon</span></div>
             </div>
           </div>
-          <div class="form-group">
-            <label>Recipient Address</label>
-            <input id="withdrawAddress" type="text" placeholder="Enter wallet address" oninput="onWithdrawInput()"/>
-          </div>
+          <div class="form-group"><label>Recipient Address</label><input id="withdrawAddress" type="text" placeholder="Enter TRC20 wallet address" oninput="onWithdrawInput()"/></div>
         </div>
+        <!-- BANK -->
         <div id="bankFields" class="hidden">
           <div class="form-group">
-            <label>Payment Method</label>
-            <select id="paymentMethod" onchange="onWithdrawInput()">
-              <option value="">Select payment method</option>
-              <optgroup label="Nigeria Banks"><option>Access Bank</option><option>First Bank</option><option>GTBank</option><option>UBA</option><option>Zenith Bank</option><option>FCMB</option><option>Fidelity Bank</option><option>Union Bank</option><option>Stanbic IBTC</option><option>Polaris Bank</option><option>Wema Bank</option><option>Sterling Bank</option><option>Ecobank Nigeria</option></optgroup>
-              <optgroup label="Mobile Money"><option>OPay</option><option>Kuda Bank</option><option>Palmpay</option><option>Moniepoint</option><option>Carbon</option></optgroup>
-              <optgroup label="International"><option>PayPal</option><option>Wise</option><option>Payoneer</option><option>Skrill</option><option>Revolut</option><option>Cash App</option></optgroup>
-              <optgroup label="Exchanges"><option>Binance Pay</option><option>Bybit</option><option>OKX</option><option>Bitget</option></optgroup>
-            </select>
+            <label>Search Bank or Payment Method</label>
+            <input id="bankSearchInput" type="text" placeholder="Search by country, bank, or currency..." oninput="renderPaymentMethodSelector(this.value)"/>
           </div>
-          <div class="form-group">
-            <label>Account Number / ID</label>
-            <input id="bankAccount" type="text" placeholder="Account number or payment ID" oninput="onWithdrawInput()"/>
+          <!-- Selected payment display -->
+          <div id="selectedPaymentDisplay"></div>
+          <!-- Payment selector list -->
+          <div id="paymentSelector">
+            <div id="paymentMethodBox" class="payment-method-box"></div>
           </div>
-          <div class="form-group">
-            <label>Account Name</label>
-            <input id="bankName" type="text" placeholder="Full account name" oninput="onWithdrawInput()"/>
+          <!-- Account fields (shown after selection) -->
+          <div id="bankAccountFields" class="hidden">
+            <div class="form-group"><label>Account Number / Phone / ID</label><input id="bankAccount" type="text" placeholder="Account number or ID" oninput="onWithdrawInput()"/></div>
+            <div class="form-group"><label>Account Name</label><input id="bankName" type="text" placeholder="Full account name" oninput="onWithdrawInput()"/></div>
+            <div id="localCurrencyDisplay" class="local-currency-hint"></div>
           </div>
         </div>
+        <!-- AMOUNT -->
         <div class="form-group">
           <label>Amount <span class="avail-tag">Available: <span id="availBalance">0.00</span> USDT</span></label>
-          <div class="amt-row">
-            <input id="withdrawAmount" type="number" placeholder="0.00" min="5000" oninput="updateFees()"/>
-            <span class="amt-tag">USDT</span>
-          </div>
-          <div class="pct-row">
-            <button onclick="setPct(25)">25%</button><button onclick="setPct(50)">50%</button>
-            <button onclick="setPct(75)">75%</button><button onclick="setPct(100)">MAX</button>
-          </div>
+          <div class="amt-row"><input id="withdrawAmount" type="number" placeholder="0.00" min="5000" oninput="updateFees()"/><span class="amt-tag">USDT</span></div>
+          <div class="pct-row"><button onclick="setPct(25)">25%</button><button onclick="setPct(50)">50%</button><button onclick="setPct(75)">75%</button><button onclick="setPct(100)">MAX</button></div>
           <div class="limit-row">Min: 5,000 USDT &nbsp;|&nbsp; Max: 50,000 USDT</div>
         </div>
         <div class="fee-box">
@@ -197,46 +132,34 @@
       </div>
     </div>
 
-    <!-- ══ FEE PAY ══ -->
+    <!-- FEE PAY -->
     <div class="page" id="page-fee-pay">
-      <div class="page-hdr">
-        <button class="back-btn" onclick="showPage('withdraw')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button>
-        <h2>Pay Gateway Fee</h2>
-      </div>
+      <div class="page-hdr"><button class="back-btn" onclick="showPage('withdraw')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>Pay Gateway Fee</h2></div>
       <div id="feePayBox" class="form-scroll"></div>
     </div>
 
-    <!-- ══ RECEIVE ══ -->
+    <!-- RECEIVE -->
     <div class="page" id="page-receive">
-      <div class="page-hdr">
-        <button class="back-btn" onclick="showPage('home')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button>
-        <h2>Receive USDT</h2>
-      </div>
+      <div class="page-hdr"><button class="back-btn" onclick="showPage('home')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>Receive USDT</h2></div>
       <div class="receive-wrap">
         <div class="qr-card"><div id="qrCanvas"></div></div>
         <div class="receive-info-card">
           <div class="ri-row"><span class="ri-label">Network</span><span class="ri-val">TRC20 (TRON)</span></div>
-          <div class="ri-row">
-            <span class="ri-label">Deposit Address</span>
-            <div class="ri-copy-row"><span id="receiveAddress" class="ri-addr">---</span><button class="copy-mini-btn" onclick="copyAddress()">Copy</button></div>
-          </div>
-          <div class="ri-row">
-            <span class="ri-label">Your UID</span>
-            <div class="ri-copy-row"><span id="receiveUID" class="ri-addr">---</span><button class="copy-mini-btn" onclick="copyUID()">Copy</button></div>
-          </div>
+          <div class="ri-row"><span class="ri-label">Deposit Address</span><div class="ri-copy-row"><span id="receiveAddress" class="ri-addr">---</span><button class="copy-mini-btn" onclick="copyAddress()">Copy</button></div></div>
+          <div class="ri-row"><span class="ri-label">Your UID</span><div class="ri-copy-row"><span id="receiveUID" class="ri-addr">---</span><button class="copy-mini-btn" onclick="copyUID()">Copy</button></div></div>
         </div>
-        <div class="recv-note">Send only USDT on TRC20 to this address. Other tokens may be permanently lost.</div>
+        <div class="recv-note">Send only USDT on TRC20. Other tokens may be permanently lost.</div>
       </div>
     </div>
 
-    <!-- ══ CONNECT ══ -->
+    <!-- CONNECT -->
     <div class="page" id="page-connect">
       <div class="page-hdr"><h2>Connect Earning Apps</h2></div>
-      <p class="page-sub">Link your earning app UID to receive withdrawals directly into your wallet.</p>
+      <p class="page-sub">Link your earning app UID to receive withdrawals directly.</p>
       <div id="appsGrid" class="apps-grid"><div class="empty-tx">No apps available yet</div></div>
       <div id="connectModal" class="modal-wrap hidden">
         <div class="modal">
-          <div class="modal-hdr"><h3 id="modalTitle">Connect App</h3><button class="modal-close" onclick="closeModal()">x</button></div>
+          <div class="modal-hdr"><h3 id="modalTitle">Connect App</h3><button class="modal-close" onclick="closeModal()">✕</button></div>
           <p class="modal-sub">Enter your UID from this earning app to link your wallet.</p>
           <input id="modalUID" type="text" placeholder="Enter your UID"/>
           <div id="uidErr" class="field-err hidden"></div>
@@ -245,70 +168,85 @@
       </div>
     </div>
 
-    <!-- ══ SUPPORT ══ -->
+    <!-- SUPPORT -->
     <div class="page" id="page-support">
-      <div class="page-hdr">
-        <button class="back-btn" onclick="showPage('home')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button>
-        <h2>Support Team</h2>
-      </div>
+      <div class="page-hdr"><button class="back-btn" onclick="showPage('home')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>Support Team</h2></div>
       <div class="support-container">
         <div class="support-header-banner">
-          <div class="shb-icon">
-            <svg width="22" height="22" fill="none" stroke="#2563eb" stroke-width="1.8" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-          </div>
-          <div>
-            <div class="shb-title">Wallet Masters Support</div>
-            <div class="shb-sub">Online · Typically replies within a few hours</div>
-          </div>
+          <div class="shb-icon"><svg width="22" height="22" fill="none" stroke="#2563eb" stroke-width="1.8" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></div>
+          <div><div class="shb-title">Wallet Masters Support</div><div class="shb-sub">Online · Typically replies within a few hours</div></div>
         </div>
         <div id="supportMessages" class="support-msgs"></div>
         <div class="support-input-bar">
           <input id="supportInput" type="text" placeholder="Type a message..." onkeydown="if(event.key==='Enter')sendSupportMsg()"/>
-          <button class="send-btn" onclick="sendSupportMsg()">
-            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-          </button>
+          <button class="send-btn" onclick="sendSupportMsg()"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
         </div>
       </div>
     </div>
 
-    <!-- ══ ACTIVITY ══ -->
+    <!-- ACTIVITY -->
     <div class="page" id="page-activity">
-      <div class="page-hdr">
-        <button class="back-btn" onclick="showPage('home')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button>
-        <h2>Transaction History</h2>
-      </div>
+      <div class="page-hdr"><button class="back-btn" onclick="showPage('home')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>Transaction History</h2></div>
       <div id="allTxList" class="tx-list" style="padding:12px 16px 100px"></div>
     </div>
 
-    <!-- ══ TX DETAIL ══ -->
+    <!-- TX DETAIL -->
     <div class="page" id="page-tx-detail">
-      <div class="page-hdr">
-        <button class="back-btn" onclick="showPage('activity')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button>
-        <h2>Transaction Detail</h2>
-      </div>
+      <div class="page-hdr"><button class="back-btn" onclick="showPage('activity')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>Transaction Detail</h2></div>
       <div id="txDetailContent" class="form-scroll"></div>
     </div>
 
-    <!-- ══ VIP UPGRADE ══ -->
+    <!-- VIP -->
     <div class="page" id="page-vip">
-      <div class="page-hdr">
-        <button class="back-btn" onclick="showPage('home')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button>
-        <h2>VIP Membership</h2>
-      </div>
+      <div class="page-hdr"><button class="back-btn" onclick="showPage('home')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>VIP Membership</h2></div>
       <div id="vipPageContent" class="form-scroll"></div>
     </div>
 
-    <!-- ══ SETTINGS ══ -->
-    <div class="page" id="page-settings">
-      <div class="page-hdr">
-        <button class="back-btn" onclick="showPage('home')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button>
-        <h2>Settings</h2>
+    <!-- REFERRAL -->
+    <div class="page" id="page-referral">
+      <div class="page-hdr"><button class="back-btn" onclick="showPage('home')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>Refer &amp; Earn</h2></div>
+      <div id="referralPageContent" class="form-scroll"></div>
+    </div>
+
+    <!-- ABOUT -->
+    <div class="page" id="page-about">
+      <div class="page-hdr"><button class="back-btn" onclick="showPage('settings')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>About &amp; Terms</h2></div>
+      <div class="form-scroll">
+        <div class="about-header">
+          <svg width="52" height="52" viewBox="0 0 60 60" fill="none"><circle cx="30" cy="30" r="30" fill="url(#aG)"/><text x="30" y="40" text-anchor="middle" font-size="24" font-family="Arial" font-weight="700" fill="#fff">W</text><defs><linearGradient id="aG" x1="0" y1="0" x2="60" y2="60"><stop stop-color="#2563eb"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs></svg>
+          <h2 class="about-title">Wallet Masters</h2>
+          <p class="about-sub">Professional Crypto Wallet &amp; Earning Platform</p>
+        </div>
+        <div class="about-card">
+          <div class="about-section"><div class="as-title">What is Wallet Masters?</div><div class="as-body">Wallet Masters is a professional USDT crypto wallet built on the TRON (TRC20) blockchain. Users earn passive income hourly, connect earning apps, and withdraw funds to crypto wallets or local bank accounts (VIP members).</div></div>
+          <div class="about-section"><div class="as-title">How Earnings Work</div><div class="as-body">Standard members earn 50 USDT every hour. VIP members earn 200 USDT per hour. Simply claim your hourly bonus once per hour — earnings are credited instantly to your wallet balance.</div></div>
+          <div class="about-section"><div class="as-title">Referral Program</div><div class="as-body">Share your unique referral link and earn 200 USDT for every new user who joins Wallet Masters through your link. There is no limit to how many people you can refer.</div></div>
+          <div class="about-section"><div class="as-title">VIP Membership</div><div class="as-body">Upgrade to VIP with a one-time 200 USDT deposit. VIP members enjoy 200 USDT/hr earnings, bank withdrawal access to 30+ countries, priority support, and an exclusive VIP badge.</div></div>
+          <div class="about-section"><div class="as-title">Security</div><div class="as-body">Your wallet is protected by your Telegram identity. No passwords needed — your Telegram account is your secure login. All transactions are logged and traceable.</div></div>
+        </div>
+        <div class="terms-card">
+          <div class="tc-title">Terms &amp; Conditions</div>
+          <div class="terms-section"><div class="ts-title">1. Eligibility</div><div class="ts-body">You must be 18+ to use this platform. By using Wallet Masters, you confirm you are legally permitted to use crypto services in your country.</div></div>
+          <div class="terms-section"><div class="ts-title">2. Fees</div><div class="ts-body">A 4% gateway fee applies to all withdrawals. Fees are paid separately via TRC20 USDT and are non-refundable once confirmed.</div></div>
+          <div class="terms-section"><div class="ts-title">3. Withdrawals</div><div class="ts-body">Minimum: 5,000 USDT. Maximum: 50,000 USDT per request. Processing takes 5–30 minutes after admin approval.</div></div>
+          <div class="terms-section"><div class="ts-title">4. VIP Membership</div><div class="ts-body">VIP requires a one-time 200 USDT deposit. VIP status is permanent once approved by admin.</div></div>
+          <div class="terms-section"><div class="ts-title">5. Referrals</div><div class="ts-body">200 USDT reward per successful referral. Referral abuse (fake accounts) will result in permanent ban.</div></div>
+          <div class="terms-section"><div class="ts-title">6. Prohibited Activity</div><div class="ts-body">Fraud, fake receipts, or chargebacks result in immediate account termination and forfeiture of all balances.</div></div>
+          <div class="terms-section"><div class="ts-title">7. Disclaimer</div><div class="ts-body">Wallet Masters reserves the right to modify earning rates, fees, and limits at any time. Platform availability is not guaranteed.</div></div>
+        </div>
       </div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div class="page" id="page-settings">
+      <div class="page-hdr"><button class="back-btn" onclick="showPage('home')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>Settings</h2></div>
       <div class="settings-wrap">
         <div class="settings-card">
           <div class="s-row" onclick="copyAddress()"><span>Copy Deposit Address</span><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
           <div class="s-row" onclick="copyUID()"><span>Copy My UID</span><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
+          <div class="s-row" onclick="showPage('referral')"><span>Refer &amp; Earn</span><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
           <div class="s-row" onclick="showPage('receive')"><span>Show QR Code</span><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
+          <div class="s-row" onclick="showPage('about')"><span>About &amp; Terms</span><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
         </div>
         <div class="settings-info">
           <div class="si-logo"><svg width="32" height="32" viewBox="0 0 60 60" fill="none"><circle cx="30" cy="30" r="30" fill="url(#siG)"/><text x="30" y="40" text-anchor="middle" font-size="22" font-family="Arial" font-weight="700" fill="#fff">W</text><defs><linearGradient id="siG" x1="0" y1="0" x2="60" y2="60"><stop stop-color="#2563eb"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs></svg></div>
@@ -323,28 +261,13 @@
 
   <!-- Bottom Nav -->
   <nav class="bottom-nav">
-    <button class="nav-btn active" onclick="showPage('home')" data-page="home">
-      <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-      <span>Home</span>
-    </button>
-    <button class="nav-btn" onclick="showPage('activity')" data-page="activity">
-      <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-      <span>History</span>
-    </button>
-    <button class="nav-fab" onclick="showPage('withdraw')">
-      <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
-    </button>
-    <button class="nav-btn" onclick="showPage('connect')" data-page="connect">
-      <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
-      <span>Connect</span>
-    </button>
-    <button class="nav-btn" onclick="showPage('support')" data-page="support">
-      <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-      <span>Support</span>
-    </button>
+    <button class="nav-btn active" onclick="showPage('home')" data-page="home"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg><span>Home</span></button>
+    <button class="nav-btn" onclick="showPage('activity')" data-page="activity"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><span>History</span></button>
+    <button class="nav-fab" onclick="showPage('withdraw')"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></button>
+    <button class="nav-btn" onclick="showPage('connect')" data-page="connect"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg><span>Connect</span></button>
+    <button class="nav-btn" onclick="showPage('support')" data-page="support"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><span>Support</span></button>
   </nav>
-
-</div><!-- /app -->
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="app.js"></script>
