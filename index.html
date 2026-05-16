@@ -271,5 +271,25 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="app.js"></script>
+
+  <!-- HOTFIX patch: acceptTerms never blocks on network error -->
+  <script>
+    window.addEventListener('DOMContentLoaded', function() {
+      // Override acceptTerms to be resilient
+      var _origAcceptTerms = window.acceptTerms;
+      window.acceptTerms = async function() {
+        var btn = document.getElementById('acceptTermsBtn');
+        if (btn) { btn.textContent = 'Opening wallet...'; btn.disabled = true; }
+        // Show loading splash
+        var splash = document.getElementById('splash');
+        if (splash) splash.innerHTML = '<div class="splash-inner"><div class="splash-logo-wrap"><svg width="60" height="60" viewBox="0 0 60 60" fill="none"><circle cx="30" cy="30" r="30" fill="url(#sg)"/><text x="30" y="40" text-anchor="middle" font-size="26" font-family="Arial" font-weight="700" fill="#fff">W</text><defs><linearGradient id="sg" x1="0" y1="0" x2="60" y2="60"><stop stop-color="#2563eb"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs></svg></div><h1 class="splash-title">Wallet Masters</h1><p class="splash-sub">Setting up your wallet...</p><div class="splash-bar"><div class="splash-fill"></div></div></div>';
+        // Best-effort save - never block user
+        try { await fetch(window.location.origin+'/api/accept-terms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:window.Telegram&&window.Telegram.WebApp?window.Telegram.WebApp.initData:'',unsafeUser:window.Telegram&&window.Telegram.WebApp&&window.Telegram.WebApp.initDataUnsafe?window.Telegram.WebApp.initDataUnsafe.user:null})}); } catch(e) { console.warn('T&C save best-effort:', e.message); }
+        // Always launch
+        if (typeof state !== 'undefined') state.termsAccepted = true;
+        setTimeout(function() { if (typeof launchApp === 'function') launchApp(); }, 500);
+      };
+    });
+  </script>
 </body>
 </html>
