@@ -1,4 +1,3 @@
-/* WM v3.1 */
 /**
  * Wallet Masters — Backend (Node.js + Express + Telegram Bot)
  * Admin: 5995434559 | Fee: TPwUS8v77TtcsYZUHUTvVx2TGqE37QnagZ
@@ -21,8 +20,7 @@ const {
   getWithdrawalById, updateWithdrawal,
   createTransaction, getStats, now,
   createSupportMessage, getSupportMessages, getAllSupportThreads, markSupportRead,
-  SHARED_TRC20_ADDRESS, MIN_WITHDRAWAL, MAX_WITHDRAWAL
-  db
+  SHARED_TRC20_ADDRESS, MIN_WITHDRAWAL, MAX_WITHDRAWAL, db
 } = require('./database');
 
 const BOT_TOKEN     = process.env.BOT_TOKEN;
@@ -123,16 +121,9 @@ bot.onText(/\/start/, async (msg) => {
     return bot.sendMessage(id, `⚙️ Admin Panel — Wallet Masters\n\n🆔 UID: ${user.uid}\n\nUse the menu below to manage the platform.`, adminMenu);
   }
 
-  // Re-set the web_app menu button for this user's chat (prevents "Menu" from appearing)
-  try {
-    await bot.setChatMenuButton({
-      chat_id: id,
-      menu_button: { type: 'web_app', text: 'Open Wallet Masters', web_app: { url: MINI_APP_URL } }
-    });
-  } catch(e) { console.error('setChatMenuButton error:', e.message); }
-  // Remove reply keyboard so the left web_app button is always visible
+  // First remove keyboard so menu button shows, then send inline open button
   await bot.sendMessage(id, '💎 Wallet Masters', { reply_markup: { remove_keyboard: true } });
-  return bot.sendMessage(id, `👋 Welcome back, ${fullName || 'User'}!\n\n🆔 UID: ${user.uid}\n💰 Balance: ${user.usdt_balance.toFixed(2)} USDT${user.is_vip ? '\n👑 Status: VIP Member' : ''}\n\nTap below to open your wallet 👇`, openWalletBtn());
+  return bot.sendMessage(id, `👋 Welcome back, ${fullName || 'User'}!\n\n🆔 UID: ${user.uid}\n💰 Balance: ${user.usdt_balance.toFixed(2)} USDT${user.is_vip ? '\n👑 Status: VIP Member' : ''}\n\nTap the button below to open your wallet 👇`, openWalletBtn());
 });
 
 // ─── Claim Hourly ──────────────────────────────────────────────────────────────
@@ -234,25 +225,6 @@ bot.onText(/Add Earning App/, (msg) => {
 });
 
 // ─── General Message Handler ────────────────────────────────────────────────────
-bot.onText(/\/referral/, async (msg) => {
-  const { id, username, first_name, last_name } = msg.from;
-  const fullName = [first_name, last_name].filter(Boolean).join(' ');
-  const user = getOrCreateUser(id, username, fullName);
-  const refLink = `https://t.me/walletmastersbot?start=ref_${user.referral_code || user.uid}`;
-  return bot.sendMessage(id, `🎁 Your Referral Link\n\n💰 Earn 200 USDT for every friend you refer!\n\n🔗 Your Link:\n${refLink}\n\n👥 Referrals: ${user.referral_count || 0}\n💵 Earned: ${(user.referral_count || 0) * 200} USDT\n\nShare your link and earn unlimited rewards!`, mainMenu());
-});
-
-bot.onText(/\/terms/, async (msg) => {
-  return bot.sendMessage(msg.from.id, '📋 Wallet Masters Terms & Conditions\n\n1. Must be 18+ to use\n2. 4% gateway fee on all withdrawals (non-refundable)\n3. Min withdrawal: 5,000 USDT | Max: 50,000 USDT\n4. VIP requires 200 USDT one-time deposit\n5. Referral reward: 200 USDT per successful referral\n6. Fake receipts or fraud = permanent ban\n7. Rates and fees may change at any time\n\nBy using Wallet Masters you agree to all terms.', mainMenu());
-});
-
-bot.onText(/\/wallet/, async (msg) => {
-  const { id, username, first_name, last_name } = msg.from;
-  const fullName = [first_name, last_name].filter(Boolean).join(' ');
-  const user = getOrCreateUser(id, username, fullName);
-  return bot.sendMessage(id, `💎 Your Wallet\n\n🆔 UID: ${user.uid}\n💰 Balance: ${user.usdt_balance.toFixed(2)} USDT\n📬 Address: ${user.trc20_address}\n👑 VIP: ${user.is_vip ? 'Yes ✅' : 'No'}\n👥 Referrals: ${user.referral_count || 0}`, openWalletBtn());
-});
-
 bot.on('message', async (msg) => {
   if (!msg.text && !msg.photo) return;
   const uid = msg.from.id;
@@ -508,37 +480,20 @@ app.post('/api/auth', (req, res) => {
     const txs = getUserTransactions(user.id, 50);
     const connections = getUserConnections(user.id);
     const hourlyStatus = getHourlyStatus(telegramId);
-    // Handle referral on first join (if new user and not already referred)
-    try {
-      const refCode = req.body.referralCode;
-      if (refCode && !user.referred_by) {
-        const allUsers = db.get('users').value();
-        const referrer = allUsers.find(u => (u.referral_code || u.uid) === refCode && String(u.telegram_id) !== String(telegramId));
-        if (referrer) {
-          db.get('users').find({ id: user.id }).assign({ referred_by: referrer.telegram_id }).write();
-          const newBal = (referrer.usdt_balance || 0) + 200;
-          const newCount = (referrer.referral_count || 0) + 1;
-          db.get('users').find({ id: referrer.id }).assign({ usdt_balance: newBal, referral_count: newCount }).write();
-          createTransaction(referrer.id, 'referral', 200, 'USDT', 'completed', 'Referral Bonus', null);
-          try { await bot.sendMessage(referrer.telegram_id, `🎁 Referral Bonus!\n\n🎉 Someone joined using your referral link!\n💰 +200 USDT has been added to your wallet!\n\nKeep sharing to earn more!`); } catch(e) {}
-        }
-      }
-    } catch(refErr) { console.error('Referral error:', refErr); }
     return res.json({
       success: true,
       user: {
         telegramId: user.telegram_id, name: user.full_name || user.telegram_username || 'User',
         username: user.telegram_username, uid: user.uid,
         trc20Address: user.trc20_address, balance: user.usdt_balance,
-        isVIP: user.is_vip === true, hourlyStatus,
-        termsAccepted: user.terms_accepted === true,
-        referralCode: user.referral_code || user.uid,
-        referralCount: user.referral_count || 0
+        isVIP: user.is_vip === true,
+      termsAccepted: user.terms_accepted === true, hourlyStatus
       },
       transactions: txs, connections
     });
   } catch(err) { console.error('Auth error:', err); return res.status(500).json({ error: 'Server error' }); }
 });
+
 
 // Accept Terms & Conditions
 app.post('/api/accept-terms', (req, res) => {
@@ -546,12 +501,12 @@ app.post('/api/accept-terms', (req, res) => {
     const { telegramId } = parseTelegramUser(req.body);
     if (!telegramId) return res.status(401).json({ error: 'Unauthorized' });
     const user = getUserByTelegramId(telegramId);
-    if (!user) {
+    if (user) {
+      db.get('users').find({ id: user.id }).assign({ terms_accepted: true }).write();
+    } else {
       const u = getOrCreateUser(telegramId, null, null);
       db.get('users').find({ id: u.id }).assign({ terms_accepted: true }).write();
-      return res.json({ success: true });
     }
-    db.get('users').find({ id: user.id }).assign({ terms_accepted: true }).write();
     return res.json({ success: true });
   } catch(err) {
     console.error('accept-terms error:', err);
@@ -766,45 +721,23 @@ app.post('/api/vip-receipt', async (req, res) => {
 });
 
 
-
-// Broadcast Payment Receipt to all users (Admin only)
-app.post('/api/admin/broadcast-receipt', async (req, res) => {
-  try {
-    const { telegramId } = parseTelegramUser(req.body);
-    if (String(telegramId) !== String(ADMIN_CHAT_ID)) return res.status(403).json({ error: 'Forbidden' });
-    const { receiptBase64, caption } = req.body;
-    if (!receiptBase64) return res.status(400).json({ error: 'No image provided' });
-    const imgBuf = Buffer.from(receiptBase64.replace(/^data:image\/\w+;base64,/, ''), 'base64');
-    const users = db.data.users.filter(u => String(u.telegram_id) !== String(ADMIN_CHAT_ID));
-    let sent = 0, failed = 0;
-    for (const user of users) {
-      try {
-        await bot.sendPhoto(user.telegram_id, imgBuf, { caption: caption || 'Payment Confirmation from Wallet Masters 💎' });
-        sent++;
-        await new Promise(r => setTimeout(r, 100)); // rate limit
-      } catch(e) { failed++; }
+// ─── Migrate existing users: auto-accept terms (preserve balance/VIP) ───────
+try {
+  const allUsers = db.get('users').value() || [];
+  let migrated = 0;
+  allUsers.forEach(u => {
+    const updates = {};
+    if (u.terms_accepted === undefined || u.terms_accepted === null) updates.terms_accepted = true;
+    if (!u.referral_code) updates.referral_code = u.uid;
+    if (u.referral_count === undefined) updates.referral_count = 0;
+    if (Object.keys(updates).length > 0) {
+      db.get('users').find({ id: u.id }).assign(updates).write();
+      migrated++;
     }
-    return res.json({ success: true, sent, failed });
-  } catch(err) { return res.status(500).json({ error: err.message }); }
-});
+  });
+  if (migrated > 0) console.log(`Migrated ${migrated} existing users`);
+} catch(e) { console.error('Migration error:', e.message); }
 
-
-bot.on('photo', async (msg) => {
-  const uid = msg.from?.id;
-  const isAdmin = String(uid) === String(ADMIN_CHAT_ID);
-  if (isAdmin && pendingActions[uid]?.type === 'broadcast_receipt') {
-    delete pendingActions[uid];
-    const fileId = msg.photo[msg.photo.length - 1].file_id;
-    const caption = msg.caption || '💎 Payment Confirmation from Wallet Masters';
-    const users = db.data.users.filter(u => String(u.telegram_id) !== String(ADMIN_CHAT_ID));
-    let sent = 0, failed = 0;
-    await bot.sendMessage(uid, `📤 Broadcasting to ${users.length} users...`);
-    for (const user of users) {
-      try { await bot.sendPhoto(user.telegram_id, fileId, { caption }); sent++; await new Promise(r=>setTimeout(r,120)); } catch(e) { failed++; }
-    }
-    return bot.sendMessage(uid, `✅ Broadcast Complete! Sent: ${sent} | Failed: ${failed}`, adminMenu);
-  }
-});
 if (bot) bot.on('polling_error', (err) => console.error('Polling error:', err.message));
 process.on('uncaughtException',  (err) => console.error('Uncaught:', err));
 process.on('unhandledRejection', (err) => console.error('Unhandled:', err));
