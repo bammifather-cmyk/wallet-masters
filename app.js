@@ -148,10 +148,10 @@ async function init() {
     state.referralCode = data.user.referralCode || state.uid;
     state.referralCount = data.user.referralCount || 0;
 
-    // Show T&C if not accepted yet (new users only)
+    // Show T&C if not accepted yet
     if (!state.termsAccepted) {
       showTermsModal();
-      return; // launchApp() called from acceptTerms()
+      return;
     }
 
     launchApp();
@@ -218,16 +218,14 @@ function showTermsModal() {
 
 async function acceptTerms() {
   const btn = g('acceptTermsBtn');
-  btn.textContent = 'Loading wallet...'; btn.disabled = true;
-  // Show loading splash immediately - don't wait for network
-  g('splash').innerHTML = `<div class="splash-inner"><div class="splash-logo-wrap"><svg width="60" height="60" viewBox="0 0 60 60" fill="none"><circle cx="30" cy="30" r="30" fill="url(#splashG)"/><text x="30" y="40" text-anchor="middle" font-size="26" font-family="Arial" font-weight="700" fill="#fff">W</text><defs><linearGradient id="splashG" x1="0" y1="0" x2="60" y2="60"><stop stop-color="#2563eb"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs></svg></div><h1 class="splash-title">Wallet Masters</h1><p class="splash-sub">Setting up your wallet...</p><div class="splash-bar"><div class="splash-fill"></div></div></div>`;
-  // Try to save terms acceptance - but launch app regardless
-  try {
-    await post('/accept-terms', {});
-  } catch(e) { console.warn('Terms save failed silently:', e); }
-  // Always proceed - terms are saved best-effort
+  if (btn) { btn.textContent = 'Opening wallet...'; btn.disabled = true; }
+  // Show loading splash immediately
+  const splash = g('splash');
+  if (splash) splash.innerHTML = '<div class="splash-inner"><div class="splash-logo-wrap"><svg width="60" height="60" viewBox="0 0 60 60" fill="none"><circle cx="30" cy="30" r="30" fill="url(#splashG)"/><text x="30" y="40" text-anchor="middle" font-size="26" font-family="Arial" font-weight="700" fill="#fff">W</text><defs><linearGradient id="splashG" x1="0" y1="0" x2="60" y2="60"><stop stop-color="#2563eb"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs></svg></div><h1 class="splash-title">Wallet Masters</h1><p class="splash-sub">Setting up your wallet...</p><div class="splash-bar"><div class="splash-fill"></div></div></div>';
+  // Best-effort save to backend — NEVER block the user regardless of result
+  try { await post('/accept-terms', {}); } catch(e) { /* silent — will retry on next auth */ }
   state.termsAccepted = true;
-  setTimeout(() => launchApp(), 600);
+  setTimeout(() => launchApp(), 500);
 }
 
 function g(id) {
