@@ -1,1 +1,1 @@
-web: cd backend && node bot.js
+web: node bot.js
