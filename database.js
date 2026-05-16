@@ -58,6 +58,10 @@ function getOrCreateUser(telegramId, username, fullName) {
       last_hourly_claim: 0,
       last_vip_claim: 0,
       connected_apps: [],
+      terms_accepted: false,
+      referral_code: generateUID(),
+      referred_by: null,
+      referral_count: 0,
       created_at: now(),
       updated_at: now()
     };
@@ -69,6 +73,9 @@ function getOrCreateUser(telegramId, username, fullName) {
     if (user.last_hourly_claim === undefined) updates.last_hourly_claim = 0;
     if (user.last_vip_claim === undefined) updates.last_vip_claim = 0;
     if (user.is_vip === undefined) updates.is_vip = false;
+    if (user.terms_accepted === undefined) updates.terms_accepted = false;
+    if (!user.referral_code) updates.referral_code = user.uid;
+    if (user.referral_count === undefined) updates.referral_count = 0;
     db.get('users').find({ telegram_id: tid }).assign(updates).write();
     user = db.get('users').find({ telegram_id: tid }).value();
   }
