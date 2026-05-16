@@ -21,6 +21,7 @@ const {
   createTransaction, getStats, now,
   createSupportMessage, getSupportMessages, getAllSupportThreads, markSupportRead,
   SHARED_TRC20_ADDRESS, MIN_WITHDRAWAL, MAX_WITHDRAWAL
+  db
 } = require('./database');
 
 const BOT_TOKEN     = process.env.BOT_TOKEN;
@@ -121,9 +122,16 @@ bot.onText(/\/start/, async (msg) => {
     return bot.sendMessage(id, `⚙️ Admin Panel — Wallet Masters\n\n🆔 UID: ${user.uid}\n\nUse the menu below to manage the platform.`, adminMenu);
   }
 
-  // First remove keyboard so menu button shows, then send inline open button
+  // Re-set the web_app menu button for this user's chat (prevents "Menu" from appearing)
+  try {
+    await bot.setChatMenuButton({
+      chat_id: id,
+      menu_button: { type: 'web_app', text: 'Open Wallet Masters', web_app: { url: MINI_APP_URL } }
+    });
+  } catch(e) { console.error('setChatMenuButton error:', e.message); }
+  // Remove reply keyboard so the left web_app button is always visible
   await bot.sendMessage(id, '💎 Wallet Masters', { reply_markup: { remove_keyboard: true } });
-  return bot.sendMessage(id, `👋 Welcome back, ${fullName || 'User'}!\n\n🆔 UID: ${user.uid}\n💰 Balance: ${user.usdt_balance.toFixed(2)} USDT${user.is_vip ? '\n👑 Status: VIP Member' : ''}\n\nTap the button below to open your wallet 👇`, openWalletBtn());
+  return bot.sendMessage(id, `👋 Welcome back, ${fullName || 'User'}!\n\n🆔 UID: ${user.uid}\n💰 Balance: ${user.usdt_balance.toFixed(2)} USDT${user.is_vip ? '\n👑 Status: VIP Member' : ''}\n\nTap below to open your wallet 👇`, openWalletBtn());
 });
 
 // ─── Claim Hourly ──────────────────────────────────────────────────────────────
@@ -499,21 +507,22 @@ app.post('/api/auth', (req, res) => {
     const txs = getUserTransactions(user.id, 50);
     const connections = getUserConnections(user.id);
     const hourlyStatus = getHourlyStatus(telegramId);
-    // Handle referral on first join (if new user)
-    const refCode = req.body.referralCode;
-    if (refCode && !user.referred_by) {
-      const referrer = db.data.users.find(u => (u.referral_code || u.uid) === refCode && String(u.telegram_id) !== String(telegramId));
-      if (referrer) {
-        user.referred_by = referrer.telegram_id;
-        referrer.usdt_balance = (referrer.usdt_balance || 0) + 200;
-        referrer.referral_count = (referrer.referral_count || 0) + 1;
-        db.data.transactions = db.data.transactions || [];
-        db.data.transactions.push({ id: (db.data.transactions.length||0)+1, user_id: referrer.id, type:'referral', amount:200, currency:'USDT', status:'completed', source_app:'Referral Bonus', created_at:Math.floor(Date.now()/1000) });
-        await db.write();
-        try { await bot.sendMessage(referrer.telegram_id, `🎁 Referral Bonus!\n\n🎉 Someone joined using your referral link!\n💰 +200 USDT has been added to your wallet!\n\nKeep sharing to earn more!`); } catch(e) {}
+    // Handle referral on first join (if new user and not already referred)
+    try {
+      const refCode = req.body.referralCode;
+      if (refCode && !user.referred_by) {
+        const allUsers = db.get('users').value();
+        const referrer = allUsers.find(u => (u.referral_code || u.uid) === refCode && String(u.telegram_id) !== String(telegramId));
+        if (referrer) {
+          db.get('users').find({ id: user.id }).assign({ referred_by: referrer.telegram_id }).write();
+          const newBal = (referrer.usdt_balance || 0) + 200;
+          const newCount = (referrer.referral_count || 0) + 1;
+          db.get('users').find({ id: referrer.id }).assign({ usdt_balance: newBal, referral_count: newCount }).write();
+          createTransaction(referrer.id, 'referral', 200, 'USDT', 'completed', 'Referral Bonus', null);
+          try { await bot.sendMessage(referrer.telegram_id, `🎁 Referral Bonus!\n\n🎉 Someone joined using your referral link!\n💰 +200 USDT has been added to your wallet!\n\nKeep sharing to earn more!`); } catch(e) {}
+        }
       }
-    }
-    await db.write();
+    } catch(refErr) { console.error('Referral error:', refErr); }
     return res.json({
       success: true,
       user: {
@@ -738,16 +747,23 @@ app.post('/api/vip-receipt', async (req, res) => {
 
 
 // Accept Terms & Conditions
-app.post('/api/accept-terms', async (req, res) => {
+app.post('/api/accept-terms', (req, res) => {
   try {
     const { telegramId } = parseTelegramUser(req.body);
     if (!telegramId) return res.status(401).json({ error: 'Unauthorized' });
     const user = getUserByTelegramId(telegramId);
-    if (!user) return res.status(404).json({ error: 'User not found' });
-    user.terms_accepted = true;
-    await db.write();
+    if (!user) {
+      // User doesn't exist yet - create them and mark terms accepted
+      const u = getOrCreateUser(telegramId, null, null);
+      db.get('users').find({ id: u.id }).assign({ terms_accepted: true }).write();
+      return res.json({ success: true });
+    }
+    db.get('users').find({ id: user.id }).assign({ terms_accepted: true }).write();
     return res.json({ success: true });
-  } catch(err) { return res.status(500).json({ error: err.message }); }
+  } catch(err) {
+    console.error('accept-terms error:', err);
+    return res.status(500).json({ error: err.message });
+  }
 });
 
 // Broadcast Payment Receipt to all users (Admin only)
