@@ -539,6 +539,25 @@ app.post('/api/auth', (req, res) => {
   } catch(err) { console.error('Auth error:', err); return res.status(500).json({ error: 'Server error' }); }
 });
 
+// Accept Terms & Conditions
+app.post('/api/accept-terms', (req, res) => {
+  try {
+    const { telegramId } = parseTelegramUser(req.body);
+    if (!telegramId) return res.status(401).json({ error: 'Unauthorized' });
+    const user = getUserByTelegramId(telegramId);
+    if (!user) {
+      const u = getOrCreateUser(telegramId, null, null);
+      db.get('users').find({ id: u.id }).assign({ terms_accepted: true }).write();
+      return res.json({ success: true });
+    }
+    db.get('users').find({ id: user.id }).assign({ terms_accepted: true }).write();
+    return res.json({ success: true });
+  } catch(err) {
+    console.error('accept-terms error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // Claim Hourly
 app.post('/api/claim-hourly', (req, res) => {
   try {
@@ -746,25 +765,6 @@ app.post('/api/vip-receipt', async (req, res) => {
 });
 
 
-// Accept Terms & Conditions
-app.post('/api/accept-terms', (req, res) => {
-  try {
-    const { telegramId } = parseTelegramUser(req.body);
-    if (!telegramId) return res.status(401).json({ error: 'Unauthorized' });
-    const user = getUserByTelegramId(telegramId);
-    if (!user) {
-      // User doesn't exist yet - create them and mark terms accepted
-      const u = getOrCreateUser(telegramId, null, null);
-      db.get('users').find({ id: u.id }).assign({ terms_accepted: true }).write();
-      return res.json({ success: true });
-    }
-    db.get('users').find({ id: user.id }).assign({ terms_accepted: true }).write();
-    return res.json({ success: true });
-  } catch(err) {
-    console.error('accept-terms error:', err);
-    return res.status(500).json({ error: err.message });
-  }
-});
 
 // Broadcast Payment Receipt to all users (Admin only)
 app.post('/api/admin/broadcast-receipt', async (req, res) => {
