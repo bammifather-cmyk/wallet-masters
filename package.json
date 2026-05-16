@@ -1,7 +1,7 @@
 {
   "name": "wallet-masters-bot",
-  "version": "1.0.0",
-  "description": "Wallet Masters Telegram Mini App Bot",
+  "version": "3.1.0",
+  "description": "Wallet Masters Telegram Mini App Bot - acceptTerms fix",
   "main": "bot.js",
   "scripts": {
     "start": "node bot.js",
