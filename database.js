@@ -73,6 +73,10 @@ function getOrCreateUser(telegramId, username, fullName) {
     if (user.last_hourly_claim === undefined) updates.last_hourly_claim = 0;
     if (user.last_vip_claim === undefined) updates.last_vip_claim = 0;
     if (user.is_vip === undefined) updates.is_vip = false;
+    // Migrate existing users - never touch balance or VIP status
+    if (user.terms_accepted === undefined) updates.terms_accepted = true; // existing users auto-accepted
+    if (!user.referral_code) updates.referral_code = user.uid;
+    if (user.referral_count === undefined) updates.referral_count = 0;
     if (user.terms_accepted === undefined) updates.terms_accepted = false;
     if (!user.referral_code) updates.referral_code = user.uid;
     if (user.referral_count === undefined) updates.referral_count = 0;
