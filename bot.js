@@ -79,12 +79,12 @@ catch (err) { console.error('Bot failed:', err.message); }
 // Menu button set per-chat in /start handler
 
 // ─── Keyboards ───────────────────────────────────────────────────────────────
-const adminMenu = { reply_markup: { keyboard: [
-  [{ text: '📋 Pending Withdrawals' }, { text: '🎬 Testimonials' }],
-  [{ text: '➕ Add Earning App' }, { text: '🗑 Remove Earning App' }],
-  [{ text: '📢 Broadcast' }, { text: '📊 Stats' }],
-  [{ text: '👥 All Users' }, { text: '💬 Support Threads' }]
-], resize_keyboard: true }};
+const adminMenu = { reply_markup: { inline_keyboard: [
+  [{ text: '📋 Withdrawals', callback_data: 'admin_pending_withdrawals' }, { text: '🎬 Testimonials', callback_data: 'admin_testimonials' }],
+  [{ text: '➕ Add App', callback_data: 'admin_add_app' }, { text: '🗑 Remove App', callback_data: 'admin_remove_app' }],
+  [{ text: '📢 Broadcast', callback_data: 'admin_broadcast' }, { text: '📊 Stats', callback_data: 'admin_stats' }],
+  [{ text: '👥 All Users', callback_data: 'admin_all_users' }, { text: '💬 Support', callback_data: 'admin_support' }]
+]}};
 
 function openWalletBtn() {
   return { reply_markup: { inline_keyboard: [[{ text: '💎 Open Wallet Masters', web_app: { url: MINI_APP_URL } }]] }};
@@ -464,6 +464,8 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
   }
 
   if (isAdmin) {
+    // Remove reply keyboard first so "Open Wallet Masters" button shows on left
+    await bot.sendMessage(id, '⚙️ Loading Admin Panel...', { reply_markup: { remove_keyboard: true } });
     return bot.sendMessage(id, `⚙️ <b>Admin Panel — Wallet Masters v4.0</b>\n\n🆔 UID: <code>${user.uid}</code>\n\n📊 <b>Platform Stats:</b>\n├ 👥 Users: <b>${getStats().users}</b>\n├ 👑 VIP Members: <b>${getStats().vip}</b>\n├ ⏳ Pending Withdrawals: <b>${getStats().pending_withdrawals}</b>\n└ 🎬 Pending Testimonials: <b>${getStats().pending_testimonials}</b>\n\n⚡ Select an option below:`, { parse_mode: 'HTML', ...adminMenu });
   }
 
@@ -489,6 +491,10 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
       { parse_mode: 'HTML', ...openWalletBtn() });
   }
 });
+
+// ─── Admin Inline Button Callbacks ──────────────────────────────────────────
+// callback_query handlers consolidated above
+;
 
 // ─── Admin Text Handlers ──────────────────────────────────────────────────────
 if (bot) bot.on('message', async (msg) => {
