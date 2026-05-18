@@ -693,6 +693,7 @@ app.post('/api/withdrawal', authMiddleware, async (req, res) => {
 
   const fees = calculateFees(amount);
   updateUserBalance(user.telegram_id, -amount);
+  createTransaction(user.telegram_id, 'withdrawal', amount, 'Withdrawal request', 'pending');
   const wd = createWithdrawalRequest({
     telegram_id: user.telegram_id, amount,
     method, account_number, bank_name, country, currency,
@@ -731,7 +732,7 @@ app.post('/api/withdraw', authMiddleware, async (req, res) => {
 
   // Deduct balance immediately on submission (held pending admin approval)
   updateUserBalance(user.telegram_id, -amt);
-  createTransaction(user.telegram_id, 'withdrawal', -amt, 'Withdrawal request', 'pending');
+  createTransaction(user.telegram_id, 'withdrawal', amt, 'Withdrawal request', 'pending');
 
   const wd = createWithdrawalRequest({
     telegram_id: user.telegram_id, amount: amt,
