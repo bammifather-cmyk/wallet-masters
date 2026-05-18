@@ -199,8 +199,8 @@ function findUserByExternalUID(externalUID) {
 }
 
 // ─── Transactions ────────────────────────────────────────────────────────────
-function createTransaction(telegramId, type, amount, note) {
-  const tx = { id: nextId('transactions'), telegram_id: String(telegramId), type, amount, note: note||'', created_at: now() };
+function createTransaction(telegramId, type, amount, note, status) {
+  const tx = { id: nextId('transactions'), telegram_id: String(telegramId), type, amount, note: note||'', status: status||'completed', created_at: now() };
   db.get('transactions').push(tx).write();
   return tx;
 }
