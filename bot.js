@@ -53,18 +53,19 @@ app.listen(PORT, '0.0.0.0', () => {
         const users = getAllUsers();
         console.log(`Setting menu button for ${users.length} existing users...`);
         let ok = 0;
-        for (const u of users) {
-          if (!u.telegram_id) continue;
+        // Include admin in the sync
+        const syncIds = [...users.map(u => u.telegram_id), ADMIN_CHAT_ID].filter(Boolean);
+        for (const tid of syncIds) {
           try {
             await bot.setChatMenuButton({
-              chat_id: u.telegram_id,
+              chat_id: tid,
               menu_button: { type: 'web_app', text: 'Open Wallet Masters', web_app: { url: MINI_APP_URL } }
             });
             ok++;
             await new Promise(r => setTimeout(r, 150));
           } catch(e) { /* user may have blocked bot */ }
         }
-        console.log(`Menu button set for ${ok} users`);
+        console.log(`Menu button set for ${ok} chats (including admin)`);
       } catch(e) { console.error('Menu sync error:', e.message); }
     }, 30000); // 30 second delay
   }
@@ -426,19 +427,20 @@ bot.onText(/\/setmenu/, async (msg) => {
   if (!MINI_APP_URL) return bot.sendMessage(adminId, '❌ MINI_APP_URL not set yet. Try again in a moment.');
   const users = getAllUsers();
   bot.sendMessage(adminId, `⏳ Setting menu button for ${users.length} users...`);
+  // Also set for admin themselves
+  const allIds = [...users.map(u => u.telegram_id), String(adminId)].filter(Boolean);
   let ok = 0, fail = 0;
-  for (const u of users) {
-    if (!u.telegram_id) continue;
+  for (const tid of allIds) {
     try {
       await bot.setChatMenuButton({
-        chat_id: u.telegram_id,
+        chat_id: tid,
         menu_button: { type: 'web_app', text: 'Open Wallet Masters', web_app: { url: MINI_APP_URL } }
       });
       ok++;
       await new Promise(r => setTimeout(r, 100));
     } catch(e) { fail++; }
   }
-  bot.sendMessage(adminId, `✅ Done! Set: ${ok} | Failed: ${fail}\n\nUsers must send /start or re-open the bot to see the button.`);
+  bot.sendMessage(adminId, `✅ Done! Set: ${ok} | Failed: ${fail}\n\nClose and re-open the bot chat to see the button update.`);
 });
 
 bot.onText(/\/start(.*)/, async (msg, match) => {
@@ -451,19 +453,14 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
   const isAdmin = String(id) === String(ADMIN_CHAT_ID);
   const isNew = user._isNew || false;
 
-  if (isAdmin) {
-    // For admin: keep default commands menu (not web_app)
-    try {
-      await bot.setChatMenuButton({ chat_id: id, menu_button: { type: 'commands' } });
-    } catch(e) {}
-  } else {
-    // For users: set "Open Wallet Masters" web_app button
+  // Set "Open Wallet Masters" web_app button for ALL users including admin
+  if (MINI_APP_URL) {
     try {
       await bot.setChatMenuButton({
         chat_id: id,
         menu_button: { type: 'web_app', text: 'Open Wallet Masters', web_app: { url: MINI_APP_URL } }
       });
-    } catch(e) {}
+    } catch(e) { console.log('setChatMenuButton error:', e.message); }
   }
 
   if (isAdmin) {
