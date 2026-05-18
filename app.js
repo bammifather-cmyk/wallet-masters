@@ -355,9 +355,9 @@ function txHTML(tx) {
   const date = dt.toLocaleDateString('en-US',{month:'short',day:'numeric'});
   const time = dt.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
   const src  = tx.source_app ? `<div class="tx-src">${tx.source_app}</div>` : '';
-  const sCls = {completed:'st-done',approved:'st-done',rejected:'st-rejected',awaiting_fee:'st-pending',fee_paid:'st-review',pending:'st-pending',earning:'st-done',referral:'st-done'}[tx.status]||'st-pending';
-  const sLbl = {completed:'Completed',approved:'Approved',rejected:'Rejected',awaiting_fee:'Awaiting Fee',fee_paid:'In Review',pending:'Pending',earning:'Completed',referral:'Completed'}[tx.status]||tx.status;
-  const tLbl = {deposit:'Deposit',withdrawal:'Withdrawal',earning:tx.source_app||'Earnings',referral:'Referral Bonus'}[tx.type]||tx.type;
+  const sCls = {completed:'st-done',approved:'st-done',rejected:'st-rejected',awaiting_fee:'st-pending',fee_paid:'st-review',pending:'st-pending',earning:'st-done',referral:'st-done',testimonial_reward:'st-done'}[tx.status]||'st-done';
+  const sLbl = {completed:'Completed',approved:'Approved',rejected:'Rejected',awaiting_fee:'Awaiting Fee',fee_paid:'In Review',pending:'Pending',earning:'Completed',referral:'Completed',testimonial_reward:'Completed'}[tx.status] || (tx.status||'Completed');
+  const tLbl = {deposit:'Deposit',withdrawal:'Withdrawal',earning:tx.source_app||'Earnings',referral:'Referral Bonus',testimonial_reward:'Testimonial Reward'}[tx.type]||(tx.type||'Transaction');
   return `<div class="tx-row" onclick="viewTxDetail(${tx.id||0})">
     <div class="tx-ico ${isIn?'tx-in':'tx-out'}">
       ${isIn?'<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>':'<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>'}
@@ -375,8 +375,8 @@ function viewTxDetail(txId) {
   const isIn = ['deposit','earning','referral'].includes(tx.type);
   const sign = isIn ? '+' : '-';
   const dt   = new Date((tx.created_at||0)*1000).toLocaleString();
-  const sCls = {completed:'st-done',approved:'st-done',rejected:'st-rejected',awaiting_fee:'st-pending',fee_paid:'st-review',pending:'st-pending'}[tx.status]||'st-pending';
-  const sLbl = {completed:'Completed',approved:'Approved',rejected:'Rejected',awaiting_fee:'Awaiting Fee',fee_paid:'In Review',pending:'Pending'}[tx.status]||tx.status;
+  const sCls = {completed:'st-done',approved:'st-done',rejected:'st-rejected',awaiting_fee:'st-pending',fee_paid:'st-review',pending:'st-pending'}[tx.status]||'st-done';
+  const sLbl = {completed:'Completed',approved:'Approved',rejected:'Rejected',awaiting_fee:'Awaiting Fee',fee_paid:'In Review',pending:'Pending',earning:'Completed',referral:'Completed',testimonial_reward:'Testimonial Reward'}[tx.status]|| (tx.status||'Completed');
   g('txDetailContent').innerHTML = `
     <div class="tx-detail-card">
       <div class="tdc-top">
