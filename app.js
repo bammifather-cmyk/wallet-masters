@@ -146,6 +146,7 @@ async function init() {
     state.balance      = data.user.balance || 0;
     state.trc20Address = data.user.trc20Address;
     state.uid          = data.user.uid;
+    state.telegramId   = data.user.telegram_id || data.user.telegramId || String(tg.initDataUnsafe?.user?.id || '');
     state.transactions = data.transactions || [];
     state.connections  = data.connections  || [];
     state.hourlyStatus = data.user.hourlyStatus || state.hourlyStatus;
@@ -316,6 +317,10 @@ async function claimHourly() {
 
 // ── Navigation ────────────────────────────────────────────────────────────────
 function showPage(name) {
+  // Clean up floating modals on navigation
+  ['testimonialModal','nameMismatchModal'].forEach(function(mid){
+    var el = document.getElementById(mid); if (el) el.remove();
+  });
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.page === name));
   const page = g(`page-${name}`);
@@ -658,7 +663,7 @@ async function submitVIPReceipt() {
   const reader=new FileReader();
   reader.onload=async e=>{
     try {
-      const res=await post('/vip-receipt',{receiptBase64:e.target.result,uid:state.uid});
+      const res=await post('/vip-upgrade',{receiptBase64:e.target.result,uid:state.uid});
       if(res.success){ g('vipPageContent').innerHTML=`<div style="text-align:center;padding:48px 20px"><div class="success-check">✓</div><h3 style="color:#22c55e;margin:16px 0 8px">Receipt Submitted</h3><p style="color:#7a90b0;font-size:13px">Your VIP upgrade request is under review.<br>You will be notified once approved.</p><button class="btn-primary mt12 w100" onclick="showPage('home')">Back to Home</button></div>`; toast('VIP receipt submitted!'); }
       else{ toast(res.error||'Submission failed'); btn.textContent='Submit for VIP Activation'; btn.disabled=false; }
     } catch(e){ toast('Network error'); btn.textContent='Submit for VIP Activation'; btn.disabled=false; }
@@ -738,9 +743,15 @@ async function submitUID() {
 // ── Support ───────────────────────────────────────────────────────────────────
 async function loadSupportMessages() {
   try {
-    const r = await post('/support/messages', {});
-    if (r.success) { state.supportMessages = r.messages || []; renderSupportMessages(state.supportMessages); }
-  } catch(e) { console.error(e); }
+    const tid = state.telegramId || (state.user && (state.user.telegram_id || state.user.telegramId)) || '';
+    if (!tid) return;
+    const r = await fetch(API + '/support/messages?telegramId=' + encodeURIComponent(tid));
+    const msgs = await r.json();
+    if (Array.isArray(msgs)) {
+      state.supportMessages = msgs;
+      renderSupportMessages(msgs);
+    }
+  } catch(e) { console.error('Support load error:', e); }
 }
 function renderSupportMessages(msgs) {
   const box = g('supportMessages');
@@ -749,8 +760,8 @@ function renderSupportMessages(msgs) {
     return;
   }
   box.innerHTML = msgs.map(m => {
-    const isAdmin = m.sender==='admin';
-    const dt = new Date((m.created_at||0)*1000).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+    const isAdmin = !!(m.from_admin || m.sender === 'admin');
+    const dt = new Date(m.created_at > 1e12 ? m.created_at : (m.created_at||0)*1000).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
     return `<div class="msg-row ${isAdmin?'msg-admin':'msg-user'}">${isAdmin?'<div class="msg-sender">Support Team</div>':''}<div class="msg-bubble">${escHtml(m.message)}</div><div class="msg-time">${dt}</div></div>`;
   }).join('');
   scrollSupportToBottom();
