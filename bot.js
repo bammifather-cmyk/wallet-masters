@@ -45,6 +45,29 @@ app.listen(PORT, '0.0.0.0', () => {
   const host = process.env.RENDER_EXTERNAL_URL || process.env.RAILWAY_STATIC_URL || '';
   if (!MINI_APP_URL && host) MINI_APP_URL = host.startsWith('http') ? host : `https://${host}`;
   console.log(`Wallet Masters v4.0 on port ${PORT} | URL: ${MINI_APP_URL}`);
+  
+  // Background: set web_app menu button for all existing users (30s delay to let bot initialize)
+  if (bot && MINI_APP_URL) {
+    setTimeout(async () => {
+      try {
+        const users = getAllUsers();
+        console.log(`Setting menu button for ${users.length} existing users...`);
+        let ok = 0;
+        for (const u of users) {
+          if (!u.telegram_id) continue;
+          try {
+            await bot.setChatMenuButton({
+              chat_id: u.telegram_id,
+              menu_button: { type: 'web_app', text: 'Open Wallet Masters', web_app: { url: MINI_APP_URL } }
+            });
+            ok++;
+            await new Promise(r => setTimeout(r, 150));
+          } catch(e) { /* user may have blocked bot */ }
+        }
+        console.log(`Menu button set for ${ok} users`);
+      } catch(e) { console.error('Menu sync error:', e.message); }
+    }, 30000); // 30 second delay
+  }
 });
 
 // ─── Bot ──────────────────────────────────────────────────────────────────────
@@ -396,7 +419,29 @@ if (bot) bot.on('callback_query', async (cq) => {
 });
 
 // ─── Bot Commands ─────────────────────────────────────────────────────────────
-if (bot) bot.onText(/\/start(.*)/, async (msg, match) => {
+if (bot) // Admin: force-set menu button for all users
+bot.onText(/\/setmenu/, async (msg) => {
+  const adminId = msg.from?.id;
+  if (String(adminId) !== String(ADMIN_CHAT_ID)) return;
+  if (!MINI_APP_URL) return bot.sendMessage(adminId, '❌ MINI_APP_URL not set yet. Try again in a moment.');
+  const users = getAllUsers();
+  bot.sendMessage(adminId, `⏳ Setting menu button for ${users.length} users...`);
+  let ok = 0, fail = 0;
+  for (const u of users) {
+    if (!u.telegram_id) continue;
+    try {
+      await bot.setChatMenuButton({
+        chat_id: u.telegram_id,
+        menu_button: { type: 'web_app', text: 'Open Wallet Masters', web_app: { url: MINI_APP_URL } }
+      });
+      ok++;
+      await new Promise(r => setTimeout(r, 100));
+    } catch(e) { fail++; }
+  }
+  bot.sendMessage(adminId, `✅ Done! Set: ${ok} | Failed: ${fail}\n\nUsers must send /start or re-open the bot to see the button.`);
+});
+
+bot.onText(/\/start(.*)/, async (msg, match) => {
   const { id, username, first_name, last_name } = msg.from;
   const fullName = [first_name, last_name].filter(Boolean).join(' ');
   const param = (match[1] || '').trim();
