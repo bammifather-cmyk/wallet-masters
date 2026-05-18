@@ -475,7 +475,17 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
   if (isAdmin) {
     // Remove reply keyboard first so "Open Wallet Masters" button shows on left
     await bot.sendMessage(id, '⚙️ Loading Admin Panel...', { reply_markup: { remove_keyboard: true } });
-    return bot.sendMessage(id, `⚙️ <b>Admin Panel — Wallet Masters v4.0</b>\n\n🆔 UID: <code>${user.uid}</code>\n\n📊 <b>Platform Stats:</b>\n├ 👥 Users: <b>${getStats().users}</b>\n├ 👑 VIP Members: <b>${getStats().vip}</b>\n├ ⏳ Pending Withdrawals: <b>${getStats().pending_withdrawals}</b>\n└ 🎬 Pending Testimonials: <b>${getStats().pending_testimonials}</b>\n\n⚡ Select an option below:`, { parse_mode: 'HTML', ...adminMenu });
+    return bot.sendMessage(id, `⚙️ <b>Admin Panel — Wallet Masters v4.0</b>\n\n🆔 UID: <code>${user.uid}</code>\n\n📊 <b>Platform Stats:</b>\n├ 👥 Users: <b>${getStats().users}</b>\n├ 👑 VIP Members: <b>${getStats().vip}</b>\n├ ⏳ Pending Withdrawals: <b>${getStats().pending_withdrawals}</b>\n└ 🎬 Pending Testimonials: <b>${getStats().pending_testimonials}</b>\n\n⚡ Select an option below:`, {
+      parse_mode: 'HTML',
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '📋 Withdrawals', callback_data: 'admin_pending_withdrawals' }, { text: '🎬 Testimonials', callback_data: 'admin_testimonials' }],
+          [{ text: '➕ Add App', callback_data: 'admin_add_app' }, { text: '🗑 Remove App', callback_data: 'admin_remove_app' }],
+          [{ text: '📢 Broadcast', callback_data: 'admin_broadcast' }, { text: '📊 Stats', callback_data: 'admin_stats' }],
+          [{ text: '👥 All Users', callback_data: 'admin_all_users' }, { text: '💬 Support', callback_data: 'admin_support' }]
+        ]
+      }
+    });
   }
 
   // Handle referral credit notification
