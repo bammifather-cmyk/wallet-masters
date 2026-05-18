@@ -711,6 +711,41 @@ app.post('/api/withdrawal', authMiddleware, async (req, res) => {
   res.json({ success: true, withdrawal: wd, fees });
 });
 
+// Alias: app.js submits to /api/withdraw (without 'al')
+app.post('/api/withdraw', authMiddleware, async (req, res) => {
+  const user = getUserByTelegramId(req.tgUser.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  if (!user.is_vip) return res.status(403).json({ error: 'VIP required for withdrawals' });
+  const { amount, isBankWithdrawal, toAddress, bankName, bankCountry,
+          localCurrency, accountNumber, method } = req.body;
+  const amt = parseFloat(amount);
+  if (!amt || amt < MIN_WITHDRAWAL || amt > MAX_WITHDRAWAL)
+    return res.status(400).json({ error: 'Amount must be between 5000 and 50000 USDT' });
+  if (user.usdt_balance < amt)
+    return res.status(400).json({ error: 'Insufficient balance' });
+  const fees = calculateFees(amt);
+  const wd = createWithdrawalRequest({
+    telegram_id: user.telegram_id, amount: amt,
+    method: method || (isBankWithdrawal ? 'bank' : 'crypto'),
+    account_number: accountNumber || toAddress || '',
+    bank_name: bankName || '',
+    country: bankCountry || '',
+    currency: localCurrency || 'USDT',
+    fee: fees.total_fee, net_amount: fees.net_amount
+  });
+  bot.sendMessage(ADMIN_CHAT_ID,
+    '<b>New Withdrawal #' + wd.id + '</b>\n\n' +
+    user.full_name + ' (' + user.uid + ')\n' +
+    'Amount: ' + amt + ' USDT | Fee: ' + fees.total_fee + ' USDT\n' +
+    (bankName || method || 'Crypto') + ' - ' + (accountNumber || toAddress || ''),
+    { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[
+      { text: 'Approve', callback_data: 'wd_approve_' + wd.id },
+      { text: 'Reject',  callback_data: 'wd_reject_'  + wd.id }
+    ]]}}
+  ).catch(() => {});
+  res.json({ success: true, withdrawal: wd, fees });
+});
+
 // VIP upgrade receipt
 app.post('/api/vip-upgrade', authMiddleware, async (req, res) => {
   const user = getUserByTelegramId(req.tgUser.id);
@@ -843,7 +878,7 @@ async function handleTestimonialSubmit(req, res) {
   };
 
   // 1. Send notification text with approve/reject buttons
-  await bot.sendMessage(ADMIN_CHAT_ID,
+  bot.sendMessage(ADMIN_CHAT_ID,
     `🎬 <b>New Testimonial #${tes.id}</b>\n\n` +
     `👤 <b>${user.full_name}</b> (${user.uid})\n` +
     `📎 <b>Type:</b> ${type === 'youtube' ? '📺 YouTube' : '🎥 Video'}\n` +
@@ -864,21 +899,25 @@ async function handleTestimonialSubmit(req, res) {
       // Try as video first, fall back to document if too large or wrong format
       const ext = videoFileName.split('.').pop().toLowerCase();
       if (['mp4', 'mov', 'webm', 'avi'].includes(ext)) {
-        await bot.sendVideo(ADMIN_CHAT_ID, buffer, {
+        bot.sendVideo(ADMIN_CHAT_ID, buffer, {
           caption: `🎥 Video from ${user.full_name} — Testimonial #${tes.id}\nCaption: ${caption}`
         }).catch(async () => {
           // Video failed - send as document
-          await bot.sendDocument(ADMIN_CHAT_ID, buffer, {
+          bot.sendDocument(ADMIN_CHAT_ID, buffer, {
             filename: videoFileName,
             caption: `📄 Video file from ${user.full_name} — Testimonial #${tes.id}`
           }).catch(() => {
-            bot.sendMessage(ADMIN_CHAT_ID,
+            // Respond immediately - don't block on Telegram upload
+  res.json({ success: true, testimonial: tes });
+
+  // Notify admin in background (fire and forget)
+  bot.sendMessage(ADMIN_CHAT_ID,
               `⚠️ Could not send video file for Testimonial #${tes.id}. Check the database.`
             ).catch(() => {});
           });
         });
       } else {
-        await bot.sendDocument(ADMIN_CHAT_ID, buffer, {
+        bot.sendDocument(ADMIN_CHAT_ID, buffer, {
           filename: videoFileName,
           caption: `📄 File from ${user.full_name} — Testimonial #${tes.id}`
         }).catch(() => {
@@ -894,7 +933,6 @@ async function handleTestimonialSubmit(req, res) {
     }
   }
 
-  res.json({ success: true, testimonial: tes });
 }
 
 app.post('/api/testimonial', authMiddleware, handleTestimonialSubmit);
