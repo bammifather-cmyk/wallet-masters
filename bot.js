@@ -58,25 +58,16 @@ setTimeout(async () => {
   if (!bot) return;
   try { await bot.setMyCommands([]); console.log('Bot commands cleared'); } catch(e) {}
 
-  // Set admin menu button
-  try {
-    await bot.setChatMenuButton({
-      chat_id: ADMIN_CHAT_ID,
-      menu_button: { type: 'web_app', text: 'Wallet Masters', web_app: { url: MINI_APP_URL } }
-    });
-    console.log('Admin menu button set');
-  } catch(e) { console.log('Admin menu btn error:', e.message); }
+    // Set admin menu button at startup
+  setMenuButton(ADMIN_CHAT_ID).catch(() => {});
 
-  // Set for all existing users
+  // Set Wallet Masters button for all existing users (delayed to avoid rate limit)
   setTimeout(async () => {
     const users = getAllUsers();
     let ok = 0;
     for (const u of users) {
       try {
-        await bot.setChatMenuButton({
-          chat_id: u.telegram_id,
-          menu_button: { type: 'web_app', text: 'Wallet Masters', web_app: { url: MINI_APP_URL } }
-        });
+        await setMenuButton(u.telegram_id);
         ok++;
         await new Promise(r => setTimeout(r, 200));
       } catch(e) {}
@@ -110,10 +101,16 @@ function openWalletBtn() {
 // Set Wallet Masters web_app menu button for a user
 async function setMenuButton(chatId) {
   try {
-    await bot.setChatMenuButton({
-      chat_id: chatId,
-      menu_button: { type: 'web_app', text: 'Wallet Masters', web_app: { url: MINI_APP_URL } }
+    const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/setChatMenuButton`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        menu_button: { type: 'web_app', text: 'Wallet Masters', web_app: { url: MINI_APP_URL } }
+      })
     });
+    const json = await res.json();
+    if (!json.ok) console.log(`setMenuButton(${chatId}) failed:`, json.description);
   } catch(e) { console.log(`setMenuButton(${chatId}) error:`, e.message); }
 }
 
@@ -142,10 +139,7 @@ if (bot) bot.onText(/\/setmenu/, async (msg) => {
   let ok = 0, fail = 0;
   for (const tid of allIds) {
     try {
-      await bot.setChatMenuButton({
-        chat_id: tid,
-        menu_button: { type: 'web_app', text: 'Wallet Masters', web_app: { url: MINI_APP_URL } }
-      });
+      await setMenuButton(tid);
       ok++;
       await new Promise(r => setTimeout(r, 100));
     } catch(e) { fail++; }
@@ -601,8 +595,9 @@ function enrichUser(user, tid) {
     username: user.telegram_username || '',
     hourlyStatus: {
       canClaim: hourlyStatus.canClaim,
-      nextClaimIn: hourlyStatus.nextClaimIn,
-      earningRate
+      nextClaimIn: Math.round(hourlyStatus.nextClaimIn / 1000),
+      earningRate,
+      hourlyAmount: earningRate
     }
   };
 }
@@ -661,7 +656,7 @@ app.get('/api/dashboard', authMiddleware, (req, res) => {
   const transactions  = getUserTransactions(user.telegram_id).slice(0, 10);
   const earningApps   = getEarningApps();
   const connections   = getUserConnections(user.telegram_id);
-  res.json({ user, hourlyStatus, transactions, earningApps, connections });
+  res.json({ user: enrichUser(user, req.tgUser.id), hourlyStatus, transactions, earningApps, connections });
 });
 
 // Claim hourly earning
@@ -669,6 +664,19 @@ app.post('/api/claim-hourly', authMiddleware, (req, res) => {
   const result = claimHourlyEarning(req.tgUser.id);
   if (!result.success) return res.status(400).json(result);
   res.json(result);
+});
+
+
+// Get hourly claiming status
+app.post('/api/hourly-status', authMiddleware, (req, res) => {
+  const status = getHourlyStatus(req.tgUser.id);
+  const isVIP = status.earningRate === 200;
+  res.json({
+    canClaim: status.canClaim,
+    nextClaimIn: Math.round(status.nextClaimIn / 1000),
+    hourlyAmount: status.earningRate || (isVIP ? 200 : 50),
+    earningRate: status.earningRate
+  });
 });
 
 // Withdrawal request
@@ -717,7 +725,7 @@ app.post('/api/vip-upgrade', authMiddleware, async (req, res) => {
     method: 'VIP Upgrade',
     account_number: 'N/A',
     type: 'vip_upgrade',
-    receipt_image
+    receipt_image: imageData
   });
 
   await bot.sendMessage(ADMIN_CHAT_ID,
@@ -728,14 +736,31 @@ app.post('/api/vip-upgrade', authMiddleware, async (req, res) => {
     ]]}}
   ).catch(() => {});
 
-  if (imageData) {
-    bot.sendPhoto(ADMIN_CHAT_ID, receipt_image.replace(/^data:image\/\w+;base64,/, '').length > 0
-      ? Buffer.from(imageData.replace(/^data:image\/[^;]+;base64,/, ''), 'base64')
-      : receipt_image
-    ).catch(() => {});
+  // Send receipt as message (safe - sendPhoto can crash with base64)
+  if (imageData && imageData.startsWith('data:')) {
+    // Base64 image - send as file
+    try {
+      const imgBuffer = Buffer.from(imageData.replace(/^data:image\/[^;]+;base64,/, ''), 'base64');
+      await bot.sendPhoto(ADMIN_CHAT_ID, imgBuffer, { caption: `VIP receipt from ${user.full_name} (${user.uid})` }).catch(() => {
+        bot.sendMessage(ADMIN_CHAT_ID, `📷 Receipt uploaded (base64, too large to preview) for ${user.full_name} (${user.uid})`).catch(() => {});
+      });
+    } catch(e) {
+      bot.sendMessage(ADMIN_CHAT_ID, `📷 Receipt from ${user.full_name} - could not attach image`).catch(() => {});
+    }
+  } else if (imageData) {
+    bot.sendPhoto(ADMIN_CHAT_ID, imageData, { caption: `Receipt from ${user.full_name}` }).catch(() => {});
   }
 
   res.json({ success: true, message: 'VIP upgrade request submitted' });
+});
+
+// Accept Terms and Conditions - persists to DB so T&C never shows again
+app.post('/api/accept-terms', authMiddleware, (req, res) => {
+  const user = getUserByTelegramId(req.tgUser.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  db.get('users').find({ telegram_id: String(req.tgUser.id) })
+    .assign({ terms_accepted: true, updated_at: now() }).write();
+  res.json({ success: true });
 });
 
 // Support message from frontend
