@@ -345,3 +345,16 @@ html,body{height:100%;background:#070d1a;color:#f0f4ff;font-family:-apple-system
 .as-body{font-size:13px;color:#7a90b0;line-height:1.6}
 .terms-card{background:#0e1629;border:1px solid #1e2d45;border-radius:14px;overflow:hidden}
 .tc-title{font-size:13px;font-weight:700;color:#f0f4ff;padding:14px 16px;border-bottom:1px solid #1e2d45;background:#131f35}
+
+
+/* ── Testimonial styles ──────────────────────────────── */
+.testimonial-card{background:#1a2544;border-radius:14px;padding:16px;margin-bottom:12px;border:1px solid #2a3a60}
+.test-header{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+.test-avatar{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#2563eb,#7c3aed);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:16px;flex-shrink:0}
+.test-name{color:#f0f4ff;font-weight:600;font-size:14px}
+.test-type{color:#8a9bc0;font-size:11px;margin-top:2px}
+.test-yt-btn{display:block;background:#e60000;color:#fff;border-radius:8px;padding:8px 14px;text-decoration:none;font-size:13px;font-weight:600;margin-bottom:8px;text-align:center}
+.test-caption{color:#8a9bc0;font-size:13px;line-height:1.5}
+/* ── Bank logo wrapper ──────────────────────────────── */
+.pm-logo-wrap{flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.pm-logo-wrap img{display:block;border-radius:50%}
