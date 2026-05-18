@@ -37,7 +37,7 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.static(path.join(__dirname, '.')));
 
-let MINI_APP_URL = process.env.MINI_APP_URL || '';
+let MINI_APP_URL = process.env.MINI_APP_URL || 'https://web-production-a3b658.up.railway.app';
 
 app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '4.0' }));
 
