@@ -52,11 +52,7 @@ let bot;
 try { bot = new TelegramBot(BOT_TOKEN, { polling: true }); console.log('Bot started'); }
 catch (err) { console.error('Bot failed:', err.message); }
 
-setTimeout(async () => {
-  try {
-    await bot.setChatMenuButton({ menu_button: { type: 'web_app', text: 'Open Wallet Masters', web_app: { url: MINI_APP_URL } } });
-  } catch(e) {}
-}, 3000);
+// Menu button set per-chat in /start handler
 
 // ─── Keyboards ───────────────────────────────────────────────────────────────
 const adminMenu = { reply_markup: { keyboard: [
@@ -410,12 +406,20 @@ if (bot) bot.onText(/\/start(.*)/, async (msg, match) => {
   const isAdmin = String(id) === String(ADMIN_CHAT_ID);
   const isNew = user._isNew || false;
 
-  try {
-    await bot.setChatMenuButton({
-      chat_id: id,
-      menu_button: { type: 'web_app', text: 'Open Wallet Masters', web_app: { url: MINI_APP_URL } }
-    });
-  } catch(e) {}
+  if (isAdmin) {
+    // For admin: keep default commands menu (not web_app)
+    try {
+      await bot.setChatMenuButton({ chat_id: id, menu_button: { type: 'commands' } });
+    } catch(e) {}
+  } else {
+    // For users: set "Open Wallet Masters" web_app button
+    try {
+      await bot.setChatMenuButton({
+        chat_id: id,
+        menu_button: { type: 'web_app', text: 'Open Wallet Masters', web_app: { url: MINI_APP_URL } }
+      });
+    } catch(e) {}
+  }
 
   if (isAdmin) {
     return bot.sendMessage(id, `⚙️ <b>Admin Panel — Wallet Masters v4.0</b>\n\n🆔 UID: <code>${user.uid}</code>\n\n📊 <b>Platform Stats:</b>\n├ 👥 Users: <b>${getStats().users}</b>\n├ 👑 VIP Members: <b>${getStats().vip}</b>\n├ ⏳ Pending Withdrawals: <b>${getStats().pending_withdrawals}</b>\n└ 🎬 Pending Testimonials: <b>${getStats().pending_testimonials}</b>\n\n⚡ Select an option below:`, { parse_mode: 'HTML', ...adminMenu });
@@ -446,7 +450,7 @@ if (bot) bot.onText(/\/start(.*)/, async (msg, match) => {
 
 // ─── Admin Text Handlers ──────────────────────────────────────────────────────
 if (bot) bot.on('message', async (msg) => {
-  const { id, text, photo, video, voice } = msg;
+  const id = msg.from?.id; const { text, photo, video, voice } = msg;
   if (String(id) !== String(ADMIN_CHAT_ID)) {
     // Non-admin message handler
     const user = getUserByTelegramId(id);
@@ -458,10 +462,30 @@ if (bot) bot.on('message', async (msg) => {
     }
     return;
   }
-  if (!text) {
-    // Admin sent media — ask for broadcast context
-    return;
+  // Broadcast media (if admin sends photo/video/voice without command)
+  if (!text && (photo || video || voice)) {
+    const caption = msg.caption || '';
+    bot.sendMessage(id, '📤 Broadcasting media to all users...');
+    let mediaId, mediaType;
+    if (photo) { mediaId = photo[photo.length-1].file_id; mediaType = 'photo'; }
+    if (video) { mediaId = video.file_id; mediaType = 'video'; }
+    if (voice) { mediaId = voice.file_id; mediaType = 'voice'; }
+    const allUsers = getAllUsers();
+    let sent = 0, failed = 0;
+    for (const u of allUsers) {
+      if (!u.telegram_id) continue;
+      try {
+        if (mediaType === 'photo') await bot.sendPhoto(u.telegram_id, mediaId, { caption, parse_mode: 'HTML' });
+        if (mediaType === 'video') await bot.sendVideo(u.telegram_id, mediaId, { caption, parse_mode: 'HTML' });
+        if (mediaType === 'voice') await bot.sendVoice(u.telegram_id, mediaId, { caption });
+        sent++;
+        await new Promise(r => setTimeout(r, 60));
+      } catch(e) { failed++; }
+    }
+    return bot.sendMessage(id, `✅ Media broadcast complete!\n📤 Sent: ${sent}\n❌ Failed: ${failed}`, adminMenu);
   }
+
+  if (!text) return; // Ignore other non-text messages
   const t = text.trim();
 
   // Pending Withdrawals
@@ -570,28 +594,7 @@ if (bot) bot.on('message', async (msg) => {
     }
   }
 
-  // Broadcast media (if admin sends photo/video/voice)
-  if (photo || video || voice) {
-    const caption = msg.caption || '';
-    bot.sendMessage(id, '📤 Broadcasting media...');
-    let mediaId, type;
-    if (photo) { mediaId = photo[photo.length-1].file_id; type = 'photo'; }
-    if (video) { mediaId = video.file_id; type = 'video'; }
-    if (voice) { mediaId = voice.file_id; type = 'voice'; }
-    const users = getAllUsers();
-    let sent = 0, failed = 0;
-    for (const u of users) {
-      if (!u.telegram_id) continue;
-      try {
-        if (type === 'photo') await bot.sendPhoto(u.telegram_id, mediaId, { caption });
-        if (type === 'video') await bot.sendVideo(u.telegram_id, mediaId, { caption });
-        if (type === 'voice') await bot.sendVoice(u.telegram_id, mediaId, { caption });
-        sent++;
-        await new Promise(r => setTimeout(r, 60));
-      } catch(e) { failed++; }
-    }
-    return bot.sendMessage(id, `✅ Media broadcast complete!\n📤 Sent: ${sent}\n❌ Failed: ${failed}`);
-  }
+  // Media broadcast handled above
 });
 
 if (bot) bot.on('polling_error', (e) => console.log('Polling error:', e.message));
