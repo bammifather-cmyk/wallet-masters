@@ -59,7 +59,7 @@ app.listen(PORT, '0.0.0.0', () => {
           try {
             await bot.setChatMenuButton({
               chat_id: tid,
-              menu_button: { type: 'web_app', text: 'Open Wallet Masters', web_app: { url: MINI_APP_URL } }
+              menu_button: { type: 'web_app', text: 'Wallet Masters', web_app: { url: MINI_APP_URL } }
             });
             ok++;
             await new Promise(r => setTimeout(r, 150));
@@ -77,6 +77,15 @@ try { bot = new TelegramBot(BOT_TOKEN, { polling: true }); console.log('Bot star
 catch (err) { console.error('Bot failed:', err.message); }
 
 // Menu button set per-chat in /start handler
+// Clear bot commands so Telegram only shows the web_app menu button
+setTimeout(async () => {
+  if (bot) {
+    try {
+      await bot.setMyCommands([]); // Remove command list from menu
+      console.log('Bot commands cleared');
+    } catch(e) { console.log('setMyCommands error:', e.message); }
+  }
+}, 2000);
 
 // ─── Keyboards ───────────────────────────────────────────────────────────────
 const adminMenu = { reply_markup: { inline_keyboard: [
@@ -434,7 +443,7 @@ bot.onText(/\/setmenu/, async (msg) => {
     try {
       await bot.setChatMenuButton({
         chat_id: tid,
-        menu_button: { type: 'web_app', text: 'Open Wallet Masters', web_app: { url: MINI_APP_URL } }
+        menu_button: { type: 'web_app', text: 'Wallet Masters', web_app: { url: MINI_APP_URL } }
       });
       ok++;
       await new Promise(r => setTimeout(r, 100));
@@ -458,7 +467,7 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
     try {
       await bot.setChatMenuButton({
         chat_id: id,
-        menu_button: { type: 'web_app', text: 'Open Wallet Masters', web_app: { url: MINI_APP_URL } }
+        menu_button: { type: 'web_app', text: 'Wallet Masters', web_app: { url: MINI_APP_URL } }
       });
     } catch(e) { console.log('setChatMenuButton error:', e.message); }
   }
