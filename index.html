@@ -237,6 +237,36 @@
       </div>
     </div>
 
+
+    <!-- TESTIMONIALS -->
+    <div class="page" id="page-testimonials">
+      <div class="page-hdr"><button class="back-btn" onclick="showPage('home')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>Testimonials</h2></div>
+      <div class="form-scroll">
+        <!-- Submit buttons -->
+        <div style="display:flex;gap:12px;padding:16px 16px 0">
+          <button class="btn-primary" onclick="showTestimonialSubmit('video')" style="flex:1;padding:14px 8px;font-size:13px">
+            🎥 Post Video<br><span style="font-size:11px;opacity:.8">Earn +1,000 USDT</span>
+          </button>
+          <button class="btn-primary" onclick="showTestimonialSubmit('youtube')" style="flex:1;padding:14px 8px;font-size:13px;background:linear-gradient(135deg,#e60000,#cc0000)">
+            📺 YouTube Link<br><span style="font-size:11px;opacity:.8">Earn +2,000 USDT</span>
+          </button>
+        </div>
+        <!-- Info box -->
+        <div style="margin:12px 16px;background:#1a2544;border-radius:12px;padding:14px;border-left:3px solid #f0b90b">
+          <div style="color:#f0b90b;font-size:12px;font-weight:700;margin-bottom:6px">HOW IT WORKS</div>
+          <div style="color:#8a9bc0;font-size:12px;line-height:1.6">
+            Share a video or YouTube link talking about how you earn 50–200 USDT/hour on Wallet Masters, your instant withdrawals, and how it changed your life.<br><br>
+            Admin reviews and approves your submission. Once approved, your USDT reward lands instantly!
+          </div>
+        </div>
+        <!-- List of approved testimonials -->
+        <div style="padding:0 16px 16px">
+          <div style="color:#8a9bc0;font-size:12px;font-weight:600;margin-bottom:12px;text-transform:uppercase;letter-spacing:.5px">Community Testimonials</div>
+          <div id="testimonialsList"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- SETTINGS -->
     <div class="page" id="page-settings">
       <div class="page-hdr"><button class="back-btn" onclick="showPage('home')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>Settings</h2></div>
@@ -247,6 +277,7 @@
           <div class="s-row" onclick="showPage('referral')"><span>Refer &amp; Earn</span><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
           <div class="s-row" onclick="showPage('receive')"><span>Show QR Code</span><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
           <div class="s-row" onclick="showPage('about')"><span>About &amp; Terms</span><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
+          <div class="s-row" onclick="showPage('testimonials')"><span>🎬 Testimonials & Earn</span><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
         </div>
         <div class="settings-info">
           <div class="si-logo"><svg width="32" height="32" viewBox="0 0 60 60" fill="none"><circle cx="30" cy="30" r="30" fill="url(#siG)"/><text x="30" y="40" text-anchor="middle" font-size="22" font-family="Arial" font-weight="700" fill="#fff">W</text><defs><linearGradient id="siG" x1="0" y1="0" x2="60" y2="60"><stop stop-color="#2563eb"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs></svg></div>
@@ -275,6 +306,12 @@
   <!-- HOTFIX patch: acceptTerms never blocks on network error -->
   <script>
     window.addEventListener('DOMContentLoaded', function() {
+      // Hook showPage to load testimonials
+      const _origShowPage = window.showPage;
+      window.showPage = function(page) {
+        if (typeof _origShowPage === 'function') _origShowPage(page);
+        if (page === 'testimonials') { setTimeout(() => { if (typeof loadTestimonialsPage === 'function') loadTestimonialsPage(); }, 100); }
+      };
       // Override acceptTerms to be resilient
       var _origAcceptTerms = window.acceptTerms;
       window.acceptTerms = async function() {
