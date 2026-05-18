@@ -428,7 +428,129 @@ if (bot) bot.on('callback_query', async (cq) => {
     removeEarningApp(appId);
     bot.answerCallbackQuery(cq.id, { text: '✅ App removed' });
     if (chatId) bot.editMessageText('✅ Earning App removed successfully.', { chat_id: chatId, message_id: msgId }).catch(()=>{});
+    return;
   }
+
+  // ─── ADMIN PANEL INLINE BUTTON HANDLERS ───────────────────────────────────
+  const adminPanel = {
+    inline_keyboard: [
+      [{ text: '📋 Withdrawals', callback_data: 'admin_pending_withdrawals' }, { text: '🎬 Testimonials', callback_data: 'admin_testimonials' }],
+      [{ text: '➕ Add App', callback_data: 'admin_add_app' }, { text: '🗑 Remove App', callback_data: 'admin_remove_app' }],
+      [{ text: '📢 Broadcast', callback_data: 'admin_broadcast' }, { text: '📊 Stats', callback_data: 'admin_stats' }],
+      [{ text: '👥 All Users', callback_data: 'admin_all_users' }, { text: '💬 Support', callback_data: 'admin_support' }]
+    ]
+  };
+
+  if (data === 'admin_pending_withdrawals') {
+    bot.answerCallbackQuery(cq.id);
+    const pending = getPendingWithdrawals().filter(w => w.type !== 'vip_upgrade');
+    if (!pending.length) {
+      return bot.sendMessage(chatId, '✅ No pending withdrawals.', { reply_markup: adminPanel });
+    }
+    for (const wd of pending.slice(0, 5)) {
+      const u = getUserByTelegramId(wd.telegram_id);
+      await bot.sendMessage(chatId,
+        `💸 <b>Withdrawal #${wd.id}</b>\n👤 ${u?.full_name || wd.telegram_id}\n💰 ${wd.amount} USDT\n🏦 ${wd.bank_name || wd.method || 'N/A'}\n🔢 ${wd.account_number || 'N/A'}`,
+        { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[
+          { text: '✅ Approve', callback_data: `wd_approve_${wd.id}` },
+          { text: '❌ Reject', callback_data: `wd_reject_${wd.id}` }
+        ]]}}
+      );
+    }
+    return bot.sendMessage(chatId, `📋 Showing ${Math.min(pending.length,5)} of ${pending.length} pending.`, { reply_markup: adminPanel });
+  }
+
+  if (data === 'admin_testimonials') {
+    bot.answerCallbackQuery(cq.id);
+    const pending = getPendingTestimonials();
+    if (!pending.length) {
+      return bot.sendMessage(chatId, '✅ No pending testimonials.', { reply_markup: adminPanel });
+    }
+    for (const tes of pending.slice(0, 5)) {
+      const reward = tes.type === 'youtube' ? 2000 : 1000;
+      await bot.sendMessage(chatId,
+        `🎬 <b>Testimonial #${tes.id}</b>\n👤 ${tes.user_name || tes.telegram_id}\n📎 ${tes.type === 'youtube' ? '📺 YouTube: ' + tes.youtube_url : '🎥 Video uploaded'}\n💬 ${tes.caption || ''}\n💰 Reward: ${reward} USDT`,
+        { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[
+          { text: `✅ Approve (+${reward} USDT)`, callback_data: `test_approve_${tes.id}` },
+          { text: '❌ Reject', callback_data: `test_reject_${tes.id}` }
+        ]]}}
+      );
+    }
+    return bot.sendMessage(chatId, `🎬 Showing ${Math.min(pending.length,5)} of ${pending.length} pending.`, { reply_markup: adminPanel });
+  }
+
+  if (data === 'admin_add_app') {
+    bot.answerCallbackQuery(cq.id);
+    return bot.sendMessage(chatId,
+      '📝 Send app details in this format:\n\n<code>ADD_APP\nName: App Name\nToken: bot_token_here</code>',
+      { parse_mode: 'HTML', reply_markup: adminPanel }
+    );
+  }
+
+  if (data === 'admin_remove_app') {
+    bot.answerCallbackQuery(cq.id);
+    const apps = getEarningApps();
+    if (!apps.length) return bot.sendMessage(chatId, '❌ No earning apps to remove.', { reply_markup: adminPanel });
+    const btns = apps.map(a => [{ text: `🗑 ${a.name} (ID:${a.id})`, callback_data: `remove_app_${a.id}` }]);
+    btns.push([{ text: '⬅️ Back', callback_data: 'admin_back' }]);
+    return bot.sendMessage(chatId, '🗑 Select app to remove:', { reply_markup: { inline_keyboard: btns } });
+  }
+
+  if (data === 'admin_broadcast') {
+    bot.answerCallbackQuery(cq.id);
+    return bot.sendMessage(chatId,
+      '📢 <b>Broadcast to All Users</b>\n\nSend your message now in this format:\n\n<code>BROADCAST: your message here</code>\n\nOr just send a photo/video with a caption.',
+      { parse_mode: 'HTML', reply_markup: adminPanel }
+    );
+  }
+
+  if (data === 'admin_stats') {
+    bot.answerCallbackQuery(cq.id);
+    const s = getStats();
+    return bot.sendMessage(chatId,
+      `📊 <b>Wallet Masters Stats</b>\n\n👥 Total Users: <b>${s.users}</b>\n👑 VIP Members: <b>${s.vip}</b>\n⏳ Pending Withdrawals: <b>${s.pending_withdrawals}</b>\n🎬 Pending Testimonials: <b>${s.pending_testimonials}</b>\n📱 Earning Apps: <b>${s.earning_apps}</b>`,
+      { parse_mode: 'HTML', reply_markup: adminPanel }
+    );
+  }
+
+  if (data === 'admin_all_users') {
+    bot.answerCallbackQuery(cq.id);
+    const users = getAllUsers().slice(-10).reverse();
+    const list = users.map((u, i) => `${i+1}. ${u.full_name || 'N/A'} | 💰 ${(u.usdt_balance||0).toFixed(0)} USDT${u.is_vip ? ' | 👑 VIP' : ''}`).join('\n');
+    return bot.sendMessage(chatId,
+      `👥 <b>Last 10 Users:</b>\n\n${list || 'No users yet.'}`,
+      { parse_mode: 'HTML', reply_markup: adminPanel }
+    );
+  }
+
+  if (data === 'admin_support') {
+    bot.answerCallbackQuery(cq.id);
+    let threads = [];
+    try { threads = getAllSupportThreads().slice(0, 5); } catch(e) {}
+    if (!threads.length) {
+      return bot.sendMessage(chatId, '✅ No support messages.', { reply_markup: adminPanel });
+    }
+    for (const m of threads) {
+      const u = getUserByTelegramId(m.telegram_id);
+      await bot.sendMessage(chatId,
+        `💬 <b>From: ${u?.full_name || m.telegram_id}</b>\n\n${m.message}\n\n<i>Reply with: /reply_${m.telegram_id} your message</i>`,
+        { parse_mode: 'HTML' }
+      );
+    }
+    return bot.sendMessage(chatId, `💬 Showing ${threads.length} support message(s).`, { reply_markup: adminPanel });
+  }
+
+  if (data === 'admin_back') {
+    bot.answerCallbackQuery(cq.id);
+    const s = getStats();
+    return bot.sendMessage(chatId,
+      `⚙️ <b>Admin Panel</b>\n\n📊 Users: ${s.users} | VIP: ${s.vip} | Pending: ${s.pending_withdrawals}\n\n⚡ Select an option:`,
+      { parse_mode: 'HTML', reply_markup: adminPanel }
+    );
+  }
+
+  // Fallback - answer any unhandled callback
+  try { bot.answerCallbackQuery(cq.id); } catch(e) {}
 });
 
 // ─── Bot Commands ─────────────────────────────────────────────────────────────
