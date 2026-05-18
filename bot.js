@@ -826,8 +826,7 @@ async function handleTestimonialSubmit(req, res) {
   const videoData  = req.body.videoData  || req.body.video_file  || '';
   const videoFileName = req.body.videoFileName || 'testimonial.mp4';
 
-  const tes = createTestimonial({
-    telegram_id: user.telegram_id,
+  const tes = createTestimonial(user.telegram_id, {
     user_name:   user.full_name,
     type,
     youtube_url: youtubeUrl,
@@ -956,8 +955,7 @@ app.post('/api/testimonial/submit', authMiddleware, async (req, res) => {
   const user = getUserByTelegramId(req.tgUser.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
   const { type, youtubeUrl, youtube_url, videoData, video_file, caption } = req.body;
-  const tes = createTestimonial({
-    telegram_id: user.telegram_id,
+  const tes = createTestimonial(user.telegram_id, {
     user_name: user.full_name,
     type, youtube_url: youtubeUrl || youtube_url,
     video_file: videoData || video_file, caption
