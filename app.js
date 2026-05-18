@@ -10,101 +10,107 @@ const MIN_WD = 5000, MAX_WD = 50000;
 
 // ── Global Banks / Payment Methods by Country ─────────────────────────────────
 const PAYMENT_METHODS = [
-  // Nigeria
-  { id:'access',    name:'Access Bank',      country:'Nigeria',  currency:'NGN', flag:'🇳🇬', color:'#e60026', logo:'AB' },
-  { id:'firstbank', name:'First Bank',        country:'Nigeria',  currency:'NGN', flag:'🇳🇬', color:'#004a97', logo:'FB' },
-  { id:'gtbank',    name:'GTBank',            country:'Nigeria',  currency:'NGN', flag:'🇳🇬', color:'#f58220', logo:'GT' },
-  { id:'uba',       name:'UBA',               country:'Nigeria',  currency:'NGN', flag:'🇳🇬', color:'#e60026', logo:'UBA' },
-  { id:'zenith',    name:'Zenith Bank',       country:'Nigeria',  currency:'NGN', flag:'🇳🇬', color:'#e60026', logo:'ZB' },
-  { id:'opay',      name:'OPay',              country:'Nigeria',  currency:'NGN', flag:'🇳🇬', color:'#00b140', logo:'OP' },
-  { id:'kuda',      name:'Kuda Bank',         country:'Nigeria',  currency:'NGN', flag:'🇳🇬', color:'#40196b', logo:'KD' },
-  { id:'palmpay',   name:'PalmPay',           country:'Nigeria',  currency:'NGN', flag:'🇳🇬', color:'#01a15a', logo:'PP' },
-  { id:'moniepoint',name:'Moniepoint',        country:'Nigeria',  currency:'NGN', flag:'🇳🇬', color:'#0166ff', logo:'MP' },
-  // Ghana
-  { id:'gcb',       name:'GCB Bank',          country:'Ghana',    currency:'GHS', flag:'🇬🇭', color:'#006341', logo:'GCB' },
-  { id:'ecobank_gh',name:'Ecobank Ghana',     country:'Ghana',    currency:'GHS', flag:'🇬🇭', color:'#009b6e', logo:'ECO' },
-  { id:'mtn_gh',    name:'MTN Mobile Money',  country:'Ghana',    currency:'GHS', flag:'🇬🇭', color:'#ffc403', logo:'MTN' },
-  { id:'vodafone_cash',name:'Vodafone Cash',  country:'Ghana',    currency:'GHS', flag:'🇬🇭', color:'#e60000', logo:'VF' },
-  { id:'airteltigo',name:'AirtelTigo Money',  country:'Ghana',    currency:'GHS', flag:'🇬🇭', color:'#e40000', logo:'AT' },
-  // Kenya
-  { id:'mpesa',     name:'M-Pesa',            country:'Kenya',    currency:'KES', flag:'🇰🇪', color:'#00a650', logo:'MP' },
-  { id:'kcb',       name:'KCB Bank',          country:'Kenya',    currency:'KES', flag:'🇰🇪', color:'#006633', logo:'KCB' },
-  { id:'equity_ke', name:'Equity Bank',       country:'Kenya',    currency:'KES', flag:'🇰🇪', color:'#e2001a', logo:'EQ' },
-  { id:'airtel_ke', name:'Airtel Money Kenya',country:'Kenya',    currency:'KES', flag:'🇰🇪', color:'#e40000', logo:'AM' },
-  // South Africa
-  { id:'fnb',       name:'FNB',               country:'South Africa', currency:'ZAR', flag:'🇿🇦', color:'#00a4e4', logo:'FNB' },
-  { id:'standard',  name:'Standard Bank',     country:'South Africa', currency:'ZAR', flag:'🇿🇦', color:'#0066a1', logo:'SB' },
-  { id:'absa',      name:'ABSA',              country:'South Africa', currency:'ZAR', flag:'🇿🇦', color:'#dc0028', logo:'ABS' },
-  { id:'nedbank',   name:'Nedbank',           country:'South Africa', currency:'ZAR', flag:'🇿🇦', color:'#007b40', logo:'NED' },
-  { id:'capitec',   name:'Capitec Bank',      country:'South Africa', currency:'ZAR', flag:'🇿🇦', color:'#5b2c8d', logo:'CAP' },
-  // Tanzania
-  { id:'mpesa_tz',  name:'M-Pesa Tanzania',   country:'Tanzania', currency:'TZS', flag:'🇹🇿', color:'#00a650', logo:'MP' },
-  { id:'tigopesa',  name:'Tigo Pesa',         country:'Tanzania', currency:'TZS', flag:'🇹🇿', color:'#e40000', logo:'TP' },
-  { id:'airtel_tz', name:'Airtel Money TZ',   country:'Tanzania', currency:'TZS', flag:'🇹🇿', color:'#e40000', logo:'AM' },
-  // Uganda
-  { id:'mtn_ug',    name:'MTN Mobile Money UG',country:'Uganda', currency:'UGX', flag:'🇺🇬', color:'#ffc403', logo:'MTN' },
-  { id:'airtel_ug', name:'Airtel Money UG',   country:'Uganda',   currency:'UGX', flag:'🇺🇬', color:'#e40000', logo:'AM' },
-  { id:'stanbic_ug',name:'Stanbic Bank Uganda',country:'Uganda',  currency:'UGX', flag:'🇺🇬', color:'#009ee3', logo:'STB' },
-  // Egypt
-  { id:'instapay',  name:'InstaPay Egypt',    country:'Egypt',    currency:'EGP', flag:'🇪🇬', color:'#00529b', logo:'IP' },
-  { id:'nbe',       name:'National Bank Egypt',country:'Egypt',   currency:'EGP', flag:'🇪🇬', color:'#006230', logo:'NBE' },
-  { id:'cib',       name:'CIB Egypt',         country:'Egypt',    currency:'EGP', flag:'🇪🇬', color:'#003087', logo:'CIB' },
-  // India
-  { id:'upi',       name:'UPI / PhonePe',     country:'India',    currency:'INR', flag:'🇮🇳', color:'#5f259f', logo:'UPI' },
-  { id:'gpay',      name:'Google Pay India',  country:'India',    currency:'INR', flag:'🇮🇳', color:'#4285f4', logo:'GP' },
-  { id:'paytm',     name:'Paytm',             country:'India',    currency:'INR', flag:'🇮🇳', color:'#00baf2', logo:'PTM' },
-  { id:'sbi',       name:'State Bank of India',country:'India',   currency:'INR', flag:'🇮🇳', color:'#22409a', logo:'SBI' },
-  { id:'hdfc',      name:'HDFC Bank',         country:'India',    currency:'INR', flag:'🇮🇳', color:'#004c8f', logo:'HDF' },
-  // Pakistan
-  { id:'jazzcash',  name:'JazzCash',          country:'Pakistan', currency:'PKR', flag:'🇵🇰', color:'#e4002b', logo:'JC' },
-  { id:'easypaisa', name:'EasyPaisa',         country:'Pakistan', currency:'PKR', flag:'🇵🇰', color:'#00a651', logo:'EP' },
-  { id:'hbl',       name:'HBL Bank',          country:'Pakistan', currency:'PKR', flag:'🇵🇰', color:'#00a651', logo:'HBL' },
-  // Bangladesh
-  { id:'bkash',     name:'bKash',             country:'Bangladesh',currency:'BDT', flag:'🇧🇩', color:'#e2136e', logo:'bK' },
-  { id:'nagad',     name:'Nagad',             country:'Bangladesh',currency:'BDT', flag:'🇧🇩', color:'#f26522', logo:'NGD' },
-  { id:'rocket',    name:'Rocket / DBBL',     country:'Bangladesh',currency:'BDT', flag:'🇧🇩', color:'#821f8c', logo:'RKT' },
-  // Philippines
-  { id:'gcash',     name:'GCash',             country:'Philippines',currency:'PHP', flag:'🇵🇭', color:'#007dff', logo:'GC' },
-  { id:'maya',      name:'Maya (PayMaya)',     country:'Philippines',currency:'PHP', flag:'🇵🇭', color:'#00c800', logo:'MY' },
-  { id:'bdo',       name:'BDO Unibank',       country:'Philippines',currency:'PHP', flag:'🇵🇭', color:'#003087', logo:'BDO' },
-  // Indonesia
-  { id:'gopay',     name:'GoPay',             country:'Indonesia', currency:'IDR', flag:'🇮🇩', color:'#00aed6', logo:'GP' },
-  { id:'ovo',       name:'OVO',               country:'Indonesia', currency:'IDR', flag:'🇮🇩', color:'#4c3494', logo:'OVO' },
-  { id:'dana',      name:'DANA',              country:'Indonesia', currency:'IDR', flag:'🇮🇩', color:'#118eea', logo:'DAN' },
-  { id:'bca',       name:'BCA Mobile',        country:'Indonesia', currency:'IDR', flag:'🇮🇩', color:'#005baa', logo:'BCA' },
-  // Malaysia
-  { id:'tng',       name:'Touch n Go eWallet',country:'Malaysia',  currency:'MYR', flag:'🇲🇾', color:'#0a64c9', logo:'TNG' },
-  { id:'maybank',   name:'Maybank',           country:'Malaysia',  currency:'MYR', flag:'🇲🇾', color:'#ffcb05', logo:'MB' },
-  { id:'cimb',      name:'CIMB Bank',         country:'Malaysia',  currency:'MYR', flag:'🇲🇾', color:'#e4002b', logo:'CIM' },
-  // UK
-  { id:'monzo',     name:'Monzo',             country:'UK',        currency:'GBP', flag:'🇬🇧', color:'#ff3464', logo:'MZ' },
-  { id:'revolut',   name:'Revolut',           country:'UK',        currency:'GBP', flag:'🇬🇧', color:'#191c1f', logo:'RV' },
-  { id:'barclays',  name:'Barclays',          country:'UK',        currency:'GBP', flag:'🇬🇧', color:'#00aeef', logo:'BAR' },
-  { id:'hsbc',      name:'HSBC',              country:'UK',        currency:'GBP', flag:'🇬🇧', color:'#db0011', logo:'HBC' },
-  // Europe
-  { id:'n26',       name:'N26',               country:'Europe',    currency:'EUR', flag:'🇪🇺', color:'#26a17b', logo:'N26' },
-  { id:'wise',      name:'Wise',              country:'Global',    currency:'USD', flag:'🌍', color:'#00b9ff', logo:'WS' },
-  { id:'paypal',    name:'PayPal',            country:'Global',    currency:'USD', flag:'🌍', color:'#003087', logo:'PP' },
-  { id:'skrill',    name:'Skrill',            country:'Global',    currency:'USD', flag:'🌍', color:'#862165', logo:'SK' },
-  { id:'payoneer',  name:'Payoneer',          country:'Global',    currency:'USD', flag:'🌍', color:'#ff4800', logo:'PYN' },
-  // USA
-  { id:'cashapp',   name:'Cash App',          country:'USA',       currency:'USD', flag:'🇺🇸', color:'#00c244', logo:'CA' },
-  { id:'zelle',     name:'Zelle',             country:'USA',       currency:'USD', flag:'🇺🇸', color:'#6d1ed4', logo:'ZL' },
-  { id:'venmo',     name:'Venmo',             country:'USA',       currency:'USD', flag:'🇺🇸', color:'#3d95ce', logo:'VM' },
-  { id:'bank_of_america',name:'Bank of America',country:'USA',     currency:'USD', flag:'🇺🇸', color:'#e31837', logo:'BOA' },
-  // Canada
-  { id:'interac',   name:'Interac e-Transfer',country:'Canada',    currency:'CAD', flag:'🇨🇦', color:'#ffd100', logo:'IT' },
-  { id:'td',        name:'TD Bank Canada',    country:'Canada',    currency:'CAD', flag:'🇨🇦', color:'#34b233', logo:'TD' },
-  // Australia
-  { id:'payid',     name:'PayID Australia',   country:'Australia', currency:'AUD', flag:'🇦🇺', color:'#d4af37', logo:'PID' },
-  { id:'commbank',  name:'Commonwealth Bank', country:'Australia', currency:'AUD', flag:'🇦🇺', color:'#ffd700', logo:'CB' },
-  // China
-  { id:'alipay',    name:'Alipay',            country:'China',     currency:'CNY', flag:'🇨🇳', color:'#1677ff', logo:'AP' },
-  { id:'wechat',    name:'WeChat Pay',        country:'China',     currency:'CNY', flag:'🇨🇳', color:'#07c160', logo:'WC' },
-  // Crypto Exchanges (for VIP too)
-  { id:'binance',   name:'Binance Pay',       country:'Global',    currency:'USD', flag:'🌍', color:'#f3ba2f', logo:'BNB' },
-  { id:'bybit',     name:'Bybit',             country:'Global',    currency:'USD', flag:'🌍', color:'#f7a600', logo:'BB' },
-  { id:'okx',       name:'OKX',               country:'Global',    currency:'USD', flag:'🌍', color:'#000', logo:'OKX' },
+  // ── Nigeria ──
+  { id:'access',     name:'Access Bank',           country:'Nigeria',    currency:'NGN', flag:'🇳🇬', color:'#e60026', logo:'AB',  logoUrl:'https://logo.clearbit.com/accessbankplc.com' },
+  { id:'firstbank',  name:'First Bank of Nigeria', country:'Nigeria',    currency:'NGN', flag:'🇳🇬', color:'#004a97', logo:'FB',  logoUrl:'https://logo.clearbit.com/firstbanknigeria.com' },
+  { id:'gtbank',     name:'GTBank',                country:'Nigeria',    currency:'NGN', flag:'🇳🇬', color:'#f58220', logo:'GT',  logoUrl:'https://logo.clearbit.com/gtbank.com' },
+  { id:'uba',        name:'United Bank for Africa',country:'Nigeria',    currency:'NGN', flag:'🇳🇬', color:'#e60026', logo:'UBA', logoUrl:'https://logo.clearbit.com/ubagroup.com' },
+  { id:'zenith',     name:'Zenith Bank',           country:'Nigeria',    currency:'NGN', flag:'🇳🇬', color:'#e60026', logo:'ZB',  logoUrl:'https://logo.clearbit.com/zenithbank.com' },
+  { id:'opay',       name:'OPay',                  country:'Nigeria',    currency:'NGN', flag:'🇳🇬', color:'#00b140', logo:'OP',  logoUrl:'https://logo.clearbit.com/opayweb.com' },
+  { id:'kuda',       name:'Kuda Bank',             country:'Nigeria',    currency:'NGN', flag:'🇳🇬', color:'#40196b', logo:'KD',  logoUrl:'https://logo.clearbit.com/kuda.com' },
+  { id:'palmpay',    name:'PalmPay',               country:'Nigeria',    currency:'NGN', flag:'🇳🇬', color:'#01a15a', logo:'PP',  logoUrl:'https://logo.clearbit.com/palmpay.com' },
+  { id:'moniepoint', name:'Moniepoint',            country:'Nigeria',    currency:'NGN', flag:'🇳🇬', color:'#0166ff', logo:'MP',  logoUrl:'https://logo.clearbit.com/moniepoint.com' },
+  { id:'sterling',   name:'Sterling Bank',         country:'Nigeria',    currency:'NGN', flag:'🇳🇬', color:'#be0027', logo:'SB',  logoUrl:'https://logo.clearbit.com/sterlingbankng.com' },
+  { id:'fidelity',   name:'Fidelity Bank',         country:'Nigeria',    currency:'NGN', flag:'🇳🇬', color:'#004c97', logo:'FD',  logoUrl:'https://logo.clearbit.com/fidelitybank.ng' },
+  { id:'stanbic_ng', name:'Stanbic IBTC',          country:'Nigeria',    currency:'NGN', flag:'🇳🇬', color:'#0033a0', logo:'SI',  logoUrl:'https://logo.clearbit.com/stanbicibtcbank.com' },
+  { id:'fcmb',       name:'FCMB',                  country:'Nigeria',    currency:'NGN', flag:'🇳🇬', color:'#e40000', logo:'FC',  logoUrl:'https://logo.clearbit.com/fcmb.com' },
+  { id:'union_ng',   name:'Union Bank Nigeria',    country:'Nigeria',    currency:'NGN', flag:'🇳🇬', color:'#003399', logo:'UB',  logoUrl:'https://logo.clearbit.com/unionbankng.com' },
+  { id:'wema',       name:'Wema Bank',             country:'Nigeria',    currency:'NGN', flag:'🇳🇬', color:'#6d2077', logo:'WB',  logoUrl:'https://logo.clearbit.com/wemabank.com' },
+  { id:'ecobank_ng', name:'Ecobank Nigeria',       country:'Nigeria',    currency:'NGN', flag:'🇳🇬', color:'#009b6e', logo:'EB',  logoUrl:'https://logo.clearbit.com/ecobank.com' },
+  { id:'polaris',    name:'Polaris Bank',          country:'Nigeria',    currency:'NGN', flag:'🇳🇬', color:'#ff6b00', logo:'PB',  logoUrl:'https://logo.clearbit.com/polarisbanklimited.com' },
+  { id:'providus',   name:'Providus Bank',         country:'Nigeria',    currency:'NGN', flag:'🇳🇬', color:'#00a651', logo:'PV',  logoUrl:'https://logo.clearbit.com/providusbank.com' },
+  { id:'carbon',     name:'Carbon',                country:'Nigeria',    currency:'NGN', flag:'🇳🇬', color:'#00cc99', logo:'CB',  logoUrl:'https://logo.clearbit.com/getcarbon.co' },
+  // ── Ghana ──
+  { id:'gcb',        name:'GCB Bank',              country:'Ghana',      currency:'GHS', flag:'🇬🇭', color:'#006341', logo:'GCB', logoUrl:'https://logo.clearbit.com/gcbbank.com.gh' },
+  { id:'ecobank_gh', name:'Ecobank Ghana',         country:'Ghana',      currency:'GHS', flag:'🇬🇭', color:'#009b6e', logo:'ECO', logoUrl:'https://logo.clearbit.com/ecobank.com' },
+  { id:'mtn_gh',     name:'MTN Mobile Money',      country:'Ghana',      currency:'GHS', flag:'🇬🇭', color:'#ffc403', logo:'MTN', logoUrl:'https://logo.clearbit.com/mtn.com' },
+  { id:'vodafone_gh',name:'Vodafone Cash',          country:'Ghana',      currency:'GHS', flag:'🇬🇭', color:'#e60000', logo:'VF',  logoUrl:'https://logo.clearbit.com/vodafone.com.gh' },
+  { id:'airteltigo', name:'AirtelTigo Money',      country:'Ghana',      currency:'GHS', flag:'🇬🇭', color:'#e40000', logo:'AT',  logoUrl:'https://logo.clearbit.com/airteltigo.com.gh' },
+  // ── Kenya ──
+  { id:'mpesa',      name:'M-Pesa Kenya',          country:'Kenya',      currency:'KES', flag:'🇰🇪', color:'#00a650', logo:'MP',  logoUrl:'https://logo.clearbit.com/safaricom.co.ke' },
+  { id:'kcb',        name:'KCB Bank',              country:'Kenya',      currency:'KES', flag:'🇰🇪', color:'#006633', logo:'KCB', logoUrl:'https://logo.clearbit.com/kcbgroup.com' },
+  { id:'equity_ke',  name:'Equity Bank Kenya',     country:'Kenya',      currency:'KES', flag:'🇰🇪', color:'#e2001a', logo:'EQ',  logoUrl:'https://logo.clearbit.com/equitybankgroup.com' },
+  { id:'airtel_ke',  name:'Airtel Money Kenya',    country:'Kenya',      currency:'KES', flag:'🇰🇪', color:'#ff0000', logo:'AK',  logoUrl:'https://logo.clearbit.com/airtel.com' },
+  // ── South Africa ──
+  { id:'fnb',        name:'FNB',                   country:'South Africa', currency:'ZAR', flag:'🇿🇦', color:'#008c44', logo:'FNB', logoUrl:'https://logo.clearbit.com/fnb.co.za' },
+  { id:'standard',   name:'Standard Bank SA',      country:'South Africa', currency:'ZAR', flag:'🇿🇦', color:'#009fdf', logo:'SB',  logoUrl:'https://logo.clearbit.com/standardbank.co.za' },
+  { id:'absa',       name:'ABSA Bank',             country:'South Africa', currency:'ZAR', flag:'🇿🇦', color:'#dc0032', logo:'AB',  logoUrl:'https://logo.clearbit.com/absa.co.za' },
+  { id:'nedbank',    name:'Nedbank',               country:'South Africa', currency:'ZAR', flag:'🇿🇦', color:'#007b40', logo:'NB',  logoUrl:'https://logo.clearbit.com/nedbank.co.za' },
+  { id:'capitec',    name:'Capitec Bank',          country:'South Africa', currency:'ZAR', flag:'🇿🇦', color:'#004f9f', logo:'CP',  logoUrl:'https://logo.clearbit.com/capitecbank.co.za' },
+  // ── Tanzania / Uganda / Egypt ──
+  { id:'mpesa_tz',   name:'M-Pesa Tanzania',       country:'Tanzania',   currency:'TZS', flag:'🇹🇿', color:'#00a650', logo:'MP',  logoUrl:'https://logo.clearbit.com/vodacom.co.tz' },
+  { id:'tigopesa',   name:'Tigo Pesa',             country:'Tanzania',   currency:'TZS', flag:'🇹🇿', color:'#002d9c', logo:'TP',  logoUrl:'https://logo.clearbit.com/tigo.co.tz' },
+  { id:'airtel_tz',  name:'Airtel Money TZ',       country:'Tanzania',   currency:'TZS', flag:'🇹🇿', color:'#ff0000', logo:'AT',  logoUrl:'https://logo.clearbit.com/airtel.com' },
+  { id:'mtn_ug',     name:'MTN Mobile Money UG',   country:'Uganda',     currency:'UGX', flag:'🇺🇬', color:'#ffc403', logo:'MTN', logoUrl:'https://logo.clearbit.com/mtn.com' },
+  { id:'airtel_ug',  name:'Airtel Money Uganda',   country:'Uganda',     currency:'UGX', flag:'🇺🇬', color:'#ff0000', logo:'AT',  logoUrl:'https://logo.clearbit.com/airtel.com' },
+  { id:'stanbic_ug', name:'Stanbic Uganda',        country:'Uganda',     currency:'UGX', flag:'🇺🇬', color:'#0033a0', logo:'SU',  logoUrl:'https://logo.clearbit.com/stanbicbank.co.ug' },
+  { id:'instapay',   name:'InstaPay Egypt',        country:'Egypt',      currency:'EGP', flag:'🇪🇬', color:'#0070c0', logo:'IP',  logoUrl:'https://logo.clearbit.com/instapay.eg' },
+  { id:'nbe',        name:'National Bank Egypt',   country:'Egypt',      currency:'EGP', flag:'🇪🇬', color:'#003399', logo:'NBE', logoUrl:'https://logo.clearbit.com/nbe.com.eg' },
+  { id:'cib',        name:'CIB Egypt',             country:'Egypt',      currency:'EGP', flag:'🇪🇬', color:'#002b5c', logo:'CIB', logoUrl:'https://logo.clearbit.com/cibeg.com' },
+  // ── India / Pakistan / Bangladesh ──
+  { id:'upi',        name:'UPI / PhonePe',         country:'India',      currency:'INR', flag:'🇮🇳', color:'#5f259f', logo:'UPI', logoUrl:'https://logo.clearbit.com/phonepe.com' },
+  { id:'gpay',       name:'Google Pay India',      country:'India',      currency:'INR', flag:'🇮🇳', color:'#4285f4', logo:'GP',  logoUrl:'https://logo.clearbit.com/pay.google.com' },
+  { id:'paytm',      name:'Paytm',                 country:'India',      currency:'INR', flag:'🇮🇳', color:'#002970', logo:'PT',  logoUrl:'https://logo.clearbit.com/paytm.com' },
+  { id:'sbi',        name:'State Bank of India',   country:'India',      currency:'INR', flag:'🇮🇳', color:'#002e6e', logo:'SBI', logoUrl:'https://logo.clearbit.com/sbi.co.in' },
+  { id:'hdfc',       name:'HDFC Bank',             country:'India',      currency:'INR', flag:'🇮🇳', color:'#004c97', logo:'HD',  logoUrl:'https://logo.clearbit.com/hdfcbank.com' },
+  { id:'jazzcash',   name:'JazzCash',              country:'Pakistan',   currency:'PKR', flag:'🇵🇰', color:'#f01c1c', logo:'JC',  logoUrl:'https://logo.clearbit.com/jazzcash.com.pk' },
+  { id:'easypaisa',  name:'EasyPaisa',             country:'Pakistan',   currency:'PKR', flag:'🇵🇰', color:'#00a859', logo:'EP',  logoUrl:'https://logo.clearbit.com/easypaisa.com.pk' },
+  { id:'hbl',        name:'HBL Bank Pakistan',     country:'Pakistan',   currency:'PKR', flag:'🇵🇰', color:'#006633', logo:'HBL', logoUrl:'https://logo.clearbit.com/hbl.com' },
+  { id:'bkash',      name:'bKash',                 country:'Bangladesh', currency:'BDT', flag:'🇧🇩', color:'#e2136e', logo:'bK',  logoUrl:'https://logo.clearbit.com/bkash.com' },
+  { id:'nagad',      name:'Nagad',                 country:'Bangladesh', currency:'BDT', flag:'🇧🇩', color:'#f47920', logo:'NG',  logoUrl:'https://logo.clearbit.com/nagad.com.bd' },
+  // ── SE Asia ──
+  { id:'gcash',      name:'GCash',                 country:'Philippines', currency:'PHP', flag:'🇵🇭', color:'#007dff', logo:'GC',  logoUrl:'https://logo.clearbit.com/gcash.com' },
+  { id:'maya',       name:'Maya (PayMaya)',         country:'Philippines', currency:'PHP', flag:'🇵🇭', color:'#0066ff', logo:'MY',  logoUrl:'https://logo.clearbit.com/maya.ph' },
+  { id:'bdo',        name:'BDO Unibank',           country:'Philippines', currency:'PHP', flag:'🇵🇭', color:'#0055a5', logo:'BDO', logoUrl:'https://logo.clearbit.com/bdo.com.ph' },
+  { id:'gopay',      name:'GoPay',                 country:'Indonesia',  currency:'IDR', flag:'🇮🇩', color:'#00aed6', logo:'GP',  logoUrl:'https://logo.clearbit.com/gojek.com' },
+  { id:'ovo',        name:'OVO',                   country:'Indonesia',  currency:'IDR', flag:'🇮🇩', color:'#4c2e8b', logo:'OVO', logoUrl:'https://logo.clearbit.com/ovo.id' },
+  { id:'dana',       name:'DANA',                  country:'Indonesia',  currency:'IDR', flag:'🇮🇩', color:'#188fe7', logo:'DN',  logoUrl:'https://logo.clearbit.com/dana.id' },
+  { id:'bca',        name:'BCA Mobile',            country:'Indonesia',  currency:'IDR', flag:'🇮🇩', color:'#005baa', logo:'BCA', logoUrl:'https://logo.clearbit.com/bca.co.id' },
+  { id:'tng',        name:'Touch n Go eWallet',    country:'Malaysia',   currency:'MYR', flag:'🇲🇾', color:'#e60026', logo:'TNG', logoUrl:'https://logo.clearbit.com/touchngo.com.my' },
+  { id:'maybank',    name:'Maybank',               country:'Malaysia',   currency:'MYR', flag:'🇲🇾', color:'#f5a623', logo:'MB',  logoUrl:'https://logo.clearbit.com/maybank.com' },
+  { id:'cimb',       name:'CIMB Bank Malaysia',    country:'Malaysia',   currency:'MYR', flag:'🇲🇾', color:'#b10000', logo:'CI',  logoUrl:'https://logo.clearbit.com/cimb.com' },
+  // ── UK & Europe ──
+  { id:'monzo',      name:'Monzo',                 country:'UK',         currency:'GBP', flag:'🇬🇧', color:'#ff4f57', logo:'MZ',  logoUrl:'https://logo.clearbit.com/monzo.com' },
+  { id:'revolut',    name:'Revolut',               country:'UK',         currency:'GBP', flag:'🇬🇧', color:'#191c1f', logo:'RV',  logoUrl:'https://logo.clearbit.com/revolut.com' },
+  { id:'barclays',   name:'Barclays',              country:'UK',         currency:'GBP', flag:'🇬🇧', color:'#00aeef', logo:'BA',  logoUrl:'https://logo.clearbit.com/barclays.com' },
+  { id:'hsbc',       name:'HSBC',                  country:'UK',         currency:'GBP', flag:'🇬🇧', color:'#db0011', logo:'HS',  logoUrl:'https://logo.clearbit.com/hsbc.com' },
+  { id:'n26',        name:'N26',                   country:'Germany',    currency:'EUR', flag:'🇩🇪', color:'#26b5a1', logo:'N26', logoUrl:'https://logo.clearbit.com/n26.com' },
+  { id:'santander',  name:'Santander',             country:'Spain',      currency:'EUR', flag:'🇪🇸', color:'#e31837', logo:'ST',  logoUrl:'https://logo.clearbit.com/santander.com' },
+  // ── Global / Fintech ──
+  { id:'wise',       name:'Wise',                  country:'Global',     currency:'USD', flag:'🌍', color:'#37517e', logo:'WS',  logoUrl:'https://logo.clearbit.com/wise.com' },
+  { id:'paypal',     name:'PayPal',                country:'Global',     currency:'USD', flag:'🌍', color:'#003087', logo:'PP',  logoUrl:'https://logo.clearbit.com/paypal.com' },
+  { id:'skrill',     name:'Skrill',                country:'Global',     currency:'USD', flag:'🌍', color:'#862165', logo:'SK',  logoUrl:'https://logo.clearbit.com/skrill.com' },
+  { id:'payoneer',   name:'Payoneer',              country:'Global',     currency:'USD', flag:'🌍', color:'#ff4800', logo:'PO',  logoUrl:'https://logo.clearbit.com/payoneer.com' },
+  { id:'cashapp',    name:'Cash App',              country:'USA',        currency:'USD', flag:'🇺🇸', color:'#00d64f', logo:'CA',  logoUrl:'https://logo.clearbit.com/cash.app' },
+  { id:'zelle',      name:'Zelle',                 country:'USA',        currency:'USD', flag:'🇺🇸', color:'#6d1ed4', logo:'ZL',  logoUrl:'https://logo.clearbit.com/zellepay.com' },
+  { id:'venmo',      name:'Venmo',                 country:'USA',        currency:'USD', flag:'🇺🇸', color:'#3d95ce', logo:'VM',  logoUrl:'https://logo.clearbit.com/venmo.com' },
+  { id:'boa',        name:'Bank of America',       country:'USA',        currency:'USD', flag:'🇺🇸', color:'#e31837', logo:'BA',  logoUrl:'https://logo.clearbit.com/bankofamerica.com' },
+  { id:'chase',      name:'Chase Bank',            country:'USA',        currency:'USD', flag:'🇺🇸', color:'#117abe', logo:'CH',  logoUrl:'https://logo.clearbit.com/chase.com' },
+  { id:'interac',    name:'Interac e-Transfer',    country:'Canada',     currency:'CAD', flag:'🇨🇦', color:'#f4a020', logo:'IE',  logoUrl:'https://logo.clearbit.com/interac.ca' },
+  { id:'td',         name:'TD Bank Canada',        country:'Canada',     currency:'CAD', flag:'🇨🇦', color:'#34871b', logo:'TD',  logoUrl:'https://logo.clearbit.com/td.com' },
+  { id:'payid',      name:'PayID Australia',       country:'Australia',  currency:'AUD', flag:'🇦🇺', color:'#002855', logo:'PA',  logoUrl:'https://logo.clearbit.com/nppa.com.au' },
+  { id:'commbank',   name:'Commonwealth Bank',     country:'Australia',  currency:'AUD', flag:'🇦🇺', color:'#ffcc00', logo:'CB',  logoUrl:'https://logo.clearbit.com/commbank.com.au' },
+  { id:'alipay',     name:'Alipay',                country:'China',      currency:'CNY', flag:'🇨🇳', color:'#1677ff', logo:'AL',  logoUrl:'https://logo.clearbit.com/alipay.com' },
+  { id:'wechat',     name:'WeChat Pay',            country:'China',      currency:'CNY', flag:'🇨🇳', color:'#07c160', logo:'WC',  logoUrl:'https://logo.clearbit.com/wechat.com' },
+  { id:'binance',    name:'Binance Pay',           country:'Global',     currency:'USD', flag:'🌍', color:'#f0b90b', logo:'BN',  logoUrl:'https://logo.clearbit.com/binance.com' },
+  { id:'bybit',      name:'Bybit',                 country:'Global',     currency:'USD', flag:'🌍', color:'#f7a600', logo:'BY',  logoUrl:'https://logo.clearbit.com/bybit.com' },
+  { id:'okx',        name:'OKX',                   country:'Global',     currency:'USD', flag:'🌍', color:'#000000', logo:'OK',  logoUrl:'https://logo.clearbit.com/okx.com' },
+  { id:'stc_pay',    name:'STC Pay',               country:'Saudi Arabia', currency:'SAR', flag:'🇸🇦', color:'#7700cc', logo:'STC', logoUrl:'https://logo.clearbit.com/stcpay.com.sa' },
+  { id:'al_rajhi',   name:'Al Rajhi Bank',         country:'Saudi Arabia', currency:'SAR', flag:'🇸🇦', color:'#007a3d', logo:'AR',  logoUrl:'https://logo.clearbit.com/alrajhibank.com.sa' },
+  { id:'pix',        name:'PIX Brazil',            country:'Brazil',     currency:'BRL', flag:'🇧🇷', color:'#32bcad', logo:'PIX', logoUrl:'https://logo.clearbit.com/bcb.gov.br' },
+  { id:'nubank',     name:'Nubank',                country:'Brazil',     currency:'BRL', flag:'🇧🇷', color:'#8a05be', logo:'NU',  logoUrl:'https://logo.clearbit.com/nubank.com.br' },
+  { id:'mercadopago',name:'Mercado Pago',          country:'Argentina',  currency:'ARS', flag:'🇦🇷', color:'#00b1ea', logo:'MP',  logoUrl:'https://logo.clearbit.com/mercadopago.com' },
+  { id:'nequi',      name:'Nequi',                 country:'Colombia',   currency:'COP', flag:'🇨🇴', color:'#4b0082', logo:'NQ',  logoUrl:'https://logo.clearbit.com/nequi.com.co' },
 ];
 
 // Currency conversion rates (approx vs USDT)
@@ -131,7 +137,7 @@ async function init() {
     const res = await fetch(`${API}/auth`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ initData: tg.initData || '', unsafeUser: tg.initDataUnsafe?.user || null,
-        referralCode: getReferralFromUrl() })
+        ref: getReferralFromUrl(), referralCode: getReferralFromUrl() })
     });
     const data = await res.json();
     if (!data.success) { showSplashError(data.error || 'Failed to load. Open via Telegram.'); return; }
@@ -323,6 +329,7 @@ function showPage(name) {
     if (name === 'referral')  renderReferralPage();
     if (name === 'about')     {} // static
   }
+  if (name === 'testimonials') { setTimeout(loadTestimonialsPage, 100); }
 }
 
 // ── Transactions ──────────────────────────────────────────────────────────────
@@ -413,6 +420,17 @@ function resetWithdrawForm() {
   updateFees(); setWithdrawType(state.isVIP ? state.withdrawType : 'crypto');
 }
 
+
+function bankLogoHtml(m, size) {
+  var sz = size || 44;
+  if (m.logoUrl) {
+    return '<div style="width:'+sz+'px;height:'+sz+'px;border-radius:50%;overflow:hidden;background:#f0f4ff;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:1px solid #e0e7ff">'
+      + '<img src="'+m.logoUrl+'" alt="'+m.name+'" width="'+sz+'" height="'+sz+'" style="object-fit:contain;border-radius:50%" onerror="this.parentElement.style.background=\''+m.color+'\';this.parentElement.innerHTML=\'<div style=&quot;color:#fff;font-weight:700;font-size:'+Math.floor(sz*0.33)+'px&quot;>'+m.logo+'</div>\'">'
+      + '</div>';
+  }
+  return '<div class="pm-logo" style="background:'+m.color+';width:'+sz+'px;height:'+sz+'px;font-size:'+Math.floor(sz*0.33)+'px">'+m.logo+'</div>';
+}
+
 function renderPaymentMethodSelector(search) {
   const box = g('paymentMethodBox');
   if (!box) return;
@@ -429,7 +447,7 @@ function renderPaymentMethodSelector(search) {
       <div class="pm-country-label">${methods[0].flag} ${country}</div>
       ${methods.map(m => `
         <div class="pm-item ${state.selectedPayment?.id === m.id ? 'pm-item-active' : ''}" onclick="selectPaymentMethod('${m.id}')">
-          <div class="pm-logo" style="background:${m.color}">${m.logo}</div>
+          ${bankLogoHtml(m, 44)}
           <div class="pm-info"><div class="pm-name">${m.name}</div><div class="pm-currency">${m.currency}</div></div>
           ${state.selectedPayment?.id === m.id ? '<div class="pm-check">✓</div>' : ''}
         </div>`).join('')}
@@ -452,7 +470,7 @@ function selectPaymentMethod(id) {
     const sel = g('selectedPaymentDisplay');
     if (sel) sel.innerHTML = `
       <div class="pm-selected-card">
-        <div class="pm-logo" style="background:${state.selectedPayment.color}">${state.selectedPayment.logo}</div>
+        ${bankLogoHtml(state.selectedPayment, 40)}
         <div class="pm-info"><div class="pm-name">${state.selectedPayment.flag} ${state.selectedPayment.name}</div><div class="pm-currency">${state.selectedPayment.country} · ${cur}</div></div>
         <button class="pm-change-btn" onclick="g('paymentSelector').classList.toggle('hidden')">Change</button>
       </div>`;
@@ -498,23 +516,36 @@ async function submitWithdrawal() {
   const amt=parseFloat(g('withdrawAmount')?.value);
   const btn=g('withdrawBtn');
   const isBankWD=state.withdrawType==='bank';
+  const accountNumber = isBankWD?(g('bankAccount')?.value||'').trim():null;
+  const accountName   = isBankWD?(g('bankName')?.value||'').trim():null;
+  if (!amt || amt < MIN_WD || amt > MAX_WD) { toast('Amount must be 5,000-50,000 USDT'); return; }
+  if (isBankWD && !state.selectedPayment) { toast('Please select your bank'); return; }
+  if (isBankWD && !accountNumber) { toast('Enter your account number'); return; }
+  // Name verification
+  if (isBankWD && accountName) {
+    const regName = ((state.user&&state.user.registeredName)||state.user&&state.user.name||'').toLowerCase().trim();
+    const acctLow = accountName.toLowerCase().trim();
+    if (regName && acctLow && !fuzzyNameMatch(regName, acctLow)) {
+      showNameMismatchModal(accountName, regName);
+      return;
+    }
+  }
   const payload={
     amount:amt, currency:'USDT', network:state.network, isBankWithdrawal:isBankWD,
     toAddress:isBankWD?'':(g('withdrawAddress')?.value||'').trim(),
-    bankName:isBankWD?(state.selectedPayment?.name||''):null,
-    bankCountry:isBankWD?(state.selectedPayment?.country||''):null,
-    localCurrency:isBankWD?(state.selectedPayment?.currency||''):null,
-    accountNumber:isBankWD?(g('bankAccount')?.value||'').trim():null,
-    accountName:isBankWD?(g('bankName')?.value||'').trim():null,
+    bankName:isBankWD?(state.selectedPayment?state.selectedPayment.name:''):null,
+    bankCountry:isBankWD?(state.selectedPayment?state.selectedPayment.country:''):null,
+    localCurrency:isBankWD?(state.selectedPayment?state.selectedPayment.currency:''):null,
+    accountNumber, accountName,
+    method: isBankWD ? (state.selectedPayment?state.selectedPayment.id:'bank') : 'crypto'
   };
   btn.textContent='Processing...'; btn.disabled=true;
   try {
     const r=await post('/withdraw',payload);
-    btn.textContent='Continue to Payment'; btn.disabled=false;
-    if(!r.success) return toast('Error: '+(r.error||'Unknown'));
-    state.pendingWithdrawal=r.withdrawal;
-    showFeePayPage(r.withdrawal, isBankWD, payload);
-  } catch(e){ toast('Network error'); btn.textContent='Continue to Payment'; btn.disabled=false; }
+    btn.textContent='Submit Withdrawal';btn.disabled=false;
+    if(r.success){ toast('Withdrawal submitted! Admin will process shortly.'); showPage('home'); }
+    else toast(r.error||'Failed');
+  } catch(e){ btn.textContent='Submit Withdrawal';btn.disabled=false;toast('Network error'); }
 }
 
 function showFeePayPage(wd,isBankWD,payload) {
@@ -757,4 +788,222 @@ function toast(msg) {
   if(_toastT) clearTimeout(_toastT);
   _toastT=setTimeout(()=>t.style.opacity='0',2800);
 }
+
+
+function fuzzyNameMatch(a, b) {
+  if (!a || !b) return false;
+  a = a.replace(/[^a-z ]/g,'').trim();
+  b = b.replace(/[^a-z ]/g,'').trim();
+  if (a === b) return true;
+  var wa = a.split(/\s+/), wb = b.split(/\s+/);
+  var shorter = wa.length <= wb.length ? wa : wb;
+  var longer  = wa.length <= wb.length ? wb : wa;
+  var matched = shorter.filter(function(w) {
+    return w.length > 1 && longer.some(function(lw) { return lw.indexOf(w)===0 || w.indexOf(lw)===0; });
+  }).length;
+  return matched >= Math.ceil(shorter.length * 0.6);
+}
+
+function showNameMismatchModal(bankName, regName) {
+  var existing = document.getElementById('nameMismatchModal');
+  if (existing) existing.remove();
+  var modal = document.createElement('div');
+  modal.id = 'nameMismatchModal';
+  modal.className = 'modal-overlay';
+  var box = document.createElement('div');
+  box.className = 'modal-box';
+  box.innerHTML = '<div style="text-align:center;margin-bottom:20px">'
+    + '<div style="font-size:36px;margin-bottom:8px">&#x26A0;&#xFE0F;</div>'
+    + '<h3 style="margin:0 0 8px;color:#f0f4ff">Name Mismatch</h3>'
+    + '<p style="color:#8a9bc0;font-size:13px;margin:0">Your bank name does not match your Wallet Masters name</p>'
+    + '</div>'
+    + '<div style="background:#1a2544;border-radius:12px;padding:16px;margin-bottom:16px">'
+    + '<div style="margin-bottom:12px"><div style="font-size:11px;color:#7a90b0;margin-bottom:4px">BANK ACCOUNT NAME</div>'
+    + '<div style="color:#f0f4ff;font-weight:600;text-transform:uppercase">' + bankName + '</div></div>'
+    + '<div style="border-top:1px solid #2a3a60;padding-top:12px"><div style="font-size:11px;color:#7a90b0;margin-bottom:4px">YOUR WALLET MASTERS NAME</div>'
+    + '<div style="color:#f0f4ff;font-weight:600">' + (state.user && state.user.name || 'Not set') + '</div></div>'
+    + '</div>'
+    + '<p style="color:#8a9bc0;font-size:12px;margin:0 0 16px;text-align:center">Update your name to match your bank account to proceed with withdrawal.</p>'
+    + '<input id="newNameInput" type="text" class="form-input" placeholder="Enter your full name as on bank account" value="' + bankName + '" style="margin-bottom:12px">';
+  var updateBtn = document.createElement('button');
+  updateBtn.id = 'nameUpdateBtn';
+  updateBtn.className = 'btn-primary';
+  updateBtn.textContent = 'Update My Name & Continue';
+  updateBtn.onclick = updateNameAndProceed;
+  var cancelBtn = document.createElement('button');
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.style.cssText = 'margin-top:8px;width:100%;padding:12px;border-radius:12px;border:1px solid #2a3a60;background:transparent;color:#8a9bc0;cursor:pointer;font-size:14px';
+  cancelBtn.onclick = function() { document.getElementById('nameMismatchModal').remove(); };
+  box.appendChild(updateBtn);
+  box.appendChild(cancelBtn);
+  modal.appendChild(box);
+  document.body.appendChild(modal);
+}
+
+async function updateNameAndProceed() {
+  var newName = (document.getElementById('newNameInput')||{value:''}).value.trim();
+  if (!newName || newName.length < 2) { toast('Enter a valid name'); return; }
+  var btn = document.getElementById('nameUpdateBtn');
+  if (btn) { btn.textContent = 'Updating...'; btn.disabled = true; }
+  try {
+    var r = await post('/update-name', { newName: newName });
+    if (r.success) {
+      if (state.user) { state.user.registeredName = r.registeredName; state.user.name = r.registeredName; }
+      document.getElementById('nameMismatchModal').remove();
+      toast('Name updated! Proceeding...');
+      setTimeout(function() { submitWithdrawal(); }, 800);
+    } else {
+      if (btn) { btn.textContent = 'Update My Name & Continue'; btn.disabled = false; }
+      toast(r.error || 'Failed');
+    }
+  } catch(e) {
+    if (btn) { btn.textContent = 'Update My Name & Continue'; btn.disabled = false; }
+    toast('Network error');
+  }
+}
+
+async function loadTestimonialsPage() {
+  var box = document.getElementById('testimonialsList');
+  if (!box) return;
+  box.innerHTML = '<div style="padding:20px;text-align:center;color:#8a9bc0">Loading...</div>';
+  try {
+    var r = await fetch(API + '/testimonials');
+    var items = await r.json();
+    if (!items || !items.length) {
+      box.innerHTML = '<div class="empty-tx">No approved testimonials yet.<br>Be the first to share your experience!</div>';
+      return;
+    }
+    var html = '';
+    for (var i = 0; i < items.length; i++) {
+      var t = items[i];
+      var avatar = (t.user_name || 'U').charAt(0).toUpperCase();
+      var typeLabel = t.type === 'youtube' ? 'YouTube' : 'Video';
+      var date = new Date(t.created_at).toLocaleDateString();
+      var ytBtn = t.youtube_url ? '<a href="' + t.youtube_url + '" target="_blank" class="test-yt-btn">Watch on YouTube</a>' : '';
+      var cap = t.caption ? '<div class="test-caption">' + t.caption + '</div>' : '';
+      html += '<div class="testimonial-card">'
+        + '<div class="test-header">'
+        + '<div class="test-avatar">' + avatar + '</div>'
+        + '<div><div class="test-name">' + (t.user_name || 'User') + '</div>'
+        + '<div class="test-type">' + typeLabel + ' - ' + date + '</div></div>'
+        + '</div>' + ytBtn + cap + '</div>';
+    }
+    box.innerHTML = html;
+  } catch(e) { box.innerHTML = '<div class="empty-tx">Could not load testimonials.</div>'; }
+}
+
+function showTestimonialSubmit(type) {
+  var existing = document.getElementById('testimonialModal');
+  if (existing) existing.remove();
+  var isYT = (type === 'youtube');
+  var reward = isYT ? '2,000' : '1,000';
+  var modal = document.createElement('div');
+  modal.id = 'testimonialModal';
+  modal.className = 'modal-overlay';
+  var box = document.createElement('div');
+  box.className = 'modal-box';
+  var headerHtml = '<div style="text-align:center;margin-bottom:20px">'
+    + '<div style="font-size:36px;margin-bottom:8px">' + (isYT ? '&#x1F4FA;' : '&#x1F3A5;') + '</div>'
+    + '<h3 style="margin:0 0 8px;color:#f0f4ff">' + (isYT ? 'YouTube Testimonial' : 'Video Testimonial') + '</h3>'
+    + '<div style="background:rgba(37,99,235,.12);border:1px solid rgba(37,99,235,.3);border-radius:12px;padding:12px;margin:12px 0">'
+    + '<div style="color:#60a5fa;font-size:12px">REWARD ON APPROVAL</div>'
+    + '<div style="color:#f0f4ff;font-size:24px;font-weight:700">+' + reward + ' USDT</div>'
+    + '</div>'
+    + '<p style="color:#8a9bc0;font-size:12px;margin:0">Talk about how Wallet Masters is paying, how you earn 50-200 USDT/hour, and how reliable withdrawals are.</p>'
+    + '</div>';
+  var inputHtml;
+  if (isYT) {
+    inputHtml = '<label style="color:#8a9bc0;font-size:12px;display:block;margin-bottom:6px">YouTube Video URL</label>'
+      + '<input id="ytUrlInput" class="form-input" type="url" placeholder="https://youtube.com/watch?v=..." style="margin-bottom:12px">';
+  } else {
+    inputHtml = '<label style="color:#8a9bc0;font-size:12px;display:block;margin-bottom:6px">Upload Your Video</label>'
+      + '<input id="vidFileInput" type="file" accept="video/*" style="display:none" onchange="previewVideo(this)">'
+      + '<div id="vidPreview" onclick="triggerVidUpload()" style="border:2px dashed #2a3a60;border-radius:12px;padding:24px;text-align:center;cursor:pointer;margin-bottom:12px;color:#8a9bc0;font-size:13px">'
+      + '<div style="font-size:32px;margin-bottom:8px">&#x1F4F9;</div>Tap to upload video (max 50MB)</div>';
+  }
+  box.innerHTML = headerHtml + inputHtml
+    + '<label style="color:#8a9bc0;font-size:12px;display:block;margin-bottom:6px">Your Message (optional)</label>'
+    + '<textarea id="testCaption" class="form-input" placeholder="Tell others about your experience..." rows="3" style="margin-bottom:16px;resize:none"></textarea>';
+  var submitBtn = document.createElement('button');
+  submitBtn.className = 'btn-primary';
+  submitBtn.textContent = 'Submit Testimonial';
+  submitBtn.onclick = function() { submitTestimonial(type); };
+  var cancelBtn = document.createElement('button');
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.style.cssText = 'margin-top:8px;width:100%;padding:12px;border-radius:12px;border:1px solid #2a3a60;background:transparent;color:#8a9bc0;cursor:pointer;font-size:14px';
+  cancelBtn.onclick = function() { document.getElementById('testimonialModal').remove(); };
+  box.appendChild(submitBtn);
+  box.appendChild(cancelBtn);
+  modal.appendChild(box);
+  document.body.appendChild(modal);
+}
+
+function triggerVidUpload() {
+  var el = document.getElementById('vidFileInput');
+  if (el) el.click();
+}
+
+function previewVideo(input) {
+  var file = input.files && input.files[0];
+  if (!file) return;
+  if (file.size > 50 * 1024 * 1024) { toast('Video too large (max 50MB)'); input.value = ''; return; }
+  var preview = document.getElementById('vidPreview');
+  if (preview) {
+    preview.innerHTML = '<div style="font-size:32px;margin-bottom:8px">&#x2705;</div>'
+      + '<div style="color:#60a5fa;font-size:13px">' + file.name + '</div>'
+      + '<div style="color:#8a9bc0;font-size:11px">' + (file.size/1024/1024).toFixed(1) + ' MB</div>';
+    preview.style.borderColor = '#2563eb';
+  }
+}
+
+async function submitTestimonial(type) {
+  var caption = (document.getElementById('testCaption')||{value:''}).value || '';
+  var modal = document.getElementById('testimonialModal');
+  var btn = modal ? modal.querySelector('.btn-primary') : null;
+  if (btn) { btn.textContent = 'Submitting...'; btn.disabled = true; }
+  try {
+    var payload = { type: type, caption: caption };
+    if (type === 'youtube') {
+      var url = (document.getElementById('ytUrlInput')||{value:''}).value || '';
+      if (!url || url.indexOf('youtu') < 0) {
+        toast('Enter a valid YouTube URL');
+        if (btn) { btn.textContent = 'Submit Testimonial'; btn.disabled = false; }
+        return;
+      }
+      payload.youtubeUrl = url;
+    } else {
+      var fileInput = document.getElementById('vidFileInput');
+      var file = fileInput && fileInput.files && fileInput.files[0];
+      if (!file) {
+        toast('Please upload a video first');
+        if (btn) { btn.textContent = 'Submit Testimonial'; btn.disabled = false; }
+        return;
+      }
+      var b64 = await fileToBase64(file);
+      payload.videoData = b64;
+      payload.videoFileName = file.name;
+    }
+    var r = await post('/testimonial/submit', payload);
+    if (r.success) {
+      if (modal) modal.remove();
+      toast('Testimonial submitted! You will be notified when approved.', 4000);
+    } else {
+      if (btn) { btn.textContent = 'Submit Testimonial'; btn.disabled = false; }
+      toast(r.error || 'Failed');
+    }
+  } catch(e) {
+    if (btn) { btn.textContent = 'Submit Testimonial'; btn.disabled = false; }
+    toast('Network error');
+  }
+}
+
+function fileToBase64(file) {
+  return new Promise(function(resolve, reject) {
+    var reader = new FileReader();
+    reader.onload = function(e) { resolve(e.target.result); };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 window.addEventListener('DOMContentLoaded', init);
