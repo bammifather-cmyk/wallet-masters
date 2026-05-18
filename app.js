@@ -349,7 +349,7 @@ function renderTx(txs, all) {
 }
 
 function txHTML(tx) {
-  const isIn = ['deposit','earning','referral'].includes(tx.type);
+  const isIn = ['deposit','earning','referral','testimonial_reward'].includes(tx.type);
   const sign = isIn ? '+' : '-';
   const dt   = new Date((tx.created_at||0)*1000);
   const date = dt.toLocaleDateString('en-US',{month:'short',day:'numeric'});
