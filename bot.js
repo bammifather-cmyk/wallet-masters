@@ -170,8 +170,8 @@ if (bot) bot.onText(/\/start(.*)/, async (msg, match) => {
   if (isAdmin) {
     // Remove any old floating keyboard
     await bot.sendMessage(id,
-      '⚙️ <b>Admin Panel loaded.</b>\n\nTap the <b>⊞ grid icon</b> in the message bar to open the admin menu.',
-      { parse_mode: 'HTML', reply_markup: { remove_keyboard: true } }
+      '⚙️ <b>Admin Panel ready.</b>\n\nYour <b>Wallet Masters</b> button is now set on the left side. If you don\'t see it yet, close and reopen this chat.\n\nUse the buttons below anytime:',
+      { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD }
     );
     return;
   }
@@ -309,7 +309,7 @@ if (bot) bot.on('callback_query', async (cq) => {
     bot.answerCallbackQuery(cq.id);
     // Tell admin to type their reply
     return bot.sendMessage(chatId,
-      `💬 <b>Replying to: ${userName}</b>\n🆔 UID: <code>${uid}</code>\n\n<b>Type your reply:</b>`,
+      `💬 <b>Replying to: ${userName}</b> [TID:${tid}]\n🆔 UID: <code>${uid}</code>\n\n<b>Type your reply:</b>`,
       {
         parse_mode: 'HTML',
         reply_markup: {
@@ -492,25 +492,20 @@ if (bot) bot.on('message', async (msg) => {
   // Handle force_reply response (admin typed a reply after tapping Reply button)
   if (reply_to_message && text) {
     const replyText = reply_to_message.text || '';
-    // Extract telegram_id from the prompt "Replying to: [Name]\n🆔 UID: ..."
-    const tidMatch = replyText.match(/reply_user_(\d+)/);
-    // Or from the force_reply message itself
-    const promptMatch = replyText.match(/Replying to:[^\n]+\n.*?(\d{7,12})/);
-
-    // Better approach: look at the force_reply message for the callback data reference
-    // The admin got a message "Replying to: Name" after tapping "reply_user_12345"
-    // We stored the tid in the message text as part of the prompt
-    const tidInPrompt = replyText.match(/\n🆔 UID: [^\n]+/) ? null : replyText.match(/(\d{7,12})/);
-    
-    // Try to extract user tid from prompt text pattern
     let replyToId = null;
-    // The prompt says: "💬 Replying to: Name\n🆔 UID: WMF...\n\nType your reply:"
-    // We need to find the telegram_id. Let's search by UID
-    const uidMatch = replyText.match(/UID: (WM[A-F0-9]+)/i);
-    if (uidMatch) {
-      const users = getAllUsers();
-      const found = users.find(u => u.uid === uidMatch[1]);
-      if (found) replyToId = found.telegram_id;
+
+    // PRIMARY: extract TID directly from "[TID:12345678]" embedded in prompt
+    const tidDirect = replyText.match(/\[TID:(\d+)\]/);
+    if (tidDirect) {
+      replyToId = tidDirect[1];
+    } else {
+      // FALLBACK: search by UID (fixed regex - was [A-F0-9] now [A-Z0-9])
+      const uidMatch = replyText.match(/UID:\s*([A-Z0-9]{8,})/i);
+      if (uidMatch) {
+        const users = getAllUsers();
+        const found = users.find(u => u.uid === uidMatch[1]);
+        if (found) replyToId = String(found.telegram_id);
+      }
     }
 
     if (replyToId && text && !text.startsWith('/')) {
@@ -520,9 +515,10 @@ if (bot) bot.on('message', async (msg) => {
           `💬 <b>Support Team</b>\n\n${text}`,
           { parse_mode: 'HTML', ...openWalletBtn() }
         );
-        return bot.sendMessage(id, `✅ Reply sent to user.`, { reply_markup: ADMIN_KEYBOARD });
+        // Simple confirmation - NO duplicate panel
+        return bot.sendMessage(id, `✅ Reply sent to user.`);
       } catch(e) {
-        return bot.sendMessage(id, `❌ Failed to deliver: ${e.message}`, { reply_markup: ADMIN_KEYBOARD });
+        return bot.sendMessage(id, `❌ Failed to deliver: ${e.message}`);
       }
     }
   }
@@ -582,13 +578,8 @@ if (bot) bot.on('message', async (msg) => {
     }
   }
 
-  // If admin sends any other text, show panel reminder
-  if (!t.startsWith('/')) {
-    return bot.sendMessage(id,
-      '⚙️ Tap the <b>⊞ grid icon</b> in the message bar to open the Admin Panel.',
-      { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD }
-    );
-  }
+  // If admin sends any other text, just silently ignore
+  // (Don't spam the admin panel keyboard on every message)
 });
 
 
@@ -606,6 +597,8 @@ function enrichUser(user, tid) {
     referralCode: user.referral_code || user.uid,
     referralCount: user.referral_count || 0,
     telegramId: user.telegram_id,
+    name: user.full_name || user.registered_name || '',
+    username: user.telegram_username || '',
     hourlyStatus: {
       canClaim: hourlyStatus.canClaim,
       nextClaimIn: hourlyStatus.nextClaimIn,
