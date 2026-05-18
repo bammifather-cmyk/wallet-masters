@@ -46,29 +46,6 @@ app.listen(PORT, '0.0.0.0', () => {
   if (!MINI_APP_URL && host) MINI_APP_URL = host.startsWith('http') ? host : `https://${host}`;
   console.log(`Wallet Masters v4.0 on port ${PORT} | URL: ${MINI_APP_URL}`);
   
-  // Background: set web_app menu button for all existing users (30s delay to let bot initialize)
-  if (bot && MINI_APP_URL) {
-    setTimeout(async () => {
-      try {
-        const users = getAllUsers();
-        console.log(`Setting menu button for ${users.length} existing users...`);
-        let ok = 0;
-        // Include admin in the sync
-        const syncIds = [...users.map(u => u.telegram_id), ADMIN_CHAT_ID].filter(Boolean);
-        for (const tid of syncIds) {
-          try {
-            await bot.setChatMenuButton({
-              chat_id: tid,
-              menu_button: { type: 'web_app', text: 'Wallet Masters', web_app: { url: MINI_APP_URL } }
-            });
-            ok++;
-            await new Promise(r => setTimeout(r, 150));
-          } catch(e) { /* user may have blocked bot */ }
-        }
-        console.log(`Menu button set for ${ok} chats (including admin)`);
-      } catch(e) { console.error('Menu sync error:', e.message); }
-    }, 30000); // 30 second delay
-  }
 });
 
 // ─── Bot ──────────────────────────────────────────────────────────────────────
@@ -77,15 +54,41 @@ try { bot = new TelegramBot(BOT_TOKEN, { polling: true }); console.log('Bot star
 catch (err) { console.error('Bot failed:', err.message); }
 
 // Menu button set per-chat in /start handler
-// Clear bot commands so Telegram only shows the web_app menu button
+// On startup: clear commands AND set menu button for all users (including admin)
 setTimeout(async () => {
-  if (bot) {
+  if (!bot) return;
+  // Clear bot command list
+  try { await bot.setMyCommands([]); console.log('Bot commands cleared'); }
+  catch(e) { console.log('setMyCommands error:', e.message); }
+
+  // Set Wallet Masters web_app menu button for admin
+  if (MINI_APP_URL) {
     try {
-      await bot.setMyCommands([]); // Remove command list from menu
-      console.log('Bot commands cleared');
-    } catch(e) { console.log('setMyCommands error:', e.message); }
+      await bot.setChatMenuButton({
+        chat_id: ADMIN_CHAT_ID,
+        menu_button: { type: 'web_app', text: 'Wallet Masters', web_app: { url: MINI_APP_URL } }
+      });
+      console.log('Admin menu button set on startup');
+    } catch(e) { console.log('Admin menu button error:', e.message); }
+
+    // Also set for all existing users (staggered)
+    setTimeout(async () => {
+      const users = getAllUsers();
+      let ok = 0;
+      for (const u of users) {
+        try {
+          await bot.setChatMenuButton({
+            chat_id: u.telegram_id,
+            menu_button: { type: 'web_app', text: 'Wallet Masters', web_app: { url: MINI_APP_URL } }
+          });
+          ok++;
+          await new Promise(r => setTimeout(r, 200));
+        } catch(e) {}
+      }
+      console.log(`Menu button synced for ${ok} users`);
+    }, 5000);
   }
-}, 2000);
+}, 3000); // 3s after bot starts
 
 // ─── Keyboards ───────────────────────────────────────────────────────────────
 const adminMenu = { reply_markup: { inline_keyboard: [
