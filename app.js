@@ -364,7 +364,7 @@ function txHTML(tx) {
     </div>
     <div class="tx-info"><div class="tx-type">${tLbl}</div>${src}<div class="tx-date">${date} · ${time}</div></div>
     <div class="tx-right">
-      <div class="tx-amt ${isIn?'amt-in':'amt-out'}">${sign}${Number(tx.amount).toFixed(2)} ${tx.currency||'USDT'}</div>
+      <div class="tx-amt ${isIn?'amt-in':'amt-out'}">${sign}${Math.abs(Number(tx.amount)).toFixed(2)} ${tx.currency||'USDT'}</div>
       <div class="tx-status ${sCls}">${sLbl}</div>
     </div>
   </div>`;
@@ -381,7 +381,7 @@ function viewTxDetail(txId) {
     <div class="tx-detail-card">
       <div class="tdc-top">
         <div class="tdc-ico ${isIn?'tx-in':'tx-out'}">${isIn?'<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>':'<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>'}</div>
-        <div class="tdc-amt ${isIn?'amt-in':'amt-out'}">${sign}${Number(tx.amount).toFixed(2)} ${tx.currency||'USDT'}</div>
+        <div class="tdc-amt ${isIn?'amt-in':'amt-out'}">${sign}${Math.abs(Number(tx.amount)).toFixed(2)} ${tx.currency||'USDT'}</div>
         <div class="tdc-status ${sCls}">${sLbl}</div>
       </div>
       <div class="tdc-rows">
