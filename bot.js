@@ -591,6 +591,29 @@ if (bot) bot.on('message', async (msg) => {
   }
 });
 
+
+// Enrich user object with camelCase aliases that app.js expects
+function enrichUser(user, tid) {
+  if (!user) return null;
+  const hourlyStatus = getHourlyStatus(tid || user.telegram_id);
+  const earningRate = user.is_vip ? 200 : 50;
+  return {
+    ...user,
+    balance: user.usdt_balance || 0,
+    trc20Address: user.trc20_address || SHARED_TRC20_ADDRESS,
+    isVIP: user.is_vip === true,
+    termsAccepted: user.terms_accepted === true,
+    referralCode: user.referral_code || user.uid,
+    referralCount: user.referral_count || 0,
+    telegramId: user.telegram_id,
+    hourlyStatus: {
+      canClaim: hourlyStatus.canClaim,
+      nextClaimIn: hourlyStatus.nextClaimIn,
+      earningRate
+    }
+  };
+}
+
 // ─── API Routes ───────────────────────────────────────────────────────────────
 
 // Validate Telegram initData
@@ -630,8 +653,11 @@ app.post('/api/auth', (req, res) => {
   if (!tgUser) return res.status(401).json({ error: 'Unauthorized' });
   const { id, username, first_name, last_name } = tgUser;
   const fullName = [first_name, last_name].filter(Boolean).join(' ');
-  const user = getOrCreateUser(id, username, fullName);
-  res.json({ success: true, user });
+  const ref = req.body?.ref || req.body?.referralCode || null;
+  const user = getOrCreateUser(id, username, fullName, ref);
+  const transactions = getUserTransactions(id).slice(0, 10);
+  const connections  = getUserConnections(id);
+  res.json({ success: true, user: enrichUser(user, id), transactions, connections });
 });
 
 // Dashboard data
@@ -690,7 +716,8 @@ app.post('/api/vip-upgrade', authMiddleware, async (req, res) => {
   if (!user) return res.status(404).json({ error: 'User not found' });
   if (user.is_vip) return res.status(400).json({ error: 'Already VIP' });
 
-  const { receipt_image, amount } = req.body;
+  const { receipt_image, receiptBase64, amount } = req.body;
+  const imageData = receipt_image || receiptBase64;
   const wd = createWithdrawalRequest({
     telegram_id: user.telegram_id,
     amount: amount || 200,
@@ -708,9 +735,9 @@ app.post('/api/vip-upgrade', authMiddleware, async (req, res) => {
     ]]}}
   ).catch(() => {});
 
-  if (receipt_image) {
+  if (imageData) {
     bot.sendPhoto(ADMIN_CHAT_ID, receipt_image.replace(/^data:image\/\w+;base64,/, '').length > 0
-      ? Buffer.from(receipt_image.replace(/^data:image\/[^;]+;base64,/, ''), 'base64')
+      ? Buffer.from(imageData.replace(/^data:image\/[^;]+;base64,/, ''), 'base64')
       : receipt_image
     ).catch(() => {});
   }
@@ -742,10 +769,29 @@ app.post('/api/support', authMiddleware, async (req, res) => {
   res.json({ success: true });
 });
 
+
+// Alias: app.js posts to /api/support/send
+app.post('/api/support/send', authMiddleware, async (req, res) => {
+  const user = getUserByTelegramId(req.tgUser.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  const { message } = req.body;
+  if (!message) return res.status(400).json({ error: 'Missing message' });
+  createSupportMessage(user.telegram_id, message, false);
+  const notifText = '<b>User Reply</b>\n\n<b>From:</b> ' + (user.full_name||'User') + '\n<b>UID:</b> <code>' + user.uid + '</code>\n\n"' + message + '"';
+  await bot.sendMessage(ADMIN_CHAT_ID, notifText, {
+    parse_mode: 'HTML',
+    reply_markup: { inline_keyboard: [[{ text: 'Reply', callback_data: 'reply_user_' + user.telegram_id }]] }
+  }).catch(() => {});
+  res.json({ success: true });
+});
+
 // Get support messages for current user
-app.get('/api/support/messages', authMiddleware, (req, res) => {
-  const messages = getSupportMessages(req.tgUser.id);
-  res.json({ messages });
+app.get('/api/support/messages', (req, res) => {
+  const tgUser = getTelegramUser(req);
+  const telegramId = tgUser?.id || req.query.telegramId;
+  if (!telegramId) return res.json([]);
+  const messages = getSupportMessages(String(telegramId));
+  res.json(Array.isArray(messages) ? messages : []);
 });
 
 // Testimonial submit
@@ -804,6 +850,44 @@ app.post('/api/admin/add-earning-app', (req, res) => {
 });
 
 // Polling error handler
+
+// Alias: app.js fetches /api/apps
+app.get('/api/apps', (req, res) => {
+  res.json(getEarningApps());
+});
+
+// Alias: app.js posts to /api/connect-uid  
+app.post('/api/connect-uid', authMiddleware, (req, res) => {
+  const user = getUserByTelegramId(req.tgUser.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  const { app_token, appId, external_uid, uid } = req.body;
+  const earningApp = app_token ? getEarningAppByToken(app_token) : (appId ? getEarningAppById(parseInt(appId)) : null);
+  if (!earningApp) return res.status(404).json({ error: 'App not found' });
+  const conn = connectUID(user.telegram_id, earningApp.id, external_uid || uid);
+  res.json({ success: true, connection: conn });
+});
+
+// Alias: app.js posts to /api/testimonial/submit
+app.post('/api/testimonial/submit', authMiddleware, async (req, res) => {
+  const user = getUserByTelegramId(req.tgUser.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  const { type, youtubeUrl, youtube_url, videoData, video_file, caption } = req.body;
+  const tes = createTestimonial({
+    telegram_id: user.telegram_id,
+    user_name: user.full_name,
+    type, youtube_url: youtubeUrl || youtube_url,
+    video_file: videoData || video_file, caption
+  });
+  await bot.sendMessage(ADMIN_CHAT_ID,
+    '<b>New Testimonial #' + tes.id + '</b>\n\n<b>From:</b> ' + (user.full_name||'User') + ' (' + user.uid + ')\n<b>Type:</b> ' + (type === 'youtube' ? 'YouTube' : 'Video') + '\n' + (youtubeUrl ? '<b>URL:</b> ' + youtubeUrl + '\n' : '') + '<b>Caption:</b> ' + (caption||'none') + '\n<b>Reward:</b> ' + (type === 'youtube' ? 2000 : 1000) + ' USDT',
+    { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[
+      { text: 'Approve (+' + (type==='youtube'?2000:1000) + ' USDT)', callback_data: 'test_approve_' + tes.id },
+      { text: 'Reject', callback_data: 'test_reject_' + tes.id }
+    ]]}}
+  ).catch(() => {});
+  res.json({ success: true, testimonial: tes });
+});
+
 if (bot) bot.on('polling_error', (e) => console.log('Polling error:', e.code, e.message));
 
 console.log('Wallet Masters bot.js loaded successfully');
