@@ -95,6 +95,7 @@ app.post('/api/auth', (req, res) => {
     const user = getOrCreateUser(telegramId, tgUser?.username, fullName, refCode);
     res.json({ success: true, user: {
       telegramId: user.telegram_id,
+      telegram_id: user.telegram_id,
       name: user.full_name,
       registeredName: user.registered_name || user.full_name,
       username: user.telegram_username,
@@ -239,10 +240,23 @@ app.post('/api/support/send', (req, res) => {
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
 app.get('/api/support/messages', (req, res) => {
-  const tid = req.query.telegramId;
-  if (!tid) return res.status(400).json({ error: 'Missing telegramId' });
-  markSupportRead(tid);
-  res.json(getSupportMessages(tid));
+  try {
+    const { telegramId: qTid } = parseTelegramUser({ body: req.query });
+    const tid = qTid || req.query.telegramId;
+    if (!tid) return res.status(400).json({ error: 'Missing telegramId' });
+    markSupportRead(tid);
+    res.json(getSupportMessages(tid));
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// Also support POST /api/support/messages for backward compat
+app.post('/api/support/messages', (req, res) => {
+  try {
+    const { telegramId } = parseTelegramUser(req.body);
+    if (!telegramId) return res.status(401).json({ error: 'Unauthorized' });
+    markSupportRead(telegramId);
+    res.json({ success: true, messages: getSupportMessages(telegramId) });
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 // Testimonials
@@ -404,7 +418,7 @@ if (bot) bot.onText(/\/start(.*)/, async (msg, match) => {
   } catch(e) {}
 
   if (isAdmin) {
-    return bot.sendMessage(id, `⚙️ <b>Admin Panel — Wallet Masters</b>\n\n🆔 UID: ${user.uid}\n📊 Platform Stats:\n👥 Users: ${getStats().users}\n👑 VIP: ${getStats().vip}\n⏳ Pending Withdrawals: ${getStats().pending_withdrawals}\n🎬 Pending Testimonials: ${getStats().pending_testimonials}`, { parse_mode: 'HTML', ...adminMenu });
+    return bot.sendMessage(id, `⚙️ <b>Admin Panel — Wallet Masters v4.0</b>\n\n🆔 UID: <code>${user.uid}</code>\n\n📊 <b>Platform Stats:</b>\n├ 👥 Users: <b>${getStats().users}</b>\n├ 👑 VIP Members: <b>${getStats().vip}</b>\n├ ⏳ Pending Withdrawals: <b>${getStats().pending_withdrawals}</b>\n└ 🎬 Pending Testimonials: <b>${getStats().pending_testimonials}</b>\n\n⚡ Select an option below:`, { parse_mode: 'HTML', ...adminMenu });
   }
 
   // Handle referral credit notification
@@ -453,7 +467,7 @@ if (bot) bot.on('message', async (msg) => {
   // Pending Withdrawals
   if (t === '📋 Pending Withdrawals') {
     const pending = getPendingWithdrawals().filter(w => w.type !== 'vip_upgrade');
-    if (!pending.length) return bot.sendMessage(id, '✅ No pending withdrawals.');
+    if (!pending.length) return bot.sendMessage(id, '✅ No pending withdrawals.', adminMenu);
     for (const wd of pending.slice(0,5)) {
       const u = getUserByTelegramId(wd.telegram_id);
       bot.sendMessage(id,
@@ -469,7 +483,7 @@ if (bot) bot.on('message', async (msg) => {
   // Testimonials
   if (t === '🎬 Testimonials') {
     const pending = getPendingTestimonials();
-    if (!pending.length) return bot.sendMessage(id, '✅ No pending testimonials.');
+    if (!pending.length) return bot.sendMessage(id, '✅ No pending testimonials.', adminMenu);
     for (const tes of pending.slice(0,5)) {
       const reward = tes.type === 'youtube' ? 2000 : 1000;
       const msg2 = `🎬 <b>Testimonial #${tes.id}</b>\n👤 ${tes.user_name || tes.telegram_id}\n📎 ${tes.type === 'youtube' ? '📺 YouTube: '+tes.youtube_url : '🎥 Video uploaded'}\n💬 ${tes.caption || ''}\n💰 Reward: ${reward} USDT`;
@@ -519,20 +533,20 @@ if (bot) bot.on('message', async (msg) => {
     const s = getStats();
     return bot.sendMessage(id,
       `📊 <b>Wallet Masters Stats</b>\n\n👥 Total Users: ${s.users}\n👑 VIP Members: ${s.vip}\n⏳ Pending Withdrawals: ${s.pending_withdrawals}\n🎬 Pending Testimonials: ${s.pending_testimonials}\n📱 Earning Apps: ${s.earning_apps}`,
-      { parse_mode: 'HTML' });
+      { parse_mode: 'HTML', ...adminMenu });
   }
 
   // All Users
   if (t === '👥 All Users') {
     const users = getAllUsers().slice(-10);
     const list = users.map(u => `• ${u.full_name || 'N/A'} | 💰${(u.usdt_balance||0).toFixed(0)} | ${u.is_vip?'👑VIP':''}`).join('\n');
-    return bot.sendMessage(id, `👥 <b>Last 10 Users:</b>\n\n${list}`, { parse_mode: 'HTML' });
+    return bot.sendMessage(id, `👥 <b>Last 10 Users:</b>\n\n${list}`, { parse_mode: 'HTML', ...adminMenu });
   }
 
   // Support Threads
   if (t === '💬 Support Threads') {
     const threads = getAllSupportThreads().slice(0,5);
-    if (!threads.length) return bot.sendMessage(id, '✅ No support messages.');
+    if (!threads.length) return bot.sendMessage(id, '✅ No support messages.', adminMenu);
     for (const m of threads) {
       const u = getUserByTelegramId(m.telegram_id);
       bot.sendMessage(id,
@@ -550,7 +564,7 @@ if (bot) bot.on('message', async (msg) => {
     createSupportMessage(replyTo, replyMsg, true);
     try {
       await bot.sendMessage(replyTo, `💬 <b>Support Team</b>\n\n${replyMsg}`, { parse_mode: 'HTML', ...openWalletBtn() });
-      return bot.sendMessage(id, `✅ Reply sent to user ${replyTo}`);
+      return bot.sendMessage(id, `✅ Reply sent to user ${replyTo}`, adminMenu);
     } catch(e) {
       return bot.sendMessage(id, `❌ Failed to send: ${e.message}`);
     }
