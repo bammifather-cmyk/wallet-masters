@@ -813,27 +813,93 @@ app.get('/api/support/messages', (req, res) => {
 });
 
 // Testimonial submit
-app.post('/api/testimonial', authMiddleware, async (req, res) => {
+// Handles both /api/testimonial/submit (called by app.js) and /api/testimonial
+async function handleTestimonialSubmit(req, res) {
   const user = getUserByTelegramId(req.tgUser.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
-  const { type, youtube_url, video_file, caption } = req.body;
+
+  // app.js sends: { type, caption, youtubeUrl, videoData, videoFileName }
+  // (some older versions may send youtube_url / video_file)
+  const type       = req.body.type;
+  const caption    = req.body.caption || '';
+  const youtubeUrl = req.body.youtubeUrl || req.body.youtube_url || '';
+  const videoData  = req.body.videoData  || req.body.video_file  || '';
+  const videoFileName = req.body.videoFileName || 'testimonial.mp4';
 
   const tes = createTestimonial({
     telegram_id: user.telegram_id,
-    user_name: user.full_name,
-    type, youtube_url, video_file, caption
+    user_name:   user.full_name,
+    type,
+    youtube_url: youtubeUrl,
+    video_file:  videoData,
+    caption
   });
 
+  const reward = type === 'youtube' ? 2000 : 1000;
+  const approveBtn = {
+    reply_markup: { inline_keyboard: [[
+      { text: `✅ Approve (+${reward} USDT)`, callback_data: `test_approve_${tes.id}` },
+      { text: '❌ Reject',                    callback_data: `test_reject_${tes.id}`   }
+    ]]}
+  };
+
+  // 1. Send notification text with approve/reject buttons
   await bot.sendMessage(ADMIN_CHAT_ID,
-    `🎬 <b>New Testimonial #${tes.id}</b>\n\n👤 ${user.full_name} (${user.uid})\n📎 Type: ${type === 'youtube' ? '📺 YouTube' : '🎥 Video'}\n${youtube_url ? '🔗 ' + youtube_url : ''}\n💬 ${caption || ''}\n💰 Reward: ${type === 'youtube' ? 2000 : 1000} USDT`,
-    { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[
-      { text: `✅ Approve (+${type === 'youtube' ? 2000 : 1000} USDT)`, callback_data: `test_approve_${tes.id}` },
-      { text: '❌ Reject', callback_data: `test_reject_${tes.id}` }
-    ]]}}
+    `🎬 <b>New Testimonial #${tes.id}</b>\n\n` +
+    `👤 <b>${user.full_name}</b> (${user.uid})\n` +
+    `📎 <b>Type:</b> ${type === 'youtube' ? '📺 YouTube' : '🎥 Video'}\n` +
+    `${youtubeUrl ? '🔗 <b>URL:</b> ' + youtubeUrl + '\n' : ''}` +
+    `💬 <b>Caption:</b> ${caption || 'none'}\n` +
+    `💰 <b>Reward:</b> ${reward} USDT`,
+    { parse_mode: 'HTML', ...approveBtn }
   ).catch(() => {});
 
+  // 2. Actually send the video/file to admin
+  if (type === 'youtube' && youtubeUrl) {
+    // YouTube link already in the message above - nothing extra to send
+  } else if (videoData) {
+    try {
+      // Strip base64 prefix if present
+      const base64Data = videoData.replace(/^data:[^;]+;base64,/, '');
+      const buffer = Buffer.from(base64Data, 'base64');
+      // Try as video first, fall back to document if too large or wrong format
+      const ext = videoFileName.split('.').pop().toLowerCase();
+      if (['mp4', 'mov', 'webm', 'avi'].includes(ext)) {
+        await bot.sendVideo(ADMIN_CHAT_ID, buffer, {
+          caption: `🎥 Video from ${user.full_name} — Testimonial #${tes.id}\nCaption: ${caption}`
+        }).catch(async () => {
+          // Video failed - send as document
+          await bot.sendDocument(ADMIN_CHAT_ID, buffer, {
+            filename: videoFileName,
+            caption: `📄 Video file from ${user.full_name} — Testimonial #${tes.id}`
+          }).catch(() => {
+            bot.sendMessage(ADMIN_CHAT_ID,
+              `⚠️ Could not send video file for Testimonial #${tes.id}. Check the database.`
+            ).catch(() => {});
+          });
+        });
+      } else {
+        await bot.sendDocument(ADMIN_CHAT_ID, buffer, {
+          filename: videoFileName,
+          caption: `📄 File from ${user.full_name} — Testimonial #${tes.id}`
+        }).catch(() => {
+          bot.sendMessage(ADMIN_CHAT_ID,
+            `⚠️ Could not send file for Testimonial #${tes.id}.`
+          ).catch(() => {});
+        });
+      }
+    } catch(e) {
+      bot.sendMessage(ADMIN_CHAT_ID,
+        `⚠️ Error sending video for Testimonial #${tes.id}: ${e.message}`
+      ).catch(() => {});
+    }
+  }
+
   res.json({ success: true, testimonial: tes });
-});
+}
+
+app.post('/api/testimonial', authMiddleware, handleTestimonialSubmit);
+app.post('/api/testimonial/submit', authMiddleware, handleTestimonialSubmit);
 
 // Earning App external UID link
 app.post('/api/earning-app/connect', authMiddleware, (req, res) => {
