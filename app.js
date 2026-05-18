@@ -286,7 +286,8 @@ function toggleBalance() {
 function updateClaimBtn() {
   const btn = g('claimHourlyBtn'), s = state.hourlyStatus;
   if (s.canClaim) {
-    btn.textContent = `Claim ${s.hourlyAmount} USDT`; btn.disabled = false; btn.style.opacity = '1';
+    const amt = s.hourlyAmount || s.earningRate || (state.isVIP ? 200 : 50);
+    btn.textContent = `Claim ${amt} USDT`; btn.disabled = false; btn.style.opacity = '1';
   } else {
     const m = Math.floor(s.nextClaimIn/60), sc = s.nextClaimIn%60;
     btn.textContent = `${m}m ${sc}s`; btn.disabled = true; btn.style.opacity = '.5';
@@ -311,7 +312,7 @@ async function claimHourly() {
       state.hourlyStatus = { canClaim: false, nextClaimIn: 3600, hourlyAmount: r.amount };
       state.transactions.unshift({ type:'earning', amount:r.amount, currency:'USDT', status:'completed', source_app: r.isVIP ? 'VIP Bonus' : 'Hourly Bonus', created_at: Math.floor(Date.now()/1000) });
       updateUI(); startCountdown(); toast(`+${r.amount} USDT Claimed!`);
-    } else { toast(r.error || 'Not ready'); const st = await post('/hourly-status',{}); if(st) state.hourlyStatus = st; updateClaimBtn(); startCountdown(); }
+    } else { toast(r.error || 'Not ready'); const st = await post('/hourly-status',{}); if(st) state.hourlyStatus = { ...st, nextClaimIn: st.nextClaimIn > 3700 ? Math.round(st.nextClaimIn/1000) : (st.nextClaimIn||3600) }; updateClaimBtn(); startCountdown(); }
   } catch(e) { toast('Network error'); updateClaimBtn(); }
 }
 
