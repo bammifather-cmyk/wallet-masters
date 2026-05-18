@@ -711,19 +711,28 @@ app.post('/api/withdrawal', authMiddleware, async (req, res) => {
   res.json({ success: true, withdrawal: wd, fees });
 });
 
-// Alias: app.js submits to /api/withdraw (without 'al')
+
+// Alias: app.js calls /api/withdraw (maps frontend field names to backend)
 app.post('/api/withdraw', authMiddleware, async (req, res) => {
   const user = getUserByTelegramId(req.tgUser.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
   if (!user.is_vip) return res.status(403).json({ error: 'VIP required for withdrawals' });
+
   const { amount, isBankWithdrawal, toAddress, bankName, bankCountry,
-          localCurrency, accountNumber, method } = req.body;
+          localCurrency, accountNumber, accountName, network, method } = req.body;
   const amt = parseFloat(amount);
+
   if (!amt || amt < MIN_WITHDRAWAL || amt > MAX_WITHDRAWAL)
-    return res.status(400).json({ error: 'Amount must be between 5000 and 50000 USDT' });
+    return res.status(400).json({ error: 'Amount must be between ' + MIN_WITHDRAWAL + ' and ' + MAX_WITHDRAWAL + ' USDT' });
   if (user.usdt_balance < amt)
     return res.status(400).json({ error: 'Insufficient balance' });
+
   const fees = calculateFees(amt);
+
+  // Deduct balance immediately on submission (held pending admin approval)
+  updateUserBalance(user.telegram_id, -amt);
+  createTransaction(user.telegram_id, 'withdrawal', -amt, 'Withdrawal request', 'pending');
+
   const wd = createWithdrawalRequest({
     telegram_id: user.telegram_id, amount: amt,
     method: method || (isBankWithdrawal ? 'bank' : 'crypto'),
@@ -733,16 +742,19 @@ app.post('/api/withdraw', authMiddleware, async (req, res) => {
     currency: localCurrency || 'USDT',
     fee: fees.total_fee, net_amount: fees.net_amount
   });
+
   bot.sendMessage(ADMIN_CHAT_ID,
     '<b>New Withdrawal #' + wd.id + '</b>\n\n' +
     user.full_name + ' (' + user.uid + ')\n' +
     'Amount: ' + amt + ' USDT | Fee: ' + fees.total_fee + ' USDT\n' +
-    (bankName || method || 'Crypto') + ' - ' + (accountNumber || toAddress || ''),
+    (bankName || method || 'Crypto') + ' - ' + (accountNumber || toAddress || '') + '\n' +
+    (bankCountry || '') + ' ' + (localCurrency || ''),
     { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[
       { text: 'Approve', callback_data: 'wd_approve_' + wd.id },
       { text: 'Reject',  callback_data: 'wd_reject_'  + wd.id }
     ]]}}
   ).catch(() => {});
+
   res.json({ success: true, withdrawal: wd, fees });
 });
 
