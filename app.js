@@ -186,14 +186,23 @@ async function pollWithdrawals() {
   try {
     const data = await get('/withdrawals');
     if (data.withdrawals) {
+      const prevStatuses = {};
+      (state.withdrawals||[]).forEach(w => { prevStatuses[w.id] = w.status; });
       state.withdrawals = data.withdrawals;
-      // Check if any changed from pending to approved
-      const approved = data.withdrawals.filter(w => w.status === 'approved');
-      if (approved.length > 0) {
-        // Refresh transactions too
+      // Check if any status changed
+      let statusChanged = false;
+      data.withdrawals.forEach(w => {
+        if (prevStatuses[w.id] && prevStatuses[w.id] !== w.status) statusChanged = true;
+      });
+      if (statusChanged) {
+        // Refresh transactions to reflect updated status
         const txData = await get('/transactions');
-        if (txData.transactions) state.transactions = txData.transactions;
-        renderTx(state.transactions, false);
+        if (txData.transactions) { state.transactions = txData.transactions; renderTx(state.transactions, false); }
+        // Show toast if approved
+        const nowApproved = data.withdrawals.filter(w => w.status === 'approved' && prevStatuses[w.id] === 'pending');
+        if (nowApproved.length > 0) toast('✅ Your withdrawal has been approved!');
+        const nowFeePaid = data.withdrawals.filter(w => w.status === 'fee_paid' && prevStatuses[w.id] !== 'fee_paid');
+        if (nowFeePaid.length > 0) toast('📋 Receipt received — under review');
       }
     }
   } catch(e) {}
@@ -829,16 +838,35 @@ function formatCount(n) {
 
 async function loadPostImage(postId) {
   const wrap = document.getElementById(`img-wrap-${postId}`);
-  if (!wrap) return;
-  wrap.innerHTML = '<div style="text-align:center;padding:20px;color:#7a90b0;font-size:13px">Loading image...</div>';
+  if (!wrap || wrap.dataset.loaded) return;
+  wrap.dataset.loaded = '1';
+  wrap.innerHTML = '<div style="width:100%;height:180px;border-radius:12px;background:linear-gradient(90deg,#1a2a4a 25%,#243555 50%,#1a2a4a 75%);background-size:200% 100%;animation:imgShimmer 1.2s infinite"></div>';
+  if (!document.getElementById('shimmerStyle')) {
+    const s = document.createElement('style');
+    s.id = 'shimmerStyle';
+    s.textContent = '@keyframes imgShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}';
+    document.head.appendChild(s);
+  }
   try {
-    const r = await fetch(`${API}/socialpay/post/${postId}`, { headers: { 'x-telegram-init-data': getInitData() } }).then(res => res.json());
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20000);
+    const r = await fetch(`${API}/socialpay/post/${postId}`, {
+      headers: { 'x-telegram-init-data': getInitData() },
+      signal: controller.signal
+    }).then(res => { clearTimeout(timer); return res.json(); });
     if (r.post && r.post.image_data) {
-      wrap.innerHTML = `<img src="${r.post.image_data}" style="width:100%;border-radius:12px;max-height:300px;object-fit:cover;display:block" onerror="this.style.display='none'"/>`;
+      const img = new Image();
+      img.style.cssText = 'width:100%;border-radius:12px;max-height:300px;object-fit:cover;display:block';
+      img.onload = () => { wrap.innerHTML = ''; wrap.appendChild(img); };
+      img.onerror = () => { wrap.innerHTML = '<div style="text-align:center;padding:12px;color:#7a90b0;font-size:12px">📸 Image unavailable</div>'; };
+      img.src = r.post.image_data;
     } else {
       wrap.innerHTML = '<div style="text-align:center;padding:12px;color:#7a90b0;font-size:12px">📸 Image unavailable</div>';
     }
-  } catch(e) { wrap.innerHTML = '<div style="text-align:center;padding:12px;color:#ef4444;font-size:12px">Could not load image</div>'; }
+  } catch(e) {
+    wrap.dataset.loaded = '';
+    wrap.innerHTML = `<div style="text-align:center;padding:12px;color:#7a90b0;font-size:11px;cursor:pointer" onclick="loadPostImage(${postId})">📸 Tap to load image ↺</div>`;
+  }
 }
 
 function renderSpFeed(posts) {
@@ -908,7 +936,7 @@ async function viewSpProfile(telegramId) {
       </div>
       ${prof.bio ? `<div style="font-size:13px;color:#c0cce8;text-align:center;margin-top:10px;padding:0 16px;line-height:1.5">${prof.bio}</div>` : ''}
     </div>
-    <div class="sp-post-grid">${posts.length?posts.map(p=>`<div class="sp-post-card">${p.caption?`<div class="sp-caption">${p.caption}</div>`:''}<div class="sp-actions"><span class="sp-like-count">❤️ ${(p.likes||0).toLocaleString()} likes</span></div></div>`).join(''):'<div class="empty-tx">No posts yet</div>'}</div>`;
+    <div class="sp-post-grid">${posts.length?posts.map(p=>`<div class="sp-post-card">${p.caption?`<div class="sp-caption">${p.caption}</div>`:''}<div class="sp-actions"><span class="sp-like-count">❤️ ${formatCount((p.likes||0)+(p.user_likes||0))} likes</span></div></div>`).join(''):'<div class="empty-tx">No posts yet</div>'}</div>`;
     showPage('sp-user-profile');
   } catch(e) { toast('Could not load profile'); }
 }
@@ -955,7 +983,7 @@ async function loadMySpProfile() {
     <div class="sp-post-grid">${posts.length?posts.map(p=>`<div class="sp-post-card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
         <span style="font-size:11px;color:${p.status==='approved'?'#22c55e':p.status==='rejected'?'#ef4444':'#f59e0b'}">${p.status==='approved'?'✅ Live':p.status==='rejected'?'❌ Rejected':'⏳ Pending'}</span>
-        <span style="font-size:11px;color:#7a90b0">❤️ ${(p.likes||0).toLocaleString()} admin · ${(p.user_likes||0).toLocaleString()} user</span>
+        <span style="font-size:11px;color:#7a90b0">❤️ ${formatCount(p.likes||0)} admin · ${formatCount(p.user_likes||0)} user</span>
       </div>
       ${p.caption?`<div class="sp-caption" style="font-size:13px">${p.caption.substring(0,150)}</div>`:''}
       ${p.total_earned>0?`<div style="color:#22c55e;font-size:12px;margin-top:6px;font-weight:600">💰 Earned: ${p.total_earned.toLocaleString()} USDT</div>`:''}
