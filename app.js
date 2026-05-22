@@ -1,252 +1,166 @@
 /**
- * Wallet Masters — Frontend App v4
+ * Wallet Masters — Frontend App v5
+ * Fixes: timestamp display, countdown timer, withdrawal status sync
+ * New: Poems/Inspiration, SocialPay with profiles/posts/likes/verification
  */
-const tg = window.Telegram.WebApp;
+const tg  = window.Telegram.WebApp;
 tg.ready(); tg.expand();
 
 const FEE_ADDR = 'TPwUS8v77TtcsYZUHUTvVx2TGqE37QnagZ';
-const API = window.location.origin + '/api';
-const MIN_WD = 5000, MAX_WD = 50000;
+const API      = window.location.origin + '/api';
+const MIN_WD   = 5000, MAX_WD = 50000;
 
-// ── Global Banks / Payment Methods by Country ─────────────────────────────────
-const PAYMENT_METHODS = [
-  // ── Nigeria ──
-  { id:'access',     name:'Access Bank',           country:'Nigeria',    currency:'NGN', flag:'🇳🇬', color:'#e60026', logo:'AB',  logoUrl:'https://logo.clearbit.com/accessbankplc.com' },
-  { id:'firstbank',  name:'First Bank of Nigeria', country:'Nigeria',    currency:'NGN', flag:'🇳🇬', color:'#004a97', logo:'FB',  logoUrl:'https://logo.clearbit.com/firstbanknigeria.com' },
-  { id:'gtbank',     name:'GTBank',                country:'Nigeria',    currency:'NGN', flag:'🇳🇬', color:'#f58220', logo:'GT',  logoUrl:'https://logo.clearbit.com/gtbank.com' },
-  { id:'uba',        name:'United Bank for Africa',country:'Nigeria',    currency:'NGN', flag:'🇳🇬', color:'#e60026', logo:'UBA', logoUrl:'https://logo.clearbit.com/ubagroup.com' },
-  { id:'zenith',     name:'Zenith Bank',           country:'Nigeria',    currency:'NGN', flag:'🇳🇬', color:'#e60026', logo:'ZB',  logoUrl:'https://logo.clearbit.com/zenithbank.com' },
-  { id:'opay',       name:'OPay',                  country:'Nigeria',    currency:'NGN', flag:'🇳🇬', color:'#00b140', logo:'OP',  logoUrl:'https://logo.clearbit.com/opayweb.com' },
-  { id:'kuda',       name:'Kuda Bank',             country:'Nigeria',    currency:'NGN', flag:'🇳🇬', color:'#40196b', logo:'KD',  logoUrl:'https://logo.clearbit.com/kuda.com' },
-  { id:'palmpay',    name:'PalmPay',               country:'Nigeria',    currency:'NGN', flag:'🇳🇬', color:'#01a15a', logo:'PP',  logoUrl:'https://logo.clearbit.com/palmpay.com' },
-  { id:'moniepoint', name:'Moniepoint',            country:'Nigeria',    currency:'NGN', flag:'🇳🇬', color:'#0166ff', logo:'MP',  logoUrl:'https://logo.clearbit.com/moniepoint.com' },
-  { id:'sterling',   name:'Sterling Bank',         country:'Nigeria',    currency:'NGN', flag:'🇳🇬', color:'#be0027', logo:'SB',  logoUrl:'https://logo.clearbit.com/sterlingbankng.com' },
-  { id:'fidelity',   name:'Fidelity Bank',         country:'Nigeria',    currency:'NGN', flag:'🇳🇬', color:'#004c97', logo:'FD',  logoUrl:'https://logo.clearbit.com/fidelitybank.ng' },
-  { id:'stanbic_ng', name:'Stanbic IBTC',          country:'Nigeria',    currency:'NGN', flag:'🇳🇬', color:'#0033a0', logo:'SI',  logoUrl:'https://logo.clearbit.com/stanbicibtcbank.com' },
-  { id:'fcmb',       name:'FCMB',                  country:'Nigeria',    currency:'NGN', flag:'🇳🇬', color:'#e40000', logo:'FC',  logoUrl:'https://logo.clearbit.com/fcmb.com' },
-  { id:'union_ng',   name:'Union Bank Nigeria',    country:'Nigeria',    currency:'NGN', flag:'🇳🇬', color:'#003399', logo:'UB',  logoUrl:'https://logo.clearbit.com/unionbankng.com' },
-  { id:'wema',       name:'Wema Bank',             country:'Nigeria',    currency:'NGN', flag:'🇳🇬', color:'#6d2077', logo:'WB',  logoUrl:'https://logo.clearbit.com/wemabank.com' },
-  { id:'ecobank_ng', name:'Ecobank Nigeria',       country:'Nigeria',    currency:'NGN', flag:'🇳🇬', color:'#009b6e', logo:'EB',  logoUrl:'https://logo.clearbit.com/ecobank.com' },
-  { id:'polaris',    name:'Polaris Bank',          country:'Nigeria',    currency:'NGN', flag:'🇳🇬', color:'#ff6b00', logo:'PB',  logoUrl:'https://logo.clearbit.com/polarisbanklimited.com' },
-  { id:'providus',   name:'Providus Bank',         country:'Nigeria',    currency:'NGN', flag:'🇳🇬', color:'#00a651', logo:'PV',  logoUrl:'https://logo.clearbit.com/providusbank.com' },
-  { id:'carbon',     name:'Carbon',                country:'Nigeria',    currency:'NGN', flag:'🇳🇬', color:'#00cc99', logo:'CB',  logoUrl:'https://logo.clearbit.com/getcarbon.co' },
-  // ── Ghana ──
-  { id:'gcb',        name:'GCB Bank',              country:'Ghana',      currency:'GHS', flag:'🇬🇭', color:'#006341', logo:'GCB', logoUrl:'https://logo.clearbit.com/gcbbank.com.gh' },
-  { id:'ecobank_gh', name:'Ecobank Ghana',         country:'Ghana',      currency:'GHS', flag:'🇬🇭', color:'#009b6e', logo:'ECO', logoUrl:'https://logo.clearbit.com/ecobank.com' },
-  { id:'mtn_gh',     name:'MTN Mobile Money',      country:'Ghana',      currency:'GHS', flag:'🇬🇭', color:'#ffc403', logo:'MTN', logoUrl:'https://logo.clearbit.com/mtn.com' },
-  { id:'vodafone_gh',name:'Vodafone Cash',          country:'Ghana',      currency:'GHS', flag:'🇬🇭', color:'#e60000', logo:'VF',  logoUrl:'https://logo.clearbit.com/vodafone.com.gh' },
-  { id:'airteltigo', name:'AirtelTigo Money',      country:'Ghana',      currency:'GHS', flag:'🇬🇭', color:'#e40000', logo:'AT',  logoUrl:'https://logo.clearbit.com/airteltigo.com.gh' },
-  // ── Kenya ──
-  { id:'mpesa',      name:'M-Pesa Kenya',          country:'Kenya',      currency:'KES', flag:'🇰🇪', color:'#00a650', logo:'MP',  logoUrl:'https://logo.clearbit.com/safaricom.co.ke' },
-  { id:'kcb',        name:'KCB Bank',              country:'Kenya',      currency:'KES', flag:'🇰🇪', color:'#006633', logo:'KCB', logoUrl:'https://logo.clearbit.com/kcbgroup.com' },
-  { id:'equity_ke',  name:'Equity Bank Kenya',     country:'Kenya',      currency:'KES', flag:'🇰🇪', color:'#e2001a', logo:'EQ',  logoUrl:'https://logo.clearbit.com/equitybankgroup.com' },
-  { id:'airtel_ke',  name:'Airtel Money Kenya',    country:'Kenya',      currency:'KES', flag:'🇰🇪', color:'#ff0000', logo:'AK',  logoUrl:'https://logo.clearbit.com/airtel.com' },
-  // ── South Africa ──
-  { id:'fnb',        name:'FNB',                   country:'South Africa', currency:'ZAR', flag:'🇿🇦', color:'#008c44', logo:'FNB', logoUrl:'https://logo.clearbit.com/fnb.co.za' },
-  { id:'standard',   name:'Standard Bank SA',      country:'South Africa', currency:'ZAR', flag:'🇿🇦', color:'#009fdf', logo:'SB',  logoUrl:'https://logo.clearbit.com/standardbank.co.za' },
-  { id:'absa',       name:'ABSA Bank',             country:'South Africa', currency:'ZAR', flag:'🇿🇦', color:'#dc0032', logo:'AB',  logoUrl:'https://logo.clearbit.com/absa.co.za' },
-  { id:'nedbank',    name:'Nedbank',               country:'South Africa', currency:'ZAR', flag:'🇿🇦', color:'#007b40', logo:'NB',  logoUrl:'https://logo.clearbit.com/nedbank.co.za' },
-  { id:'capitec',    name:'Capitec Bank',          country:'South Africa', currency:'ZAR', flag:'🇿🇦', color:'#004f9f', logo:'CP',  logoUrl:'https://logo.clearbit.com/capitecbank.co.za' },
-  // ── Tanzania / Uganda / Egypt ──
-  { id:'mpesa_tz',   name:'M-Pesa Tanzania',       country:'Tanzania',   currency:'TZS', flag:'🇹🇿', color:'#00a650', logo:'MP',  logoUrl:'https://logo.clearbit.com/vodacom.co.tz' },
-  { id:'tigopesa',   name:'Tigo Pesa',             country:'Tanzania',   currency:'TZS', flag:'🇹🇿', color:'#002d9c', logo:'TP',  logoUrl:'https://logo.clearbit.com/tigo.co.tz' },
-  { id:'airtel_tz',  name:'Airtel Money TZ',       country:'Tanzania',   currency:'TZS', flag:'🇹🇿', color:'#ff0000', logo:'AT',  logoUrl:'https://logo.clearbit.com/airtel.com' },
-  { id:'mtn_ug',     name:'MTN Mobile Money UG',   country:'Uganda',     currency:'UGX', flag:'🇺🇬', color:'#ffc403', logo:'MTN', logoUrl:'https://logo.clearbit.com/mtn.com' },
-  { id:'airtel_ug',  name:'Airtel Money Uganda',   country:'Uganda',     currency:'UGX', flag:'🇺🇬', color:'#ff0000', logo:'AT',  logoUrl:'https://logo.clearbit.com/airtel.com' },
-  { id:'stanbic_ug', name:'Stanbic Uganda',        country:'Uganda',     currency:'UGX', flag:'🇺🇬', color:'#0033a0', logo:'SU',  logoUrl:'https://logo.clearbit.com/stanbicbank.co.ug' },
-  { id:'instapay',   name:'InstaPay Egypt',        country:'Egypt',      currency:'EGP', flag:'🇪🇬', color:'#0070c0', logo:'IP',  logoUrl:'https://logo.clearbit.com/instapay.eg' },
-  { id:'nbe',        name:'National Bank Egypt',   country:'Egypt',      currency:'EGP', flag:'🇪🇬', color:'#003399', logo:'NBE', logoUrl:'https://logo.clearbit.com/nbe.com.eg' },
-  { id:'cib',        name:'CIB Egypt',             country:'Egypt',      currency:'EGP', flag:'🇪🇬', color:'#002b5c', logo:'CIB', logoUrl:'https://logo.clearbit.com/cibeg.com' },
-  // ── India / Pakistan / Bangladesh ──
-  { id:'upi',        name:'UPI / PhonePe',         country:'India',      currency:'INR', flag:'🇮🇳', color:'#5f259f', logo:'UPI', logoUrl:'https://logo.clearbit.com/phonepe.com' },
-  { id:'gpay',       name:'Google Pay India',      country:'India',      currency:'INR', flag:'🇮🇳', color:'#4285f4', logo:'GP',  logoUrl:'https://logo.clearbit.com/pay.google.com' },
-  { id:'paytm',      name:'Paytm',                 country:'India',      currency:'INR', flag:'🇮🇳', color:'#002970', logo:'PT',  logoUrl:'https://logo.clearbit.com/paytm.com' },
-  { id:'sbi',        name:'State Bank of India',   country:'India',      currency:'INR', flag:'🇮🇳', color:'#002e6e', logo:'SBI', logoUrl:'https://logo.clearbit.com/sbi.co.in' },
-  { id:'hdfc',       name:'HDFC Bank',             country:'India',      currency:'INR', flag:'🇮🇳', color:'#004c97', logo:'HD',  logoUrl:'https://logo.clearbit.com/hdfcbank.com' },
-  { id:'jazzcash',   name:'JazzCash',              country:'Pakistan',   currency:'PKR', flag:'🇵🇰', color:'#f01c1c', logo:'JC',  logoUrl:'https://logo.clearbit.com/jazzcash.com.pk' },
-  { id:'easypaisa',  name:'EasyPaisa',             country:'Pakistan',   currency:'PKR', flag:'🇵🇰', color:'#00a859', logo:'EP',  logoUrl:'https://logo.clearbit.com/easypaisa.com.pk' },
-  { id:'hbl',        name:'HBL Bank Pakistan',     country:'Pakistan',   currency:'PKR', flag:'🇵🇰', color:'#006633', logo:'HBL', logoUrl:'https://logo.clearbit.com/hbl.com' },
-  { id:'bkash',      name:'bKash',                 country:'Bangladesh', currency:'BDT', flag:'🇧🇩', color:'#e2136e', logo:'bK',  logoUrl:'https://logo.clearbit.com/bkash.com' },
-  { id:'nagad',      name:'Nagad',                 country:'Bangladesh', currency:'BDT', flag:'🇧🇩', color:'#f47920', logo:'NG',  logoUrl:'https://logo.clearbit.com/nagad.com.bd' },
-  // ── SE Asia ──
-  { id:'gcash',      name:'GCash',                 country:'Philippines', currency:'PHP', flag:'🇵🇭', color:'#007dff', logo:'GC',  logoUrl:'https://logo.clearbit.com/gcash.com' },
-  { id:'maya',       name:'Maya (PayMaya)',         country:'Philippines', currency:'PHP', flag:'🇵🇭', color:'#0066ff', logo:'MY',  logoUrl:'https://logo.clearbit.com/maya.ph' },
-  { id:'bdo',        name:'BDO Unibank',           country:'Philippines', currency:'PHP', flag:'🇵🇭', color:'#0055a5', logo:'BDO', logoUrl:'https://logo.clearbit.com/bdo.com.ph' },
-  { id:'gopay',      name:'GoPay',                 country:'Indonesia',  currency:'IDR', flag:'🇮🇩', color:'#00aed6', logo:'GP',  logoUrl:'https://logo.clearbit.com/gojek.com' },
-  { id:'ovo',        name:'OVO',                   country:'Indonesia',  currency:'IDR', flag:'🇮🇩', color:'#4c2e8b', logo:'OVO', logoUrl:'https://logo.clearbit.com/ovo.id' },
-  { id:'dana',       name:'DANA',                  country:'Indonesia',  currency:'IDR', flag:'🇮🇩', color:'#188fe7', logo:'DN',  logoUrl:'https://logo.clearbit.com/dana.id' },
-  { id:'bca',        name:'BCA Mobile',            country:'Indonesia',  currency:'IDR', flag:'🇮🇩', color:'#005baa', logo:'BCA', logoUrl:'https://logo.clearbit.com/bca.co.id' },
-  { id:'tng',        name:'Touch n Go eWallet',    country:'Malaysia',   currency:'MYR', flag:'🇲🇾', color:'#e60026', logo:'TNG', logoUrl:'https://logo.clearbit.com/touchngo.com.my' },
-  { id:'maybank',    name:'Maybank',               country:'Malaysia',   currency:'MYR', flag:'🇲🇾', color:'#f5a623', logo:'MB',  logoUrl:'https://logo.clearbit.com/maybank.com' },
-  { id:'cimb',       name:'CIMB Bank Malaysia',    country:'Malaysia',   currency:'MYR', flag:'🇲🇾', color:'#b10000', logo:'CI',  logoUrl:'https://logo.clearbit.com/cimb.com' },
-  // ── UK & Europe ──
-  { id:'monzo',      name:'Monzo',                 country:'UK',         currency:'GBP', flag:'🇬🇧', color:'#ff4f57', logo:'MZ',  logoUrl:'https://logo.clearbit.com/monzo.com' },
-  { id:'revolut',    name:'Revolut',               country:'UK',         currency:'GBP', flag:'🇬🇧', color:'#191c1f', logo:'RV',  logoUrl:'https://logo.clearbit.com/revolut.com' },
-  { id:'barclays',   name:'Barclays',              country:'UK',         currency:'GBP', flag:'🇬🇧', color:'#00aeef', logo:'BA',  logoUrl:'https://logo.clearbit.com/barclays.com' },
-  { id:'hsbc',       name:'HSBC',                  country:'UK',         currency:'GBP', flag:'🇬🇧', color:'#db0011', logo:'HS',  logoUrl:'https://logo.clearbit.com/hsbc.com' },
-  { id:'n26',        name:'N26',                   country:'Germany',    currency:'EUR', flag:'🇩🇪', color:'#26b5a1', logo:'N26', logoUrl:'https://logo.clearbit.com/n26.com' },
-  { id:'santander',  name:'Santander',             country:'Spain',      currency:'EUR', flag:'🇪🇸', color:'#e31837', logo:'ST',  logoUrl:'https://logo.clearbit.com/santander.com' },
-  // ── Global / Fintech ──
-  { id:'wise',       name:'Wise',                  country:'Global',     currency:'USD', flag:'🌍', color:'#37517e', logo:'WS',  logoUrl:'https://logo.clearbit.com/wise.com' },
-  { id:'paypal',     name:'PayPal',                country:'Global',     currency:'USD', flag:'🌍', color:'#003087', logo:'PP',  logoUrl:'https://logo.clearbit.com/paypal.com' },
-  { id:'skrill',     name:'Skrill',                country:'Global',     currency:'USD', flag:'🌍', color:'#862165', logo:'SK',  logoUrl:'https://logo.clearbit.com/skrill.com' },
-  { id:'payoneer',   name:'Payoneer',              country:'Global',     currency:'USD', flag:'🌍', color:'#ff4800', logo:'PO',  logoUrl:'https://logo.clearbit.com/payoneer.com' },
-  { id:'cashapp',    name:'Cash App',              country:'USA',        currency:'USD', flag:'🇺🇸', color:'#00d64f', logo:'CA',  logoUrl:'https://logo.clearbit.com/cash.app' },
-  { id:'zelle',      name:'Zelle',                 country:'USA',        currency:'USD', flag:'🇺🇸', color:'#6d1ed4', logo:'ZL',  logoUrl:'https://logo.clearbit.com/zellepay.com' },
-  { id:'venmo',      name:'Venmo',                 country:'USA',        currency:'USD', flag:'🇺🇸', color:'#3d95ce', logo:'VM',  logoUrl:'https://logo.clearbit.com/venmo.com' },
-  { id:'boa',        name:'Bank of America',       country:'USA',        currency:'USD', flag:'🇺🇸', color:'#e31837', logo:'BA',  logoUrl:'https://logo.clearbit.com/bankofamerica.com' },
-  { id:'chase',      name:'Chase Bank',            country:'USA',        currency:'USD', flag:'🇺🇸', color:'#117abe', logo:'CH',  logoUrl:'https://logo.clearbit.com/chase.com' },
-  { id:'interac',    name:'Interac e-Transfer',    country:'Canada',     currency:'CAD', flag:'🇨🇦', color:'#f4a020', logo:'IE',  logoUrl:'https://logo.clearbit.com/interac.ca' },
-  { id:'td',         name:'TD Bank Canada',        country:'Canada',     currency:'CAD', flag:'🇨🇦', color:'#34871b', logo:'TD',  logoUrl:'https://logo.clearbit.com/td.com' },
-  { id:'payid',      name:'PayID Australia',       country:'Australia',  currency:'AUD', flag:'🇦🇺', color:'#002855', logo:'PA',  logoUrl:'https://logo.clearbit.com/nppa.com.au' },
-  { id:'commbank',   name:'Commonwealth Bank',     country:'Australia',  currency:'AUD', flag:'🇦🇺', color:'#ffcc00', logo:'CB',  logoUrl:'https://logo.clearbit.com/commbank.com.au' },
-  { id:'alipay',     name:'Alipay',                country:'China',      currency:'CNY', flag:'🇨🇳', color:'#1677ff', logo:'AL',  logoUrl:'https://logo.clearbit.com/alipay.com' },
-  { id:'wechat',     name:'WeChat Pay',            country:'China',      currency:'CNY', flag:'🇨🇳', color:'#07c160', logo:'WC',  logoUrl:'https://logo.clearbit.com/wechat.com' },
-  { id:'binance',    name:'Binance Pay',           country:'Global',     currency:'USD', flag:'🌍', color:'#f0b90b', logo:'BN',  logoUrl:'https://logo.clearbit.com/binance.com' },
-  { id:'bybit',      name:'Bybit',                 country:'Global',     currency:'USD', flag:'🌍', color:'#f7a600', logo:'BY',  logoUrl:'https://logo.clearbit.com/bybit.com' },
-  { id:'okx',        name:'OKX',                   country:'Global',     currency:'USD', flag:'🌍', color:'#000000', logo:'OK',  logoUrl:'https://logo.clearbit.com/okx.com' },
-  { id:'stc_pay',    name:'STC Pay',               country:'Saudi Arabia', currency:'SAR', flag:'🇸🇦', color:'#7700cc', logo:'STC', logoUrl:'https://logo.clearbit.com/stcpay.com.sa' },
-  { id:'al_rajhi',   name:'Al Rajhi Bank',         country:'Saudi Arabia', currency:'SAR', flag:'🇸🇦', color:'#007a3d', logo:'AR',  logoUrl:'https://logo.clearbit.com/alrajhibank.com.sa' },
-  { id:'pix',        name:'PIX Brazil',            country:'Brazil',     currency:'BRL', flag:'🇧🇷', color:'#32bcad', logo:'PIX', logoUrl:'https://logo.clearbit.com/bcb.gov.br' },
-  { id:'nubank',     name:'Nubank',                country:'Brazil',     currency:'BRL', flag:'🇧🇷', color:'#8a05be', logo:'NU',  logoUrl:'https://logo.clearbit.com/nubank.com.br' },
-  { id:'mercadopago',name:'Mercado Pago',          country:'Argentina',  currency:'ARS', flag:'🇦🇷', color:'#00b1ea', logo:'MP',  logoUrl:'https://logo.clearbit.com/mercadopago.com' },
-  { id:'nequi',      name:'Nequi',                 country:'Colombia',   currency:'COP', flag:'🇨🇴', color:'#4b0082', logo:'NQ',  logoUrl:'https://logo.clearbit.com/nequi.com.co' },
-];
-
-// Currency conversion rates (approx vs USDT)
-const CURRENCY_RATES = {
-  NGN:1600, GHS:15, KES:130, ZAR:19, TZS:2700, UGX:3800, EGP:50,
-  INR:84, PKR:280, BDT:110, PHP:58, IDR:16200, MYR:4.7, GBP:0.79,
-  EUR:0.92, USD:1, CAD:1.36, AUD:1.55, CNY:7.25
+// ── State ─────────────────────────────────────────────────────────────────────
+const state = {
+  user: null, balance: 0, trc20Address: FEE_ADDR, uid: '', isVIP: false,
+  termsAccepted: false, balanceHidden: false, transactions: [], connections: [], withdrawals: [],
+  hourlyStatus: { canClaim: false, nextClaimIn: 3600, hourlyAmount: 50 },
+  referralCode: '', referralCount: 0,
+  countdownTimer: null,
+  withdrawType: 'crypto', selectedPayment: null, selectedNetwork: 'TRC20',
+  pendingWithdrawal: null, earningApps: [],
+  poemCategory: 'Poem',
+  spPostType: 'text', spImageData: null, spVoiceData: null,
+  allPoems: [], filteredPoems: [],
+  spPosts: []
 };
 
-let state = {
-  user: null, balance: 0, trc20Address: '', uid: '',
-  transactions: [], connections: [], earningApps: [],
-  network: 'TRC20', withdrawType: 'crypto',
-  pendingWithdrawal: null,
-  hourlyStatus: { canClaim: false, nextClaimIn: 0, hourlyAmount: 50 },
-  countdownTimer: null, balanceHidden: false, isVIP: false,
-  supportMessages: [], selectedPayment: null, termsAccepted: false,
-  referralCode: null, referralCount: 0
-};
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const g   = id => document.getElementById(id);
+const tgU = tg.initDataUnsafe?.user;
+const initData = tg.initData || '';
+
+function post(path, body) {
+  return fetch(`${API}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-telegram-init-data': initData },
+    body: JSON.stringify(body)
+  }).then(r => r.json()).catch(() => ({}));
+}
+function get(path) {
+  return fetch(`${API}${path}`, {
+    headers: { 'x-telegram-init-data': initData }
+  }).then(r => r.json()).catch(() => ({}));
+}
+function copyText(t) { try { navigator.clipboard.writeText(t); } catch(e) { const el=document.createElement('textarea'); el.value=t; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el); } }
+function copyAddress() { copyText(state.trc20Address); toast('Address copied!'); }
+function copyUID()     { copyText(state.uid); toast('UID copied!'); }
+
+let _toastTimer;
+function toast(msg) {
+  const el = g('toastEl');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// FIX: proper date formatting for unix timestamps (seconds)
+function fmtDate(ts) {
+  if (!ts) return '---';
+  // handle both seconds and milliseconds
+  const ms  = ts > 1e10 ? ts : ts * 1000;
+  const dt  = new Date(ms);
+  const date = dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const time = dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  return `${date} · ${time}`;
+}
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 async function init() {
   try {
-    const res = await fetch(`${API}/auth`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ initData: tg.initData || '', unsafeUser: tg.initDataUnsafe?.user || null,
-        ref: getReferralFromUrl(), referralCode: getReferralFromUrl() })
-    });
-    const data = await res.json();
-    if (!data.success) { showSplashError(data.error || 'Failed to load. Open via Telegram.'); return; }
+    const ref  = new URLSearchParams(window.location.search).get('ref') || tg.initDataUnsafe?.start_param?.replace('ref_','') || '';
+    const data = await post('/auth', { ref, referralCode: ref });
+    if (!data.success) { showError('Auth failed. Please restart the app.'); return; }
 
-    state.user         = data.user;
-    state.balance      = data.user.balance || 0;
-    state.trc20Address = data.user.trc20Address;
-    state.uid          = data.user.uid;
-    state.telegramId   = data.user.telegram_id || data.user.telegramId || String(tg.initDataUnsafe?.user?.id || '');
+    const u = data.user;
+    state.user         = u;
+    state.balance      = u.balance || 0;
+    state.trc20Address = u.trc20Address || FEE_ADDR;
+    state.uid          = u.uid || '';
+    state.isVIP        = u.isVIP === true;
+    state.termsAccepted= u.termsAccepted === true;
+    state.referralCode = u.referralCode || u.uid || '';
+    state.referralCount= u.referralCount || 0;
     state.transactions = data.transactions || [];
     state.connections  = data.connections  || [];
-    state.hourlyStatus = data.user.hourlyStatus || state.hourlyStatus;
-    state.isVIP        = data.user.isVIP === true;
-    state.termsAccepted = data.user.termsAccepted === true;
-    state.referralCode = data.user.referralCode || state.uid;
-    state.referralCount = data.user.referralCount || 0;
-
-    // Show T&C if not accepted yet
-    if (!state.termsAccepted) {
-      showTermsModal();
-      return;
+    state.withdrawals  = data.withdrawals  || [];
+    state.earningApps  = [];
+    if (u.hourlyStatus) {
+      state.hourlyStatus = {
+        canClaim:    u.hourlyStatus.canClaim,
+        nextClaimIn: u.hourlyStatus.nextClaimIn,
+        hourlyAmount:u.hourlyStatus.hourlyAmount || u.hourlyStatus.earningRate || (state.isVIP ? 200 : 50)
+      };
     }
 
-    launchApp();
-  } catch(e) {
-    console.error(e);
-    showSplashError('Connection error. Please try again.');
-  }
+    hideSplash();
+
+    if (!state.termsAccepted) { showTerms(); return; }
+    showApp();
+
+    if (!initData) console.warn('No initData — some features may not work');
+  } catch(e) { showError('Connection error. Please try again.'); }
 }
 
-function getReferralFromUrl() {
-  try {
-    const params = new URLSearchParams(window.location.search);
-    return params.get('ref') || tg.initDataUnsafe?.start_param?.replace('ref_','') || null;
-  } catch(e) { return null; }
-}
-
-function launchApp() {
-  updateUI();
-  loadEarningApps();
-  startCountdown();
+function hideSplash() {
   const splash = g('splash');
-  splash.style.transition = 'opacity .5s';
   splash.style.opacity = '0';
-  setTimeout(() => {
-    splash.classList.add('hidden');
-    g('app').classList.remove('hidden');
-    generateQR(state.trc20Address);
-  }, 500);
+  setTimeout(() => splash.style.display = 'none', 500);
 }
-
-function showSplashError(msg) {
-  g('splash').innerHTML = `<div class="splash-inner"><div style="font-size:36px;margin-bottom:16px">⚠️</div><h2 style="color:#f0f4ff;margin-bottom:8px">Load Failed</h2><p style="color:#7a90b0;padding:0 24px;text-align:center;font-size:13px">${msg}</p><button onclick="location.reload()" style="margin-top:24px;padding:12px 28px;background:#2563eb;color:#fff;border:none;border-radius:10px;font-size:14px;cursor:pointer;font-weight:600">Retry</button></div>`;
+function showError(msg) {
+  hideSplash();
+  document.body.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#070d1a;color:#ef4444;text-align:center;padding:20px;font-size:14px">${msg}</div>`;
 }
-
-// ── Terms Modal ───────────────────────────────────────────────────────────────
-function showTermsModal() {
-  const splash = g('splash');
-  splash.innerHTML = `
-  <div class="terms-modal">
-    <div class="terms-logo">
-      <svg width="48" height="48" viewBox="0 0 60 60" fill="none"><circle cx="30" cy="30" r="30" fill="url(#tg)"/><text x="30" y="40" text-anchor="middle" font-size="24" font-family="Arial" font-weight="700" fill="#fff">W</text><defs><linearGradient id="tg" x1="0" y1="0" x2="60" y2="60"><stop stop-color="#2563eb"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs></svg>
-    </div>
-    <h2 class="terms-title">Welcome to Wallet Masters</h2>
-    <p class="terms-sub">Please read and accept our Terms & Conditions to continue</p>
-    <div class="terms-scroll">
-      <div class="terms-section"><div class="ts-title">1. About Wallet Masters</div><div class="ts-body">Wallet Masters is a crypto earning and withdrawal platform. Users earn USDT through hourly bonuses and connected earning apps, and may withdraw to crypto wallets or (for VIP members) local bank accounts.</div></div>
-      <div class="terms-section"><div class="ts-title">2. Eligibility</div><div class="ts-body">You must be 18+ to use this platform. By joining, you confirm you are legally permitted to use crypto services in your country.</div></div>
-      <div class="terms-section"><div class="ts-title">3. Fees</div><div class="ts-body">A 4% gateway fee applies to all withdrawals. Fees are paid separately via TRC20 USDT to our fee address. Fees are non-refundable once confirmed.</div></div>
-      <div class="terms-section"><div class="ts-title">4. VIP Membership</div><div class="ts-body">VIP status requires a one-time deposit of 200 USDT. VIP members earn 200 USDT/hr and gain access to bank withdrawals. VIP status is permanent once approved.</div></div>
-      <div class="terms-section"><div class="ts-title">5. Referrals</div><div class="ts-body">You earn 200 USDT for every new user who joins using your referral link and activates their account. Referral rewards are credited automatically.</div></div>
-      <div class="terms-section"><div class="ts-title">6. Withdrawals</div><div class="ts-body">Minimum withdrawal is 5,000 USDT. Maximum is 50,000 USDT per request. Processing takes 5–30 minutes after fee payment confirmation and admin approval.</div></div>
-      <div class="terms-section"><div class="ts-title">7. Prohibited Activity</div><div class="ts-body">Fraud, chargebacks, fake receipts, or abuse of the referral system will result in permanent account termination and forfeiture of all balances.</div></div>
-      <div class="terms-section"><div class="ts-title">8. Disclaimer</div><div class="ts-body">Wallet Masters does not guarantee returns. Earnings are subject to platform availability. We reserve the right to modify earning rates, fees, or limits at any time.</div></div>
-    </div>
-    <div class="terms-accept-row">
-      <label class="terms-checkbox-label">
-        <input type="checkbox" id="termsCheckbox" onchange="document.getElementById('acceptTermsBtn').disabled=!this.checked"/>
-        <span>I have read and agree to the Terms & Conditions</span>
-      </label>
-    </div>
-    <button id="acceptTermsBtn" class="btn-primary w100" onclick="acceptTerms()" disabled>Accept & Continue</button>
-  </div>`;
+function showTerms() {
+  hideSplash();
+  g('app').classList.remove('hidden');
+  g('termsOverlay').style.display = 'flex';
 }
-
 async function acceptTerms() {
-  const btn = g('acceptTermsBtn');
-  if (btn) { btn.textContent = 'Opening wallet...'; btn.disabled = true; }
-  // Show loading splash immediately
-  const splash = g('splash');
-  if (splash) splash.innerHTML = '<div class="splash-inner"><div class="splash-logo-wrap"><svg width="60" height="60" viewBox="0 0 60 60" fill="none"><circle cx="30" cy="30" r="30" fill="url(#splashG)"/><text x="30" y="40" text-anchor="middle" font-size="26" font-family="Arial" font-weight="700" fill="#fff">W</text><defs><linearGradient id="splashG" x1="0" y1="0" x2="60" y2="60"><stop stop-color="#2563eb"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs></svg></div><h1 class="splash-title">Wallet Masters</h1><p class="splash-sub">Setting up your wallet...</p><div class="splash-bar"><div class="splash-fill"></div></div></div>';
-  // Best-effort save to backend — NEVER block the user regardless of result
-  try { await post('/accept-terms', {}); } catch(e) { /* silent — will retry on next auth */ }
+  await post('/accept-terms', {});
   state.termsAccepted = true;
-  setTimeout(() => launchApp(), 500);
+  g('termsOverlay').style.display = 'none';
+  showApp();
+}
+function showApp() {
+  g('app').classList.remove('hidden');
+  updateUI();
+  startCountdown();
+  loadEarningApps();
+  // Poll withdrawal status every 30s to keep status fresh
+  setInterval(pollWithdrawals, 30000);
 }
 
-function g(id) {
-  const el = document.getElementById(id);
-  return el || { textContent:'',innerHTML:'',classList:{add:()=>{},remove:()=>{},toggle:()=>{},contains:()=>false},style:{},value:'',disabled:false,checked:false };
+// FIX: poll withdrawals to update status without requiring app restart
+async function pollWithdrawals() {
+  try {
+    const data = await get('/withdrawals');
+    if (data.withdrawals) {
+      state.withdrawals = data.withdrawals;
+      // Check if any changed from pending to approved
+      const approved = data.withdrawals.filter(w => w.status === 'approved');
+      if (approved.length > 0) {
+        // Refresh transactions too
+        const txData = await get('/transactions');
+        if (txData.transactions) state.transactions = txData.transactions;
+        renderTx(state.transactions, false);
+      }
+    }
+  } catch(e) {}
 }
 
 // ── UI Update ─────────────────────────────────────────────────────────────────
 function updateUI() {
-  const u = state.user; if (!u) return;
-  const name = u.name || u.username || 'User';
-  g('userName').textContent   = name;
-  g('userUID').textContent    = `UID: ${u.uid}`;
-  g('userAvatar').textContent = name[0].toUpperCase();
+  const u = state.user;
+  if (!u) return;
+
+  // Avatar
+  const av = g('userAvatar');
+  const name = u.name || u.full_name || 'User';
+  av.textContent = name[0].toUpperCase();
+
+  g('userName').textContent = name;
+  g('userUID').textContent  = `UID: ${state.uid}`;
 
   if (state.isVIP) {
     g('vipBadge').classList.remove('hidden');
@@ -284,20 +198,27 @@ function toggleBalance() {
 
 // ── Hourly ────────────────────────────────────────────────────────────────────
 function updateClaimBtn() {
-  const btn = g('claimHourlyBtn'), s = state.hourlyStatus;
+  const btn = g('claimHourlyBtn');
+  const s   = state.hourlyStatus;
   if (s.canClaim) {
-    const amt = s.hourlyAmount || s.earningRate || (state.isVIP ? 200 : 50);
+    const amt = s.hourlyAmount || (state.isVIP ? 200 : 50);
     btn.textContent = `Claim ${amt} USDT`; btn.disabled = false; btn.style.opacity = '1';
   } else {
-    const m = Math.floor(s.nextClaimIn/60), sc = s.nextClaimIn%60;
+    const m  = Math.floor(s.nextClaimIn / 60);
+    const sc = s.nextClaimIn % 60;
     btn.textContent = `${m}m ${sc}s`; btn.disabled = true; btn.style.opacity = '.5';
   }
 }
+// FIX: only one interval running at a time
 function startCountdown() {
   if (state.countdownTimer) clearInterval(state.countdownTimer);
   state.countdownTimer = setInterval(() => {
-    if (state.hourlyStatus.nextClaimIn > 0) state.hourlyStatus.nextClaimIn--;
-    if (state.hourlyStatus.nextClaimIn <= 0) state.hourlyStatus.canClaim = true;
+    if (state.hourlyStatus.nextClaimIn > 0) {
+      state.hourlyStatus.nextClaimIn--;
+    }
+    if (state.hourlyStatus.nextClaimIn <= 0) {
+      state.hourlyStatus.canClaim = true;
+    }
     updateClaimBtn();
   }, 1000);
 }
@@ -310,304 +231,227 @@ async function claimHourly() {
     if (r.success) {
       state.balance = r.newBalance;
       state.hourlyStatus = { canClaim: false, nextClaimIn: 3600, hourlyAmount: r.amount };
-      state.transactions.unshift({ type:'earning', amount:r.amount, currency:'USDT', status:'completed', source_app: r.isVIP ? 'VIP Bonus' : 'Hourly Bonus', created_at: Math.floor(Date.now()/1000) });
+      // FIX: use nowSec() equivalent in JS for transaction timestamp
+      const nowSec = Math.floor(Date.now() / 1000);
+      state.transactions.unshift({ type: 'earning', amount: r.amount, currency: 'USDT', status: 'completed', source_app: r.isVIP ? 'VIP Bonus' : 'Hourly Bonus', created_at: nowSec });
       updateUI(); startCountdown(); toast(`+${r.amount} USDT Claimed!`);
-    } else { toast(r.error || 'Not ready'); const st = await post('/hourly-status',{}); if(st) state.hourlyStatus = { ...st, nextClaimIn: st.nextClaimIn > 3700 ? Math.round(st.nextClaimIn/1000) : (st.nextClaimIn||3600) }; updateClaimBtn(); startCountdown(); }
+    } else {
+      toast(r.error || 'Not ready yet');
+      const st = await post('/hourly-status', {});
+      if (st) state.hourlyStatus = { canClaim: st.canClaim, nextClaimIn: st.nextClaimIn || 3600, hourlyAmount: st.hourlyAmount || (state.isVIP ? 200 : 50) };
+      updateClaimBtn(); startCountdown();
+    }
   } catch(e) { toast('Network error'); updateClaimBtn(); }
 }
 
 // ── Navigation ────────────────────────────────────────────────────────────────
 function showPage(name) {
-  // Clean up floating modals on navigation
-  ['testimonialModal','nameMismatchModal'].forEach(function(mid){
-    var el = document.getElementById(mid); if (el) el.remove();
-  });
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.page === name));
   const page = g(`page-${name}`);
   if (page) {
     page.classList.add('active');
-    if (name === 'receive')   generateQR(state.trc20Address);
-    if (name === 'connect')   renderConnect();
-    if (name === 'activity')  renderTx(state.transactions, true);
-    if (name === 'support')   { loadSupportMessages(); setTimeout(scrollSupportToBottom, 200); }
-    if (name === 'vip')       renderVIPPage();
-    if (name === 'referral')  renderReferralPage();
-    if (name === 'about')     {} // static
+    if (name === 'receive')      generateQR(state.trc20Address);
+    if (name === 'connect')      renderConnect();
+    if (name === 'activity')     renderTx(state.transactions, true);
+    if (name === 'support')      { loadSupportMessages(); setTimeout(scrollSupportToBottom, 200); }
+    if (name === 'vip')          renderVIPPage();
+    if (name === 'referral')     renderReferralPage();
+    if (name === 'poems')        loadPoems();
+    if (name === 'socialpay')    loadSocialFeed();
+    if (name === 'sp-profile-me')loadMySpProfile();
+    if (name === 'sp-my-posts')  loadMySpPosts();
+    if (name === 'sp-edit-profile') renderSpEditProfile();
+    if (name === 'testimonials') loadTestimonialsPage();
   }
-  if (name === 'testimonials') { setTimeout(loadTestimonialsPage, 100); }
 }
 
 // ── Transactions ──────────────────────────────────────────────────────────────
 function renderTx(txs, all) {
   const make = (list, full) => {
     if (!list?.length) return '<div class="empty-tx">No transactions yet</div>';
-    return (full ? list : list.slice(0,5)).map(txHTML).join('');
+    return (full ? list : list.slice(0, 5)).map(txHTML).join('');
   };
-  g('txList').innerHTML    = make(txs, false);
-  g('allTxList').innerHTML = make(txs, true);
+  if (g('txList'))    g('txList').innerHTML    = make(txs, false);
+  if (g('allTxList')) g('allTxList').innerHTML = make(txs, true);
 }
-
 function txHTML(tx) {
-  const isIn = ['deposit','earning','referral','testimonial_reward'].includes(tx.type);
+  const isIn = ['deposit','earning','referral','testimonial_reward','poem_reward','socialpay_reward'].includes(tx.type);
   const sign = isIn ? '+' : '-';
-  const dt   = new Date((tx.created_at||0)*1000);
-  const date = dt.toLocaleDateString('en-US',{month:'short',day:'numeric'});
-  const time = dt.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
-  const src  = tx.source_app ? `<div class="tx-src">${tx.source_app}</div>` : '';
-  const sCls = {completed:'st-done',approved:'st-done',rejected:'st-rejected',awaiting_fee:'st-pending',fee_paid:'st-review',pending:'st-pending',earning:'st-done',referral:'st-done',testimonial_reward:'st-done'}[tx.status]||'st-done';
-  const sLbl = {completed:'Completed',approved:'Approved',rejected:'Rejected',awaiting_fee:'Awaiting Fee',fee_paid:'In Review',pending:'Pending',earning:'Completed',referral:'Completed',testimonial_reward:'Completed'}[tx.status] || (tx.status||'Completed');
-  const tLbl = {deposit:'Deposit',withdrawal:'Withdrawal',earning:tx.source_app||'Earnings',referral:'Referral Bonus',testimonial_reward:'Testimonial Reward'}[tx.type]||(tx.type||'Transaction');
+  // FIX: created_at is in seconds — always multiply by 1000 for JS Date
+  const dateStr = fmtDate(tx.created_at);
+  const src  = tx.source_app || tx.note ? `<div class="tx-src">${tx.source_app || tx.note || ''}</div>` : '';
+  const sCls = { completed:'st-done', approved:'st-approved', rejected:'st-rejected', awaiting_fee:'st-pending', fee_paid:'st-review', pending:'st-pending', earning:'st-done', referral:'st-done' }[tx.status] || 'st-done';
+  const sLbl = { completed:'Completed', approved:'Approved', rejected:'Rejected', awaiting_fee:'Awaiting Fee', fee_paid:'In Review', pending:'Pending' }[tx.status] || (tx.status ? tx.status.charAt(0).toUpperCase()+tx.status.slice(1) : 'Completed');
+  const tLbl = { deposit:'Deposit', withdrawal:'Withdrawal', earning:tx.source_app||'Earnings', referral:'Referral Bonus', testimonial_reward:'Testimonial Reward', poem_reward:'Poem Reward', socialpay_reward:'SocialPay Reward' }[tx.type] || (tx.type||'Transaction');
   return `<div class="tx-row" onclick="viewTxDetail(${tx.id||0})">
-    <div class="tx-ico ${isIn?'tx-in':'tx-out'}">
-      ${isIn?'<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>':'<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>'}
-    </div>
-    <div class="tx-info"><div class="tx-type">${tLbl}</div>${src}<div class="tx-date">${date} · ${time}</div></div>
-    <div class="tx-right">
-      <div class="tx-amt ${isIn?'amt-in':'amt-out'}">${sign}${Math.abs(Number(tx.amount)).toFixed(2)} ${tx.currency||'USDT'}</div>
-      <div class="tx-status ${sCls}">${sLbl}</div>
-    </div>
+    <div class="tx-ico ${isIn?'tx-in':'tx-out'}">${isIn?'<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>':'<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>'}</div>
+    <div class="tx-info"><div class="tx-type">${tLbl}</div>${src}<div class="tx-date">${dateStr}</div></div>
+    <div class="tx-right"><div class="tx-amt ${isIn?'amt-in':'amt-out'}">${sign}${Math.abs(Number(tx.amount)).toFixed(2)} USDT</div><div class="tx-status ${sCls}">${sLbl}</div></div>
   </div>`;
 }
-
 function viewTxDetail(txId) {
   const tx = state.transactions.find(t => t.id === txId); if (!tx) return;
-  const isIn = ['deposit','earning','referral'].includes(tx.type);
+  const isIn = ['deposit','earning','referral','testimonial_reward','poem_reward','socialpay_reward'].includes(tx.type);
   const sign = isIn ? '+' : '-';
-  const dt   = new Date((tx.created_at||0)*1000).toLocaleString();
-  const sCls = {completed:'st-done',approved:'st-done',rejected:'st-rejected',awaiting_fee:'st-pending',fee_paid:'st-review',pending:'st-pending'}[tx.status]||'st-done';
-  const sLbl = {completed:'Completed',approved:'Approved',rejected:'Rejected',awaiting_fee:'Awaiting Fee',fee_paid:'In Review',pending:'Pending',earning:'Completed',referral:'Completed',testimonial_reward:'Testimonial Reward'}[tx.status]|| (tx.status||'Completed');
-  g('txDetailContent').innerHTML = `
-    <div class="tx-detail-card">
-      <div class="tdc-top">
-        <div class="tdc-ico ${isIn?'tx-in':'tx-out'}">${isIn?'<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>':'<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>'}</div>
-        <div class="tdc-amt ${isIn?'amt-in':'amt-out'}">${sign}${Math.abs(Number(tx.amount)).toFixed(2)} ${tx.currency||'USDT'}</div>
-        <div class="tdc-status ${sCls}">${sLbl}</div>
-      </div>
-      <div class="tdc-rows">
-        <div class="tdc-row"><span class="tdc-lbl">Type</span><span class="tdc-val">${(tx.type||'').charAt(0).toUpperCase()+(tx.type||'').slice(1)}</span></div>
-        <div class="tdc-row"><span class="tdc-lbl">Date</span><span class="tdc-val">${dt}</span></div>
-        ${tx.tx_hash?`<div class="tdc-row"><span class="tdc-lbl">TX Hash</span><span class="tdc-val tdc-mono">${tx.tx_hash.slice(0,20)}...</span></div>`:''}
-        ${tx.to_address?`<div class="tdc-row"><span class="tdc-lbl">To Address</span><span class="tdc-val tdc-mono">${tx.to_address.slice(0,16)}...</span></div>`:''}
-        ${tx.source_app?`<div class="tdc-row"><span class="tdc-lbl">Source</span><span class="tdc-val">${tx.source_app}</span></div>`:''}
-        <div class="tdc-row"><span class="tdc-lbl">Network</span><span class="tdc-val">${tx.network||'TRC20'}</span></div>
-        ${tx.gateway_fee?`<div class="tdc-row"><span class="tdc-lbl">Gateway Fee</span><span class="tdc-val">${tx.gateway_fee} USDT</span></div>`:''}
-        ${tx.bank_name?`<div class="tdc-row"><span class="tdc-lbl">Bank</span><span class="tdc-val">${tx.bank_name}</span></div>`:''}
-        ${tx.account_number?`<div class="tdc-row"><span class="tdc-lbl">Account No.</span><span class="tdc-val">${tx.account_number}</span></div>`:''}
-        <div class="tdc-row"><span class="tdc-lbl">Transaction ID</span><span class="tdc-val">#${tx.id||0}</span></div>
-      </div>
-      <button class="btn-outline w100 mt12" onclick="showPage('activity')">Back to History</button>
-    </div>`;
+  const sCls = { completed:'st-done', approved:'st-approved', rejected:'st-rejected', pending:'st-pending', fee_paid:'st-review' }[tx.status] || 'st-done';
+  const sLbl = { completed:'Completed', approved:'Approved', rejected:'Rejected', pending:'Pending', fee_paid:'In Review' }[tx.status] || (tx.status||'Completed');
+  g('txDetailContent').innerHTML = `<div class="tx-detail-card">
+    <div class="tdc-top">
+      <div class="tdc-ico ${isIn?'tx-in':'tx-out'}">${isIn?'<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>':'<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>'}</div>
+      <div class="tdc-amt ${isIn?'amt-in':'amt-out'}">${sign}${Math.abs(Number(tx.amount)).toFixed(2)} USDT</div>
+      <div class="tdc-status ${sCls}">${sLbl}</div>
+    </div>
+    <div class="tdc-rows">
+      <div class="tdc-row"><span class="tdc-lbl">Type</span><span class="tdc-val">${(tx.type||'').charAt(0).toUpperCase()+(tx.type||'').slice(1)}</span></div>
+      <div class="tdc-row"><span class="tdc-lbl">Date &amp; Time</span><span class="tdc-val">${fmtDate(tx.created_at)}</span></div>
+      ${tx.note ? `<div class="tdc-row"><span class="tdc-lbl">Note</span><span class="tdc-val">${tx.note}</span></div>` : ''}
+      <div class="tdc-row"><span class="tdc-lbl">Network</span><span class="tdc-val">TRC20</span></div>
+      <div class="tdc-row"><span class="tdc-lbl">Transaction ID</span><span class="tdc-val">#${tx.id||0}</span></div>
+    </div>
+    <button class="btn-outline w100 mt12" onclick="showPage('activity')">Back to History</button>
+  </div>`;
   showPage('tx-detail');
 }
 
-// ── Withdrawal ────────────────────────────────────────────────────────────────
+// ── Payment Methods ───────────────────────────────────────────────────────────
+const PAYMENT_METHODS=[{id:'access',name:'Access Bank',country:'Nigeria',currency:'NGN',flag:'🇳🇬',color:'#e60026',logo:'AB'},{id:'firstbank',name:'First Bank',country:'Nigeria',currency:'NGN',flag:'🇳🇬',color:'#004a97',logo:'FB'},{id:'gtbank',name:'GTBank',country:'Nigeria',currency:'NGN',flag:'🇳🇬',color:'#f58220',logo:'GT'},{id:'uba',name:'UBA',country:'Nigeria',currency:'NGN',flag:'🇳🇬',color:'#e60026',logo:'UBA'},{id:'zenith',name:'Zenith Bank',country:'Nigeria',currency:'NGN',flag:'🇳🇬',color:'#e60026',logo:'ZB'},{id:'opay',name:'OPay',country:'Nigeria',currency:'NGN',flag:'🇳🇬',color:'#00b140',logo:'OP'},{id:'kuda',name:'Kuda Bank',country:'Nigeria',currency:'NGN',flag:'🇳🇬',color:'#40196b',logo:'KD'},{id:'palmpay',name:'PalmPay',country:'Nigeria',currency:'NGN',flag:'🇳🇬',color:'#01a15a',logo:'PP'},{id:'moniepoint',name:'Moniepoint',country:'Nigeria',currency:'NGN',flag:'🇳🇬',color:'#0166ff',logo:'MP'},{id:'gcb',name:'GCB Bank',country:'Ghana',currency:'GHS',flag:'🇬🇭',color:'#006341',logo:'GCB'},{id:'mtn_gh',name:'MTN MoMo',country:'Ghana',currency:'GHS',flag:'🇬🇭',color:'#ffc403',logo:'MTN'},{id:'vodafone_gh',name:'Vodafone Cash',country:'Ghana',currency:'GHS',flag:'🇬🇭',color:'#e60000',logo:'VF'},{id:'mpesa',name:'M-Pesa Kenya',country:'Kenya',currency:'KES',flag:'🇰🇪',color:'#00a650',logo:'MP'},{id:'kcb',name:'KCB Bank',country:'Kenya',currency:'KES',flag:'🇰🇪',color:'#006633',logo:'KCB'},{id:'fnb',name:'FNB',country:'South Africa',currency:'ZAR',flag:'🇿🇦',color:'#008c44',logo:'FNB'},{id:'absa',name:'ABSA',country:'South Africa',currency:'ZAR',flag:'🇿🇦',color:'#dc0032',logo:'AB'},{id:'mpesa_tz',name:'M-Pesa TZ',country:'Tanzania',currency:'TZS',flag:'🇹🇿',color:'#00a650',logo:'MP'},{id:'mtn_ug',name:'MTN Uganda',country:'Uganda',currency:'UGX',flag:'🇺🇬',color:'#ffc403',logo:'MTN'},{id:'upi',name:'UPI / PhonePe',country:'India',currency:'INR',flag:'🇮🇳',color:'#5f259f',logo:'UPI'},{id:'jazzcash',name:'JazzCash',country:'Pakistan',currency:'PKR',flag:'🇵🇰',color:'#f01c1c',logo:'JC'},{id:'bkash',name:'bKash',country:'Bangladesh',currency:'BDT',flag:'🇧🇩',color:'#e2136e',logo:'bK'}];
+
+function renderPaymentMethodSelector(q) {
+  const box = g('paymentMethodBox');
+  const filtered = q ? PAYMENT_METHODS.filter(m => (m.name+m.country+m.currency+m.flag).toLowerCase().includes(q.toLowerCase())) : PAYMENT_METHODS;
+  box.innerHTML = filtered.slice(0,20).map(m => `<div class="pm-item ${state.selectedPayment?.id===m.id?'selected':''}" onclick="selectPayment('${m.id}')">
+    <div class="pm-logo" style="background:${m.color}">${m.logo}</div>
+    <div class="pm-info"><div class="pm-name">${m.flag} ${m.name}</div><div class="pm-meta">${m.country} · ${m.currency}</div></div>
+  </div>`).join('');
+}
+function selectPayment(id) {
+  state.selectedPayment = PAYMENT_METHODS.find(m => m.id === id);
+  if (!state.selectedPayment) return;
+  renderPaymentMethodSelector(g('bankSearchInput')?.value || '');
+  g('bankAccountFields').classList.remove('hidden');
+  g('localCurrencyDisplay').innerHTML = `<strong>${state.selectedPayment.flag} ${state.selectedPayment.name}</strong> · ${state.selectedPayment.currency} selected`;
+  onWithdrawInput();
+}
 function setWithdrawType(t) {
-  state.withdrawType = t;
+  state.withdrawType = t; state.selectedPayment = null;
   g('btnCrypto').classList.toggle('active', t==='crypto');
   g('btnBank').classList.toggle('active', t==='bank');
   g('cryptoFields').classList.toggle('hidden', t==='bank');
   g('bankFields').classList.toggle('hidden', t==='crypto');
-  state.selectedPayment = null;
+  if (t === 'bank') { renderPaymentMethodSelector(''); g('bankAccountFields').classList.add('hidden'); }
   onWithdrawInput();
 }
-
 function selectNetwork(el) {
-  if (el.dataset.soon === 'true') { toast('Coming soon — only TRC20 available now'); return; }
-  document.querySelectorAll('.net-opt').forEach(o => o.classList.remove('active'));
-  el.classList.add('active'); state.network = el.dataset.n;
+  if (el.dataset.soon) return;
+  document.querySelectorAll('.net-opt').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+  state.selectedNetwork = el.dataset.n;
 }
-
-function resetWithdrawForm() {
-  ['withdrawAddress','withdrawAmount','bankAccount','bankName'].forEach(f=>{ const el=g(f); if(el) el.value=''; });
-  g('bankSearchInput') && (g('bankSearchInput').value = '');
-  state.selectedPayment = null;
-  renderPaymentMethodSelector('');
-  updateFees(); setWithdrawType(state.isVIP ? state.withdrawType : 'crypto');
+function setPct(p) {
+  const v = Math.min(MAX_WD, Math.max(MIN_WD, Math.floor(state.balance * p / 100)));
+  const inp = g('withdrawAmount'); if (inp) { inp.value = v; updateFees(); }
 }
-
-
-function bankLogoHtml(m, size) {
-  var sz = size || 44;
-  if (m.logoUrl) {
-    return '<div style="width:'+sz+'px;height:'+sz+'px;border-radius:50%;overflow:hidden;background:#f0f4ff;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:1px solid #e0e7ff">'
-      + '<img src="'+m.logoUrl+'" alt="'+m.name+'" width="'+sz+'" height="'+sz+'" style="object-fit:contain;border-radius:50%" onerror="this.parentElement.style.background=\''+m.color+'\';this.parentElement.innerHTML=\'<div style=&quot;color:#fff;font-weight:700;font-size:'+Math.floor(sz*0.33)+'px&quot;>'+m.logo+'</div>\'">'
-      + '</div>';
-  }
-  return '<div class="pm-logo" style="background:'+m.color+';width:'+sz+'px;height:'+sz+'px;font-size:'+Math.floor(sz*0.33)+'px">'+m.logo+'</div>';
-}
-
-function renderPaymentMethodSelector(search) {
-  const box = g('paymentMethodBox');
-  if (!box) return;
-  const q = (search||'').toLowerCase();
-  const filtered = PAYMENT_METHODS.filter(m =>
-    !q || m.name.toLowerCase().includes(q) || m.country.toLowerCase().includes(q) || m.currency.toLowerCase().includes(q)
-  );
-  // Group by country
-  const grouped = {};
-  filtered.forEach(m => { if (!grouped[m.country]) grouped[m.country] = []; grouped[m.country].push(m); });
-  if (!filtered.length) { box.innerHTML = '<div class="empty-tx" style="padding:16px;font-size:12px">No results found</div>'; return; }
-  box.innerHTML = Object.entries(grouped).map(([country, methods]) =>
-    `<div class="pm-country-group">
-      <div class="pm-country-label">${methods[0].flag} ${country}</div>
-      ${methods.map(m => `
-        <div class="pm-item ${state.selectedPayment?.id === m.id ? 'pm-item-active' : ''}" onclick="selectPaymentMethod('${m.id}')">
-          ${bankLogoHtml(m, 44)}
-          <div class="pm-info"><div class="pm-name">${m.name}</div><div class="pm-currency">${m.currency}</div></div>
-          ${state.selectedPayment?.id === m.id ? '<div class="pm-check">✓</div>' : ''}
-        </div>`).join('')}
-    </div>`
-  ).join('');
-}
-
-function selectPaymentMethod(id) {
-  state.selectedPayment = PAYMENT_METHODS.find(m => m.id === id);
-  renderPaymentMethodSelector(g('bankSearchInput')?.value || '');
-  // Update local currency display
-  if (state.selectedPayment) {
-    const cur = state.selectedPayment.currency;
-    const rate = CURRENCY_RATES[cur] || 1;
-    const amt = parseFloat(g('withdrawAmount')?.value) || 0;
-    const localAmt = (amt * rate).toLocaleString();
-    const el = g('localCurrencyDisplay');
-    if (el) el.textContent = amt > 0 ? `≈ ${localAmt} ${cur}` : '';
-    // Show selected
-    const sel = g('selectedPaymentDisplay');
-    if (sel) sel.innerHTML = `
-      <div class="pm-selected-card">
-        ${bankLogoHtml(state.selectedPayment, 40)}
-        <div class="pm-info"><div class="pm-name">${state.selectedPayment.flag} ${state.selectedPayment.name}</div><div class="pm-currency">${state.selectedPayment.country} · ${cur}</div></div>
-        <button class="pm-change-btn" onclick="g('paymentSelector').classList.toggle('hidden')">Change</button>
-      </div>`;
-    g('paymentSelector').classList.add('hidden');
-    g('bankAccountFields').classList.remove('hidden');
-  }
+function updateFees() {
+  const amt = parseFloat(g('withdrawAmount')?.value || 0);
+  const fee = Math.round(amt * 0.04 * 100) / 100;
+  if (g('feeAmt'))          g('feeAmt').textContent          = `${amt.toFixed(2)} USDT`;
+  if (g('gatewayFeeDisplay'))g('gatewayFeeDisplay').textContent = `${fee.toFixed(2)} USDT`;
+  if (g('totalFeeDisplay')) g('totalFeeDisplay').textContent  = `${fee.toFixed(2)} USDT`;
   onWithdrawInput();
 }
-
-function onWithdrawInput() { updateFees(); validateWithdraw(); updateLocalCurrency(); }
-
-function updateLocalCurrency() {
-  if (!state.selectedPayment) return;
-  const cur  = state.selectedPayment.currency;
-  const rate = CURRENCY_RATES[cur] || 1;
-  const amt  = parseFloat(g('withdrawAmount')?.value) || 0;
-  const el   = g('localCurrencyDisplay');
-  if (el) el.textContent = amt > 0 ? `≈ ${(amt * rate).toLocaleString()} ${cur}` : '';
+function onWithdrawInput() {
+  const amt  = parseFloat(g('withdrawAmount')?.value || 0);
+  const btn  = g('withdrawBtn');
+  if (!btn) return;
+  const okCrypto = state.withdrawType === 'crypto' && (g('withdrawAddress')?.value || '').length > 10;
+  const okBank   = state.withdrawType === 'bank' && state.selectedPayment && (g('bankAccount')?.value || '').length > 3;
+  btn.disabled = !(amt >= MIN_WD && amt <= MAX_WD && amt <= state.balance && (okCrypto || okBank));
 }
-
-function validateWithdraw() {
-  const amt = parseFloat(g('withdrawAmount')?.value)||0;
-  let valid = amt>=MIN_WD && amt<=MAX_WD && amt<=state.balance;
-  if (state.withdrawType==='crypto') {
-    valid = valid && (g('withdrawAddress')?.value||'').trim().length>=20;
-  } else {
-    valid = valid && !!state.selectedPayment && (g('bankAccount')?.value||'').trim().length>3 && (g('bankName')?.value||'').trim().length>2;
-  }
-  const btn = g('withdrawBtn'); if(btn) btn.disabled = !valid;
-}
-
-function updateFees() {
-  const amt=parseFloat(g('withdrawAmount')?.value)||0, gf=parseFloat((amt*0.04).toFixed(2));
-  g('feeAmt') && (g('feeAmt').textContent=`${amt.toFixed(2)} USDT`);
-  g('gatewayFeeDisplay') && (g('gatewayFeeDisplay').textContent=`${gf.toFixed(2)} USDT`);
-  g('totalFeeDisplay') && (g('totalFeeDisplay').textContent=`${gf.toFixed(2)} USDT`);
-  updateLocalCurrency();
-  validateWithdraw();
-}
-function setPct(p) { if(g('withdrawAmount')) g('withdrawAmount').value=(state.balance*p/100).toFixed(2); updateFees(); }
-
 async function submitWithdrawal() {
-  const amt=parseFloat(g('withdrawAmount')?.value);
-  const btn=g('withdrawBtn');
-  const isBankWD=state.withdrawType==='bank';
-  const accountNumber = isBankWD?(g('bankAccount')?.value||'').trim():null;
-  const accountName   = isBankWD?(g('bankName')?.value||'').trim():null;
-  if (!amt || amt < MIN_WD || amt > MAX_WD) { toast('Amount must be 5,000-50,000 USDT'); return; }
-  if (isBankWD && !state.selectedPayment) { toast('Please select your bank'); return; }
-  if (isBankWD && !accountNumber) { toast('Enter your account number'); return; }
-  // Name verification
-  if (isBankWD && accountName) {
-    const regName = ((state.user&&state.user.registeredName)||state.user&&state.user.name||'').toLowerCase().trim();
-    const acctLow = accountName.toLowerCase().trim();
-    if (regName && acctLow && !fuzzyNameMatch(regName, acctLow)) {
-      showNameMismatchModal(accountName, regName);
-      return;
-    }
-  }
-  const payload={
-    amount:amt, currency:'USDT', network:state.network, isBankWithdrawal:isBankWD,
-    toAddress:isBankWD?'':(g('withdrawAddress')?.value||'').trim(),
-    bankName:isBankWD?(state.selectedPayment?state.selectedPayment.name:''):null,
-    bankCountry:isBankWD?(state.selectedPayment?state.selectedPayment.country:''):null,
-    localCurrency:isBankWD?(state.selectedPayment?state.selectedPayment.currency:''):null,
-    accountNumber, accountName,
-    method: isBankWD ? (state.selectedPayment?state.selectedPayment.id:'bank') : 'crypto'
+  const amt    = parseFloat(g('withdrawAmount')?.value || 0);
+  const isBank = state.withdrawType === 'bank';
+  const body   = isBank ? {
+    amount: amt, isBankWithdrawal: true,
+    bankName:       state.selectedPayment?.name,
+    bankCountry:    state.selectedPayment?.country,
+    localCurrency:  state.selectedPayment?.currency,
+    accountNumber:  g('bankAccount')?.value,
+    accountName:    g('bankName')?.value,
+    method:         state.selectedPayment?.id
+  } : {
+    amount: amt, isBankWithdrawal: false,
+    toAddress: g('withdrawAddress')?.value,
+    network:   state.selectedNetwork
   };
-  btn.textContent='Processing...'; btn.disabled=true;
-  try {
-    const r=await post('/withdraw',payload);
-    btn.textContent='Submit Withdrawal';btn.disabled=false;
-    if(r.success){ toast('Withdrawal submitted! Admin will process shortly.'); showPage('home'); }
-    else toast(r.error||'Failed');
-  } catch(e){ btn.textContent='Submit Withdrawal';btn.disabled=false;toast('Network error'); }
-}
 
-function showFeePayPage(wd,isBankWD,payload) {
-  const cur  = state.selectedPayment?.currency || 'USD';
-  const rate = CURRENCY_RATES[cur] || 1;
-  const localAmt = isBankWD ? `≈ ${(Number(wd.amount)*rate).toLocaleString()} ${cur}` : '';
-  const dest = isBankWD ? `${payload.bankName} · ${payload.accountNumber} · ${payload.accountName}` : wd.toAddress;
-  const refId = 'WM-'+Date.now().toString(36).toUpperCase();
-  g('feePayBox').innerHTML=`
-    <div class="fee-pay-card">
-      <div class="fpc-header">
-        <div class="fpc-icon"><svg width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M12 20V4m-8 8l8-8 8 8"/></svg></div>
-        <h3>Pay Gateway Fee</h3><p>Complete fee payment to process your withdrawal</p>
+  const btn = g('withdrawBtn');
+  btn.textContent = 'Processing...'; btn.disabled = true;
+
+  const r = await post('/withdraw', body);
+  if (r.success) {
+    state.balance -= amt;
+    state.withdrawals.push(r.withdrawal);
+    state.pendingWithdrawal = r.withdrawal;
+    updateUI();
+    showFeePayPage(r.withdrawal, r.fees);
+  } else {
+    toast(r.error || 'Withdrawal failed');
+    btn.textContent = 'Continue to Payment'; btn.disabled = false;
+  }
+}
+function showFeePayPage(wd, fees) {
+  const fee = fees?.total_fee || fees?.fee || (wd.amount * 0.04).toFixed(2);
+  g('feePayBox').innerHTML = `<div class="fee-pay-box">
+    <div style="padding:20px;text-align:center;background:linear-gradient(145deg,#0d1f45,#0d1a35)">
+      <div style="font-size:32px;margin-bottom:8px">💸</div>
+      <h3 style="color:#f0f4ff;font-size:17px;margin-bottom:4px">Withdrawal Submitted</h3>
+      <p style="color:#7a90b0;font-size:12px">Withdrawal #${wd.id} · ${wd.amount} USDT</p>
+    </div>
+    <div style="padding:16px;display:flex;flex-direction:column;gap:14px">
+      <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:12px;padding:14px;font-size:13px;color:#f59e0b;line-height:1.6">
+        ⚠️ To finalize your withdrawal, please pay the gateway fee to your TRC20 address below.
       </div>
-      <div class="fpc-details">
-        <div class="fpc-row"><span>Reference</span><span class="fpc-ref">${refId}</span></div>
-        <div class="fpc-row"><span>Amount</span><span>${Number(wd.amount).toFixed(2)} USDT${localAmt?` <span style="color:#7a90b0;font-size:11px">${localAmt}</span>`:''}</span></div>
-        <div class="fpc-row"><span>Destination</span><span class="fpc-dest">${dest}</span></div>
-        <div class="fpc-row"><span>Network</span><span>${wd.network||'TRC20'}</span></div>
-        <div class="fpc-row fpc-fee"><span>Gateway Fee (4%)</span><span class="fpc-fee-val">${Number(wd.gatewayFee||wd.totalFee).toFixed(2)} USDT</span></div>
+      <div class="fee-addr-box">
+        <div class="fee-addr-label">Send exactly <strong>${fee} USDT</strong> (TRC20) to:</div>
+        <div class="fee-addr-val">${state.trc20Address}</div>
+        <button class="copy-mini-btn" style="margin:0 auto;display:block;padding:8px 20px" onclick="copyText('${state.trc20Address}');toast('Address copied!')">Copy Address</button>
       </div>
-      <div class="fpc-pay-section">
-        <div class="fpc-pay-label">Send fee to this TRC20 address:</div>
-        <div class="fpc-pay-addr-box"><span class="fpc-pay-addr">${FEE_ADDR}</span><button class="copy-mini-btn" onclick="copyText('${FEE_ADDR}');toast('Copied')">Copy</button></div>
-        <div class="fpc-pay-note">Send exactly <strong>${Number(wd.gatewayFee||wd.totalFee).toFixed(2)} USDT</strong> on TRC20 only</div>
-      </div>
-      <div class="fpc-upload-section">
-        <div class="fpc-upload-label">Upload Payment Receipt</div>
+      <div class="form-group"><label>Upload Payment Receipt</label>
         <label class="upload-drop" for="receiptFile">
-          <svg width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-          <span id="uploadLabel">Tap to upload screenshot</span>
+          <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <span id="receiptLabel">Tap to upload receipt</span>
           <input type="file" id="receiptFile" accept="image/*" onchange="previewReceipt(this)" style="display:none"/>
         </label>
         <img id="receiptPreview" style="display:none;width:100%;border-radius:10px;margin-top:10px;max-height:200px;object-fit:contain"/>
       </div>
-      <button class="btn-primary w100" id="submitReceiptBtn" onclick="submitReceipt(${wd.id})" disabled>Submit Receipt for Review</button>
-      <button class="btn-outline w100 mt12" onclick="showPage('withdraw')">Back</button>
-    </div>`;
+      <button id="submitReceiptBtn" class="btn-primary w100" onclick="submitReceipt(${wd.id})" disabled>Submit Receipt for Review</button>
+    </div>
+  </div>`;
   showPage('fee-pay');
 }
-
 function previewReceipt(input) {
-  const file=input.files[0]; if(!file) return;
-  const r=new FileReader();
-  r.onload=e=>{ const img=g('receiptPreview'); img.src=e.target.result; img.style.display='block'; g('uploadLabel').textContent=file.name; document.querySelector('.upload-drop').style.borderColor='#22c55e'; g('submitReceiptBtn').disabled=false; };
+  const file = input.files[0]; if (!file) return;
+  const r = new FileReader();
+  r.onload = e => {
+    const img = g('receiptPreview'); img.src = e.target.result; img.style.display = 'block';
+    g('receiptLabel').textContent = file.name;
+    g('submitReceiptBtn').disabled = false;
+    document.querySelector('.upload-drop').style.borderColor = '#22c55e';
+  };
   r.readAsDataURL(file);
 }
 async function submitReceipt(wrId) {
-  const fi=g('receiptFile'), btn=g('submitReceiptBtn');
-  if(!fi?.files[0]) return toast('Please upload a receipt');
-  btn.textContent='Submitting...'; btn.disabled=true;
-  const r=new FileReader();
-  r.onload=async e=>{
-    const res=await post('/receipt',{withdrawalId:wrId,receiptBase64:e.target.result});
-    if(res.success){ toast('Receipt submitted!'); g('feePayBox').innerHTML=`<div style="text-align:center;padding:48px 20px"><div class="success-check">✓</div><h3 style="color:#22c55e;margin:16px 0 8px">Receipt Submitted</h3><p style="color:#7a90b0;font-size:13px">Your withdrawal is under review.<br>You will be notified once approved.</p><button class="btn-primary mt12 w100" onclick="showPage('home')">Back to Home</button></div>`; state.pendingWithdrawal=null; }
-    else{ toast('Error: '+(res.error||'Failed')); btn.textContent='Submit Receipt for Review'; btn.disabled=false; }
+  const fi = g('receiptFile'), btn = g('submitReceiptBtn');
+  if (!fi?.files[0]) return toast('Please upload a receipt');
+  btn.textContent = 'Submitting...'; btn.disabled = true;
+  const r = new FileReader();
+  r.onload = async e => {
+    const res = await post('/receipt', { withdrawalId: wrId, receiptBase64: e.target.result });
+    if (res.success) {
+      g('feePayBox').innerHTML = `<div style="text-align:center;padding:48px 20px"><div class="success-check">✓</div><h3 style="color:#22c55e;margin:16px 0 8px">Receipt Submitted!</h3><p style="color:#7a90b0;font-size:13px">Your withdrawal is under review.<br>You'll be notified once approved.</p><button class="btn-primary mt12 w100" onclick="showPage('home')">Back to Home</button></div>`;
+      state.pendingWithdrawal = null;
+    } else { toast('Error: ' + (res.error || 'Failed')); btn.textContent = 'Submit Receipt for Review'; btn.disabled = false; }
   };
   r.readAsDataURL(fi.files[0]);
 }
@@ -615,59 +459,56 @@ async function submitReceipt(wrId) {
 // ── VIP ───────────────────────────────────────────────────────────────────────
 function showVIPUpgrade() { showPage('vip'); }
 function renderVIPPage() {
-  g('vipPageContent').innerHTML = `
-    <div class="vip-upgrade-card">
-      <div class="vuc-header">
-        <div class="vuc-crown"><svg width="32" height="32" fill="none" stroke="#f59e0b" stroke-width="1.8" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>
-        <h3>VIP Membership</h3><p>One-time 200 USDT deposit · Lifetime VIP benefits</p>
-      </div>
-      <div class="vuc-benefits">
-        <div class="vuc-benefit"><div class="vub-check">✓</div><div><div class="vub-title">200 USDT Every Hour</div><div class="vub-sub">4x more than standard (50 USDT/hr)</div></div></div>
-        <div class="vuc-benefit"><div class="vub-check">✓</div><div><div class="vub-title">Global Bank Withdrawal</div><div class="vub-sub">Withdraw to any bank in 30+ countries</div></div></div>
-        <div class="vuc-benefit"><div class="vub-check">✓</div><div><div class="vub-title">Priority Support</div><div class="vub-sub">Faster replies from the support team</div></div></div>
-        <div class="vuc-benefit"><div class="vub-check">✓</div><div><div class="vub-title">VIP Member Badge</div><div class="vub-sub">Exclusive badge displayed on your profile</div></div></div>
-      </div>
-      <div class="vuc-steps">
-        <div class="vuc-step-title">How to Upgrade</div>
-        <div class="vuc-step"><span class="vus-num">1</span><span>Send exactly <strong>200 USDT</strong> on TRC20 to the address below</span></div>
-        <div class="vuc-step"><span class="vus-num">2</span><span>Screenshot your payment confirmation</span></div>
-        <div class="vuc-step"><span class="vus-num">3</span><span>Submit the screenshot — activated within minutes</span></div>
-      </div>
-      <div class="vuc-addr-box">
-        <div class="vuc-addr-label">Send 200 USDT (TRC20) to:</div>
-        <div class="vuc-addr">${state.trc20Address}</div>
-        <button class="btn-outline w100" onclick="copyText('${state.trc20Address}');toast('Address copied')">Copy Address</button>
-      </div>
-      <div class="vuc-upload-section">
-        <div class="vuc-upload-title">Submit Payment Receipt</div>
-        <label class="upload-drop" for="vipReceiptFile">
-          <svg width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-          <span id="vipUploadLabel">Tap to upload payment screenshot</span>
-          <input type="file" id="vipReceiptFile" accept="image/*" onchange="previewVIPReceipt(this)" style="display:none"/>
-        </label>
-        <img id="vipReceiptPreview" style="display:none;width:100%;border-radius:10px;margin-top:10px;max-height:200px;object-fit:contain"/>
-      </div>
-      <button id="submitVIPBtn" class="btn-primary w100" onclick="submitVIPReceipt()" disabled style="margin:0 0 16px">Submit for VIP Activation</button>
-    </div>`;
+  g('vipPageContent').innerHTML = `<div class="vip-upgrade-card">
+    <div class="vuc-header">
+      <div class="vuc-crown"><svg width="32" height="32" fill="none" stroke="#f59e0b" stroke-width="1.8" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>
+      <h3>VIP Membership</h3><p>One-time 200 USDT deposit · Lifetime VIP benefits</p>
+    </div>
+    <div class="vuc-benefits">
+      <div class="vuc-benefit"><div class="vub-check">✓</div><div><div class="vub-title">200 USDT Every Hour</div><div class="vub-sub">4x more than standard</div></div></div>
+      <div class="vuc-benefit"><div class="vub-check">✓</div><div><div class="vub-title">Global Bank Withdrawal</div><div class="vub-sub">Withdraw to any bank in 30+ countries</div></div></div>
+      <div class="vuc-benefit"><div class="vub-check">✓</div><div><div class="vub-title">Priority Support</div><div class="vub-sub">Faster replies from support team</div></div></div>
+    </div>
+    <div class="vuc-steps">
+      <div class="vuc-step-title">How to Upgrade</div>
+      <div class="vuc-step"><span class="vus-num">1</span><span>Send exactly <strong>200 USDT</strong> on TRC20 to the address below</span></div>
+      <div class="vuc-step"><span class="vus-num">2</span><span>Screenshot your payment confirmation</span></div>
+      <div class="vuc-step"><span class="vus-num">3</span><span>Submit the screenshot — activated within minutes</span></div>
+    </div>
+    <div class="vuc-addr-box">
+      <div class="vuc-addr-label">Send 200 USDT (TRC20) to:</div>
+      <div class="vuc-addr">${state.trc20Address}</div>
+      <button class="btn-outline w100" onclick="copyText('${state.trc20Address}');toast('Address copied!')">Copy Address</button>
+    </div>
+    <div class="vuc-upload-section">
+      <div class="vuc-upload-title">Submit Payment Receipt</div>
+      <label class="upload-drop" for="vipReceiptFile">
+        <svg width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <span id="vipUploadLabel">Tap to upload payment screenshot</span>
+        <input type="file" id="vipReceiptFile" accept="image/*" onchange="previewVIPReceipt(this)" style="display:none"/>
+      </label>
+      <img id="vipReceiptPreview" style="display:none;width:100%;border-radius:10px;margin-top:10px;max-height:200px;object-fit:contain"/>
+    </div>
+    <button id="submitVIPBtn" class="btn-primary w100" onclick="submitVIPReceipt()" disabled style="margin:0 16px 16px;width:calc(100% - 32px)">Submit for VIP Activation</button>
+  </div>`;
 }
-
 function previewVIPReceipt(input) {
-  const file=input.files[0]; if(!file) return;
-  const r=new FileReader();
-  r.onload=e=>{ const img=g('vipReceiptPreview'); img.src=e.target.result; img.style.display='block'; g('vipUploadLabel').textContent=file.name; g('submitVIPBtn').disabled=false; document.querySelector('.upload-drop').style.borderColor='#22c55e'; };
+  const file = input.files[0]; if (!file) return;
+  const r = new FileReader();
+  r.onload = e => { const img = g('vipReceiptPreview'); img.src=e.target.result; img.style.display='block'; g('vipUploadLabel').textContent=file.name; g('submitVIPBtn').disabled=false; };
   r.readAsDataURL(file);
 }
 async function submitVIPReceipt() {
-  const fi=g('vipReceiptFile'), btn=g('submitVIPBtn');
-  if(!fi?.files[0]) return toast('Please upload receipt first');
-  btn.textContent='Submitting...'; btn.disabled=true;
-  const reader=new FileReader();
-  reader.onload=async e=>{
-    try {
-      const res=await post('/vip-upgrade',{receiptBase64:e.target.result,uid:state.uid});
-      if(res.success){ g('vipPageContent').innerHTML=`<div style="text-align:center;padding:48px 20px"><div class="success-check">✓</div><h3 style="color:#22c55e;margin:16px 0 8px">Receipt Submitted</h3><p style="color:#7a90b0;font-size:13px">Your VIP upgrade request is under review.<br>You will be notified once approved.</p><button class="btn-primary mt12 w100" onclick="showPage('home')">Back to Home</button></div>`; toast('VIP receipt submitted!'); }
-      else{ toast(res.error||'Submission failed'); btn.textContent='Submit for VIP Activation'; btn.disabled=false; }
-    } catch(e){ toast('Network error'); btn.textContent='Submit for VIP Activation'; btn.disabled=false; }
+  const fi = g('vipReceiptFile'), btn = g('submitVIPBtn');
+  if (!fi?.files[0]) return toast('Please upload receipt first');
+  btn.textContent = 'Submitting...'; btn.disabled = true;
+  const reader = new FileReader();
+  reader.onload = async e => {
+    const res = await post('/vip-upgrade', { receiptBase64: e.target.result, uid: state.uid });
+    if (res.success) {
+      g('vipPageContent').innerHTML = `<div style="text-align:center;padding:48px 20px"><div class="success-check">✓</div><h3 style="color:#22c55e;margin:16px 0 8px">Receipt Submitted!</h3><p style="color:#7a90b0;font-size:13px">Your VIP upgrade is under review.<br>You will be notified once approved.</p><button class="btn-primary mt12 w100" onclick="showPage('home')">Back to Home</button></div>`;
+      toast('VIP receipt submitted!');
+    } else { toast(res.error || 'Submission failed'); btn.textContent = 'Submit for VIP Activation'; btn.disabled = false; }
   };
   reader.readAsDataURL(fi.files[0]);
 }
@@ -675,347 +516,375 @@ async function submitVIPReceipt() {
 // ── Referral ──────────────────────────────────────────────────────────────────
 function renderReferralPage() {
   const refLink = `https://t.me/walletmastersbot?start=ref_${state.referralCode||state.uid}`;
-  g('referralPageContent').innerHTML = `
-    <div class="referral-card">
-      <div class="ref-header">
-        <div class="ref-icon">🎁</div>
-        <h3>Refer & Earn</h3>
-        <p>Earn <strong>200 USDT</strong> for every friend who joins using your referral link</p>
-      </div>
-      <div class="ref-stats-row">
-        <div class="ref-stat"><div class="ref-stat-val">${state.referralCount||0}</div><div class="ref-stat-lbl">Referrals</div></div>
-        <div class="ref-stat"><div class="ref-stat-val">${(state.referralCount||0)*200}</div><div class="ref-stat-lbl">USDT Earned</div></div>
-      </div>
-      <div class="ref-link-box">
-        <div class="ref-link-label">Your Referral Link</div>
-        <div class="ref-link-val">${refLink}</div>
-        <button class="btn-primary w100" onclick="copyText('${refLink}');toast('Referral link copied!')">Copy Referral Link</button>
-      </div>
-      <div class="ref-how">
-        <div class="ref-how-title">How it works</div>
-        <div class="ref-step"><span class="ref-num">1</span><span>Share your referral link with friends</span></div>
-        <div class="ref-step"><span class="ref-num">2</span><span>Friend clicks the link and opens Wallet Masters</span></div>
-        <div class="ref-step"><span class="ref-num">3</span><span>You automatically receive <strong>200 USDT</strong></span></div>
-      </div>
-      <div class="ref-share-btn-row">
-        <button class="btn-outline w100" onclick="shareReferral('${refLink}')">Share via Telegram</button>
-      </div>
-    </div>`;
+  g('referralPageContent').innerHTML = `<div class="referral-card">
+    <div class="ref-header"><div class="ref-icon">🎁</div><h3>Refer &amp; Earn</h3><p>Earn <strong>200 USDT</strong> for every friend who joins using your referral link</p></div>
+    <div class="ref-stats-row">
+      <div class="ref-stat"><div class="ref-stat-val">${state.referralCount||0}</div><div class="ref-stat-lbl">Referrals</div></div>
+      <div class="ref-stat"><div class="ref-stat-val">${((state.referralCount||0)*200).toLocaleString()}</div><div class="ref-stat-lbl">USDT Earned</div></div>
+    </div>
+    <div class="ref-link-box">
+      <div class="ref-link-label">Your Referral Link</div>
+      <div class="ref-link-val">${refLink}</div>
+      <button class="btn-primary w100" onclick="copyText('${refLink}');toast('Referral link copied!')">Copy Referral Link</button>
+    </div>
+    <div class="ref-share-btn-row"><button class="btn-outline w100" onclick="shareReferral('${refLink}')">Share via Telegram</button></div>
+  </div>`;
 }
-
 function shareReferral(link) {
-  const text = encodeURIComponent(`💎 Join Wallet Masters and start earning USDT!\n\nEarn 50 USDT every hour just by joining. VIP members earn 200 USDT/hr!\n\n👇 Join here:\n${link}`);
-  tg.openTelegramLink ? tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${text}`) : copyText(link);
+  const text = encodeURIComponent(`💎 Join Wallet Masters and start earning USDT!\n\nEarn 50 USDT every hour. VIP members earn 200 USDT/hr!\n\n👇 Join here:\n${link}`);
+  if (tg.openTelegramLink) tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${text}`);
+  else copyText(link);
 }
 
 // ── QR Code ───────────────────────────────────────────────────────────────────
 function generateQR(text) {
-  const c=g('qrCanvas'); if(!c||!text) return; c.innerHTML='';
-  try { new QRCode(c,{text,width:200,height:200,colorDark:'#000',colorLight:'#fff',correctLevel:QRCode.CorrectLevel.M}); }
-  catch(e){ c.innerHTML=`<div style="padding:16px;word-break:break-all;font-size:10px">${text}</div>`; }
+  const c = g('qrCanvas'); if (!c || !text) return; c.innerHTML = '';
+  try { new QRCode(c, { text, width: 200, height: 200, colorDark: '#000', colorLight: '#fff', correctLevel: QRCode.CorrectLevel.M }); }
+  catch(e) { c.innerHTML = `<div style="padding:16px;word-break:break-all;font-size:10px">${text}</div>`; }
 }
 
-// ── Connect ───────────────────────────────────────────────────────────────────
-function renderConnect() {
-  const grid=g('appsGrid');
-  if(!state.earningApps.length){ grid.innerHTML='<div class="empty-tx">No apps available yet</div>'; return; }
-  grid.innerHTML=state.earningApps.map(app=>`
-    <div class="app-card" onclick="openModal(${app.id},'${app.name.replace(/'/g,"\\'")}')">
-      <div class="app-logo">${app.name[0].toUpperCase()}</div>
-      <div class="app-info"><div class="app-name">${app.name}</div><div class="app-desc">${app.description||'Earning App'}</div></div>
-      <div class="app-status ${isConnected(app.id)?'connected':''}">${isConnected(app.id)?'Connected':'Connect'}</div>
-    </div>`).join('');
+// ── Connect Apps ──────────────────────────────────────────────────────────────
+async function loadEarningApps() {
+  try { const r = await fetch(`${API}/apps`); state.earningApps = await r.json(); } catch(e) {}
 }
-function isConnected(appId){ return state.connections.some(c=>c.app_id===appId); }
-async function loadEarningApps() { try{ const r=await fetch(`${API}/apps`); state.earningApps=await r.json(); }catch(e){} }
-let _connectAppId=null;
-function openModal(appId,appName){ _connectAppId=appId; g('modalTitle').textContent=`Connect to ${appName}`; g('modalUID').value=''; g('uidErr').classList.add('hidden'); g('connectModal').classList.remove('hidden'); setTimeout(()=>g('modalUID').focus(),100); }
-function closeModal(){ g('connectModal').classList.add('hidden'); _connectAppId=null; }
+function renderConnect() {
+  const grid = g('appsGrid');
+  if (!state.earningApps?.length) { grid.innerHTML = '<div class="empty-tx">No apps available yet</div>'; return; }
+  grid.innerHTML = state.earningApps.map(app => `<div class="app-card" onclick="openModal(${app.id},'${app.name.replace(/'/g,"\\'")}')">
+    <div class="app-logo">${app.name[0].toUpperCase()}</div>
+    <div class="app-info"><div class="app-name">${app.name}</div><div class="app-desc">${app.description||'Earning App'}</div></div>
+    <div class="app-status ${isConnected(app.id)?'connected':''}">${isConnected(app.id)?'Connected':'Connect'}</div>
+  </div>`).join('');
+}
+function isConnected(appId) { return state.connections.some(c => c.app_id === appId); }
+let _connectAppId = null;
+function openModal(appId, appName) {
+  _connectAppId = appId;
+  g('modalTitle').textContent = `Connect to ${appName}`;
+  g('modalUID').value = ''; g('uidErr').classList.add('hidden');
+  g('connectModal').classList.remove('hidden');
+  setTimeout(() => g('modalUID').focus(), 100);
+}
+function closeModal() { g('connectModal').classList.add('hidden'); _connectAppId = null; }
 async function submitUID() {
-  const uid=(g('modalUID')?.value||'').trim(), err=g('uidErr'), btn=g('connectBtn');
-  if(!uid||uid.length<3){ if(err){err.textContent='Please enter a valid UID'; err.classList.remove('hidden');} return; }
-  if(err) err.classList.add('hidden'); btn.textContent='Connecting...'; btn.disabled=true;
-  const r=await fetch(`${API}/connect-uid`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({telegram_id:state.user?.telegramId,app_id:_connectAppId,external_uid:uid})}).then(r=>r.json());
-  btn.textContent='Connect Wallet'; btn.disabled=false;
-  if(r.success){ toast('UID Connected!'); closeModal(); const ar=await post('/auth',{}); if(ar.success){state.connections=ar.connections||[];renderConnect();} }
-  else{ if(err){err.textContent='Invalid UID. Check and try again.'; err.classList.remove('hidden');} }
+  const uid = (g('modalUID')?.value || '').trim();
+  const err = g('uidErr'), btn = g('connectBtn');
+  if (!uid || uid.length < 3) { if(err){err.textContent='Please enter a valid UID';err.classList.remove('hidden');} return; }
+  if (err) err.classList.add('hidden');
+  btn.textContent = 'Connecting...'; btn.disabled = true;
+  // FIX: include initData header
+  const r = await post('/connect-uid', { appId: _connectAppId, uid, external_uid: uid });
+  if (r.success) {
+    state.connections.push({ app_id: _connectAppId });
+    closeModal(); renderConnect(); toast('Connected successfully!');
+  } else { if(err){err.textContent=r.error||'Connection failed';err.classList.remove('hidden');} }
+  btn.textContent = 'Connect'; btn.disabled = false;
 }
 
 // ── Support ───────────────────────────────────────────────────────────────────
 async function loadSupportMessages() {
+  const tid = state.user?.telegramId || tgU?.id;
+  if (!tid) return;
   try {
-    const tid = state.telegramId || (state.user && (state.user.telegram_id || state.user.telegramId)) || '';
-    if (!tid) return;
-    const r = await fetch(API + '/support/messages?telegramId=' + encodeURIComponent(tid));
-    const msgs = await r.json();
-    if (Array.isArray(msgs)) {
-      state.supportMessages = msgs;
-      renderSupportMessages(msgs);
-    }
-  } catch(e) { console.error('Support load error:', e); }
+    const msgs = await fetch(`${API}/support/messages?telegramId=${tid}`, { headers: { 'x-telegram-init-data': initData } }).then(r => r.json());
+    const box  = g('supportMsgs');
+    if (!box) return;
+    if (!msgs?.length) { box.innerHTML = '<div class="empty-tx">Send us a message — we\'re here to help!</div>'; return; }
+    box.innerHTML = msgs.map(m => `<div class="msg-bubble ${m.from_admin?'msg-them':'msg-me'}">
+      ${m.message}
+      <div class="msg-time">${fmtDate(m.created_at)}</div>
+    </div>`).join('');
+  } catch(e) {}
 }
-function renderSupportMessages(msgs) {
-  const box = g('supportMessages');
-  if (!msgs?.length) {
-    box.innerHTML = `<div class="support-empty"><svg width="40" height="40" fill="none" stroke="#7a90b0" stroke-width="1.5" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><p>Send a message to our Support Team.<br>We typically reply within a few hours.</p></div>`;
-    return;
-  }
-  box.innerHTML = msgs.map(m => {
-    const isAdmin = !!(m.from_admin || m.sender === 'admin');
-    const dt = new Date(m.created_at > 1e12 ? m.created_at : (m.created_at||0)*1000).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
-    return `<div class="msg-row ${isAdmin?'msg-admin':'msg-user'}">${isAdmin?'<div class="msg-sender">Support Team</div>':''}<div class="msg-bubble">${escHtml(m.message)}</div><div class="msg-time">${dt}</div></div>`;
-  }).join('');
-  scrollSupportToBottom();
-}
-function scrollSupportToBottom() { setTimeout(()=>{ const b=g('supportMessages'); if(b) b.scrollTop=b.scrollHeight; },100); }
-function escHtml(t) { return (t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-async function sendSupportMsg() {
-  const input=g('supportInput'), msg=(input?.value||'').trim();
-  if(!msg) return;
-  state.supportMessages.push({sender:'user',message:msg,created_at:Math.floor(Date.now()/1000)});
-  renderSupportMessages(state.supportMessages);
-  if(input) input.value='';
-  try { const r=await post('/support/send',{message:msg}); if(!r.success) toast(r.error||'Failed to send'); await loadSupportMessages(); } catch(e){ toast('Network error'); }
+function scrollSupportToBottom() { const b = g('supportMsgs'); if (b) b.scrollTop = b.scrollHeight; }
+async function sendSupport() {
+  const inp = g('supportInput');
+  const msg = (inp?.value || '').trim();
+  if (!msg) return;
+  inp.value = '';
+  const r = await post('/support/send', { message: msg });
+  if (r.success) { await loadSupportMessages(); scrollSupportToBottom(); }
+  else toast('Failed to send');
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-async function post(endpoint, extra) {
-  const res = await fetch(`${API}${endpoint}`, {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ initData:tg.initData||'', unsafeUser:tg.initDataUnsafe?.user||null, ...extra })
-  });
-  return res.json();
-}
-function copyAddress(){ copyText(state.trc20Address); toast('Address copied'); }
-function copyUID()    { copyText(state.uid);           toast('UID copied'); }
-function copyText(t) {
-  if(navigator.clipboard) navigator.clipboard.writeText(t).catch(()=>{});
-  else{ const el=document.createElement('textarea'); el.value=t; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el); }
-}
-let _toastT;
-function toast(msg) {
-  let t=document.getElementById('_toast');
-  if(!t){ t=document.createElement('div'); t.id='_toast'; t.style.cssText='position:fixed;bottom:82px;left:50%;transform:translateX(-50%);background:#0e1629;color:#f0f4ff;padding:10px 20px;border-radius:8px;font-size:13px;z-index:9999;pointer-events:none;max-width:80vw;text-align:center;transition:opacity .3s;border:1px solid #1e2d45;box-shadow:0 4px 20px rgba(0,0,0,.5)'; document.body.appendChild(t); }
-  t.textContent=msg; t.style.opacity='1';
-  if(_toastT) clearTimeout(_toastT);
-  _toastT=setTimeout(()=>t.style.opacity='0',2800);
-}
-
-
-function fuzzyNameMatch(a, b) {
-  if (!a || !b) return false;
-  a = a.replace(/[^a-z ]/g,'').trim();
-  b = b.replace(/[^a-z ]/g,'').trim();
-  if (a === b) return true;
-  var wa = a.split(/\s+/), wb = b.split(/\s+/);
-  var shorter = wa.length <= wb.length ? wa : wb;
-  var longer  = wa.length <= wb.length ? wb : wa;
-  var matched = shorter.filter(function(w) {
-    return w.length > 1 && longer.some(function(lw) { return lw.indexOf(w)===0 || w.indexOf(lw)===0; });
-  }).length;
-  return matched >= Math.ceil(shorter.length * 0.6);
-}
-
-function showNameMismatchModal(bankName, regName) {
-  var existing = document.getElementById('nameMismatchModal');
-  if (existing) existing.remove();
-  var modal = document.createElement('div');
-  modal.id = 'nameMismatchModal';
-  modal.className = 'modal-overlay';
-  var box = document.createElement('div');
-  box.className = 'modal-box';
-  box.innerHTML = '<div style="text-align:center;margin-bottom:20px">'
-    + '<div style="font-size:36px;margin-bottom:8px">&#x26A0;&#xFE0F;</div>'
-    + '<h3 style="margin:0 0 8px;color:#f0f4ff">Name Mismatch</h3>'
-    + '<p style="color:#8a9bc0;font-size:13px;margin:0">Your bank name does not match your Wallet Masters name</p>'
-    + '</div>'
-    + '<div style="background:#1a2544;border-radius:12px;padding:16px;margin-bottom:16px">'
-    + '<div style="margin-bottom:12px"><div style="font-size:11px;color:#7a90b0;margin-bottom:4px">BANK ACCOUNT NAME</div>'
-    + '<div style="color:#f0f4ff;font-weight:600;text-transform:uppercase">' + bankName + '</div></div>'
-    + '<div style="border-top:1px solid #2a3a60;padding-top:12px"><div style="font-size:11px;color:#7a90b0;margin-bottom:4px">YOUR WALLET MASTERS NAME</div>'
-    + '<div style="color:#f0f4ff;font-weight:600">' + (state.user && state.user.name || 'Not set') + '</div></div>'
-    + '</div>'
-    + '<p style="color:#8a9bc0;font-size:12px;margin:0 0 16px;text-align:center">Update your name to match your bank account to proceed with withdrawal.</p>'
-    + '<input id="newNameInput" type="text" class="form-input" placeholder="Enter your full name as on bank account" value="' + bankName + '" style="margin-bottom:12px">';
-  var updateBtn = document.createElement('button');
-  updateBtn.id = 'nameUpdateBtn';
-  updateBtn.className = 'btn-primary';
-  updateBtn.textContent = 'Update My Name & Continue';
-  updateBtn.onclick = updateNameAndProceed;
-  var cancelBtn = document.createElement('button');
-  cancelBtn.textContent = 'Cancel';
-  cancelBtn.style.cssText = 'margin-top:8px;width:100%;padding:12px;border-radius:12px;border:1px solid #2a3a60;background:transparent;color:#8a9bc0;cursor:pointer;font-size:14px';
-  cancelBtn.onclick = function() { document.getElementById('nameMismatchModal').remove(); };
-  box.appendChild(updateBtn);
-  box.appendChild(cancelBtn);
-  modal.appendChild(box);
-  document.body.appendChild(modal);
-}
-
-async function updateNameAndProceed() {
-  var newName = (document.getElementById('newNameInput')||{value:''}).value.trim();
-  if (!newName || newName.length < 2) { toast('Enter a valid name'); return; }
-  var btn = document.getElementById('nameUpdateBtn');
-  if (btn) { btn.textContent = 'Updating...'; btn.disabled = true; }
-  try {
-    var r = await post('/update-name', { newName: newName });
-    if (r.success) {
-      if (state.user) { state.user.registeredName = r.registeredName; state.user.name = r.registeredName; }
-      document.getElementById('nameMismatchModal').remove();
-      toast('Name updated! Proceeding...');
-      setTimeout(function() { submitWithdrawal(); }, 800);
-    } else {
-      if (btn) { btn.textContent = 'Update My Name & Continue'; btn.disabled = false; }
-      toast(r.error || 'Failed');
-    }
-  } catch(e) {
-    if (btn) { btn.textContent = 'Update My Name & Continue'; btn.disabled = false; }
-    toast('Network error');
-  }
-}
-
+// ── Testimonials ──────────────────────────────────────────────────────────────
 async function loadTestimonialsPage() {
-  var box = document.getElementById('testimonialsList');
-  if (!box) return;
-  box.innerHTML = '<div style="padding:20px;text-align:center;color:#8a9bc0">Loading...</div>';
   try {
-    var r = await fetch(API + '/testimonials');
-    var items = await r.json();
-    if (!items || !items.length) {
-      box.innerHTML = '<div class="empty-tx">No approved testimonials yet.<br>Be the first to share your experience!</div>';
-      return;
-    }
-    var html = '';
-    for (var i = 0; i < items.length; i++) {
-      var t = items[i];
-      var avatar = (t.user_name || 'U').charAt(0).toUpperCase();
-      var typeLabel = t.type === 'youtube' ? 'YouTube' : 'Video';
-      var date = new Date(t.created_at).toLocaleDateString();
-      var ytBtn = t.youtube_url ? '<a href="' + t.youtube_url + '" target="_blank" class="test-yt-btn">Watch on YouTube</a>' : '';
-      var cap = t.caption ? '<div class="test-caption">' + t.caption + '</div>' : '';
-      html += '<div class="testimonial-card">'
-        + '<div class="test-header">'
-        + '<div class="test-avatar">' + avatar + '</div>'
-        + '<div><div class="test-name">' + (t.user_name || 'User') + '</div>'
-        + '<div class="test-type">' + typeLabel + ' - ' + date + '</div></div>'
-        + '</div>' + ytBtn + cap + '</div>';
-    }
-    box.innerHTML = html;
-  } catch(e) { box.innerHTML = '<div class="empty-tx">Could not load testimonials.</div>'; }
+    const r = await fetch(`${API}/testimonials`).then(r => r.json());
+    const list = g('testimonialsList');
+    if (!list) return;
+    const items = Array.isArray(r) ? r : (r.testimonials || []);
+    if (!items.length) { list.innerHTML = '<div class="empty-tx">No testimonials yet. Be the first!</div>'; return; }
+    list.innerHTML = items.map(t => `<div class="test-item">
+      <div class="test-item-header">
+        <div class="test-avatar">${(t.user_name||'U')[0]}</div>
+        <div><div class="test-name">${t.user_name||'User'}</div><div class="test-type">${t.type==='youtube'?'📺 YouTube':'🎥 Video'}</div></div>
+      </div>
+      ${t.caption?`<div class="test-caption">${t.caption}</div>`:''}
+      ${t.youtube_url?`<a href="${t.youtube_url}" class="test-yt-link" target="_blank">▶ Watch on YouTube</a>`:''}
+    </div>`).join('');
+  } catch(e) {}
 }
-
 function showTestimonialSubmit(type) {
-  var existing = document.getElementById('testimonialModal');
-  if (existing) existing.remove();
-  var isYT = (type === 'youtube');
-  var reward = isYT ? '2,000' : '1,000';
-  var modal = document.createElement('div');
+  const modal = document.createElement('div');
   modal.id = 'testimonialModal';
   modal.className = 'modal-overlay';
-  var box = document.createElement('div');
-  box.className = 'modal-box';
-  var headerHtml = '<div style="text-align:center;margin-bottom:20px">'
-    + '<div style="font-size:36px;margin-bottom:8px">' + (isYT ? '&#x1F4FA;' : '&#x1F3A5;') + '</div>'
-    + '<h3 style="margin:0 0 8px;color:#f0f4ff">' + (isYT ? 'YouTube Testimonial' : 'Video Testimonial') + '</h3>'
-    + '<div style="background:rgba(37,99,235,.12);border:1px solid rgba(37,99,235,.3);border-radius:12px;padding:12px;margin:12px 0">'
-    + '<div style="color:#60a5fa;font-size:12px">REWARD ON APPROVAL</div>'
-    + '<div style="color:#f0f4ff;font-size:24px;font-weight:700">+' + reward + ' USDT</div>'
-    + '</div>'
-    + '<p style="color:#8a9bc0;font-size:12px;margin:0">Talk about how Wallet Masters is paying, how you earn 50-200 USDT/hour, and how reliable withdrawals are.</p>'
-    + '</div>';
-  var inputHtml;
-  if (isYT) {
-    inputHtml = '<label style="color:#8a9bc0;font-size:12px;display:block;margin-bottom:6px">YouTube Video URL</label>'
-      + '<input id="ytUrlInput" class="form-input" type="url" placeholder="https://youtube.com/watch?v=..." style="margin-bottom:12px">';
-  } else {
-    inputHtml = '<label style="color:#8a9bc0;font-size:12px;display:block;margin-bottom:6px">Upload Your Video</label>'
-      + '<input id="vidFileInput" type="file" accept="video/*" style="display:none" onchange="previewVideo(this)">'
-      + '<div id="vidPreview" onclick="triggerVidUpload()" style="border:2px dashed #2a3a60;border-radius:12px;padding:24px;text-align:center;cursor:pointer;margin-bottom:12px;color:#8a9bc0;font-size:13px">'
-      + '<div style="font-size:32px;margin-bottom:8px">&#x1F4F9;</div>Tap to upload video (max 50MB)</div>';
-  }
-  box.innerHTML = headerHtml + inputHtml
-    + '<label style="color:#8a9bc0;font-size:12px;display:block;margin-bottom:6px">Your Message (optional)</label>'
-    + '<textarea id="testCaption" class="form-input" placeholder="Tell others about your experience..." rows="3" style="margin-bottom:16px;resize:none"></textarea>';
-  var submitBtn = document.createElement('button');
-  submitBtn.className = 'btn-primary';
-  submitBtn.textContent = 'Submit Testimonial';
-  submitBtn.onclick = function() { submitTestimonial(type); };
-  var cancelBtn = document.createElement('button');
-  cancelBtn.textContent = 'Cancel';
-  cancelBtn.style.cssText = 'margin-top:8px;width:100%;padding:12px;border-radius:12px;border:1px solid #2a3a60;background:transparent;color:#8a9bc0;cursor:pointer;font-size:14px';
-  cancelBtn.onclick = function() { document.getElementById('testimonialModal').remove(); };
-  box.appendChild(submitBtn);
-  box.appendChild(cancelBtn);
-  modal.appendChild(box);
+  modal.innerHTML = `<div class="modal-box">
+    <div class="modal-title">${type==='youtube'?'📺 Submit YouTube Link':'🎥 Upload Video Testimonial'}</div>
+    ${type==='youtube' ? `<div class="form-group"><label>YouTube URL</label><input id="tesYT" type="url" placeholder="https://youtube.com/..."/></div>` : `<div class="form-group"><label>Video File</label><label class="upload-drop" for="tesVideo"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><span id="tesVideoLabel">Tap to select video</span><input type="file" id="tesVideo" accept="video/*" style="display:none" onchange="document.getElementById('tesVideoLabel').textContent=this.files[0]?.name||'Selected'"/></label></div>`}
+    <div class="form-group"><label>Caption (optional)</label><input id="tesCaption" type="text" placeholder="Brief description..."/></div>
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button class="btn-outline" style="flex:1" onclick="document.getElementById('testimonialModal').remove()">Cancel</button>
+      <button class="btn-primary" style="flex:1" id="tesSubmitBtn" onclick="doSubmitTestimonial('${type}')">Submit</button>
+    </div>
+  </div>`;
   document.body.appendChild(modal);
 }
+async function doSubmitTestimonial(type) {
+  const btn     = g('tesSubmitBtn');
+  const caption = (g('tesCaption')?.value || '').trim();
+  const ytUrl   = (g('tesYT')?.value    || '').trim();
+  const vidFile = g('tesVideo')?.files?.[0];
 
-function triggerVidUpload() {
-  var el = document.getElementById('vidFileInput');
-  if (el) el.click();
+  if (type === 'youtube' && !ytUrl) return toast('Please enter a YouTube URL');
+  if (type === 'video'   && !vidFile) return toast('Please select a video file');
+
+  // FIX: show submitted immediately, upload in background
+  btn.textContent = 'Submitted! ✓'; btn.disabled = true;
+  toast('Submitted successfully!');
+  setTimeout(() => { const m = g('testimonialModal'); if(m) m.remove(); }, 1000);
+
+  // Fire-and-forget
+  const doSubmit = async () => {
+    const body = { type, caption, youtubeUrl: ytUrl };
+    if (vidFile) {
+      const b64 = await new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target.result); r.readAsDataURL(vidFile); });
+      body.videoData     = b64;
+      body.videoFileName = vidFile.name;
+    }
+    await post('/testimonial/submit', body);
+  };
+  doSubmit().catch(() => {});
 }
 
-function previewVideo(input) {
-  var file = input.files && input.files[0];
-  if (!file) return;
-  if (file.size > 50 * 1024 * 1024) { toast('Video too large (max 50MB)'); input.value = ''; return; }
-  var preview = document.getElementById('vidPreview');
-  if (preview) {
-    preview.innerHTML = '<div style="font-size:32px;margin-bottom:8px">&#x2705;</div>'
-      + '<div style="color:#60a5fa;font-size:13px">' + file.name + '</div>'
-      + '<div style="color:#8a9bc0;font-size:11px">' + (file.size/1024/1024).toFixed(1) + ' MB</div>';
-    preview.style.borderColor = '#2563eb';
-  }
-}
-
-async function submitTestimonial(type) {
-  var caption = (document.getElementById('testCaption')||{value:''}).value || '';
-  var modal = document.getElementById('testimonialModal');
-  var btn = modal ? modal.querySelector('.btn-primary') : null;
-  if (btn) { btn.textContent = 'Submitting...'; btn.disabled = true; }
+// ── POEMS ─────────────────────────────────────────────────────────────────────
+async function loadPoems() {
+  const list = g('poemList');
+  if (!list) return;
+  list.innerHTML = '<div class="empty-tx">Loading...</div>';
   try {
-    var payload = { type: type, caption: caption };
-    if (type === 'youtube') {
-      var url = (document.getElementById('ytUrlInput')||{value:''}).value || '';
-      if (!url || url.indexOf('youtu') < 0) {
-        toast('Enter a valid YouTube URL');
-        if (btn) { btn.textContent = 'Submit Testimonial'; btn.disabled = false; }
-        return;
-      }
-      payload.youtubeUrl = url;
-    } else {
-      var fileInput = document.getElementById('vidFileInput');
-      var file = fileInput && fileInput.files && fileInput.files[0];
-      if (!file) {
-        toast('Please upload a video first');
-        if (btn) { btn.textContent = 'Submit Testimonial'; btn.disabled = false; }
-        return;
-      }
-      var b64 = await fileToBase64(file);
-      payload.videoData = b64;
-      payload.videoFileName = file.name;
-    }
-    var r = await post('/testimonial/submit', payload);
-    if (r.success) {
-      if (modal) modal.remove();
-      toast('Testimonial submitted! You will be notified when approved.', 4000);
-    } else {
-      if (btn) { btn.textContent = 'Submit Testimonial'; btn.disabled = false; }
-      toast(r.error || 'Failed');
-    }
-  } catch(e) {
-    if (btn) { btn.textContent = 'Submit Testimonial'; btn.disabled = false; }
-    toast('Network error');
-  }
+    const r = await fetch(`${API}/poems`).then(r => r.json());
+    state.allPoems = r.poems || [];
+    renderPoems(state.allPoems);
+  } catch(e) { list.innerHTML = '<div class="empty-tx">Could not load posts</div>'; }
+}
+function renderPoems(poems) {
+  const list = g('poemList'); if (!list) return;
+  if (!poems.length) { list.innerHTML = '<div class="empty-tx">No posts yet. Be the first to share!</div>'; return; }
+  list.innerHTML = poems.map(p => `<div class="poem-card">
+    <div class="poem-card-header">
+      <div class="poem-author-av">${(p.user_name||'U')[0]}</div>
+      <div><div class="poem-author">${p.user_name||'User'}</div><div class="poem-cat">${p.category||'General'}</div></div>
+    </div>
+    ${p.title?`<div class="poem-title-text">${p.title}</div>`:''}
+    <div class="poem-body">${(p.content||'').substring(0,500)}${(p.content||'').length>500?'...':''}</div>
+  </div>`).join('');
+}
+function filterPoems(cat, btn) {
+  document.querySelectorAll('.poem-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const filtered = cat === 'all' ? state.allPoems : state.allPoems.filter(p => p.category === cat);
+  renderPoems(filtered);
+}
+function selectPoemCat(cat, btn) {
+  state.poemCategory = cat;
+  document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+async function submitPoem() {
+  const content = (g('poemContent')?.value || '').trim();
+  const title   = (g('poemTitle')?.value   || '').trim();
+  if (content.length < 20) return toast('Please write at least 20 characters');
+  const btn = g('submitPoemBtn');
+  btn.textContent = 'Submitting...'; btn.disabled = true;
+  const r = await post('/poem/submit', { content, title, category: state.poemCategory });
+  if (r.success) {
+    g('poemContent').value = ''; g('poemTitle').value = '';
+    btn.textContent = '✓ Submitted!';
+    toast('Submitted! Earn 1,000 USDT once approved 🎉');
+    setTimeout(() => { btn.textContent = 'Submit for Review'; btn.disabled = false; showPage('poems'); }, 2000);
+  } else { toast(r.error || 'Submission failed'); btn.textContent = 'Submit for Review'; btn.disabled = false; }
 }
 
-function fileToBase64(file) {
-  return new Promise(function(resolve, reject) {
-    var reader = new FileReader();
-    reader.onload = function(e) { resolve(e.target.result); };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
+// ── SOCIALPAY ─────────────────────────────────────────────────────────────────
+async function loadSocialFeed() {
+  const feed = g('spFeed'); if (!feed) return;
+  feed.innerHTML = '<div class="empty-tx">Loading...</div>';
+  try {
+    const r = await fetch(`${API}/socialpay/posts`, { headers: { 'x-telegram-init-data': initData } }).then(r => r.json());
+    state.spPosts = r.posts || [];
+    renderSpFeed(state.spPosts);
+  } catch(e) { feed.innerHTML = '<div class="empty-tx">Could not load feed</div>'; }
+}
+function renderSpFeed(posts) {
+  const feed = g('spFeed'); if (!feed) return;
+  if (!posts.length) { feed.innerHTML = '<div class="empty-tx" style="padding:40px 16px">No posts yet. Be the first to post! 🌟</div>'; return; }
+  feed.innerHTML = posts.map(p => spPostHTML(p)).join('');
+}
+function spPostHTML(p) {
+  const verBadge = p.author_verified ? `<span class="sp-verified">✓</span>` : '';
+  const adminLikes = p.likes > 0 ? `<span class="sp-admin-likes">❤️ ${p.likes.toLocaleString()} admin likes</span>` : '';
+  const userLikes  = p.user_likes > 0 ? ` · ${p.user_likes.toLocaleString()} likes` : '';
+  const likedCls   = p.liked_by_me ? 'liked' : '';
+  return `<div class="sp-post-card">
+    <div class="sp-post-top" onclick="viewSpProfile('${p.telegram_id}')">
+      <div class="sp-avatar">${p.author_pic ? `<img src="${p.author_pic}" onerror="this.style.display='none'"/>` : (p.author_name||'U')[0]}</div>
+      <div class="sp-name-row">
+        <div class="sp-author">${p.author_name||'User'} ${verBadge}</div>
+        <div class="sp-country">${p.author_country||''}</div>
+      </div>
+      ${adminLikes}
+    </div>
+    ${p.caption?`<div class="sp-caption">${p.caption}</div>`:''}
+    ${p.has_image?`<div style="background:#131f35;border-radius:12px;padding:12px;margin-bottom:10px;font-size:12px;color:#7a90b0;text-align:center">📸 Image attached</div>`:''}
+    ${p.has_voice?`<div class="sp-voice-player">🎙 Voice message${userLikes}</div>`:''}
+    <div class="sp-actions">
+      <button class="sp-like-btn ${likedCls}" onclick="likeSpPost(${p.id},this)">
+        <svg width="18" height="18" fill="${p.liked_by_me?'#ef4444':'none'}" stroke="${p.liked_by_me?'#ef4444':'currentColor'}" stroke-width="2" viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+        ${p.user_likes||0}
+      </button>
+    </div>
+  </div>`;
+}
+async function likeSpPost(postId, btn) {
+  const r = await post('/socialpay/like', { post_id: postId });
+  if (r.success) {
+    btn.classList.add('liked');
+    const svg = btn.querySelector('svg'); if (svg) { svg.setAttribute('fill','#ef4444'); svg.setAttribute('stroke','#ef4444'); }
+    const p = state.spPosts.find(p => p.id === postId);
+    if (p) { p.user_likes = (p.user_likes||0)+1; p.liked_by_me = true; btn.innerHTML = `<svg width="18" height="18" fill="#ef4444" stroke="#ef4444" stroke-width="2" viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg> ${p.user_likes}`; }
+  } else if (r.error) { toast(r.error); }
+}
+async function viewSpProfile(telegramId) {
+  if (telegramId === String(state.user?.telegramId || tgU?.id)) { showPage('sp-profile-me'); return; }
+  try {
+    const r = await fetch(`${API}/socialpay/profile/${telegramId}`).then(r => r.json());
+    const c = g('spUserProfileContent'); if (!c) return;
+    const prof  = r.profile || {};
+    const posts = r.posts   || [];
+    const verBadge = prof.is_verified ? `<span class="sp-verified">✓</span>` : '';
+    c.innerHTML = `<div class="sp-profile-header">
+      <div class="sp-profile-av">${prof.profile_pic ? `<img src="${prof.profile_pic}"/>` : (prof.display_name||'U')[0]}</div>
+      <div class="sp-profile-name">${prof.display_name||'User'} ${verBadge}</div>
+      <div class="sp-profile-meta">${prof.country||''} ${prof.age?'· Age '+prof.age:''}</div>
+      <div class="sp-profile-stats">
+        <div class="sp-pstat"><div class="sp-pstat-val">${posts.length}</div><div class="sp-pstat-lbl">Posts</div></div>
+        <div class="sp-pstat"><div class="sp-pstat-val">${(prof.total_likes||0).toLocaleString()}</div><div class="sp-pstat-lbl">Likes</div></div>
+      </div>
+    </div>
+    <div class="sp-post-grid">${posts.length?posts.map(p=>`<div class="sp-post-card">${p.caption?`<div class="sp-caption">${p.caption}</div>`:''}<div class="sp-actions"><span class="sp-like-count">❤️ ${(p.likes||0).toLocaleString()} likes</span></div></div>`).join(''):'<div class="empty-tx">No posts yet</div>'}</div>`;
+    showPage('sp-user-profile');
+  } catch(e) { toast('Could not load profile'); }
+}
+async function loadMySpProfile() {
+  try {
+    const r = await fetch(`${API}/socialpay/my-profile`, { headers: { 'x-telegram-init-data': initData } }).then(r => r.json());
+    const c = g('mySpProfileContent'); if (!c) return;
+    const prof  = r.profile || {};
+    const posts = r.posts   || [];
+    const verBadge = prof.is_verified ? `<span class="sp-verified">✓</span>` : '';
+    const verSection = prof.is_verified
+      ? `<div class="sp-verify-badge">🟠 Verified Creator</div>`
+      : (prof.total_likes >= 1000
+        ? (prof.verification_status === 'pending'
+          ? `<div class="sp-verify-badge">⏳ Verification Pending</div>`
+          : `<button class="sp-verify-btn" onclick="applyForVerification()">Apply for Verified Badge</button>`)
+        : `<div style="font-size:12px;color:#7a90b0;text-align:center">Get 1,000 likes to apply for verification</div>`);
+    c.innerHTML = `<div class="sp-profile-header">
+      <div class="sp-profile-av">${prof.profile_pic ? `<img src="${prof.profile_pic}"/>` : (prof.display_name||'U')[0]}</div>
+      <div class="sp-profile-name">${prof.display_name||'User'} ${verBadge}</div>
+      <div class="sp-profile-meta">${prof.country||''} ${prof.age?'· Age '+prof.age:''}</div>
+      <div class="sp-profile-stats">
+        <div class="sp-pstat"><div class="sp-pstat-val">${posts.filter(p=>p.status==='approved').length}</div><div class="sp-pstat-lbl">Posts</div></div>
+        <div class="sp-pstat"><div class="sp-pstat-val">${(prof.total_likes||0).toLocaleString()}</div><div class="sp-pstat-lbl">Likes</div></div>
+      </div>
+      ${verSection}
+      <div style="display:flex;gap:8px;margin-top:12px;justify-content:center">
+        <button class="sp-edit-btn" onclick="showPage('sp-edit-profile')">✏️ Edit Profile</button>
+        <button class="sp-post-btn" onclick="showPage('sp-compose')">+ New Post</button>
+      </div>
+    </div>
+    <div class="sp-post-grid">${posts.length?posts.map(p=>`<div class="sp-post-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-size:11px;color:${p.status==='approved'?'#22c55e':p.status==='rejected'?'#ef4444':'#f59e0b'}">${p.status==='approved'?'✅ Live':p.status==='rejected'?'❌ Rejected':'⏳ Pending'}</span>
+        <span style="font-size:11px;color:#7a90b0">❤️ ${(p.likes||0).toLocaleString()} admin · ${(p.user_likes||0).toLocaleString()} user</span>
+      </div>
+      ${p.caption?`<div class="sp-caption" style="font-size:13px">${p.caption.substring(0,150)}</div>`:''}
+      ${p.total_earned>0?`<div style="color:#22c55e;font-size:12px;margin-top:6px;font-weight:600">💰 Earned: ${p.total_earned.toLocaleString()} USDT</div>`:''}
+    </div>`).join(''):'<div class="empty-tx">No posts yet. Create your first post!</div>'}</div>`;
+  } catch(e) { const c=g('mySpProfileContent'); if(c) c.innerHTML='<div class="empty-tx">Could not load profile</div>'; }
+}
+async function loadMySpPosts() {
+  await loadMySpProfile();
+}
+function renderSpEditProfile() {
+  const c = g('spEditProfileContent'); if (!c) return;
+  c.innerHTML = `
+    <div class="form-group"><label>Display Name</label><input id="spEditName" type="text" placeholder="Your name on SocialPay"/></div>
+    <div class="form-group"><label>Country</label><input id="spEditCountry" type="text" placeholder="Your country"/></div>
+    <div class="form-group"><label>Age</label><input id="spEditAge" type="number" placeholder="Your age" min="18" max="100"/></div>
+    <div class="form-group"><label>Profile Picture URL (optional)</label><input id="spEditPic" type="url" placeholder="https://..."/></div>
+    <button class="btn-primary w100" onclick="saveSpProfile()">Save Profile</button>`;
+}
+async function saveSpProfile() {
+  const name    = (g('spEditName')?.value    || '').trim();
+  const country = (g('spEditCountry')?.value || '').trim();
+  const age     = (g('spEditAge')?.value     || '').trim();
+  const pic     = (g('spEditPic')?.value     || '').trim();
+  const r = await post('/socialpay/profile', { display_name: name, country, age, profile_pic: pic });
+  if (r.success) { toast('Profile updated!'); showPage('sp-profile-me'); }
+  else toast(r.error || 'Update failed');
+}
+function selectPostType(type, btn) {
+  state.spPostType = type;
+  document.querySelectorAll('.pt-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  g('spImageUpload').style.display = type === 'photo' ? 'flex' : 'none';
+  g('spVoiceUpload').style.display = type === 'voice' ? 'flex' : 'none';
+}
+function previewSpImage(input) {
+  const file = input.files[0]; if (!file) return;
+  const r = new FileReader();
+  r.onload = e => { state.spImageData = e.target.result; const img = g('spImgPreview'); img.src = e.target.result; img.style.display = 'block'; g('spImgLabel').textContent = file.name; };
+  r.readAsDataURL(file);
+}
+function previewSpVoice(input) {
+  const file = input.files[0]; if (!file) return;
+  const r = new FileReader();
+  r.onload = e => { state.spVoiceData = e.target.result; g('spVoiceLabel').textContent = file.name; const ind = g('spVoiceIndicator'); ind.style.display = 'block'; ind.textContent = `🎙 Voice ready: ${file.name}`; };
+  r.readAsDataURL(file);
+}
+async function submitSocialPost() {
+  const caption = (g('spCaption')?.value || '').trim();
+  if (caption.length < 5) return toast('Please write a caption (min 5 characters)');
+  const btn = g('submitSpBtn');
+  btn.textContent = 'Submitting...'; btn.disabled = true;
+  const body = { caption, post_type: state.spPostType };
+  if (state.spPostType === 'photo' && state.spImageData) body.image_data = state.spImageData;
+  if (state.spPostType === 'voice' && state.spVoiceData) body.voice_data = state.spVoiceData;
+  const r = await post('/socialpay/post', body);
+  if (r.success) {
+    g('spCaption').value = ''; state.spImageData = null; state.spVoiceData = null;
+    btn.textContent = '✓ Submitted!';
+    toast('Post submitted for review! 🌟');
+    setTimeout(() => { btn.textContent = 'Submit Post'; btn.disabled = false; showPage('socialpay'); }, 2000);
+  } else { toast(r.error || 'Submission failed'); btn.textContent = 'Submit Post'; btn.disabled = false; }
+}
+async function applyForVerification() {
+  const r = await post('/socialpay/apply-verification', {});
+  if (r.success) { toast('Verification request submitted! Admin will review. 🟠'); loadMySpProfile(); }
+  else toast(r.error || 'Could not apply');
 }
 
-window.addEventListener('DOMContentLoaded', init);
+// ── Boot ──────────────────────────────────────────────────────────────────────
+window.addEventListener('load', init);
