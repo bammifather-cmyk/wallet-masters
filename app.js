@@ -31,12 +31,17 @@ const tgU = tg.initDataUnsafe?.user;
 // initData read fresh each call so Telegram has time to inject it
 function getInitData() { return tg.initData || ''; }
 
-function post(path, body) {
+function post(path, body, timeoutMs) {
+  timeoutMs = timeoutMs || 12000;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   return fetch(`${API}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-telegram-init-data': getInitData() },
-    body: JSON.stringify(body)
-  }).then(r => r.json()).catch(() => ({}));
+    body: JSON.stringify(body),
+    signal: controller.signal
+  }).then(r => { clearTimeout(timer); return r.json(); })
+    .catch(() => { clearTimeout(timer); return {}; });
 }
 function get(path) {
   return fetch(`${API}${path}`, {
@@ -69,18 +74,29 @@ function fmtDate(ts) {
 // ── Init ──────────────────────────────────────────────────────────────────────
 async function init(retryCount) {
   retryCount = retryCount || 0;
+  // Hide any previous error overlay and keep splash visible
+  const errEl = document.getElementById('_errOverlay');
+  if (errEl) errEl.style.display = 'none';
+
+  // Update splash text to show progress on retries
+  const splashSub = document.querySelector('.splash-sub');
+  if (splashSub && retryCount > 0) {
+    splashSub.textContent = 'Connecting' + '.'.repeat(retryCount);
+  }
+
   try {
     const ref  = new URLSearchParams(window.location.search).get('ref') || tg.initDataUnsafe?.start_param?.replace('ref_','') || '';
     const data = await post('/auth', { ref, referralCode: ref });
 
-    // If auth fails and we have retries left, wait and try again
+    // If auth fails, retry silently up to 5 times with increasing delays
     if (!data.success) {
-      if (retryCount < 3) {
-        await new Promise(r => setTimeout(r, 800));
+      if (retryCount < 5) {
+        const delay = [500, 1000, 1500, 2000, 3000][retryCount] || 2000;
+        await new Promise(r => setTimeout(r, delay));
         return init(retryCount + 1);
       }
-      // All retries exhausted
-      showError('Could not connect. Please close and reopen the app. <br><br><button onclick="init(0)" style="background:#2563eb;border:none;border-radius:8px;padding:10px 20px;color:#fff;font-size:14px;cursor:pointer;margin-top:8px">🔄 Retry</button>');
+      // 5 retries exhausted - show friendly error with tap-to-retry
+      showError('Slow connection detected.<br>Please check your internet and try again.');
       return;
     }
 
@@ -112,11 +128,12 @@ async function init(retryCount) {
 
     if (!initData) console.warn('No initData — some features may not work');
   } catch(e) {
-    if (retryCount < 3) {
-      await new Promise(r => setTimeout(r, 800));
+    if (retryCount < 5) {
+      const delay = [500, 1000, 1500, 2000, 3000][retryCount] || 2000;
+      await new Promise(r => setTimeout(r, delay));
       return init(retryCount + 1);
     }
-    showError('Connection error. Please close and reopen the app. <br><br><button onclick="init(0)" style="background:#2563eb;border:none;border-radius:8px;padding:10px 20px;color:#fff;font-size:14px;cursor:pointer;margin-top:8px">🔄 Retry</button>');
+    showError('Slow connection detected.<br>Please check your internet and try again.');
   }
 }
 
@@ -126,9 +143,27 @@ function hideSplash() {
   setTimeout(() => splash.style.display = 'none', 500);
 }
 function showError(msg) {
-  hideSplash();
-  document.body.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#070d1a;color:#ef4444;text-align:center;padding:20px;font-size:14px">${msg}</div>`;
+  // Don't destroy DOM - overlay on top of splash so retry works
+  let errEl = document.getElementById('_errOverlay');
+  if (!errEl) {
+    errEl = document.createElement('div');
+    errEl.id = '_errOverlay';
+    errEl.style.cssText = 'position:fixed;inset:0;background:#070d1a;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;text-align:center';
+    document.body.appendChild(errEl);
+  }
+  errEl.style.display = 'flex';
+  errEl.innerHTML = `
+    <svg width="48" height="48" viewBox="0 0 48 48" fill="none" style="margin-bottom:16px">
+      <circle cx="24" cy="24" r="24" fill="#1a1030"/>
+      <path d="M24 14v12" stroke="#ef4444" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="24" cy="33" r="2" fill="#ef4444"/>
+    </svg>
+    <div style="color:#ef4444;font-size:15px;font-weight:600;margin-bottom:8px">Connection Error</div>
+    <div style="color:#7a90b0;font-size:13px;margin-bottom:24px;line-height:1.5">${msg}</div>
+    <button onclick="document.getElementById('_errOverlay').style.display='none';init(0);" style="background:linear-gradient(135deg,#2563eb,#7c3aed);border:none;border-radius:12px;padding:14px 32px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;width:100%;max-width:240px">🔄 Tap to Retry</button>
+  `;
 }
+
 function showTerms() {
   hideSplash();
   g('app').classList.remove('hidden');
@@ -1158,21 +1193,20 @@ async function sendDMVoice(input) {
 }
 
 window.addEventListener('load', () => {
-  // Give Telegram WebApp a moment to fully inject initData before starting
   if (tg.initData) {
     init();
   } else {
-    // Wait up to 2 seconds for Telegram to inject initData
+    // Wait up to 4 seconds for Telegram to inject initData
     let waited = 0;
     const waitForTg = setInterval(() => {
-      waited += 100;
+      waited += 200;
       if (tg.initData) {
         clearInterval(waitForTg);
         init();
-      } else if (waited >= 2000) {
+      } else if (waited >= 4000) {
         clearInterval(waitForTg);
-        init(); // Try anyway - server will handle auth
+        init(); // Try anyway with retry logic
       }
-    }, 100);
+    }, 200);
   }
 });
