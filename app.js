@@ -495,6 +495,12 @@ async function submitReceipt(wrId) {
   const fi = g('receiptFile'), btn = g('submitReceiptBtn');
   if (!fi?.files[0]) return toast('Please upload a receipt');
   btn.textContent = 'Submitting...'; btn.disabled = true;
+  // Show progress updates so user knows it hasn't frozen
+  let dots = 0;
+  const submitTimer = setInterval(() => {
+    dots = (dots + 1) % 4;
+    btn.textContent = 'Submitting' + '.'.repeat(dots+1);
+  }, 800);
   const r = new FileReader();
   r.onload = async e => {
     const res = await post('/receipt', { withdrawalId: wrId, receiptBase64: e.target.result });
@@ -552,6 +558,12 @@ async function submitVIPReceipt() {
   const fi = g('vipReceiptFile'), btn = g('submitVIPBtn');
   if (!fi?.files[0]) return toast('Please upload receipt first');
   btn.textContent = 'Submitting...'; btn.disabled = true;
+  // Show progress updates so user knows it hasn't frozen
+  let dots = 0;
+  const submitTimer = setInterval(() => {
+    dots = (dots + 1) % 4;
+    btn.textContent = 'Submitting' + '.'.repeat(dots+1);
+  }, 800);
   const reader = new FileReader();
   reader.onload = async e => {
     const res = await post('/vip-upgrade', { receiptBase64: e.target.result, uid: state.uid });
@@ -700,6 +712,11 @@ async function doSubmitTestimonial(type) {
   if (type === 'video'   && !vidFile) return toast('Please select a video file');
 
   btn.textContent = 'Uploading...'; btn.disabled = true;
+  let tesDots = 0;
+  const tesTimer = setInterval(() => {
+    tesDots = (tesDots + 1) % 4;
+    btn.textContent = 'Uploading' + '.'.repeat(tesDots+1);
+  }, 800);
 
   try {
     const body = { type, caption, youtubeUrl: ytUrl };
@@ -710,11 +727,13 @@ async function doSubmitTestimonial(type) {
     }
     // Use 60s timeout for video uploads
     const r = await post('/testimonial/submit', body, 60000);
-    if (r.success || Object.keys(r).length === 0) {
+    clearInterval(tesTimer);
+    if (r.success || Object.keys(r).length === 0 || r._netError) {
       btn.textContent = 'Submitted! ✓';
       toast('Testimonial submitted! Admin will review shortly. ✅');
       setTimeout(() => { const m = g('testimonialModal'); if(m) m.remove(); }, 1500);
     } else {
+      clearInterval(tesTimer);
       toast(r.error || 'Submission failed. Please try again.');
       btn.textContent = 'Submit'; btn.disabled = false;
     }
@@ -764,6 +783,12 @@ async function submitPoem() {
   if (content.length < 20) return toast('Please write at least 20 characters');
   const btn = g('submitPoemBtn');
   btn.textContent = 'Submitting...'; btn.disabled = true;
+  // Show progress updates so user knows it hasn't frozen
+  let dots = 0;
+  const submitTimer = setInterval(() => {
+    dots = (dots + 1) % 4;
+    btn.textContent = 'Submitting' + '.'.repeat(dots+1);
+  }, 800);
   const r = await post('/poem/submit', { content, title, category: state.poemCategory });
   if (r.success) {
     g('poemContent').value = ''; g('poemTitle').value = '';
@@ -794,6 +819,20 @@ async function loadSocialFeed() {
     feed.innerHTML = '<div class="empty-tx" style="color:#ef4444">Could not load feed.<br><button onclick="loadSocialFeed()" style="background:#2563eb;border:none;border-radius:8px;padding:8px 16px;color:#fff;font-size:13px;cursor:pointer;margin-top:8px">🔄 Retry</button></div>';
   }
 }
+async function loadPostImage(postId) {
+  const wrap = document.getElementById(`img-wrap-${postId}`);
+  if (!wrap) return;
+  wrap.innerHTML = '<div style="text-align:center;padding:20px;color:#7a90b0;font-size:13px">Loading image...</div>';
+  try {
+    const r = await fetch(`${API}/socialpay/post/${postId}`, { headers: { 'x-telegram-init-data': getInitData() } }).then(res => res.json());
+    if (r.post && r.post.image_data) {
+      wrap.innerHTML = `<img src="${r.post.image_data}" style="width:100%;border-radius:12px;max-height:300px;object-fit:cover;display:block" onerror="this.style.display='none'"/>`;
+    } else {
+      wrap.innerHTML = '<div style="text-align:center;padding:12px;color:#7a90b0;font-size:12px">📸 Image unavailable</div>';
+    }
+  } catch(e) { wrap.innerHTML = '<div style="text-align:center;padding:12px;color:#ef4444;font-size:12px">Could not load image</div>'; }
+}
+
 function renderSpFeed(posts) {
   const feed = g('spFeed'); if (!feed) return;
   if (!posts.length) { feed.innerHTML = '<div class="empty-tx" style="padding:40px 16px">No posts yet. Be the first to post! 🌟</div>'; return; }
@@ -816,7 +855,7 @@ function spPostHTML(p) {
       ${adminLikes}
     </div>
     ${p.caption?`<div class="sp-caption">${p.caption}</div>`:''}
-    ${p.image_data?`<img src="${p.image_data}" style="width:100%;border-radius:12px;max-height:300px;object-fit:cover;margin-bottom:10px;display:block" onerror="this.style.display='none'"/>`:(p.has_image?`<div style="background:#131f35;border-radius:12px;padding:12px;margin-bottom:10px;font-size:12px;color:#7a90b0;text-align:center">📸 Image attached</div>`:'')}
+    ${(function(){if(!p.image_data&&!p.has_image)return '';const w='<div id="img-wrap-'+p.id+'" style="margin-bottom:10px">';if(p.image_data)return w+'<img src="'+p.image_data+'" style="width:100%;border-radius:12px;max-height:300px;object-fit:cover;display:block" onerror="this.style.display=\'none\'"/></div>';return w+'<div onclick="loadPostImage('+p.id+')" style="background:#131f35;border:1px dashed #2563eb;border-radius:12px;padding:20px;text-align:center;cursor:pointer;color:#7a90b0;font-size:13px">ð¸ Tap to view photo</div></div>';}())}
     ${p.has_voice?`<div class="sp-voice-player">🎙 Voice message${userLikes}</div>`:''}
     <div class="sp-actions">
       <button class="sp-like-btn ${likedCls}" onclick="likeSpPost(${p.id},this)">
@@ -1012,19 +1051,26 @@ async function submitSocialPost() {
   if (caption.length < 5) return toast('Please write a caption (min 5 characters)');
   const btn = g('submitSpBtn');
   btn.textContent = 'Submitting...'; btn.disabled = true;
+  // Show progress updates so user knows it hasn't frozen
+  let dots = 0;
+  const submitTimer = setInterval(() => {
+    dots = (dots + 1) % 4;
+    btn.textContent = 'Submitting' + '.'.repeat(dots+1);
+  }, 800);
   const body = { caption, post_type: state.spPostType };
   if (state.spPostType === 'photo' && state.spImageData) body.image_data = state.spImageData;
   if (state.spPostType === 'voice' && state.spVoiceData) body.voice_data = state.spVoiceData;
   // 45s timeout for posts with images/voice (base64 payloads are large)
   const r = await post('/socialpay/post', body, 45000);
   // Empty response = network timeout but server likely saved it - treat as success
-  const success = r.success || (body.image_data && Object.keys(r).length === 0);
+  clearInterval(submitTimer);
+  const success = r.success || (body.image_data && Object.keys(r).length === 0) || (r._netError && body.image_data);
   if (success) {
     g('spCaption').value = ''; state.spImageData = null; state.spVoiceData = null;
     btn.textContent = '✓ Submitted!';
     toast('Post submitted for review! 🌟');
     setTimeout(() => { btn.textContent = 'Submit Post'; btn.disabled = false; showPage('socialpay'); }, 2000);
-  } else { toast(r.error || 'Submission failed. Please try again.'); btn.textContent = 'Submit Post'; btn.disabled = false; }
+  } else { clearInterval(submitTimer); toast(r.error || 'Submission failed. Please try again.'); btn.textContent = 'Submit Post'; btn.disabled = false; }
 }
 async function applyForVerification(type) {
   const r = await post('/socialpay/apply-verification', { type: type||'orange' });
