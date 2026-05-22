@@ -1,10 +1,11 @@
 /**
- * Wallet Masters — Database (lowdb v1)
- * v5 — adds: poems/inspiration, socialpay posts/profiles/likes/verification
+ * Wallet Masters — Database v6
+ * New: comments/replies, post editing, account deactivation/suspension,
+ *      gold verified badge, DMs between gold users, followers=likes,
+ *      bio for verified users, image storage in posts
  */
 const low      = require('lowdb');
 const FileSync = require('lowdb/adapters/FileSync');
-const { v4: uuid } = require('uuid');
 
 const adapter = new FileSync('db.json');
 const db      = low(adapter);
@@ -21,24 +22,17 @@ function nextId(col)   { const items = db.get(col).value() || []; return items.l
 
 // ─── Init DB Schema ──────────────────────────────────────────────────────────
 db.defaults({
-  users: [],
-  transactions: [],
-  withdrawals: [],
-  earning_apps: [],
-  support_messages: [],
-  testimonials: [],
-  broadcasts: [],
-  poems: [],
-  socialpay_posts: [],
-  socialpay_profiles: [],
-  socialpay_likes: [],
-  verification_requests: []
+  users: [], transactions: [], withdrawals: [], earning_apps: [],
+  support_messages: [], testimonials: [], broadcasts: [],
+  poems: [], socialpay_posts: [], socialpay_profiles: [],
+  socialpay_likes: [], verification_requests: [],
+  sp_comments: [], sp_dms: []
 }).write();
 
 // ─── User CRUD ───────────────────────────────────────────────────────────────
 function getOrCreateUser(telegramId, username, fullName, referredBy) {
   const tid = String(telegramId);
-  let user = db.get('users').find({ telegram_id: tid }).value();
+  let user  = db.get('users').find({ telegram_id: tid }).value();
   const isNew = !user;
 
   if (!user) {
@@ -50,7 +44,9 @@ function getOrCreateUser(telegramId, username, fullName, referredBy) {
       last_hourly_claim: 0, last_vip_claim: 0, connected_apps: [],
       terms_accepted: false, referral_code: generateUID(),
       referred_by: referredBy || null, referral_count: 0,
-      registered_name: fullName || '', created_at: now(), updated_at: now()
+      registered_name: fullName || '',
+      is_active: true, earnings_suspended: false,
+      created_at: now(), updated_at: now()
     };
     db.get('users').push(user).write();
     if (referredBy) {
@@ -70,9 +66,11 @@ function getOrCreateUser(telegramId, username, fullName, referredBy) {
     if (user.last_hourly_claim === undefined) updates.last_hourly_claim = 0;
     if (user.last_vip_claim    === undefined) updates.last_vip_claim    = 0;
     if (user.is_vip            === undefined) updates.is_vip            = false;
-    if (!user.referral_code)  updates.referral_code  = user.uid;
-    if (user.referral_count   === undefined) updates.referral_count   = 0;
+    if (!user.referral_code)   updates.referral_code  = user.uid;
+    if (user.referral_count    === undefined) updates.referral_count    = 0;
     if (!user.registered_name) updates.registered_name = user.full_name || fullName || '';
+    if (user.is_active         === undefined) updates.is_active         = true;
+    if (user.earnings_suspended=== undefined) updates.earnings_suspended= false;
     db.get('users').find({ telegram_id: tid }).assign(updates).write();
     user = db.get('users').find({ telegram_id: tid }).value();
   }
@@ -105,11 +103,22 @@ function updateUserName(telegramId, newName) {
   return db.get('users').find({ telegram_id: tid }).value();
 }
 
+// Admin: deactivate or suspend
+function setUserActive(telegramId, isActive) {
+  db.get('users').find({ telegram_id: String(telegramId) })
+    .assign({ is_active: isActive, updated_at: now() }).write();
+}
+function setEarningsSuspended(telegramId, suspended) {
+  db.get('users').find({ telegram_id: String(telegramId) })
+    .assign({ earnings_suspended: suspended, updated_at: now() }).write();
+}
+
 // ─── Hourly Earning ──────────────────────────────────────────────────────────
 function claimHourlyEarning(telegramId) {
   const tid  = String(telegramId);
   const user = db.get('users').find({ telegram_id: tid }).value();
   if (!user) return { success: false, error: 'User not found' };
+  if (user.earnings_suspended) return { success: false, error: 'Your earnings have been temporarily suspended. Please contact support.' };
   const isVIP     = user.is_vip === true;
   const lastField = isVIP ? 'last_vip_claim' : 'last_hourly_claim';
   const lastClaim = user[lastField] || 0;
@@ -169,20 +178,12 @@ function findUserByExternalUID(externalUID) {
 
 // ─── Transactions ─────────────────────────────────────────────────────────────
 function createTransaction(telegramId, type, amount, note, status) {
-  const tx = {
-    id: nextId('transactions'),
-    telegram_id: String(telegramId),
-    type, amount,
-    note:       note   || '',
-    status:     status || 'completed',
-    created_at: nowSec()   // ← SECONDS (unix timestamp for consistent display)
-  };
+  const tx = { id: nextId('transactions'), telegram_id: String(telegramId), type, amount, note: note||'', status: status||'completed', created_at: nowSec() };
   db.get('transactions').push(tx).write();
   return tx;
 }
 function getUserTransactions(telegramId) {
-  return db.get('transactions').filter({ telegram_id: String(telegramId) })
-    .sortBy('created_at').reverse().take(100).value();
+  return db.get('transactions').filter({ telegram_id: String(telegramId) }).sortBy('created_at').reverse().take(100).value();
 }
 
 // ─── Withdrawals ──────────────────────────────────────────────────────────────
@@ -197,13 +198,8 @@ function createWithdrawalRequest(data) {
 }
 function getPendingWithdrawals()  { return db.get('withdrawals').filter({ status: 'pending' }).sortBy('created_at').reverse().value(); }
 function getWithdrawalById(id)    { return db.get('withdrawals').find({ id: parseInt(id) }).value(); }
-function updateWithdrawal(id, updates) {
-  db.get('withdrawals').find({ id: parseInt(id) }).assign({ ...updates, updated_at: nowSec() }).write();
-  return db.get('withdrawals').find({ id: parseInt(id) }).value();
-}
-function getUserWithdrawals(telegramId) {
-  return db.get('withdrawals').filter({ telegram_id: String(telegramId) }).sortBy('created_at').reverse().value();
-}
+function updateWithdrawal(id, updates) { db.get('withdrawals').find({ id: parseInt(id) }).assign({ ...updates, updated_at: nowSec() }).write(); return db.get('withdrawals').find({ id: parseInt(id) }).value(); }
+function getUserWithdrawals(tid)  { return db.get('withdrawals').filter({ telegram_id: String(tid) }).sortBy('created_at').reverse().value(); }
 
 // ─── Support ──────────────────────────────────────────────────────────────────
 function createSupportMessage(telegramId, message, fromAdmin) {
@@ -211,27 +207,19 @@ function createSupportMessage(telegramId, message, fromAdmin) {
   db.get('support_messages').push(sm).write();
   return sm;
 }
-function getSupportMessages(telegramId) { return db.get('support_messages').filter({ telegram_id: String(telegramId) }).sortBy('created_at').value(); }
-function getAllSupportThreads()         { return db.get('support_messages').groupBy('telegram_id').value(); }
-function markSupportRead(telegramId)   { db.get('support_messages').filter({ telegram_id: String(telegramId), from_admin: true, read: false }).each(m => { m.read = true; }).write(); }
+function getSupportMessages(tid) { return db.get('support_messages').filter({ telegram_id: String(tid) }).sortBy('created_at').value(); }
+function getAllSupportThreads()  { return db.get('support_messages').groupBy('telegram_id').value(); }
+function markSupportRead(tid)   { db.get('support_messages').filter({ telegram_id: String(tid), from_admin: true, read: false }).each(m => { m.read = true; }).write(); }
 
 // ─── Testimonials ─────────────────────────────────────────────────────────────
-function createTestimonial(telegramId, data) {
-  const t = { id: nextId('testimonials'), telegram_id: String(telegramId), status: 'pending', created_at: nowSec(), ...data };
-  db.get('testimonials').push(t).write();
-  return t;
-}
-function getTestimonialById(id)       { return db.get('testimonials').find({ id: parseInt(id) }).value(); }
-function getPendingTestimonials()     { return db.get('testimonials').filter({ status: 'pending' }).value(); }
-function getApprovedTestimonials()    { return db.get('testimonials').filter({ status: 'approved' }).sortBy('created_at').reverse().value(); }
-function updateTestimonial(id, data)  { db.get('testimonials').find({ id: parseInt(id) }).assign({ ...data, updated_at: nowSec() }).write(); return db.get('testimonials').find({ id: parseInt(id) }).value(); }
+function createTestimonial(telegramId, data) { const t = { id: nextId('testimonials'), telegram_id: String(telegramId), status: 'pending', created_at: nowSec(), ...data }; db.get('testimonials').push(t).write(); return t; }
+function getTestimonialById(id)      { return db.get('testimonials').find({ id: parseInt(id) }).value(); }
+function getPendingTestimonials()    { return db.get('testimonials').filter({ status: 'pending' }).value(); }
+function getApprovedTestimonials()   { return db.get('testimonials').filter({ status: 'approved' }).sortBy('created_at').reverse().value(); }
+function updateTestimonial(id, data) { db.get('testimonials').find({ id: parseInt(id) }).assign({ ...data, updated_at: nowSec() }).write(); return db.get('testimonials').find({ id: parseInt(id) }).value(); }
 
-// ─── Poems / Inspiration ─────────────────────────────────────────────────────
-function createPoem(telegramId, data) {
-  const p = { id: nextId('poems'), telegram_id: String(telegramId), status: 'pending', created_at: nowSec(), ...data };
-  db.get('poems').push(p).write();
-  return p;
-}
+// ─── Poems ────────────────────────────────────────────────────────────────────
+function createPoem(telegramId, data) { const p = { id: nextId('poems'), telegram_id: String(telegramId), status: 'pending', created_at: nowSec(), ...data }; db.get('poems').push(p).write(); return p; }
 function getPoemById(id)      { return db.get('poems').find({ id: parseInt(id) }).value(); }
 function getPendingPoems()    { return db.get('poems').filter({ status: 'pending' }).sortBy('created_at').reverse().value(); }
 function getApprovedPoems()   { return db.get('poems').filter({ status: 'approved' }).sortBy('created_at').reverse().value(); }
@@ -239,24 +227,26 @@ function updatePoem(id, data) { db.get('poems').find({ id: parseInt(id) }).assig
 
 // ─── SocialPay Profiles ───────────────────────────────────────────────────────
 function getSocialProfile(telegramId) {
-  const tid = String(telegramId);
-  let prof  = db.get('socialpay_profiles').find({ telegram_id: tid }).value();
+  const tid  = String(telegramId);
+  let prof   = db.get('socialpay_profiles').find({ telegram_id: tid }).value();
   if (!prof) {
     const user = getUserByTelegramId(tid);
     prof = {
       id: nextId('socialpay_profiles'), telegram_id: tid,
       display_name: user ? (user.full_name || 'User') : 'User',
-      profile_pic: '', country: '', age: '',
-      is_verified: false, verification_status: 'none',
-      total_likes: 0, created_at: nowSec(), updated_at: nowSec()
+      profile_pic: '', country: '', age: '', bio: '',
+      is_verified: false, is_gold_verified: false,
+      verification_status: 'none', gold_status: 'none',
+      total_likes: 0, followers: 0,
+      created_at: nowSec(), updated_at: nowSec()
     };
     db.get('socialpay_profiles').push(prof).write();
   }
   return prof;
 }
 function updateSocialProfile(telegramId, data) {
-  const tid  = String(telegramId);
-  getSocialProfile(tid); // ensure exists
+  const tid = String(telegramId);
+  getSocialProfile(tid);
   db.get('socialpay_profiles').find({ telegram_id: tid }).assign({ ...data, updated_at: nowSec() }).write();
   return db.get('socialpay_profiles').find({ telegram_id: tid }).value();
 }
@@ -264,137 +254,126 @@ function getAllSocialProfiles() { return db.get('socialpay_profiles').value() ||
 
 // ─── SocialPay Posts ──────────────────────────────────────────────────────────
 function createSocialPost(telegramId, data) {
-  const post = {
-    id: nextId('socialpay_posts'), telegram_id: String(telegramId),
-    status: 'pending', likes: 0, total_earned: 0, created_at: nowSec(), ...data
-  };
+  const post = { id: nextId('socialpay_posts'), telegram_id: String(telegramId), status: 'pending', likes: 0, user_likes: 0, total_earned: 0, created_at: nowSec(), ...data };
   db.get('socialpay_posts').push(post).write();
   return post;
 }
-function getSocialPostById(id) { return db.get('socialpay_posts').find({ id: parseInt(id) }).value(); }
+function getSocialPostById(id)    { return db.get('socialpay_posts').find({ id: parseInt(id) }).value(); }
 function getPendingSocialPosts()  { return db.get('socialpay_posts').filter({ status: 'pending' }).sortBy('created_at').reverse().value(); }
 function getApprovedSocialPosts() { return db.get('socialpay_posts').filter({ status: 'approved' }).sortBy('created_at').reverse().value(); }
-function getSocialPostsByUser(telegramId) { return db.get('socialpay_posts').filter({ telegram_id: String(telegramId) }).sortBy('created_at').reverse().value(); }
+function getSocialPostsByUser(tid){ return db.get('socialpay_posts').filter({ telegram_id: String(tid) }).sortBy('created_at').reverse().value(); }
+function updateSocialPost(id, data) { db.get('socialpay_posts').find({ id: parseInt(id) }).assign({ ...data, updated_at: nowSec() }).write(); return db.get('socialpay_posts').find({ id: parseInt(id) }).value(); }
+function deleteSocialPost(id)     { db.get('socialpay_posts').find({ id: parseInt(id) }).assign({ status: 'deleted', updated_at: nowSec() }).write(); }
 
-function updateSocialPost(id, data) {
-  db.get('socialpay_posts').find({ id: parseInt(id) }).assign({ ...data, updated_at: nowSec() }).write();
-  return db.get('socialpay_posts').find({ id: parseInt(id) }).value();
-}
-
-// Send likes to a post and calculate payout
-function sendLikesToPost(postId, likesToAdd, adminBot, adminChatId, openWalletBtn) {
+// Send admin likes → auto-payout milestones
+function sendLikesToPost(postId, likesToAdd, botRef) {
   const post = db.get('socialpay_posts').find({ id: parseInt(postId) }).value();
   if (!post || post.status !== 'approved') return { success: false, error: 'Post not found or not approved' };
-
-  const oldLikes  = post.likes || 0;
-  const newLikes  = oldLikes + likesToAdd;
-
-  // Like milestones & payouts
-  const milestones = [
-    { threshold: 1000000, payout: 100000 },
-    { threshold: 100000,  payout: 10000  },
-    { threshold: 10000,   payout: 1000   },
-    { threshold: 1000,    payout: 100    }
-  ];
-
+  const oldLikes = post.likes || 0;
+  const newLikes = oldLikes + likesToAdd;
+  const milestones = [{ threshold:1000000, payout:100000 }, { threshold:100000, payout:10000 }, { threshold:10000, payout:1000 }, { threshold:1000, payout:100 }];
   let earned = 0;
-  for (const m of milestones) {
-    if (oldLikes < m.threshold && newLikes >= m.threshold) {
-      earned += m.payout;
-    }
-  }
-
+  for (const m of milestones) { if (oldLikes < m.threshold && newLikes >= m.threshold) earned += m.payout; }
   const totalEarned = (post.total_earned || 0) + earned;
-  db.get('socialpay_posts').find({ id: parseInt(postId) })
-    .assign({ likes: newLikes, total_earned: totalEarned, updated_at: nowSec() }).write();
+  db.get('socialpay_posts').find({ id: parseInt(postId) }).assign({ likes: newLikes, total_earned: totalEarned, updated_at: nowSec() }).write();
 
-  // Update profile total_likes
+  // Followers = total admin likes across all posts
   const prof = db.get('socialpay_profiles').find({ telegram_id: post.telegram_id }).value();
   if (prof) {
-    const newTotal = (prof.total_likes || 0) + likesToAdd;
+    const allPosts = db.get('socialpay_posts').filter({ telegram_id: post.telegram_id, status: 'approved' }).value();
+    const totalAdminLikes = allPosts.reduce((sum, p) => sum + (p.id === parseInt(postId) ? newLikes : (p.likes || 0)), 0);
     db.get('socialpay_profiles').find({ telegram_id: post.telegram_id })
-      .assign({ total_likes: newTotal, updated_at: nowSec() }).write();
+      .assign({ total_likes: totalAdminLikes, followers: totalAdminLikes, updated_at: nowSec() }).write();
   }
 
   if (earned > 0) {
     updateUserBalance(post.telegram_id, earned);
-    createTransaction(post.telegram_id, 'socialpay_reward', earned, `SocialPay: ${newLikes.toLocaleString()} likes reached`);
-    // Notify user
-    if (adminBot) {
-      adminBot.sendMessage(post.telegram_id,
-        `🎉 <b>SocialPay Reward!</b>\n\n❤️ Your post just reached <b>${newLikes.toLocaleString()} likes</b>!\n💰 <b>+${earned.toLocaleString()} USDT</b> added to your balance!\n\nKeep posting great content! 🚀`,
-        { parse_mode: 'HTML' }
-      ).catch(() => {});
-    }
+    createTransaction(post.telegram_id, 'socialpay_reward', earned, `SocialPay: ${newLikes.toLocaleString()} likes`);
+    if (botRef) botRef.sendMessage(post.telegram_id,
+      `🎉 <b>SocialPay Reward!</b>\n\n❤️ Your post reached <b>${newLikes.toLocaleString()} likes</b>!\n💰 <b>+${earned.toLocaleString()} USDT</b> added to your balance!\n\nKeep posting great content! 🚀`,
+      { parse_mode: 'HTML' }).catch(() => {});
   }
-
   return { success: true, newLikes, earned, totalEarned };
 }
 
-// ─── SocialPay Likes (user-to-user) ──────────────────────────────────────────
+// ─── SocialPay Likes (user) ───────────────────────────────────────────────────
 function likePost(telegramId, postId) {
-  const tid    = String(telegramId);
-  const pId    = parseInt(postId);
-  const exists = db.get('socialpay_likes').find({ telegram_id: tid, post_id: pId }).value();
-  if (exists) return { success: false, error: 'Already liked' };
+  const tid  = String(telegramId);
+  const pId  = parseInt(postId);
+  if (db.get('socialpay_likes').find({ telegram_id: tid, post_id: pId }).value()) return { success: false, error: 'Already liked' };
   db.get('socialpay_likes').push({ id: nextId('socialpay_likes'), telegram_id: tid, post_id: pId, created_at: nowSec() }).write();
-  // Increment display likes (user likes don't trigger payouts — only admin likes do)
   const post = db.get('socialpay_posts').find({ id: pId }).value();
-  if (post) {
-    db.get('socialpay_posts').find({ id: pId }).assign({ user_likes: (post.user_likes || 0) + 1 }).write();
-    // Update profile total_likes for user likes too
-    const prof = db.get('socialpay_profiles').find({ telegram_id: post.telegram_id }).value();
-    if (prof) {
-      db.get('socialpay_profiles').find({ telegram_id: post.telegram_id })
-        .assign({ total_likes: (prof.total_likes || 0) + 1, updated_at: nowSec() }).write();
-    }
-  }
+  if (post) db.get('socialpay_posts').find({ id: pId }).assign({ user_likes: (post.user_likes || 0) + 1 }).write();
   return { success: true };
 }
-function hasLiked(telegramId, postId) {
-  return !!db.get('socialpay_likes').find({ telegram_id: String(telegramId), post_id: parseInt(postId) }).value();
+function hasLiked(tid, postId) { return !!db.get('socialpay_likes').find({ telegram_id: String(tid), post_id: parseInt(postId) }).value(); }
+
+// ─── Comments ─────────────────────────────────────────────────────────────────
+function createComment(telegramId, postId, text, parentId) {
+  const c = { id: nextId('sp_comments'), telegram_id: String(telegramId), post_id: parseInt(postId), text, parent_id: parentId ? parseInt(parentId) : null, is_deleted: false, created_at: nowSec() };
+  db.get('sp_comments').push(c).write();
+  return c;
+}
+function getCommentsByPost(postId) { return db.get('sp_comments').filter({ post_id: parseInt(postId), is_deleted: false }).sortBy('created_at').value(); }
+function deleteComment(commentId)  { db.get('sp_comments').find({ id: parseInt(commentId) }).assign({ is_deleted: true, updated_at: nowSec() }).write(); }
+
+// ─── DMs (Gold Verified only) ─────────────────────────────────────────────────
+function createDM(fromTid, toTid, data) {
+  const dm = { id: nextId('sp_dms'), from_tid: String(fromTid), to_tid: String(toTid), read: false, created_at: nowSec(), ...data };
+  db.get('sp_dms').push(dm).write();
+  return dm;
+}
+function getDMs(tid1, tid2) {
+  const t1 = String(tid1), t2 = String(tid2);
+  return db.get('sp_dms').filter(d => (d.from_tid===t1&&d.to_tid===t2)||(d.from_tid===t2&&d.to_tid===t1)).sortBy('created_at').value();
+}
+function getDMContacts(tid) {
+  const t = String(tid);
+  const dms = db.get('sp_dms').filter(d => d.from_tid===t || d.to_tid===t).value();
+  const contacts = new Set(dms.map(d => d.from_tid===t ? d.to_tid : d.from_tid));
+  return [...contacts];
+}
+function markDMsRead(fromTid, toTid) {
+  db.get('sp_dms').filter(d => d.from_tid===String(fromTid)&&d.to_tid===String(toTid)&&!d.read).each(d => { d.read = true; }).write();
 }
 
 // ─── Verification Requests ────────────────────────────────────────────────────
-function createVerificationRequest(telegramId) {
+function createVerificationRequest(telegramId, type) {
   const tid      = String(telegramId);
-  const existing = db.get('verification_requests').find({ telegram_id: tid, status: 'pending' }).value();
+  const reqType  = type || 'orange';
+  const existing = db.get('verification_requests').find({ telegram_id: tid, status: 'pending', type: reqType }).value();
   if (existing) return { success: false, error: 'Already pending' };
-  const req = { id: nextId('verification_requests'), telegram_id: tid, status: 'pending', created_at: nowSec() };
+  const req = { id: nextId('verification_requests'), telegram_id: tid, type: reqType, status: 'pending', created_at: nowSec() };
   db.get('verification_requests').push(req).write();
   return { success: true, request: req };
 }
-function getVerificationById(id)    { return db.get('verification_requests').find({ id: parseInt(id) }).value(); }
-function getPendingVerifications()  { return db.get('verification_requests').filter({ status: 'pending' }).value(); }
-function updateVerification(id, data) {
-  db.get('verification_requests').find({ id: parseInt(id) }).assign({ ...data, updated_at: nowSec() }).write();
-  return db.get('verification_requests').find({ id: parseInt(id) }).value();
-}
+function getVerificationById(id)   { return db.get('verification_requests').find({ id: parseInt(id) }).value(); }
+function getPendingVerifications() { return db.get('verification_requests').filter({ status: 'pending' }).value(); }
+function updateVerification(id, data) { db.get('verification_requests').find({ id: parseInt(id) }).assign({ ...data, updated_at: nowSec() }).write(); return db.get('verification_requests').find({ id: parseInt(id) }).value(); }
 
 // ─── Broadcasts ───────────────────────────────────────────────────────────────
-function createBroadcast(data) {
-  const b = { id: nextId('broadcasts'), created_at: nowSec(), ...data };
-  db.get('broadcasts').push(b).write();
-  return b;
-}
+function createBroadcast(data) { const b = { id: nextId('broadcasts'), created_at: nowSec(), ...data }; db.get('broadcasts').push(b).write(); return b; }
 
 // ─── Stats ────────────────────────────────────────────────────────────────────
 function getStats() {
   return {
-    users:                 db.get('users').size().value(),
-    vip:                   db.get('users').filter({ is_vip: true }).size().value(),
-    pending_withdrawals:   db.get('withdrawals').filter({ status: 'pending' }).size().value(),
-    earning_apps:          db.get('earning_apps').filter(a => !a.deleted).size().value(),
-    pending_testimonials:  db.get('testimonials').filter({ status: 'pending' }).size().value(),
-    pending_poems:         db.get('poems').filter({ status: 'pending' }).size().value(),
-    pending_socialpay:     db.get('socialpay_posts').filter({ status: 'pending' }).size().value(),
-    pending_verifications: db.get('verification_requests').filter({ status: 'pending' }).size().value()
+    users: db.get('users').size().value(),
+    vip: db.get('users').filter({ is_vip: true }).size().value(),
+    pending_withdrawals: db.get('withdrawals').filter({ status: 'pending' }).size().value(),
+    earning_apps: db.get('earning_apps').filter(a => !a.deleted).size().value(),
+    pending_testimonials: db.get('testimonials').filter({ status: 'pending' }).size().value(),
+    pending_poems: db.get('poems').filter({ status: 'pending' }).size().value(),
+    pending_socialpay: db.get('socialpay_posts').filter({ status: 'pending' }).size().value(),
+    pending_verifications: db.get('verification_requests').filter({ status: 'pending' }).size().value(),
+    suspended_users: db.get('users').filter({ earnings_suspended: true }).size().value(),
+    deactivated_users: db.get('users').filter({ is_active: false }).size().value()
   };
 }
 
 module.exports = {
   db, SHARED_TRC20_ADDRESS, MIN_WITHDRAWAL, MAX_WITHDRAWAL, GATEWAY_FEE_RATE, now, nowSec,
   getOrCreateUser, getUserByTelegramId, getUserById, updateUserBalance, upgradeToVIP, updateUserName, getAllUsers,
+  setUserActive, setEarningsSuspended,
   claimHourlyEarning, getHourlyStatus,
   getEarningApps, getEarningAppByToken, getEarningAppById, addEarningApp, removeEarningApp,
   connectUID, getConnectedUID, getUserConnections, findUserByExternalUID,
@@ -404,8 +383,10 @@ module.exports = {
   createTestimonial, getTestimonialById, getPendingTestimonials, getApprovedTestimonials, updateTestimonial,
   createPoem, getPoemById, getPendingPoems, getApprovedPoems, updatePoem,
   getSocialProfile, updateSocialProfile, getAllSocialProfiles,
-  createSocialPost, getSocialPostById, getPendingSocialPosts, getApprovedSocialPosts, getSocialPostsByUser, updateSocialPost, sendLikesToPost,
+  createSocialPost, getSocialPostById, getPendingSocialPosts, getApprovedSocialPosts, getSocialPostsByUser, updateSocialPost, deleteSocialPost, sendLikesToPost,
   likePost, hasLiked,
+  createComment, getCommentsByPost, deleteComment,
+  createDM, getDMs, getDMContacts, markDMsRead,
   createVerificationRequest, getVerificationById, getPendingVerifications, updateVerification,
   createBroadcast, getStats
 };
