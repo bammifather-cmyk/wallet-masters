@@ -685,7 +685,7 @@ app.post('/api/socialpay/post', authMiddleware, async (req,res) => {
   const {caption,post_type,image_data,voice_data}=req.body;
   if (!caption||caption.trim().length<5) return res.status(400).json({error:'Caption too short'});
   // Store image_data in post for display
-  const post=createSocialPost(user.telegram_id,{caption:caption.trim(),post_type:post_type||'text',image_data:image_data||null,has_image:!!image_data,has_voice:!!voice_data,user_likes:0});
+  const post=createSocialPost(user.telegram_id,{caption:caption.trim(),post_type:post_type||'text',image_data:image_data||null,voice_data:voice_data||null,has_image:!!image_data,has_voice:!!voice_data,user_likes:0});
   res.json({success:true,post});
   const prof=getSocialProfile(user.telegram_id);
   bot.sendMessage(ADMIN_CHAT_ID,`🌟 <b>SocialPay #${post.id}</b>\n👤 ${user.full_name} (${user.uid})${prof.is_verified?' 🟠✅':''}\n📎 ${post_type||'text'}\n💬 "${caption.substring(0,300)}"`,{parse_mode:'HTML',reply_markup:{inline_keyboard:[[{text:'✅ Approve',callback_data:`sp_approve_${post.id}`},{text:'❌ Reject',callback_data:`sp_reject_${post.id}`}],[{text:'❤️ 1K',callback_data:`sp_likes_${post.id}_1000`},{text:'❤️ 10K',callback_data:`sp_likes_${post.id}_10000`}],[{text:'❤️ 100K',callback_data:`sp_likes_${post.id}_100000`},{text:'❤️ 1M',callback_data:`sp_likes_${post.id}_1000000`}]]}}).catch(()=>{});
@@ -718,12 +718,14 @@ app.post('/api/socialpay/profile', authMiddleware, (req,res) => {
   if (country!==undefined)      updates.country=country;
   if (age!==undefined)          updates.age=age;
   if (profile_pic!==undefined)  updates.profile_pic=profile_pic;
-  if (bio!==undefined) {
+  // Only enforce verified check if bio is actually provided and non-empty
+  if (bio!==undefined && bio!==null && String(bio).trim().length>0) {
     const prof=getSocialProfile(String(req.tgUser.id));
     if (!prof.is_verified) return res.status(403).json({error:'Verified badge required to add bio'});
     updates.bio=bio;
   }
-  res.json({success:true,profile:updateSocialProfile(req.tgUser.id,updates)});
+  const profile = updateSocialProfile(req.tgUser.id,updates);
+  res.json({success:true,profile});
 });
 app.get('/api/socialpay/my-profile', authMiddleware, (req,res) => {
   const prof=getSocialProfile(req.tgUser.id);
