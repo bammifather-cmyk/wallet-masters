@@ -675,9 +675,22 @@ app.get('/api/socialpay/posts', (req,res) => {
   const tgUser   = getTelegramUser(req);
   const enriched = posts.map(p => {
     const prof = profiles.find(pr=>pr.telegram_id===p.telegram_id)||{};
-    return { ...p, author_name:prof.display_name||'User', author_verified:prof.is_verified||false, author_gold:prof.is_gold_verified||false, author_pic:prof.profile_pic||'', author_country:prof.country||'', liked_by_me: tgUser?hasLiked(tgUser.id,p.id):false };
+    // STRIP image_data and voice_data from list - they are huge base64 blobs
+    // Use has_image/has_voice flags instead; full data only loaded on single post view
+    const { image_data, voice_data, ...postLight } = p;
+    return { ...postLight, author_name:prof.display_name||'User', author_verified:prof.is_verified||false, author_gold:prof.is_gold_verified||false, author_pic:prof.profile_pic||'', author_country:prof.country||'', liked_by_me: tgUser?hasLiked(tgUser.id,p.id):false };
   });
   res.json({ posts: enriched });
+});
+
+// Get single post with full image data
+app.get('/api/socialpay/post/:id', (req,res) => {
+  const post = getSocialPostById(req.params.id);
+  if (!post || post.status !== 'approved') return res.status(404).json({error:'Post not found'});
+  const profiles = getAllSocialProfiles();
+  const prof = profiles.find(pr=>pr.telegram_id===post.telegram_id)||{};
+  const tgUser = getTelegramUser(req);
+  res.json({ post: { ...post, author_name:prof.display_name||'User', author_verified:prof.is_verified||false, author_pic:prof.profile_pic||'', author_country:prof.country||'', liked_by_me: tgUser?hasLiked(tgUser.id,post.id):false } });
 });
 
 app.post('/api/socialpay/post', authMiddleware, async (req,res) => {
@@ -708,7 +721,8 @@ app.post('/api/socialpay/like', authMiddleware, (req,res) => res.json(likePost(r
 
 app.get('/api/socialpay/profile/:telegramId', (req,res) => {
   const prof=getSocialProfile(req.params.telegramId);
-  const posts=getSocialPostsByUser(req.params.telegramId).filter(p=>p.status==='approved');
+  const rawPosts=getSocialPostsByUser(req.params.telegramId).filter(p=>p.status==='approved');
+  const posts=rawPosts.map(p=>{ const {image_data,voice_data,...light}=p; return light; });
   res.json({profile:prof,posts});
 });
 app.post('/api/socialpay/profile', authMiddleware, (req,res) => {
@@ -729,8 +743,15 @@ app.post('/api/socialpay/profile', authMiddleware, (req,res) => {
 });
 app.get('/api/socialpay/my-profile', authMiddleware, (req,res) => {
   const prof=getSocialProfile(req.tgUser.id);
-  const posts=getSocialPostsByUser(req.tgUser.id);
-  res.json({profile:prof,posts});
+  const rawPosts=getSocialPostsByUser(req.tgUser.id);
+  // Strip image_data/voice_data from list - only return flags
+  const posts=rawPosts.map(p=>{ const {image_data,voice_data,...light}=p; return light; });
+  // Also strip profile_pic from the profile if it's too large (>100KB base64)
+  const profileOut = {...prof};
+  if (profileOut.profile_pic && profileOut.profile_pic.length > 100000) {
+    profileOut.profile_pic = profileOut.profile_pic.substring(0, 100000); // truncate safely - frontend handles onerror
+  }
+  res.json({profile:profileOut,posts});
 });
 
 // Comments (verified users only)
