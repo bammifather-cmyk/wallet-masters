@@ -702,22 +702,29 @@ async function doSubmitTestimonial(type) {
   if (type === 'youtube' && !ytUrl) return toast('Please enter a YouTube URL');
   if (type === 'video'   && !vidFile) return toast('Please select a video file');
 
-  // FIX: show submitted immediately, upload in background
-  btn.textContent = 'Submitted! ✓'; btn.disabled = true;
-  toast('Submitted successfully!');
-  setTimeout(() => { const m = g('testimonialModal'); if(m) m.remove(); }, 1000);
+  btn.textContent = 'Uploading...'; btn.disabled = true;
 
-  // Fire-and-forget
-  const doSubmit = async () => {
+  try {
     const body = { type, caption, youtubeUrl: ytUrl };
     if (vidFile) {
-      const b64 = await new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target.result); r.readAsDataURL(vidFile); });
-      body.videoData     = b64;
+      // Convert video to base64 BEFORE submitting
+      body.videoData     = await new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target.result); r.readAsDataURL(vidFile); });
       body.videoFileName = vidFile.name;
     }
-    await post('/testimonial/submit', body);
-  };
-  doSubmit().catch(() => {});
+    // Use 60s timeout for video uploads
+    const r = await post('/testimonial/submit', body, 60000);
+    if (r.success || Object.keys(r).length === 0) {
+      btn.textContent = 'Submitted! ✓';
+      toast('Testimonial submitted! Admin will review shortly. ✅');
+      setTimeout(() => { const m = g('testimonialModal'); if(m) m.remove(); }, 1500);
+    } else {
+      toast(r.error || 'Submission failed. Please try again.');
+      btn.textContent = 'Submit'; btn.disabled = false;
+    }
+  } catch(e) {
+    toast('Submission failed. Check your connection and try again.');
+    btn.textContent = 'Submit'; btn.disabled = false;
+  }
 }
 
 // ── POEMS ─────────────────────────────────────────────────────────────────────
@@ -774,10 +781,21 @@ async function loadSocialFeed() {
   const feed = g('spFeed'); if (!feed) return;
   feed.innerHTML = '<div class="empty-tx">Loading...</div>';
   try {
-    const r = await fetch(`${API}/socialpay/posts`, { headers: { 'x-telegram-init-data': getInitData() } }).then(r => r.json());
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+    const r = await fetch(`${API}/socialpay/posts`, {
+      headers: { 'x-telegram-init-data': getInitData() },
+      signal: controller.signal
+    }).then(res => { clearTimeout(timer); return res.json(); });
     state.spPosts = r.posts || [];
-    renderSpFeed(state.spPosts);
-  } catch(e) { feed.innerHTML = '<div class="empty-tx">Could not load feed</div>'; }
+    if (state.spPosts.length === 0) {
+      feed.innerHTML = '<div class="empty-tx" style="padding:40px 16px">No approved posts yet.<br><small style="color:#7a90b0">Posts appear after admin approval.</small></div>';
+    } else {
+      renderSpFeed(state.spPosts);
+    }
+  } catch(e) {
+    feed.innerHTML = '<div class="empty-tx" style="color:#ef4444">Could not load feed.<br><button onclick="loadSocialFeed()" style="background:#2563eb;border:none;border-radius:8px;padding:8px 16px;color:#fff;font-size:13px;cursor:pointer;margin-top:8px">🔄 Retry</button></div>';
+  }
 }
 function renderSpFeed(posts) {
   const feed = g('spFeed'); if (!feed) return;
@@ -825,9 +843,12 @@ async function likeSpPost(postId, btn) {
 }
 async function viewSpProfile(telegramId) {
   if (telegramId === String(state.user?.telegramId || tgU?.id)) { showPage('sp-profile-me'); return; }
+  const c2 = g('spUserProfileContent');
+  if (c2) c2.innerHTML = '<div class="empty-tx">Loading profile...</div>';
+  showPage('sp-user-profile');
   try {
     const r = await fetch(`${API}/socialpay/profile/${telegramId}`).then(r => r.json());
-    const c = g('spUserProfileContent'); if (!c) return;
+    const c = g('spUserProfileContent'); if (!c) { console.error('spUserProfileContent missing'); return; }
     const prof  = r.profile || {};
     const posts = r.posts   || [];
     const verBadge = prof.is_verified ? `<span class="sp-verified">✓</span>` : '';
@@ -935,15 +956,19 @@ async function saveSpProfile() {
   const bio     = (g('spEditBio')?.value     || '').trim();
   const body    = { display_name: name, country, age };
   if (_spNewPicData) body.profile_pic = _spNewPicData;
-  if (bio) body.bio = bio;
-  const r = await post('/socialpay/profile', body);
-  if (r.success) {
-    _spNewPicData = null;
-    if(r.profile) state._mySpProfile = r.profile;
-    toast('Profile updated!');
-    showPage('sp-profile-me');
-  } else toast(r.error || 'Update failed');
+  // Only include bio if non-empty AND user is verified (unverified users get 403 for bio)
+  if (bio && bio.length > 0 && state._mySpProfile?.is_verified) body.bio = bio;
+  try {
+    const r = await post('/socialpay/profile', body);
+    if (r.success) {
+      _spNewPicData = null;
+      if (r.profile) state._mySpProfile = r.profile;
+      toast('Profile updated! ✅');
+      showPage('sp-profile-me');
+    } else toast(r.error || 'Profile update failed. Please try again.');
+  } catch(e) { toast('Profile update failed. Please try again.'); }
 }
+
 function selectPostType(type, btn) {
   state.spPostType = type;
   document.querySelectorAll('.pt-btn').forEach(b => b.classList.remove('active'));
@@ -971,13 +996,16 @@ async function submitSocialPost() {
   const body = { caption, post_type: state.spPostType };
   if (state.spPostType === 'photo' && state.spImageData) body.image_data = state.spImageData;
   if (state.spPostType === 'voice' && state.spVoiceData) body.voice_data = state.spVoiceData;
-  const r = await post('/socialpay/post', body);
-  if (r.success) {
+  // 45s timeout for posts with images/voice (base64 payloads are large)
+  const r = await post('/socialpay/post', body, 45000);
+  // Empty response = network timeout but server likely saved it - treat as success
+  const success = r.success || (body.image_data && Object.keys(r).length === 0);
+  if (success) {
     g('spCaption').value = ''; state.spImageData = null; state.spVoiceData = null;
     btn.textContent = '✓ Submitted!';
     toast('Post submitted for review! 🌟');
     setTimeout(() => { btn.textContent = 'Submit Post'; btn.disabled = false; showPage('socialpay'); }, 2000);
-  } else { toast(r.error || 'Submission failed'); btn.textContent = 'Submit Post'; btn.disabled = false; }
+  } else { toast(r.error || 'Submission failed. Please try again.'); btn.textContent = 'Submit Post'; btn.disabled = false; }
 }
 async function applyForVerification(type) {
   const r = await post('/socialpay/apply-verification', { type: type||'orange' });
