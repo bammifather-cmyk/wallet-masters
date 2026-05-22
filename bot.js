@@ -159,17 +159,20 @@ if (bot) bot.on('callback_query', async (cq) => {
     const wd = getWithdrawalById(wdId);
     if (!wd) return bot.answerCallbackQuery(cq.id, { text: '❌ Not found' });
     if (action === 'approve') {
-      updateWithdrawal(wdId, { status: 'approved' });
-      // Also update the matching transaction so frontend shows "Approved" instantly
+      updateWithdrawal(wdId, { status: 'completed' });
       const userTxs = getUserTransactions(wd.telegram_id);
-      const matchTx = userTxs.filter(t => t.type === 'withdrawal' && t.status === 'pending')
+      const matchTx = userTxs.filter(t => t.type === 'withdrawal' && ['pending','fee_paid','awaiting_fee'].includes(t.status))
                               .sort((a,b) => b.created_at - a.created_at)[0];
-      if (matchTx) { db.get('transactions').find({ id: matchTx.id }).assign({ status: 'approved', updated_at: Math.floor(Date.now()/1000) }).write(); }
+      if (matchTx) { db.get('transactions').find({ id: matchTx.id }).assign({ status: 'completed', updated_at: Math.floor(Date.now()/1000) }).write(); }
       bot.sendMessage(wd.telegram_id, `✅ <b>Withdrawal Approved!</b>\n\n💰 ${wd.amount} USDT has been sent to your account.`, { parse_mode: 'HTML', ...openWalletBtn() });
       bot.answerCallbackQuery(cq.id, { text: '✅ Approved!' });
     } else {
       updateWithdrawal(wdId, { status: 'rejected' });
       updateUserBalance(wd.telegram_id, wd.amount);
+      const rejTxs = getUserTransactions(wd.telegram_id);
+      const rejTx = rejTxs.filter(t => t.type === 'withdrawal' && ['pending','fee_paid','awaiting_fee'].includes(t.status))
+                           .sort((a,b) => b.created_at - a.created_at)[0];
+      if (rejTx) { db.get('transactions').find({ id: rejTx.id }).assign({ status: 'rejected', updated_at: Math.floor(Date.now()/1000) }).write(); }
       bot.sendMessage(wd.telegram_id, `❌ <b>Withdrawal Rejected</b>\n\n💰 ${wd.amount} USDT refunded to your balance.`, { parse_mode: 'HTML', ...openWalletBtn() });
       bot.answerCallbackQuery(cq.id, { text: '❌ Rejected & refunded' });
     }
