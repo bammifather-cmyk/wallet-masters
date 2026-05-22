@@ -819,7 +819,7 @@ async function loadSocialFeed() {
     feed.innerHTML = '<div class="empty-tx" style="color:#ef4444">Could not load feed.<br><button onclick="loadSocialFeed()" style="background:#2563eb;border:none;border-radius:8px;padding:8px 16px;color:#fff;font-size:13px;cursor:pointer;margin-top:8px">🔄 Retry</button></div>';
   }
 }
-async function formatCount(n) {
+function formatCount(n) {
   n = Number(n) || 0;
   if (n >= 1000000000) return (n / 1000000000).toFixed(n % 1000000000 === 0 ? 0 : 1).replace(/\.0$/,'') + 'B';
   if (n >= 1000000)    return (n / 1000000).toFixed(n % 1000000 === 0 ? 0 : 1).replace(/\.0$/,'') + 'M';
