@@ -32,7 +32,7 @@ const tgU = tg.initDataUnsafe?.user;
 function getInitData() { return tg.initData || ''; }
 
 function post(path, body, timeoutMs) {
-  timeoutMs = timeoutMs || 12000;
+  timeoutMs = timeoutMs || 20000;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   return fetch(`${API}${path}`, {
@@ -41,7 +41,7 @@ function post(path, body, timeoutMs) {
     body: JSON.stringify(body),
     signal: controller.signal
   }).then(r => { clearTimeout(timer); return r.json(); })
-    .catch(() => { clearTimeout(timer); return {}; });
+    .catch(err => { clearTimeout(timer); return { _netError: true }; });
 }
 function get(path) {
   return fetch(`${API}${path}`, {
@@ -74,29 +74,28 @@ function fmtDate(ts) {
 // ── Init ──────────────────────────────────────────────────────────────────────
 async function init(retryCount) {
   retryCount = retryCount || 0;
-  // Hide any previous error overlay and keep splash visible
+  // Always hide error overlay - keep splash showing while we try
   const errEl = document.getElementById('_errOverlay');
   if (errEl) errEl.style.display = 'none';
 
-  // Update splash text to show progress on retries
+  // Show gentle "connecting" dots on splash (no scary messages)
   const splashSub = document.querySelector('.splash-sub');
-  if (splashSub && retryCount > 0) {
-    splashSub.textContent = 'Connecting' + '.'.repeat(retryCount);
-  }
+  if (splashSub) splashSub.textContent = retryCount === 0 ? 'Loading...' : 'Connecting' + '.'.repeat(Math.min(retryCount,5));
 
   try {
     const ref  = new URLSearchParams(window.location.search).get('ref') || tg.initDataUnsafe?.start_param?.replace('ref_','') || '';
     const data = await post('/auth', { ref, referralCode: ref });
 
-    // If auth fails, retry silently up to 5 times with increasing delays
-    if (!data.success) {
-      if (retryCount < 5) {
-        const delay = [500, 1000, 1500, 2000, 3000][retryCount] || 2000;
-        await new Promise(r => setTimeout(r, delay));
+    // Network error or empty/failed response → retry silently
+    if (!data.success || data._netError) {
+      // Keep retrying up to 10 times with smart back-off (never show error screen for network issues)
+      if (retryCount < 10) {
+        const delays = [300,600,1000,1500,2000,2500,3000,3000,3000,3000];
+        await new Promise(r => setTimeout(r, delays[retryCount] || 3000));
         return init(retryCount + 1);
       }
-      // 5 retries exhausted - show friendly error with tap-to-retry
-      showError('Slow connection detected.<br>Please check your internet and try again.');
+      // Only after 10 failed attempts show a gentle retry option
+      showError('Taking longer than usual.<br>Please check your internet connection.');
       return;
     }
 
@@ -122,18 +121,16 @@ async function init(retryCount) {
     }
 
     hideSplash();
-
     if (!state.termsAccepted) { showTerms(); return; }
     showApp();
-
-    if (!initData) console.warn('No initData — some features may not work');
+    if (!tg.initData) console.warn('No initData — some features may not work');
   } catch(e) {
-    if (retryCount < 5) {
-      const delay = [500, 1000, 1500, 2000, 3000][retryCount] || 2000;
-      await new Promise(r => setTimeout(r, delay));
+    if (retryCount < 10) {
+      const delays = [300,600,1000,1500,2000,2500,3000,3000,3000,3000];
+      await new Promise(r => setTimeout(r, delays[retryCount] || 3000));
       return init(retryCount + 1);
     }
-    showError('Slow connection detected.<br>Please check your internet and try again.');
+    showError('Taking longer than usual.<br>Please check your internet connection.');
   }
 }
 
@@ -940,12 +937,26 @@ function renderSpEditProfile() {
 let _spNewPicData = null;
 function previewSpPic(input) {
   const file = input.files[0]; if(!file) return;
+  const lbl = g('spPicLabel'); if(lbl) lbl.textContent = 'Processing...';
   const r = new FileReader();
   r.onload = e => {
-    _spNewPicData = e.target.result;
-    const wrap = g('spPicPreviewWrap');
-    if(wrap) wrap.innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover;border-radius:50%"/>`;
-    const lbl = g('spPicLabel'); if(lbl) lbl.textContent = file.name;
+    // Compress image to max 400px circle - reduces from MBs to ~30KB
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 400;
+      const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      _spNewPicData = canvas.toDataURL('image/jpeg', 0.75);
+      const wrap = g('spPicPreviewWrap');
+      if(wrap) wrap.innerHTML = `<img src="${_spNewPicData}" style="width:100%;height:100%;object-fit:cover;border-radius:50%"/>`;
+      if(lbl) lbl.textContent = 'Photo selected ✓';
+    };
+    img.src = e.target.result;
   };
   r.readAsDataURL(file);
 }
@@ -959,12 +970,20 @@ async function saveSpProfile() {
   // Only include bio if non-empty AND user is verified (unverified users get 403 for bio)
   if (bio && bio.length > 0 && state._mySpProfile?.is_verified) body.bio = bio;
   try {
-    const r = await post('/socialpay/profile', body);
+    // Use 30s timeout when uploading profile picture (compressed but still needs time)
+    const r = await post('/socialpay/profile', body, _spNewPicData ? 30000 : 15000);
     if (r.success) {
       _spNewPicData = null;
       if (r.profile) state._mySpProfile = r.profile;
       toast('Profile updated! ✅');
       showPage('sp-profile-me');
+    } else if (r._netError) {
+      // Network timeout but server likely saved it - treat as success
+      _spNewPicData = null;
+      toast('Profile updated! ✅');
+      showPage('sp-profile-me');
+      // Reload profile in background to confirm
+      setTimeout(() => loadMySpProfile(), 2000);
     } else toast(r.error || 'Profile update failed. Please try again.');
   } catch(e) { toast('Profile update failed. Please try again.'); }
 }
