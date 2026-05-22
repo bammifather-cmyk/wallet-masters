@@ -819,6 +819,14 @@ async function loadSocialFeed() {
     feed.innerHTML = '<div class="empty-tx" style="color:#ef4444">Could not load feed.<br><button onclick="loadSocialFeed()" style="background:#2563eb;border:none;border-radius:8px;padding:8px 16px;color:#fff;font-size:13px;cursor:pointer;margin-top:8px">🔄 Retry</button></div>';
   }
 }
+async function formatCount(n) {
+  n = Number(n) || 0;
+  if (n >= 1000000000) return (n / 1000000000).toFixed(n % 1000000000 === 0 ? 0 : 1).replace(/\.0$/,'') + 'B';
+  if (n >= 1000000)    return (n / 1000000).toFixed(n % 1000000 === 0 ? 0 : 1).replace(/\.0$/,'') + 'M';
+  if (n >= 10000)      return (n / 1000).toFixed(n % 1000 === 0 ? 0 : 1).replace(/\.0$/,'') + 'K';
+  return n.toLocaleString();
+}
+
 async function loadPostImage(postId) {
   const wrap = document.getElementById(`img-wrap-${postId}`);
   if (!wrap) return;
@@ -841,9 +849,10 @@ function renderSpFeed(posts) {
 function spPostHTML(p) {
   // Store caption for safe editing
   _postCaptions[p.id] = p.caption || '';
-  const verBadge = p.author_verified ? `<span class="sp-verified">✓</span>` : '';
-  const adminLikes = p.likes > 0 ? `<span class="sp-admin-likes">❤️ ${p.likes.toLocaleString()} admin likes</span>` : '';
-  const userLikes  = p.user_likes > 0 ? ` · ${p.user_likes.toLocaleString()} likes` : '';
+  const verBadge = p.author_gold ? `<span class="sp-verified sp-verified-gold">✓</span>` : (p.author_verified ? `<span class="sp-verified">✓</span>` : '');
+  const adminLikes = ''; // admin likes no longer shown separately at top
+  const totalLikes = (p.likes || 0) + (p.user_likes || 0);
+  const userLikes  = ''; // combined into totalLikes below
   const likedCls   = p.liked_by_me ? 'liked' : '';
   return `<div class="sp-post-card">
     <div class="sp-post-top" onclick="viewSpProfile('${p.telegram_id}')">
@@ -860,7 +869,7 @@ function spPostHTML(p) {
     <div class="sp-actions">
       <button class="sp-like-btn ${likedCls}" onclick="likeSpPost(${p.id},this)">
         <svg width="18" height="18" fill="${p.liked_by_me?'#ef4444':'none'}" stroke="${p.liked_by_me?'#ef4444':'currentColor'}" stroke-width="2" viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-        ${p.user_likes||0}
+        ${formatCount(totalLikes)}
       </button>
       <button onclick="toggleComments(${p.id})" style="background:none;border:none;color:#7a90b0;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:4px">💬 Comments</button>
       ${String(p.telegram_id)===String(state.user?.telegramId||tgU?.id||'') ? `<button onclick="handleEditPost(${p.id})" style="background:none;border:none;color:#2563eb;font-size:12px;cursor:pointer">Edit</button>` : ''}
@@ -887,15 +896,17 @@ async function viewSpProfile(telegramId) {
     const c = g('spUserProfileContent'); if (!c) { console.error('spUserProfileContent missing'); return; }
     const prof  = r.profile || {};
     const posts = r.posts   || [];
-    const verBadge = prof.is_verified ? `<span class="sp-verified">✓</span>` : '';
+    const verBadge = prof.is_gold_verified ? `<span class="sp-verified sp-verified-gold">✓</span>` : (prof.is_verified ? `<span class="sp-verified">✓</span>` : '');
     c.innerHTML = `<div class="sp-profile-header">
       <div class="sp-profile-av">${prof.profile_pic ? `<img src="${prof.profile_pic}"/>` : (prof.display_name||'U')[0]}</div>
       <div class="sp-profile-name">${prof.display_name||'User'} ${verBadge}</div>
       <div class="sp-profile-meta">${prof.country||''} ${prof.age?'· Age '+prof.age:''}</div>
       <div class="sp-profile-stats">
         <div class="sp-pstat"><div class="sp-pstat-val">${posts.length}</div><div class="sp-pstat-lbl">Posts</div></div>
-        <div class="sp-pstat"><div class="sp-pstat-val">${(prof.total_likes||0).toLocaleString()}</div><div class="sp-pstat-lbl">Likes</div></div>
+        <div class="sp-pstat"><div class="sp-pstat-val">${formatCount(prof.total_likes||0)}</div><div class="sp-pstat-lbl">Likes</div></div>
+        <div class="sp-pstat"><div class="sp-pstat-val">${formatCount(prof.followers||prof.total_likes||0)}</div><div class="sp-pstat-lbl">Followers</div></div>
       </div>
+      ${prof.bio ? `<div style="font-size:13px;color:#c0cce8;text-align:center;margin-top:10px;padding:0 16px;line-height:1.5">${prof.bio}</div>` : ''}
     </div>
     <div class="sp-post-grid">${posts.length?posts.map(p=>`<div class="sp-post-card">${p.caption?`<div class="sp-caption">${p.caption}</div>`:''}<div class="sp-actions"><span class="sp-like-count">❤️ ${(p.likes||0).toLocaleString()} likes</span></div></div>`).join(''):'<div class="empty-tx">No posts yet</div>'}</div>`;
     showPage('sp-user-profile');
@@ -908,16 +919,16 @@ async function loadMySpProfile() {
     const prof  = r.profile || {};
     const posts = r.posts   || [];
     state._mySpProfile = prof;
-    const verBadge = prof.is_verified ? `<span class="sp-verified">✓</span>` : '';
+    const verBadge = prof.is_gold_verified ? `<span class="sp-verified sp-verified-gold">✓</span>` : (prof.is_verified ? `<span class="sp-verified">✓</span>` : '');
     const verSection = prof.is_gold_verified
       ? `<div style="display:flex;gap:8px;flex-direction:column;align-items:center">
-          <div style="background:linear-gradient(135deg,#f59e0b,#d97706);border-radius:20px;padding:6px 16px;color:#fff;font-size:13px;font-weight:600">🌟 Gold Verified Creator</div>
+          <div style="background:linear-gradient(135deg,#f59e0b,#d97706);border-radius:20px;padding:6px 16px;color:#fff;font-size:13px;font-weight:600"><span style="background:#fff;color:#d97706;border-radius:50%;width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-right:4px">✓</span>Gold Verified · Legendary Earner</div>
          </div>`
       : prof.is_verified
         ? ((prof.total_likes||0) >= 500000
           ? (prof.gold_status === 'pending'
             ? `<div style="display:flex;gap:8px;flex-direction:column;align-items:center"><div class="sp-verify-badge">🟠 Verified Creator</div><div style="font-size:11px;color:#7a90b0">⏳ Gold verification pending</div></div>`
-            : `<div style="display:flex;gap:8px;flex-direction:column;align-items:center"><div class="sp-verify-badge">🟠 Verified Creator</div><button style="background:linear-gradient(135deg,#f59e0b,#d97706);border:none;border-radius:20px;padding:7px 18px;color:#fff;font-size:12px;font-weight:600;cursor:pointer" onclick="applyForVerification('gold')">Apply for 🌟 Gold Badge</button></div>`)
+            : `<div style="display:flex;gap:8px;flex-direction:column;align-items:center"><div class="sp-verify-badge">🟠 Verified Creator</div><button style="background:linear-gradient(135deg,#f59e0b,#d97706);border:none;border-radius:20px;padding:7px 18px;color:#fff;font-size:12px;font-weight:600;cursor:pointer" onclick="applyForVerification('gold')"><span style="background:#fff;color:#d97706;border-radius:50%;width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;margin-right:4px">✓</span>Apply for Gold Badge</button></div>`)
           : `<div style="display:flex;gap:8px;flex-direction:column;align-items:center"><div class="sp-verify-badge">🟠 Verified Creator</div><div style="font-size:11px;color:#7a90b0">Need 500K likes for Gold badge (${((prof.total_likes||0)/1000).toFixed(0)}K / 500K)</div></div>`)
         : ((prof.total_likes||0) >= 1000
           ? (prof.verification_status === 'pending'
@@ -930,8 +941,8 @@ async function loadMySpProfile() {
       <div class="sp-profile-meta">${prof.country||''} ${prof.age?'· Age '+prof.age:''}</div>
       <div class="sp-profile-stats">
         <div class="sp-pstat"><div class="sp-pstat-val">${posts.filter(p=>p.status==='approved').length}</div><div class="sp-pstat-lbl">Posts</div></div>
-        <div class="sp-pstat"><div class="sp-pstat-val">${(prof.total_likes||0).toLocaleString()}</div><div class="sp-pstat-lbl">Likes</div></div>
-        <div class="sp-pstat"><div class="sp-pstat-val">${(prof.followers||prof.total_likes||0).toLocaleString()}</div><div class="sp-pstat-lbl">Followers</div></div>
+        <div class="sp-pstat"><div class="sp-pstat-val">${formatCount(prof.total_likes||0)}</div><div class="sp-pstat-lbl">Likes</div></div>
+        <div class="sp-pstat"><div class="sp-pstat-val">${formatCount(prof.followers||prof.total_likes||0)}</div><div class="sp-pstat-lbl">Followers</div></div>
       </div>
       ${verSection}
       <div style="display:flex;gap:8px;margin-top:12px;justify-content:center;flex-wrap:wrap">
