@@ -320,6 +320,7 @@ html,body{height:100%;background:#070d1a;color:#f0f4ff;font-family:-apple-system
 .sp-name-row{flex:1}
 .sp-author{font-size:14px;font-weight:600;color:#f0f4ff;display:flex;align-items:center;gap:4px}
 .sp-verified{width:16px;height:16px;background:#e87722;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:9px;color:#fff}
+.sp-verified-gold{background:linear-gradient(135deg,#f59e0b,#d97706)!important;box-shadow:0 0 6px rgba(245,158,11,0.5)}
 .sp-country{font-size:11px;color:#7a90b0}
 .sp-caption{font-size:14px;color:#c0cce8;line-height:1.6;margin-bottom:10px}
 .sp-image{width:100%;border-radius:12px;max-height:300px;object-fit:cover;margin-bottom:10px;display:block}
