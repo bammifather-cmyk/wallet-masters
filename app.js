@@ -750,6 +750,8 @@ function renderSpFeed(posts) {
   feed.innerHTML = posts.map(p => spPostHTML(p)).join('');
 }
 function spPostHTML(p) {
+  // Store caption for safe editing
+  _postCaptions[p.id] = p.caption || '';
   const verBadge = p.author_verified ? `<span class="sp-verified">✓</span>` : '';
   const adminLikes = p.likes > 0 ? `<span class="sp-admin-likes">❤️ ${p.likes.toLocaleString()} admin likes</span>` : '';
   const userLikes  = p.user_likes > 0 ? ` · ${p.user_likes.toLocaleString()} likes` : '';
@@ -772,8 +774,7 @@ function spPostHTML(p) {
         ${p.user_likes||0}
       </button>
       <button onclick="toggleComments(${p.id})" style="background:none;border:none;color:#7a90b0;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:4px">💬 Comments</button>
-      ${String(p.telegram_id)===String(state.user?.telegramId||tgU?.id||'') ? `<button onclick="editSpPost(${p.id},'${p.caption.replace(/'/g,"\\'").replace(/
-/g,' ')}')" style="background:none;border:none;color:#2563eb;font-size:12px;cursor:pointer">Edit</button>` : ''}
+      ${String(p.telegram_id)===String(state.user?.telegramId||tgU?.id||'') ? `<button onclick="handleEditPost(${p.id})" style="background:none;border:none;color:#2563eb;font-size:12px;cursor:pointer">Edit</button>` : ''}
     </div>
     <div id="comments-${p.id}" style="margin-top:10px;display:none"></div>
   </div>`;
@@ -950,6 +951,23 @@ async function applyForVerification(type) {
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
+
+// Caption storage for edit (avoids inline escaping bugs)
+const _postCaptions = {};
+
+function handleEditPost(postId) {
+  const caption = _postCaptions[postId] || '';
+  const newCaption = prompt('Edit your post:', caption);
+  if (!newCaption || newCaption.trim() === caption) return;
+  fetch(`${API}/socialpay/post/${postId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'x-telegram-init-data': getInitData() },
+    body: JSON.stringify({ caption: newCaption.trim() })
+  }).then(r => r.json()).then(r => {
+    if (r.success) { toast('Post updated!'); loadSocialFeed(); }
+    else toast(r.error || 'Update failed');
+  });
+}
 
 // Toggle comments section
 async function toggleComments(postId) {
