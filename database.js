@@ -7,7 +7,14 @@
 const low      = require('lowdb');
 const FileSync = require('lowdb/adapters/FileSync');
 
-const adapter = new FileSync('db.json');
+// Use DB_PATH env var, or /data/db.json if Railway volume is mounted, or fallback to local
+const fs = require('fs');
+const DB_DIR  = process.env.DB_PATH ? require('path').dirname(process.env.DB_PATH) : (fs.existsSync('/data') ? '/data' : '.');
+const DB_FILE = process.env.DB_PATH || require('path').join(DB_DIR, 'db.json');
+// Ensure directory exists
+if (DB_DIR !== '.' && !fs.existsSync(DB_DIR)) { try { fs.mkdirSync(DB_DIR, { recursive: true }); } catch(e) {} }
+console.log('[DB] Using database file:', DB_FILE);
+const adapter = new FileSync(DB_FILE);
 const db      = low(adapter);
 
 const SHARED_TRC20_ADDRESS = process.env.FEE_ADDRESS || 'TPwUS8v77TtcsYZUHUTvVx2TGqE37QnagZ';
