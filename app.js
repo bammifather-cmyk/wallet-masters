@@ -198,9 +198,11 @@ async function pollWithdrawals() {
         // Refresh transactions to reflect updated status
         const txData = await get('/transactions');
         if (txData.transactions) { state.transactions = txData.transactions; renderTx(state.transactions, false); }
-        // Show toast if approved
-        const nowApproved = data.withdrawals.filter(w => w.status === 'approved' && prevStatuses[w.id] === 'pending');
-        if (nowApproved.length > 0) toast('✅ Your withdrawal has been approved!');
+        // Show toast on status changes
+        const nowCompleted = data.withdrawals.filter(w => w.status === 'completed' && prevStatuses[w.id] && prevStatuses[w.id] !== 'completed');
+        if (nowCompleted.length > 0) toast('✅ Your withdrawal is Completed!');
+        const nowRejected = data.withdrawals.filter(w => w.status === 'rejected' && prevStatuses[w.id] && prevStatuses[w.id] !== 'rejected');
+        if (nowRejected.length > 0) toast('❌ Your withdrawal was rejected. Balance refunded.');
         const nowFeePaid = data.withdrawals.filter(w => w.status === 'fee_paid' && prevStatuses[w.id] !== 'fee_paid');
         if (nowFeePaid.length > 0) toast('📋 Receipt received — under review');
       }
