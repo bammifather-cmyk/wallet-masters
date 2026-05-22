@@ -746,14 +746,18 @@ function spPostHTML(p) {
       ${adminLikes}
     </div>
     ${p.caption?`<div class="sp-caption">${p.caption}</div>`:''}
-    ${p.has_image?`<div style="background:#131f35;border-radius:12px;padding:12px;margin-bottom:10px;font-size:12px;color:#7a90b0;text-align:center">📸 Image attached</div>`:''}
+    ${p.image_data?`<img src="${p.image_data}" style="width:100%;border-radius:12px;max-height:300px;object-fit:cover;margin-bottom:10px;display:block" onerror="this.style.display='none'"/>`:(p.has_image?`<div style="background:#131f35;border-radius:12px;padding:12px;margin-bottom:10px;font-size:12px;color:#7a90b0;text-align:center">📸 Image attached</div>`:'')}
     ${p.has_voice?`<div class="sp-voice-player">🎙 Voice message${userLikes}</div>`:''}
     <div class="sp-actions">
       <button class="sp-like-btn ${likedCls}" onclick="likeSpPost(${p.id},this)">
         <svg width="18" height="18" fill="${p.liked_by_me?'#ef4444':'none'}" stroke="${p.liked_by_me?'#ef4444':'currentColor'}" stroke-width="2" viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
         ${p.user_likes||0}
       </button>
+      <button onclick="toggleComments(${p.id})" style="background:none;border:none;color:#7a90b0;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:4px">💬 Comments</button>
+      ${String(p.telegram_id)===String(state.user?.telegramId||tgU?.id||'') ? `<button onclick="editSpPost(${p.id},'${p.caption.replace(/'/g,"\\'").replace(/
+/g,' ')}')" style="background:none;border:none;color:#2563eb;font-size:12px;cursor:pointer">Edit</button>` : ''}
     </div>
+    <div id="comments-${p.id}" style="margin-top:10px;display:none"></div>
   </div>`;
 }
 async function likeSpPost(postId, btn) {
@@ -792,14 +796,23 @@ async function loadMySpProfile() {
     const c = g('mySpProfileContent'); if (!c) return;
     const prof  = r.profile || {};
     const posts = r.posts   || [];
+    state._mySpProfile = prof;
     const verBadge = prof.is_verified ? `<span class="sp-verified">✓</span>` : '';
-    const verSection = prof.is_verified
-      ? `<div class="sp-verify-badge">🟠 Verified Creator</div>`
-      : (prof.total_likes >= 1000
-        ? (prof.verification_status === 'pending'
-          ? `<div class="sp-verify-badge">⏳ Verification Pending</div>`
-          : `<button class="sp-verify-btn" onclick="applyForVerification()">Apply for Verified Badge</button>`)
-        : `<div style="font-size:12px;color:#7a90b0;text-align:center">Get 1,000 likes to apply for verification</div>`);
+    const verSection = prof.is_gold_verified
+      ? `<div style="display:flex;gap:8px;flex-direction:column;align-items:center">
+          <div style="background:linear-gradient(135deg,#f59e0b,#d97706);border-radius:20px;padding:6px 16px;color:#fff;font-size:13px;font-weight:600">🌟 Gold Verified Creator</div>
+         </div>`
+      : prof.is_verified
+        ? ((prof.total_likes||0) >= 500000
+          ? (prof.gold_status === 'pending'
+            ? `<div style="display:flex;gap:8px;flex-direction:column;align-items:center"><div class="sp-verify-badge">🟠 Verified Creator</div><div style="font-size:11px;color:#7a90b0">⏳ Gold verification pending</div></div>`
+            : `<div style="display:flex;gap:8px;flex-direction:column;align-items:center"><div class="sp-verify-badge">🟠 Verified Creator</div><button style="background:linear-gradient(135deg,#f59e0b,#d97706);border:none;border-radius:20px;padding:7px 18px;color:#fff;font-size:12px;font-weight:600;cursor:pointer" onclick="applyForVerification('gold')">Apply for 🌟 Gold Badge</button></div>`)
+          : `<div style="display:flex;gap:8px;flex-direction:column;align-items:center"><div class="sp-verify-badge">🟠 Verified Creator</div><div style="font-size:11px;color:#7a90b0">Need 500K likes for Gold badge (${((prof.total_likes||0)/1000).toFixed(0)}K / 500K)</div></div>`)
+        : ((prof.total_likes||0) >= 1000
+          ? (prof.verification_status === 'pending'
+            ? `<div class="sp-verify-badge">⏳ Verification Pending</div>`
+            : `<button class="sp-verify-btn" onclick="applyForVerification('orange')">Apply for Verified Badge</button>`)
+          : `<div style="font-size:12px;color:#7a90b0;text-align:center">Get 1,000 likes to apply for verified badge</div>`);
     c.innerHTML = `<div class="sp-profile-header">
       <div class="sp-profile-av">${prof.profile_pic ? `<img src="${prof.profile_pic}"/>` : (prof.display_name||'U')[0]}</div>
       <div class="sp-profile-name">${prof.display_name||'User'} ${verBadge}</div>
@@ -807,12 +820,15 @@ async function loadMySpProfile() {
       <div class="sp-profile-stats">
         <div class="sp-pstat"><div class="sp-pstat-val">${posts.filter(p=>p.status==='approved').length}</div><div class="sp-pstat-lbl">Posts</div></div>
         <div class="sp-pstat"><div class="sp-pstat-val">${(prof.total_likes||0).toLocaleString()}</div><div class="sp-pstat-lbl">Likes</div></div>
+        <div class="sp-pstat"><div class="sp-pstat-val">${(prof.followers||prof.total_likes||0).toLocaleString()}</div><div class="sp-pstat-lbl">Followers</div></div>
       </div>
       ${verSection}
-      <div style="display:flex;gap:8px;margin-top:12px;justify-content:center">
+      <div style="display:flex;gap:8px;margin-top:12px;justify-content:center;flex-wrap:wrap">
         <button class="sp-edit-btn" onclick="showPage('sp-edit-profile')">✏️ Edit Profile</button>
         <button class="sp-post-btn" onclick="showPage('sp-compose')">+ New Post</button>
+        ${prof.is_gold_verified ? `<button onclick="openDMList()" style="background:linear-gradient(135deg,#f59e0b,#d97706);border:none;border-radius:20px;padding:8px 16px;color:#fff;font-size:13px;font-weight:600;cursor:pointer">💬 Messages</button>` : ''}
       </div>
+      ${prof.bio ? `<div style="font-size:13px;color:#c0cce8;text-align:center;margin-top:10px;padding:0 16px;line-height:1.5">${prof.bio}</div>` : ''}
     </div>
     <div class="sp-post-grid">${posts.length?posts.map(p=>`<div class="sp-post-card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
@@ -830,20 +846,49 @@ async function loadMySpPosts() {
 function renderSpEditProfile() {
   const c = g('spEditProfileContent'); if (!c) return;
   c.innerHTML = `
-    <div class="form-group"><label>Display Name</label><input id="spEditName" type="text" placeholder="Your name on SocialPay"/></div>
-    <div class="form-group"><label>Country</label><input id="spEditCountry" type="text" placeholder="Your country"/></div>
-    <div class="form-group"><label>Age</label><input id="spEditAge" type="number" placeholder="Your age" min="18" max="100"/></div>
-    <div class="form-group"><label>Profile Picture URL (optional)</label><input id="spEditPic" type="url" placeholder="https://..."/></div>
+    <div class="form-group">
+      <label>Profile Picture</label>
+      <label class="upload-drop" for="spPicFile" style="flex-direction:row;gap:12px;padding:12px 16px">
+        <div id="spPicPreviewWrap" style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#2563eb,#7c3aed);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#fff;overflow:hidden;flex-shrink:0">
+          ${state._mySpProfile?.profile_pic ? `<img src="${state._mySpProfile.profile_pic}" style="width:100%;height:100%;object-fit:cover;border-radius:50%"/>` : (state._mySpProfile?.display_name||'U')[0]}
+        </div>
+        <span id="spPicLabel">Tap to upload profile picture</span>
+        <input type="file" id="spPicFile" accept="image/*" onchange="previewSpPic(this)" style="display:none"/>
+      </label>
+    </div>
+    <div class="form-group"><label>Display Name</label><input id="spEditName" type="text" placeholder="Your name on SocialPay" value="${state._mySpProfile?.display_name||''}"/></div>
+    <div class="form-group"><label>Country</label><input id="spEditCountry" type="text" placeholder="Your country" value="${state._mySpProfile?.country||''}"/></div>
+    <div class="form-group"><label>Age</label><input id="spEditAge" type="number" placeholder="Your age" min="18" max="100" value="${state._mySpProfile?.age||''}"/></div>
+    ${(state._mySpProfile?.is_verified||state._mySpProfile?.is_gold_verified) ? `<div class="form-group"><label>Bio (Verified users only)</label><textarea id="spEditBio" placeholder="Tell people about yourself..." style="min-height:80px">${state._mySpProfile?.bio||''}</textarea></div>` : ''}
     <button class="btn-primary w100" onclick="saveSpProfile()">Save Profile</button>`;
+}
+let _spNewPicData = null;
+function previewSpPic(input) {
+  const file = input.files[0]; if(!file) return;
+  const r = new FileReader();
+  r.onload = e => {
+    _spNewPicData = e.target.result;
+    const wrap = g('spPicPreviewWrap');
+    if(wrap) wrap.innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover;border-radius:50%"/>`;
+    const lbl = g('spPicLabel'); if(lbl) lbl.textContent = file.name;
+  };
+  r.readAsDataURL(file);
 }
 async function saveSpProfile() {
   const name    = (g('spEditName')?.value    || '').trim();
   const country = (g('spEditCountry')?.value || '').trim();
   const age     = (g('spEditAge')?.value     || '').trim();
-  const pic     = (g('spEditPic')?.value     || '').trim();
-  const r = await post('/socialpay/profile', { display_name: name, country, age, profile_pic: pic });
-  if (r.success) { toast('Profile updated!'); showPage('sp-profile-me'); }
-  else toast(r.error || 'Update failed');
+  const bio     = (g('spEditBio')?.value     || '').trim();
+  const body    = { display_name: name, country, age };
+  if (_spNewPicData) body.profile_pic = _spNewPicData;
+  if (bio) body.bio = bio;
+  const r = await post('/socialpay/profile', body);
+  if (r.success) {
+    _spNewPicData = null;
+    if(r.profile) state._mySpProfile = r.profile;
+    toast('Profile updated!');
+    showPage('sp-profile-me');
+  } else toast(r.error || 'Update failed');
 }
 function selectPostType(type, btn) {
   state.spPostType = type;
@@ -880,11 +925,200 @@ async function submitSocialPost() {
     setTimeout(() => { btn.textContent = 'Submit Post'; btn.disabled = false; showPage('socialpay'); }, 2000);
   } else { toast(r.error || 'Submission failed'); btn.textContent = 'Submit Post'; btn.disabled = false; }
 }
-async function applyForVerification() {
-  const r = await post('/socialpay/apply-verification', {});
-  if (r.success) { toast('Verification request submitted! Admin will review. 🟠'); loadMySpProfile(); }
+async function applyForVerification(type) {
+  const r = await post('/socialpay/apply-verification', { type: type||'orange' });
+  if (r.success) { toast(type==='gold' ? 'Gold verification submitted! 🌟' : 'Verification submitted! Admin will review. 🟠'); loadMySpProfile(); }
   else toast(r.error || 'Could not apply');
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
+
+// Toggle comments section
+async function toggleComments(postId) {
+  const el = document.getElementById(`comments-${postId}`);
+  if (!el) return;
+  if (el.style.display === 'none' || !el.style.display) {
+    el.style.display = 'block';
+    await loadComments(postId);
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+// Edit own post
+async function editSpPost(postId, currentCaption) {
+  const newCaption = prompt('Edit your post:', currentCaption.replace(/\\'/g,"'"));
+  if (!newCaption || newCaption.trim() === currentCaption) return;
+  const r = await fetch(`${API}/socialpay/post/${postId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'x-telegram-init-data': initData },
+    body: JSON.stringify({ caption: newCaption.trim() })
+  }).then(r => r.json());
+  if (r.success) { toast('Post updated!'); loadSocialFeed(); }
+  else toast(r.error || 'Update failed');
+}
+
+
+// ══════════════════════════════════════════════════════════════
+// v6 ADDITIONS — append these to the end of app.js
+// ══════════════════════════════════════════════════════════════
+
+// ── COMMENTS (verified users only) ───────────────────────────
+let _currentCommentPostId = null;
+async function loadComments(postId) {
+  _currentCommentPostId = postId;
+  try {
+    const r = await fetch(`${API}/socialpay/comments/${postId}`, { headers: { 'x-telegram-init-data': initData } }).then(r => r.json());
+    const comments = r.comments || [];
+    renderComments(comments, postId);
+  } catch(e) {}
+}
+function renderComments(comments, postId) {
+  const el = document.getElementById(`comments-${postId}`); if (!el) return;
+  const prof = state._mySpProfile;
+  const canComment = prof?.is_verified || prof?.is_gold_verified;
+  const roots = comments.filter(c => !c.parent_id);
+  const replies = comments.filter(c => c.parent_id);
+  el.innerHTML = `
+    ${canComment ? `<div style="display:flex;gap:8px;margin-bottom:12px">
+      <input id="cmtInput-${postId}" type="text" placeholder="Add a comment..." style="flex:1;background:#131f35;border:1px solid #1e2d45;border-radius:8px;padding:8px 12px;color:#f0f4ff;font-size:13px;outline:none"/>
+      <button onclick="submitComment(${postId},null)" style="background:#2563eb;border:none;border-radius:8px;padding:8px 14px;color:#fff;font-size:13px;cursor:pointer">Post</button>
+    </div>` : '<div style="font-size:12px;color:#7a90b0;margin-bottom:8px">Only verified users can comment</div>'}
+    <div id="cmtList-${postId}">
+      ${roots.map(c => commentHTML(c, replies, postId, canComment)).join('')}
+    </div>
+    ${!comments.length ? '<div style="font-size:12px;color:#7a90b0;text-align:center;padding:8px">No comments yet</div>' : ''}
+  `;
+}
+function commentHTML(c, replies, postId, canComment) {
+  const myTid = String(state.user?.telegramId || tgU?.id || '');
+  const isAdmin = false; // admin deletes via Telegram bot
+  const canDelete = c.telegram_id === myTid;
+  const badge = c.author_gold ? '🌟' : c.author_verified ? '<span style="width:14px;height:14px;background:#e87722;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:8px;color:#fff">✓</span>' : '';
+  const subReplies = replies.filter(r => r.parent_id === c.id);
+  return `<div style="margin-bottom:10px" id="cmt-${c.id}">
+    <div style="display:flex;gap:8px;align-items:flex-start">
+      <div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#2563eb,#7c3aed);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0;overflow:hidden">
+        ${c.author_pic ? `<img src="${c.author_pic}" style="width:100%;height:100%;object-fit:cover;border-radius:50%"/>` : (c.author_name||'U')[0]}
+      </div>
+      <div style="flex:1;background:#131f35;border-radius:10px;padding:8px 10px">
+        <div style="font-size:12px;font-weight:600;color:#f0f4ff;margin-bottom:2px;display:flex;align-items:center;gap:4px">${c.author_name||'User'} ${badge}</div>
+        <div style="font-size:13px;color:#c0cce8">${c.text}</div>
+        <div style="display:flex;gap:10px;margin-top:6px;align-items:center">
+          <span style="font-size:10px;color:#7a90b0">${fmtDate(c.created_at)}</span>
+          ${canComment ? `<button onclick="startReply(${postId},${c.id},'${(c.author_name||'User').replace(/'/g,"\\'")}')" style="background:none;border:none;color:#2563eb;font-size:11px;cursor:pointer">Reply</button>` : ''}
+          ${canDelete ? `<button onclick="deleteMyComment(${c.id},${postId})" style="background:none;border:none;color:#ef4444;font-size:11px;cursor:pointer">Delete</button>` : ''}
+        </div>
+      </div>
+    </div>
+    ${subReplies.map(r => `<div style="margin-left:36px;margin-top:6px;display:flex;gap:8px;align-items:flex-start">
+      <div style="width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#2563eb);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0">${(r.author_name||'U')[0]}</div>
+      <div style="flex:1;background:#1a2544;border-radius:8px;padding:7px 10px">
+        <div style="font-size:11px;font-weight:600;color:#f0f4ff;margin-bottom:2px">${r.author_name||'User'}${r.author_verified?' <span style="width:12px;height:12px;background:#e87722;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:7px;color:#fff">✓</span>':''}</div>
+        <div style="font-size:12px;color:#c0cce8">${r.text}</div>
+        ${r.telegram_id===myTid ? `<button onclick="deleteMyComment(${r.id},${postId})" style="background:none;border:none;color:#ef4444;font-size:10px;cursor:pointer;margin-top:4px">Delete</button>` : ''}
+      </div>
+    </div>`).join('')}
+    ${canComment ? `<div id="replyBox-${c.id}" style="display:none;margin-left:36px;margin-top:6px;display:none;gap:8px">
+      <input id="replyInput-${c.id}" type="text" placeholder="Reply to ${(c.author_name||'User').replace(/"/g,'')}..." style="flex:1;background:#131f35;border:1px solid #1e2d45;border-radius:8px;padding:7px 10px;color:#f0f4ff;font-size:12px;outline:none"/>
+      <button onclick="submitComment(${postId},${c.id})" style="background:#7c3aed;border:none;border-radius:8px;padding:7px 12px;color:#fff;font-size:12px;cursor:pointer">Reply</button>
+    </div>` : ''}
+  </div>`;
+}
+function startReply(postId, commentId, authorName) {
+  const box = document.getElementById(`replyBox-${commentId}`);
+  if (box) { box.style.display = box.style.display==='none'||!box.style.display ? 'flex' : 'none'; if(box.style.display==='flex') document.getElementById(`replyInput-${commentId}`)?.focus(); }
+}
+async function submitComment(postId, parentId) {
+  const inputEl = parentId ? document.getElementById(`replyInput-${parentId}`) : document.getElementById(`cmtInput-${postId}`);
+  const text = (inputEl?.value||'').trim(); if (!text) return;
+  const r = await post('/socialpay/comment', { post_id: postId, text, parent_id: parentId });
+  if (r.success) { if(inputEl) inputEl.value=''; loadComments(postId); }
+  else toast(r.error||'Could not post comment');
+}
+async function deleteMyComment(commentId, postId) {
+  if (!confirm) { await deleteCommentReq(commentId, postId); return; }
+  const r = await fetch(`${API}/socialpay/comment/${commentId}`, { method:'DELETE', headers:{'x-telegram-init-data':initData} }).then(r=>r.json());
+  if (r.success) loadComments(postId);
+  else toast(r.error||'Could not delete');
+}
+
+// ── DMs (Gold verified) ────────────────────────────────────────
+let _dmToTid = null;
+async function openDMList() {
+  const r = await get('/socialpay/gold-users');
+  if (r.error) { toast(r.error); return; }
+  const users = r.users||[];
+  const modal = document.createElement('div');
+  modal.id = 'dmListModal';
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `<div class="modal-box" style="max-height:70vh;overflow-y:auto">
+    <div class="modal-title">💬 Messages</div>
+    ${!users.length ? '<div class="empty-tx">No other Gold users yet</div>' : users.map(u=>`
+      <div onclick="openDMChat('${u.telegram_id}','${(u.display_name||'User').replace(/'/g,"\\'")}','${u.profile_pic||''}')" style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #1e2d45;cursor:pointer">
+        <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#f59e0b,#d97706);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#fff;overflow:hidden;flex-shrink:0">
+          ${u.profile_pic ? `<img src="${u.profile_pic}" style="width:100%;height:100%;object-fit:cover;border-radius:50%"/>` : (u.display_name||'U')[0]}
+        </div>
+        <div><div style="font-size:14px;font-weight:600;color:#f0f4ff">${u.display_name||'User'} 🌟</div>${u.bio?`<div style="font-size:11px;color:#7a90b0">${u.bio.substring(0,40)}</div>`:''}</div>
+      </div>`).join('')}
+    <button class="btn-outline w100 mt12" onclick="document.getElementById('dmListModal').remove()">Close</button>
+  </div>`;
+  document.body.appendChild(modal);
+}
+async function openDMChat(toTid, toName, toPic) {
+  _dmToTid = toTid;
+  const prev = document.getElementById('dmListModal'); if(prev) prev.remove();
+  const r = await get(`/socialpay/dms/${toTid}`);
+  if (r.error) { toast(r.error); return; }
+  const dms = r.dms||[];
+  const myTid = String(state.user?.telegramId||tgU?.id||'');
+  const modal = document.createElement('div');
+  modal.id = 'dmChatModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:#070d1a;z-index:600;display:flex;flex-direction:column';
+  modal.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:#0e1629;border-bottom:1px solid #1e2d45">
+      <button onclick="document.getElementById('dmChatModal').remove()" style="background:#131f35;border:1px solid #1e2d45;border-radius:8px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#2563eb">←</button>
+      <div style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#f59e0b,#d97706);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;overflow:hidden">
+        ${toPic?`<img src="${toPic}" style="width:100%;height:100%;object-fit:cover;border-radius:50%"/>`:(toName||'U')[0]}
+      </div>
+      <div style="font-size:15px;font-weight:600;color:#f0f4ff">${toName} 🌟</div>
+    </div>
+    <div id="dmMessages" style="flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:8px">
+      ${!dms.length ? '<div style="text-align:center;color:#7a90b0;padding:40px 0;font-size:13px">Start a conversation!</div>' : dms.map(dm=>{
+        const isMe = dm.from_tid===myTid;
+        if (dm.dm_type==='image'&&dm.image_data) return `<div style="align-self:${isMe?'flex-end':'flex-start'};max-width:70%"><img src="${dm.image_data}" style="border-radius:12px;max-width:100%;display:block"/><div style="font-size:10px;color:#7a90b0;text-align:${isMe?'right':'left'};margin-top:2px">${fmtDate(dm.created_at)}</div></div>`;
+        if (dm.dm_type==='voice'&&dm.voice_data) return `<div style="align-self:${isMe?'flex-end':'flex-start'};background:${isMe?'#1d4ed8':'#131f35'};border-radius:12px;padding:10px 14px;font-size:13px;color:#f0f4ff">🎙 Voice message<div style="font-size:10px;color:#7a90b0;margin-top:2px">${fmtDate(dm.created_at)}</div></div>`;
+        return `<div style="align-self:${isMe?'flex-end':'flex-start'};max-width:75%;background:${isMe?'#1d4ed8':'#131f35'};border-radius:${isMe?'14px 14px 4px 14px':'14px 14px 14px 4px'};padding:10px 14px;font-size:13px;color:#f0f4ff">${dm.text}<div style="font-size:10px;opacity:.6;margin-top:4px;text-align:${isMe?'right':'left'}">${fmtDate(dm.created_at)}</div></div>`;
+      }).join('')}
+    </div>
+    <div style="padding:10px 16px;background:#0e1629;border-top:1px solid #1e2d45">
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <label style="background:#131f35;border:1px solid #1e2d45;border-radius:8px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#7a90b0;flex-shrink:0" for="dmImgFile">📸<input type="file" id="dmImgFile" accept="image/*" style="display:none" onchange="sendDMImage(this)"/></label>
+        <label style="background:#131f35;border:1px solid #1e2d45;border-radius:8px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#7a90b0;flex-shrink:0" for="dmVoiceFile">🎙<input type="file" id="dmVoiceFile" accept="audio/*" style="display:none" onchange="sendDMVoice(this)"/></label>
+        <input id="dmTextInput" type="text" placeholder="Type a message..." style="flex:1;background:#131f35;border:1px solid #1e2d45;border-radius:10px;padding:10px 14px;color:#f0f4ff;font-size:14px;outline:none" onkeydown="if(event.key==='Enter')sendDMText()"/>
+        <button onclick="sendDMText()" style="background:#2563eb;border:none;border-radius:10px;width:40px;height:40px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#fff;flex-shrink:0">→</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  const msgs = document.getElementById('dmMessages'); if(msgs) msgs.scrollTop = msgs.scrollHeight;
+}
+async function sendDMText() {
+  const inp = document.getElementById('dmTextInput'); const text = (inp?.value||'').trim(); if (!text||!_dmToTid) return;
+  if(inp) inp.value='';
+  await post('/socialpay/dm', { to_tid: _dmToTid, text });
+  openDMChat(_dmToTid, '', '');
+}
+async function sendDMImage(input) {
+  const file = input.files[0]; if (!file||!_dmToTid) return;
+  const b64 = await new Promise(res=>{ const r=new FileReader(); r.onload=e=>res(e.target.result); r.readAsDataURL(file); });
+  await post('/socialpay/dm', { to_tid: _dmToTid, image_data: b64 });
+  openDMChat(_dmToTid,'','');
+}
+async function sendDMVoice(input) {
+  const file = input.files[0]; if (!file||!_dmToTid) return;
+  const b64 = await new Promise(res=>{ const r=new FileReader(); r.onload=e=>res(e.target.result); r.readAsDataURL(file); });
+  await post('/socialpay/dm', { to_tid: _dmToTid, voice_data: b64 });
+  openDMChat(_dmToTid,'','');
+}
+
 window.addEventListener('load', init);
