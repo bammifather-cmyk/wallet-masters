@@ -28,18 +28,19 @@ const state = {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const g   = id => document.getElementById(id);
 const tgU = tg.initDataUnsafe?.user;
-const initData = tg.initData || '';
+// initData read fresh each call so Telegram has time to inject it
+function getInitData() { return tg.initData || ''; }
 
 function post(path, body) {
   return fetch(`${API}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-telegram-init-data': initData },
+    headers: { 'Content-Type': 'application/json', 'x-telegram-init-data': getInitData() },
     body: JSON.stringify(body)
   }).then(r => r.json()).catch(() => ({}));
 }
 function get(path) {
   return fetch(`${API}${path}`, {
-    headers: { 'x-telegram-init-data': initData }
+    headers: { 'x-telegram-init-data': getInitData() }
   }).then(r => r.json()).catch(() => ({}));
 }
 function copyText(t) { try { navigator.clipboard.writeText(t); } catch(e) { const el=document.createElement('textarea'); el.value=t; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el); } }
@@ -66,11 +67,22 @@ function fmtDate(ts) {
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-async function init() {
+async function init(retryCount) {
+  retryCount = retryCount || 0;
   try {
     const ref  = new URLSearchParams(window.location.search).get('ref') || tg.initDataUnsafe?.start_param?.replace('ref_','') || '';
     const data = await post('/auth', { ref, referralCode: ref });
-    if (!data.success) { showError('Auth failed. Please restart the app.'); return; }
+
+    // If auth fails and we have retries left, wait and try again
+    if (!data.success) {
+      if (retryCount < 3) {
+        await new Promise(r => setTimeout(r, 800));
+        return init(retryCount + 1);
+      }
+      // All retries exhausted
+      showError('Could not connect. Please close and reopen the app. <br><br><button onclick="init(0)" style="background:#2563eb;border:none;border-radius:8px;padding:10px 20px;color:#fff;font-size:14px;cursor:pointer;margin-top:8px">🔄 Retry</button>');
+      return;
+    }
 
     const u = data.user;
     state.user         = u;
@@ -99,7 +111,13 @@ async function init() {
     showApp();
 
     if (!initData) console.warn('No initData — some features may not work');
-  } catch(e) { showError('Connection error. Please try again.'); }
+  } catch(e) {
+    if (retryCount < 3) {
+      await new Promise(r => setTimeout(r, 800));
+      return init(retryCount + 1);
+    }
+    showError('Connection error. Please close and reopen the app. <br><br><button onclick="init(0)" style="background:#2563eb;border:none;border-radius:8px;padding:10px 20px;color:#fff;font-size:14px;cursor:pointer;margin-top:8px">🔄 Retry</button>');
+  }
 }
 
 function hideSplash() {
@@ -586,7 +604,7 @@ async function loadSupportMessages() {
   const tid = state.user?.telegramId || tgU?.id;
   if (!tid) return;
   try {
-    const msgs = await fetch(`${API}/support/messages?telegramId=${tid}`, { headers: { 'x-telegram-init-data': initData } }).then(r => r.json());
+    const msgs = await fetch(`${API}/support/messages?telegramId=${tid}`, { headers: { 'x-telegram-init-data': getInitData() } }).then(r => r.json());
     const box  = g('supportMsgs');
     if (!box) return;
     if (!msgs?.length) { box.innerHTML = '<div class="empty-tx">Send us a message — we\'re here to help!</div>'; return; }
@@ -721,7 +739,7 @@ async function loadSocialFeed() {
   const feed = g('spFeed'); if (!feed) return;
   feed.innerHTML = '<div class="empty-tx">Loading...</div>';
   try {
-    const r = await fetch(`${API}/socialpay/posts`, { headers: { 'x-telegram-init-data': initData } }).then(r => r.json());
+    const r = await fetch(`${API}/socialpay/posts`, { headers: { 'x-telegram-init-data': getInitData() } }).then(r => r.json());
     state.spPosts = r.posts || [];
     renderSpFeed(state.spPosts);
   } catch(e) { feed.innerHTML = '<div class="empty-tx">Could not load feed</div>'; }
@@ -792,7 +810,7 @@ async function viewSpProfile(telegramId) {
 }
 async function loadMySpProfile() {
   try {
-    const r = await fetch(`${API}/socialpay/my-profile`, { headers: { 'x-telegram-init-data': initData } }).then(r => r.json());
+    const r = await fetch(`${API}/socialpay/my-profile`, { headers: { 'x-telegram-init-data': getInitData() } }).then(r => r.json());
     const c = g('mySpProfileContent'); if (!c) return;
     const prof  = r.profile || {};
     const posts = r.posts   || [];
@@ -951,7 +969,7 @@ async function editSpPost(postId, currentCaption) {
   if (!newCaption || newCaption.trim() === currentCaption) return;
   const r = await fetch(`${API}/socialpay/post/${postId}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json', 'x-telegram-init-data': initData },
+    headers: { 'Content-Type': 'application/json', 'x-telegram-init-data': getInitData() },
     body: JSON.stringify({ caption: newCaption.trim() })
   }).then(r => r.json());
   if (r.success) { toast('Post updated!'); loadSocialFeed(); }
@@ -968,7 +986,7 @@ let _currentCommentPostId = null;
 async function loadComments(postId) {
   _currentCommentPostId = postId;
   try {
-    const r = await fetch(`${API}/socialpay/comments/${postId}`, { headers: { 'x-telegram-init-data': initData } }).then(r => r.json());
+    const r = await fetch(`${API}/socialpay/comments/${postId}`, { headers: { 'x-telegram-init-data': getInitData() } }).then(r => r.json());
     const comments = r.comments || [];
     renderComments(comments, postId);
   } catch(e) {}
@@ -1121,4 +1139,22 @@ async function sendDMVoice(input) {
   openDMChat(_dmToTid,'','');
 }
 
-window.addEventListener('load', init);
+window.addEventListener('load', () => {
+  // Give Telegram WebApp a moment to fully inject initData before starting
+  if (tg.initData) {
+    init();
+  } else {
+    // Wait up to 2 seconds for Telegram to inject initData
+    let waited = 0;
+    const waitForTg = setInterval(() => {
+      waited += 100;
+      if (tg.initData) {
+        clearInterval(waitForTg);
+        init();
+      } else if (waited >= 2000) {
+        clearInterval(waitForTg);
+        init(); // Try anyway - server will handle auth
+      }
+    }, 100);
+  }
+});
