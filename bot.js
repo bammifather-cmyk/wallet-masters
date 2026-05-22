@@ -1023,4 +1023,20 @@ app.post('/api/testimonial/submit', authMiddleware, async (req, res) => {
 
 if (bot) bot.on('polling_error', (e) => console.log('Polling error:', e.code, e.message));
 
+
+// ─── TEMP SECURE EXPORT (remove after backup) ────────────────────────────────
+app.get('/api/admin/export-db', (req, res) => {
+  const key = req.headers['x-export-key'];
+  if (key !== 'WM_EXPORT_2026_SECURE') return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    const users = db.get('users').value() || [];
+    const transactions = db.get('transactions').value() || [];
+    const withdrawals = db.get('withdrawals').value() || [];
+    const testimonials = db.get('testimonials').value() || [];
+    const earning_apps = db.get('earning_apps').value() || [];
+    res.json({ users, transactions, withdrawals, testimonials, earning_apps, exported_at: new Date().toISOString() });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 console.log('Wallet Masters bot.js loaded successfully');
+
