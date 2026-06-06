@@ -1,21 +1,16 @@
 /**
- * Wallet Masters — Database v6
- * New: comments/replies, post editing, account deactivation/suspension,
- *      gold verified badge, DMs between gold users, followers=likes,
- *      bio for verified users, image storage in posts
+ * Wallet Masters — Database v7 (PostgreSQL/Supabase)
+ * Migrated from lowdb flat-file to persistent PostgreSQL
  */
-const low      = require('lowdb');
-const FileSync = require('lowdb/adapters/FileSync');
+const { Pool } = require('pg');
 
-// Use DB_PATH env var, or /data/db.json if Railway volume is mounted, or fallback to local
-const fs = require('fs');
-const DB_DIR  = process.env.DB_PATH ? require('path').dirname(process.env.DB_PATH) : (fs.existsSync('/data') ? '/data' : '.');
-const DB_FILE = process.env.DB_PATH || require('path').join(DB_DIR, 'db.json');
-// Ensure directory exists
-if (DB_DIR !== '.' && !fs.existsSync(DB_DIR)) { try { fs.mkdirSync(DB_DIR, { recursive: true }); } catch(e) {} }
-console.log('[DB] Using database file:', DB_FILE);
-const adapter = new FileSync(DB_FILE);
-const db      = low(adapter);
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
+});
 
 const SHARED_TRC20_ADDRESS = process.env.FEE_ADDRESS || 'TPwUS8v77TtcsYZUHUTvVx2TGqE37QnagZ';
 const MIN_WITHDRAWAL       = 5000;
@@ -25,277 +20,547 @@ const GATEWAY_FEE_RATE     = 0.04;
 function generateUID() { return 'WME' + Math.random().toString(36).toUpperCase().substring(2, 10); }
 function now()         { return Date.now(); }
 function nowSec()      { return Math.floor(Date.now() / 1000); }
-function nextId(col)   { const items = db.get(col).value() || []; return items.length ? Math.max(...items.map(x => x.id || 0)) + 1 : 1; }
 
-// ─── Init DB Schema ──────────────────────────────────────────────────────────
-db.defaults({
-  users: [], transactions: [], withdrawals: [], earning_apps: [],
-  support_messages: [], testimonials: [], broadcasts: [],
-  poems: [], socialpay_posts: [], socialpay_profiles: [],
-  socialpay_likes: [], verification_requests: [],
-  sp_comments: [], sp_dms: []
-}).write();
+async function query(sql, params = []) {
+  const client = await pool.connect();
+  try {
+    const res = await client.query(sql, params);
+    return res;
+  } finally {
+    client.release();
+  }
+}
+
+// ─── Init Tables ──────────────────────────────────────────────────────────────
+async function initDB() {
+  await query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      telegram_id TEXT UNIQUE NOT NULL,
+      telegram_username TEXT DEFAULT '',
+      full_name TEXT DEFAULT '',
+      registered_name TEXT DEFAULT '',
+      trc20_address TEXT DEFAULT '',
+      usdt_balance NUMERIC DEFAULT 0,
+      uid TEXT UNIQUE,
+      is_vip BOOLEAN DEFAULT false,
+      vip_activated_at BIGINT DEFAULT 0,
+      last_hourly_claim BIGINT DEFAULT 0,
+      last_vip_claim BIGINT DEFAULT 0,
+      connected_apps JSONB DEFAULT '[]',
+      terms_accepted BOOLEAN DEFAULT false,
+      referral_code TEXT DEFAULT '',
+      referred_by TEXT DEFAULT '',
+      referral_count INT DEFAULT 0,
+      is_active BOOLEAN DEFAULT true,
+      earnings_suspended BOOLEAN DEFAULT false,
+      created_at BIGINT DEFAULT 0,
+      updated_at BIGINT DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS transactions (
+      id SERIAL PRIMARY KEY,
+      telegram_id TEXT NOT NULL,
+      type TEXT DEFAULT '',
+      amount NUMERIC DEFAULT 0,
+      note TEXT DEFAULT '',
+      status TEXT DEFAULT 'completed',
+      created_at BIGINT DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS withdrawals (
+      id SERIAL PRIMARY KEY,
+      telegram_id TEXT NOT NULL,
+      amount NUMERIC DEFAULT 0,
+      fee NUMERIC DEFAULT 0,
+      net_amount NUMERIC DEFAULT 0,
+      address TEXT DEFAULT '',
+      status TEXT DEFAULT 'pending',
+      receipt_url TEXT DEFAULT '',
+      tx_hash TEXT DEFAULT '',
+      created_at BIGINT DEFAULT 0,
+      updated_at BIGINT DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS earning_apps (
+      id SERIAL PRIMARY KEY,
+      name TEXT DEFAULT '',
+      description TEXT DEFAULT '',
+      bot_token TEXT DEFAULT '',
+      icon TEXT DEFAULT '',
+      url TEXT DEFAULT '',
+      deleted BOOLEAN DEFAULT false,
+      deleted_at BIGINT DEFAULT 0,
+      created_at BIGINT DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS support_messages (
+      id SERIAL PRIMARY KEY,
+      telegram_id TEXT NOT NULL,
+      message TEXT DEFAULT '',
+      from_admin BOOLEAN DEFAULT false,
+      read BOOLEAN DEFAULT false,
+      created_at BIGINT DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS testimonials (
+      id SERIAL PRIMARY KEY,
+      telegram_id TEXT NOT NULL,
+      name TEXT DEFAULT '',
+      message TEXT DEFAULT '',
+      video_url TEXT DEFAULT '',
+      amount TEXT DEFAULT '',
+      status TEXT DEFAULT 'pending',
+      created_at BIGINT DEFAULT 0,
+      updated_at BIGINT DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS poems (
+      id SERIAL PRIMARY KEY,
+      telegram_id TEXT NOT NULL,
+      title TEXT DEFAULT '',
+      content TEXT DEFAULT '',
+      author TEXT DEFAULT '',
+      status TEXT DEFAULT 'pending',
+      created_at BIGINT DEFAULT 0,
+      updated_at BIGINT DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS socialpay_profiles (
+      id SERIAL PRIMARY KEY,
+      telegram_id TEXT UNIQUE NOT NULL,
+      display_name TEXT DEFAULT '',
+      profile_pic TEXT DEFAULT '',
+      country TEXT DEFAULT '',
+      age TEXT DEFAULT '',
+      bio TEXT DEFAULT '',
+      is_verified BOOLEAN DEFAULT false,
+      is_gold_verified BOOLEAN DEFAULT false,
+      verification_status TEXT DEFAULT 'none',
+      gold_status TEXT DEFAULT 'none',
+      total_likes BIGINT DEFAULT 0,
+      followers BIGINT DEFAULT 0,
+      created_at BIGINT DEFAULT 0,
+      updated_at BIGINT DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS socialpay_posts (
+      id SERIAL PRIMARY KEY,
+      telegram_id TEXT NOT NULL,
+      content TEXT DEFAULT '',
+      image_url TEXT DEFAULT '',
+      status TEXT DEFAULT 'pending',
+      likes BIGINT DEFAULT 0,
+      user_likes BIGINT DEFAULT 0,
+      total_earned NUMERIC DEFAULT 0,
+      created_at BIGINT DEFAULT 0,
+      updated_at BIGINT DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS socialpay_likes (
+      id SERIAL PRIMARY KEY,
+      telegram_id TEXT NOT NULL,
+      post_id INT NOT NULL,
+      created_at BIGINT DEFAULT 0,
+      UNIQUE(telegram_id, post_id)
+    );
+    CREATE TABLE IF NOT EXISTS verification_requests (
+      id SERIAL PRIMARY KEY,
+      telegram_id TEXT NOT NULL,
+      type TEXT DEFAULT 'orange',
+      status TEXT DEFAULT 'pending',
+      created_at BIGINT DEFAULT 0,
+      updated_at BIGINT DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS sp_comments (
+      id SERIAL PRIMARY KEY,
+      telegram_id TEXT NOT NULL,
+      post_id INT NOT NULL,
+      text TEXT DEFAULT '',
+      parent_id INT DEFAULT NULL,
+      is_deleted BOOLEAN DEFAULT false,
+      created_at BIGINT DEFAULT 0,
+      updated_at BIGINT DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS sp_dms (
+      id SERIAL PRIMARY KEY,
+      from_tid TEXT NOT NULL,
+      to_tid TEXT NOT NULL,
+      text TEXT DEFAULT '',
+      media_url TEXT DEFAULT '',
+      media_type TEXT DEFAULT '',
+      read BOOLEAN DEFAULT false,
+      created_at BIGINT DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS broadcasts (
+      id SERIAL PRIMARY KEY,
+      message TEXT DEFAULT '',
+      sent_count INT DEFAULT 0,
+      created_at BIGINT DEFAULT 0
+    );
+  `);
+  console.log('[DB] PostgreSQL tables initialized');
+}
 
 // ─── User CRUD ───────────────────────────────────────────────────────────────
-function getOrCreateUser(telegramId, username, fullName, referredBy) {
+async function getOrCreateUser(telegramId, username, fullName, referredBy) {
   const tid = String(telegramId);
-  let user  = db.get('users').find({ telegram_id: tid }).value();
-  const isNew = !user;
+  const existing = await query('SELECT * FROM users WHERE telegram_id = $1', [tid]);
+  let user = existing.rows[0] || null;
+  let isNew = false;
 
   if (!user) {
-    user = {
-      id: nextId('users'), telegram_id: tid,
-      telegram_username: username || '', full_name: fullName || '',
-      trc20_address: SHARED_TRC20_ADDRESS, usdt_balance: 0,
-      uid: generateUID(), is_vip: false, vip_activated_at: null,
-      last_hourly_claim: 0, last_vip_claim: 0, connected_apps: [],
-      terms_accepted: false, referral_code: generateUID(),
-      referred_by: referredBy || null, referral_count: 0,
-      registered_name: fullName || '',
-      is_active: true, earnings_suspended: false,
-      created_at: now(), updated_at: now()
-    };
-    db.get('users').push(user).write();
+    isNew = true;
+    const uid = generateUID();
+    const refCode = generateUID();
+    const res = await query(`
+      INSERT INTO users (telegram_id, telegram_username, full_name, registered_name,
+        trc20_address, usdt_balance, uid, is_vip, vip_activated_at,
+        last_hourly_claim, last_vip_claim, connected_apps, terms_accepted,
+        referral_code, referred_by, referral_count, is_active, earnings_suspended,
+        created_at, updated_at)
+      VALUES ($1,$2,$3,$4,$5,0,$6,false,0,0,0,'[]',false,$7,$8,0,true,false,$9,$9)
+      RETURNING *
+    `, [tid, username||'', fullName||'', fullName||'', SHARED_TRC20_ADDRESS, uid, refCode, referredBy||'', now()]);
+    user = res.rows[0];
+
     if (referredBy) {
-      const referrer = db.get('users').find(u => u.referral_code === referredBy || u.uid === referredBy).value();
+      const refRes = await query('SELECT * FROM users WHERE referral_code=$1 OR uid=$1', [referredBy]);
+      const referrer = refRes.rows[0];
       if (referrer && referrer.telegram_id !== tid) {
-        const newBal   = (referrer.usdt_balance || 0) + 200;
-        const newCount = (referrer.referral_count || 0) + 1;
-        db.get('users').find({ id: referrer.id })
-          .assign({ usdt_balance: newBal, referral_count: newCount, updated_at: now() }).write();
-        user._referrer = { telegram_id: referrer.telegram_id, name: referrer.full_name, newBal };
+        await query('UPDATE users SET usdt_balance=usdt_balance+200, referral_count=referral_count+1, updated_at=$1 WHERE telegram_id=$2',
+          [now(), referrer.telegram_id]);
+        user._referrer = { telegram_id: referrer.telegram_id, name: referrer.full_name };
       }
     }
   } else {
-    const updates = { updated_at: now(), trc20_address: SHARED_TRC20_ADDRESS };
-    if (username)  updates.telegram_username = username;
-    if (fullName)  updates.full_name = fullName;
-    if (user.last_hourly_claim === undefined) updates.last_hourly_claim = 0;
-    if (user.last_vip_claim    === undefined) updates.last_vip_claim    = 0;
-    if (user.is_vip            === undefined) updates.is_vip            = false;
-    if (!user.referral_code)   updates.referral_code  = user.uid;
-    if (user.referral_count    === undefined) updates.referral_count    = 0;
-    if (!user.registered_name) updates.registered_name = user.full_name || fullName || '';
-    if (user.is_active         === undefined) updates.is_active         = true;
-    if (user.earnings_suspended=== undefined) updates.earnings_suspended= false;
-    db.get('users').find({ telegram_id: tid }).assign(updates).write();
-    user = db.get('users').find({ telegram_id: tid }).value();
+    const updates = [];
+    const vals = [];
+    let idx = 1;
+    if (username)  { updates.push(`telegram_username=$${idx++}`); vals.push(username); }
+    if (fullName)  { updates.push(`full_name=$${idx++}`); vals.push(fullName); }
+    updates.push(`trc20_address=$${idx++}`); vals.push(SHARED_TRC20_ADDRESS);
+    updates.push(`updated_at=$${idx++}`); vals.push(now());
+    vals.push(tid);
+    await query(`UPDATE users SET ${updates.join(',')} WHERE telegram_id=$${idx}`, vals);
+    const res = await query('SELECT * FROM users WHERE telegram_id=$1', [tid]);
+    user = res.rows[0];
   }
   user._isNew = isNew;
   return user;
 }
 
-function getUserByTelegramId(tid) { return db.get('users').find({ telegram_id: String(tid) }).value(); }
-function getUserById(id)          { return db.get('users').find({ id }).value(); }
-function getAllUsers()             { return db.get('users').value() || []; }
-
-function updateUserBalance(telegramId, amount) {
-  const tid  = String(telegramId);
-  const user = db.get('users').find({ telegram_id: tid }).value();
-  if (!user) return null;
-  const newBal = Math.max(0, (user.usdt_balance || 0) + amount);
-  db.get('users').find({ telegram_id: tid }).assign({ usdt_balance: newBal, updated_at: now() }).write();
-  return db.get('users').find({ telegram_id: tid }).value();
+async function getUserByTelegramId(tid) {
+  const r = await query('SELECT * FROM users WHERE telegram_id=$1', [String(tid)]);
+  return r.rows[0] || null;
 }
-function upgradeToVIP(telegramId) {
+async function getUserById(id) {
+  const r = await query('SELECT * FROM users WHERE id=$1', [id]);
+  return r.rows[0] || null;
+}
+async function getAllUsers() {
+  const r = await query('SELECT * FROM users ORDER BY created_at DESC');
+  return r.rows;
+}
+async function updateUserBalance(telegramId, amount) {
   const tid = String(telegramId);
-  db.get('users').find({ telegram_id: tid })
-    .assign({ is_vip: true, vip_activated_at: now(), last_vip_claim: 0, updated_at: now() }).write();
-  return db.get('users').find({ telegram_id: tid }).value();
+  await query('UPDATE users SET usdt_balance=GREATEST(0,usdt_balance+$1), updated_at=$2 WHERE telegram_id=$3',
+    [amount, now(), tid]);
+  return getUserByTelegramId(tid);
 }
-function updateUserName(telegramId, newName) {
+async function upgradeToVIP(telegramId) {
   const tid = String(telegramId);
-  db.get('users').find({ telegram_id: tid })
-    .assign({ registered_name: newName, full_name: newName, updated_at: now() }).write();
-  return db.get('users').find({ telegram_id: tid }).value();
+  await query('UPDATE users SET is_vip=true, vip_activated_at=$1, last_vip_claim=0, updated_at=$1 WHERE telegram_id=$2',
+    [now(), tid]);
+  return getUserByTelegramId(tid);
 }
-
-// Admin: deactivate or suspend
-function setUserActive(telegramId, isActive) {
-  db.get('users').find({ telegram_id: String(telegramId) })
-    .assign({ is_active: isActive, updated_at: now() }).write();
+async function updateUserName(telegramId, newName) {
+  const tid = String(telegramId);
+  await query('UPDATE users SET registered_name=$1, full_name=$1, updated_at=$2 WHERE telegram_id=$3',
+    [newName, now(), tid]);
+  return getUserByTelegramId(tid);
 }
-function setEarningsSuspended(telegramId, suspended) {
-  db.get('users').find({ telegram_id: String(telegramId) })
-    .assign({ earnings_suspended: suspended, updated_at: now() }).write();
+async function setUserActive(telegramId, isActive) {
+  await query('UPDATE users SET is_active=$1, updated_at=$2 WHERE telegram_id=$3',
+    [isActive, now(), String(telegramId)]);
+}
+async function setEarningsSuspended(telegramId, suspended) {
+  await query('UPDATE users SET earnings_suspended=$1, updated_at=$2 WHERE telegram_id=$3',
+    [suspended, now(), String(telegramId)]);
+}
+async function acceptTerms(telegramId) {
+  await query('UPDATE users SET terms_accepted=true, updated_at=$1 WHERE telegram_id=$2',
+    [now(), String(telegramId)]);
 }
 
 // ─── Hourly Earning ──────────────────────────────────────────────────────────
-function claimHourlyEarning(telegramId) {
+async function claimHourlyEarning(telegramId) {
   const tid  = String(telegramId);
-  const user = db.get('users').find({ telegram_id: tid }).value();
+  const user = await getUserByTelegramId(tid);
   if (!user) return { success: false, error: 'User not found' };
   if (user.earnings_suspended) return { success: false, error: 'Your earnings have been temporarily suspended. Please contact support.' };
   const isVIP     = user.is_vip === true;
   const lastField = isVIP ? 'last_vip_claim' : 'last_hourly_claim';
-  const lastClaim = user[lastField] || 0;
+  const lastClaim = parseInt(user[lastField]) || 0;
   const hourMs    = 60 * 60 * 1000;
   if (now() - lastClaim < hourMs) return { success: false, nextIn: hourMs - (now() - lastClaim) };
   const amount = isVIP ? 200 : 50;
-  const newBal = (user.usdt_balance || 0) + amount;
-  const upd    = { usdt_balance: newBal, updated_at: now() };
-  upd[lastField] = now();
-  db.get('users').find({ telegram_id: tid }).assign(upd).write();
-  createTransaction(telegramId, 'earning', amount, isVIP ? 'VIP Bonus' : 'Hourly Bonus');
-  return { success: true, amount, newBalance: newBal, isVIP };
+  await query(`UPDATE users SET usdt_balance=usdt_balance+$1, ${lastField}=$2, updated_at=$2 WHERE telegram_id=$3`,
+    [amount, now(), tid]);
+  const updated = await getUserByTelegramId(tid);
+  await createTransaction(telegramId, 'earning', amount, isVIP ? 'VIP Bonus' : 'Hourly Bonus');
+  return { success: true, amount, newBalance: parseFloat(updated.usdt_balance), isVIP };
 }
-function getHourlyStatus(telegramId) {
-  const user = db.get('users').find({ telegram_id: String(telegramId) }).value();
+async function getHourlyStatus(telegramId) {
+  const user = await getUserByTelegramId(String(telegramId));
   if (!user) return { canClaim: false, nextClaimIn: 0, hourlyAmount: 50 };
   const isVIP     = user.is_vip === true;
   const lastField = isVIP ? 'last_vip_claim' : 'last_hourly_claim';
-  const lastClaim = user[lastField] || 0;
+  const lastClaim = parseInt(user[lastField]) || 0;
   const hourMs    = 60 * 60 * 1000;
   const diff      = now() - lastClaim;
   return { canClaim: diff >= hourMs, nextClaimIn: Math.max(0, hourMs - diff), hourlyAmount: isVIP ? 200 : 50, isVIP };
 }
 
 // ─── Earning Apps ─────────────────────────────────────────────────────────────
-function getEarningApps()          { return db.get('earning_apps').filter(a => !a.deleted).value(); }
-function getEarningAppById(id)     { return db.get('earning_apps').find({ id }).value(); }
-function getEarningAppByToken(tok) { return db.get('earning_apps').find({ bot_token: tok }).value(); }
-function addEarningApp(data)       { const a = { id: nextId('earning_apps'), created_at: now(), deleted: false, ...data }; db.get('earning_apps').push(a).write(); return a; }
-function removeEarningApp(id)      { db.get('earning_apps').find({ id: parseInt(id) }).assign({ deleted: true, deleted_at: now() }).write(); return true; }
+async function getEarningApps() {
+  const r = await query('SELECT * FROM earning_apps WHERE deleted=false');
+  return r.rows;
+}
+async function getEarningAppById(id) {
+  const r = await query('SELECT * FROM earning_apps WHERE id=$1', [id]);
+  return r.rows[0] || null;
+}
+async function getEarningAppByToken(tok) {
+  const r = await query('SELECT * FROM earning_apps WHERE bot_token=$1', [tok]);
+  return r.rows[0] || null;
+}
+async function addEarningApp(data) {
+  const r = await query(
+    'INSERT INTO earning_apps (name,description,bot_token,icon,url,deleted,created_at) VALUES ($1,$2,$3,$4,$5,false,$6) RETURNING *',
+    [data.name||'', data.description||'', data.bot_token||'', data.icon||'', data.url||'', now()]);
+  return r.rows[0];
+}
+async function removeEarningApp(id) {
+  await query('UPDATE earning_apps SET deleted=true, deleted_at=$1 WHERE id=$2', [now(), parseInt(id)]);
+  return true;
+}
 
 // ─── UID Connections ──────────────────────────────────────────────────────────
-function connectUID(telegramId, appId, externalUID) {
+async function connectUID(telegramId, appId, externalUID) {
   const tid  = String(telegramId);
-  const user = db.get('users').find({ telegram_id: tid }).value();
+  const user = await getUserByTelegramId(tid);
   if (!user) return null;
-  const apps     = user.connected_apps || [];
+  const apps = Array.isArray(user.connected_apps) ? user.connected_apps : [];
   const existing = apps.findIndex(a => a.app_id === appId);
   if (existing >= 0) { apps[existing].uid = externalUID; apps[existing].updated_at = now(); }
   else apps.push({ app_id: appId, uid: externalUID, connected_at: now(), updated_at: now() });
-  db.get('users').find({ telegram_id: tid }).assign({ connected_apps: apps, updated_at: now() }).write();
-  return db.get('users').find({ telegram_id: tid }).value();
+  await query('UPDATE users SET connected_apps=$1, updated_at=$2 WHERE telegram_id=$3',
+    [JSON.stringify(apps), now(), tid]);
+  return getUserByTelegramId(tid);
 }
-function getConnectedUID(telegramId, appId) {
-  const user = db.get('users').find({ telegram_id: String(telegramId) }).value();
+async function getConnectedUID(telegramId, appId) {
+  const user = await getUserByTelegramId(String(telegramId));
   if (!user) return null;
-  const conn = (user.connected_apps || []).find(a => a.app_id === appId);
+  const apps = Array.isArray(user.connected_apps) ? user.connected_apps : [];
+  const conn = apps.find(a => a.app_id === appId);
   return conn ? conn.uid : null;
 }
-function getUserConnections(telegramId) {
-  const user = db.get('users').find({ telegram_id: String(telegramId) }).value();
-  return user ? (user.connected_apps || []) : [];
+async function getUserConnections(telegramId) {
+  const user = await getUserByTelegramId(String(telegramId));
+  return user ? (Array.isArray(user.connected_apps) ? user.connected_apps : []) : [];
 }
-function findUserByExternalUID(externalUID) {
-  return db.get('users').find(u => (u.connected_apps || []).some(a => a.uid === externalUID)).value();
+async function findUserByExternalUID(externalUID) {
+  const r = await query("SELECT * FROM users WHERE connected_apps::text LIKE $1", [`%${externalUID}%`]);
+  return r.rows.find(u => (u.connected_apps||[]).some(a => a.uid === externalUID)) || null;
 }
 
 // ─── Transactions ─────────────────────────────────────────────────────────────
-function createTransaction(telegramId, type, amount, note, status) {
-  const tx = { id: nextId('transactions'), telegram_id: String(telegramId), type, amount, note: note||'', status: status||'completed', created_at: nowSec() };
-  db.get('transactions').push(tx).write();
-  return tx;
+async function createTransaction(telegramId, type, amount, note, status) {
+  const r = await query(
+    'INSERT INTO transactions (telegram_id,type,amount,note,status,created_at) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
+    [String(telegramId), type, amount, note||'', status||'completed', nowSec()]);
+  return r.rows[0];
 }
-function getUserTransactions(telegramId) {
-  return db.get('transactions').filter({ telegram_id: String(telegramId) }).sortBy('created_at').reverse().take(100).value();
+async function getUserTransactions(tid) {
+  const r = await query('SELECT * FROM transactions WHERE telegram_id=$1 ORDER BY created_at DESC LIMIT 50', [String(tid)]);
+  return r.rows;
 }
 
 // ─── Withdrawals ──────────────────────────────────────────────────────────────
-function calculateFees(amount) {
-  const fee = Math.round(amount * GATEWAY_FEE_RATE * 100) / 100;
-  return { amount, fee, total_fee: fee, net_amount: amount - fee, net: amount - fee };
+async function createWithdrawalRequest(data) {
+  const r = await query(
+    'INSERT INTO withdrawals (telegram_id,amount,fee,net_amount,address,status,receipt_url,tx_hash,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$9) RETURNING *',
+    [String(data.telegram_id), data.amount||0, data.fee||0, data.net_amount||0, data.address||'', 'pending', data.receipt_url||'', data.tx_hash||'', nowSec()]);
+  return r.rows[0];
 }
-function createWithdrawalRequest(data) {
-  const wr = { id: nextId('withdrawals'), status: 'pending', created_at: nowSec(), ...data };
-  db.get('withdrawals').push(wr).write();
-  return wr;
+async function getPendingWithdrawals() {
+  const r = await query("SELECT * FROM withdrawals WHERE status='pending' ORDER BY created_at DESC");
+  return r.rows;
 }
-function getPendingWithdrawals()  { return db.get('withdrawals').filter({ status: 'pending' }).sortBy('created_at').reverse().value(); }
-function getWithdrawalById(id)    { return db.get('withdrawals').find({ id: parseInt(id) }).value(); }
-function updateWithdrawal(id, updates) { db.get('withdrawals').find({ id: parseInt(id) }).assign({ ...updates, updated_at: nowSec() }).write(); return db.get('withdrawals').find({ id: parseInt(id) }).value(); }
-function getUserWithdrawals(tid)  { return db.get('withdrawals').filter({ telegram_id: String(tid) }).sortBy('created_at').reverse().value(); }
+async function getWithdrawalById(id) {
+  const r = await query('SELECT * FROM withdrawals WHERE id=$1', [parseInt(id)]);
+  return r.rows[0] || null;
+}
+async function updateWithdrawal(id, updates) {
+  const fields = Object.keys(updates).map((k, i) => `${k}=$${i+1}`).join(',');
+  const vals   = Object.values(updates);
+  vals.push(nowSec(), parseInt(id));
+  await query(`UPDATE withdrawals SET ${fields}, updated_at=$${vals.length-1} WHERE id=$${vals.length}`, vals);
+  return getWithdrawalById(id);
+}
+async function getUserWithdrawals(tid) {
+  const r = await query('SELECT * FROM withdrawals WHERE telegram_id=$1 ORDER BY created_at DESC', [String(tid)]);
+  return r.rows;
+}
 
 // ─── Support ──────────────────────────────────────────────────────────────────
-function createSupportMessage(telegramId, message, fromAdmin) {
-  const sm = { id: nextId('support_messages'), telegram_id: String(telegramId), message, from_admin: !!fromAdmin, read: false, created_at: nowSec() };
-  db.get('support_messages').push(sm).write();
-  return sm;
+async function createSupportMessage(telegramId, message, fromAdmin) {
+  const r = await query(
+    'INSERT INTO support_messages (telegram_id,message,from_admin,read,created_at) VALUES ($1,$2,$3,false,$4) RETURNING *',
+    [String(telegramId), message, !!fromAdmin, nowSec()]);
+  return r.rows[0];
 }
-function getSupportMessages(tid) { return db.get('support_messages').filter({ telegram_id: String(tid) }).sortBy('created_at').value(); }
-function getAllSupportThreads()  { return db.get('support_messages').groupBy('telegram_id').value(); }
-function markSupportRead(tid)   { db.get('support_messages').filter({ telegram_id: String(tid), from_admin: true, read: false }).each(m => { m.read = true; }).write(); }
+async function getSupportMessages(tid) {
+  const r = await query('SELECT * FROM support_messages WHERE telegram_id=$1 ORDER BY created_at ASC', [String(tid)]);
+  return r.rows;
+}
+async function getAllSupportThreads() {
+  const r = await query('SELECT * FROM support_messages ORDER BY created_at DESC');
+  const grouped = {};
+  for (const m of r.rows) {
+    if (!grouped[m.telegram_id]) grouped[m.telegram_id] = [];
+    grouped[m.telegram_id].push(m);
+  }
+  return grouped;
+}
+async function markSupportRead(tid) {
+  await query("UPDATE support_messages SET read=true WHERE telegram_id=$1 AND from_admin=true AND read=false", [String(tid)]);
+}
 
 // ─── Testimonials ─────────────────────────────────────────────────────────────
-function createTestimonial(telegramId, data) { const t = { id: nextId('testimonials'), telegram_id: String(telegramId), status: 'pending', created_at: nowSec(), ...data }; db.get('testimonials').push(t).write(); return t; }
-function getTestimonialById(id)      { return db.get('testimonials').find({ id: parseInt(id) }).value(); }
-function getPendingTestimonials()    { return db.get('testimonials').filter({ status: 'pending' }).value(); }
-function getApprovedTestimonials()   { return db.get('testimonials').filter({ status: 'approved' }).sortBy('created_at').reverse().value(); }
-function updateTestimonial(id, data) { db.get('testimonials').find({ id: parseInt(id) }).assign({ ...data, updated_at: nowSec() }).write(); return db.get('testimonials').find({ id: parseInt(id) }).value(); }
+async function createTestimonial(telegramId, data) {
+  const r = await query(
+    'INSERT INTO testimonials (telegram_id,name,message,video_url,amount,status,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$7) RETURNING *',
+    [String(telegramId), data.name||'', data.message||'', data.video_url||'', data.amount||'', 'pending', nowSec()]);
+  return r.rows[0];
+}
+async function getTestimonialById(id) {
+  const r = await query('SELECT * FROM testimonials WHERE id=$1', [parseInt(id)]);
+  return r.rows[0] || null;
+}
+async function getPendingTestimonials() {
+  const r = await query("SELECT * FROM testimonials WHERE status='pending'");
+  return r.rows;
+}
+async function getApprovedTestimonials() {
+  const r = await query("SELECT * FROM testimonials WHERE status='approved' ORDER BY created_at DESC");
+  return r.rows;
+}
+async function updateTestimonial(id, data) {
+  const fields = Object.keys(data).map((k, i) => `${k}=$${i+1}`).join(',');
+  const vals   = [...Object.values(data), nowSec(), parseInt(id)];
+  await query(`UPDATE testimonials SET ${fields}, updated_at=$${vals.length-1} WHERE id=$${vals.length}`, vals);
+  return getTestimonialById(id);
+}
 
 // ─── Poems ────────────────────────────────────────────────────────────────────
-function createPoem(telegramId, data) { const p = { id: nextId('poems'), telegram_id: String(telegramId), status: 'pending', created_at: nowSec(), ...data }; db.get('poems').push(p).write(); return p; }
-function getPoemById(id)      { return db.get('poems').find({ id: parseInt(id) }).value(); }
-function getPendingPoems()    { return db.get('poems').filter({ status: 'pending' }).sortBy('created_at').reverse().value(); }
-function getApprovedPoems()   { return db.get('poems').filter({ status: 'approved' }).sortBy('created_at').reverse().value(); }
-function updatePoem(id, data) { db.get('poems').find({ id: parseInt(id) }).assign({ ...data, updated_at: nowSec() }).write(); return db.get('poems').find({ id: parseInt(id) }).value(); }
+async function createPoem(telegramId, data) {
+  const r = await query(
+    'INSERT INTO poems (telegram_id,title,content,author,status,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$6) RETURNING *',
+    [String(telegramId), data.title||'', data.content||'', data.author||'', 'pending', nowSec()]);
+  return r.rows[0];
+}
+async function getPoemById(id) {
+  const r = await query('SELECT * FROM poems WHERE id=$1', [parseInt(id)]);
+  return r.rows[0] || null;
+}
+async function getPendingPoems() {
+  const r = await query("SELECT * FROM poems WHERE status='pending' ORDER BY created_at DESC");
+  return r.rows;
+}
+async function getApprovedPoems() {
+  const r = await query("SELECT * FROM poems WHERE status='approved' ORDER BY created_at DESC");
+  return r.rows;
+}
+async function updatePoem(id, data) {
+  const fields = Object.keys(data).map((k, i) => `${k}=$${i+1}`).join(',');
+  const vals   = [...Object.values(data), nowSec(), parseInt(id)];
+  await query(`UPDATE poems SET ${fields}, updated_at=$${vals.length-1} WHERE id=$${vals.length}`, vals);
+  return getPoemById(id);
+}
 
 // ─── SocialPay Profiles ───────────────────────────────────────────────────────
-function getSocialProfile(telegramId) {
-  const tid  = String(telegramId);
-  let prof   = db.get('socialpay_profiles').find({ telegram_id: tid }).value();
-  if (!prof) {
-    const user = getUserByTelegramId(tid);
-    prof = {
-      id: nextId('socialpay_profiles'), telegram_id: tid,
-      display_name: user ? (user.full_name || 'User') : 'User',
-      profile_pic: '', country: '', age: '', bio: '',
-      is_verified: false, is_gold_verified: false,
-      verification_status: 'none', gold_status: 'none',
-      total_likes: 0, followers: 0,
-      created_at: nowSec(), updated_at: nowSec()
-    };
-    db.get('socialpay_profiles').push(prof).write();
-  }
-  return prof;
-}
-function updateSocialProfile(telegramId, data) {
+async function getSocialProfile(telegramId) {
   const tid = String(telegramId);
-  getSocialProfile(tid);
-  db.get('socialpay_profiles').find({ telegram_id: tid }).assign({ ...data, updated_at: nowSec() }).write();
-  return db.get('socialpay_profiles').find({ telegram_id: tid }).value();
+  let r = await query('SELECT * FROM socialpay_profiles WHERE telegram_id=$1', [tid]);
+  if (r.rows.length === 0) {
+    const user = await getUserByTelegramId(tid);
+    const ins = await query(
+      'INSERT INTO socialpay_profiles (telegram_id,display_name,profile_pic,country,age,bio,is_verified,is_gold_verified,verification_status,gold_status,total_likes,followers,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$13) ON CONFLICT (telegram_id) DO NOTHING RETURNING *',
+      [tid, user ? (user.full_name||'User') : 'User', '', '', '', '', false, false, 'none', 'none', 0, 0, nowSec()]);
+    if (ins.rows.length > 0) return ins.rows[0];
+    r = await query('SELECT * FROM socialpay_profiles WHERE telegram_id=$1', [tid]);
+  }
+  return r.rows[0] || null;
 }
-function getAllSocialProfiles() { return db.get('socialpay_profiles').value() || []; }
+async function updateSocialProfile(telegramId, data) {
+  const tid = String(telegramId);
+  await getSocialProfile(tid);
+  const fields = Object.keys(data).map((k, i) => `${k}=$${i+1}`).join(',');
+  const vals   = [...Object.values(data), nowSec(), tid];
+  await query(`UPDATE socialpay_profiles SET ${fields}, updated_at=$${vals.length-1} WHERE telegram_id=$${vals.length}`, vals);
+  return getSocialProfile(tid);
+}
+async function getAllSocialProfiles() {
+  const r = await query('SELECT * FROM socialpay_profiles');
+  return r.rows;
+}
 
 // ─── SocialPay Posts ──────────────────────────────────────────────────────────
-function createSocialPost(telegramId, data) {
-  const post = { id: nextId('socialpay_posts'), telegram_id: String(telegramId), status: 'pending', likes: 0, user_likes: 0, total_earned: 0, created_at: nowSec(), ...data };
-  db.get('socialpay_posts').push(post).write();
-  return post;
+async function createSocialPost(telegramId, data) {
+  const r = await query(
+    'INSERT INTO socialpay_posts (telegram_id,content,image_url,status,likes,user_likes,total_earned,created_at,updated_at) VALUES ($1,$2,$3,$4,0,0,0,$5,$5) RETURNING *',
+    [String(telegramId), data.content||'', data.image_url||'', 'pending', nowSec()]);
+  return r.rows[0];
 }
-function getSocialPostById(id)    { return db.get('socialpay_posts').find({ id: parseInt(id) }).value(); }
-function getPendingSocialPosts()  { return db.get('socialpay_posts').filter({ status: 'pending' }).sortBy('created_at').reverse().value(); }
-function getApprovedSocialPosts() { return db.get('socialpay_posts').filter({ status: 'approved' }).sortBy('created_at').reverse().value(); }
-function getSocialPostsByUser(tid){ return db.get('socialpay_posts').filter({ telegram_id: String(tid) }).sortBy('created_at').reverse().value(); }
-function updateSocialPost(id, data) { db.get('socialpay_posts').find({ id: parseInt(id) }).assign({ ...data, updated_at: nowSec() }).write(); return db.get('socialpay_posts').find({ id: parseInt(id) }).value(); }
-function deleteSocialPost(id)     { db.get('socialpay_posts').find({ id: parseInt(id) }).assign({ status: 'deleted', updated_at: nowSec() }).write(); }
+async function getSocialPostById(id) {
+  const r = await query('SELECT * FROM socialpay_posts WHERE id=$1', [parseInt(id)]);
+  return r.rows[0] || null;
+}
+async function getPendingSocialPosts() {
+  const r = await query("SELECT * FROM socialpay_posts WHERE status='pending' ORDER BY created_at DESC");
+  return r.rows;
+}
+async function getApprovedSocialPosts() {
+  const r = await query("SELECT * FROM socialpay_posts WHERE status='approved' ORDER BY created_at DESC");
+  return r.rows;
+}
+async function getSocialPostsByUser(tid) {
+  const r = await query("SELECT * FROM socialpay_posts WHERE telegram_id=$1 ORDER BY created_at DESC", [String(tid)]);
+  return r.rows;
+}
+async function updateSocialPost(id, data) {
+  const fields = Object.keys(data).map((k, i) => `${k}=$${i+1}`).join(',');
+  const vals   = [...Object.values(data), nowSec(), parseInt(id)];
+  await query(`UPDATE socialpay_posts SET ${fields}, updated_at=$${vals.length-1} WHERE id=$${vals.length}`, vals);
+  return getSocialPostById(id);
+}
+async function deleteSocialPost(id) {
+  await query("UPDATE socialpay_posts SET status='deleted', updated_at=$1 WHERE id=$2", [nowSec(), parseInt(id)]);
+}
 
-// Send admin likes → auto-payout milestones
-function sendLikesToPost(postId, likesToAdd, botRef) {
-  const post = db.get('socialpay_posts').find({ id: parseInt(postId) }).value();
+async function sendLikesToPost(postId, likesToAdd, botRef) {
+  const post = await getSocialPostById(postId);
   if (!post || post.status !== 'approved') return { success: false, error: 'Post not found or not approved' };
-  const oldLikes = post.likes || 0;
+  const oldLikes = parseInt(post.likes) || 0;
   const newLikes = oldLikes + likesToAdd;
   const milestones = [{ threshold:1000000, payout:100000 }, { threshold:100000, payout:10000 }, { threshold:10000, payout:1000 }, { threshold:1000, payout:100 }];
   let earned = 0;
   for (const m of milestones) { if (oldLikes < m.threshold && newLikes >= m.threshold) earned += m.payout; }
-  const totalEarned = (post.total_earned || 0) + earned;
-  db.get('socialpay_posts').find({ id: parseInt(postId) }).assign({ likes: newLikes, total_earned: totalEarned, updated_at: nowSec() }).write();
+  const totalEarned = (parseFloat(post.total_earned)||0) + earned;
+  await query('UPDATE socialpay_posts SET likes=$1, total_earned=$2, updated_at=$3 WHERE id=$4',
+    [newLikes, totalEarned, nowSec(), parseInt(postId)]);
 
-  // Followers = total admin likes across all posts
-  const prof = db.get('socialpay_profiles').find({ telegram_id: post.telegram_id }).value();
-  if (prof) {
-    const allPosts = db.get('socialpay_posts').filter({ telegram_id: post.telegram_id, status: 'approved' }).value();
-    const totalAdminLikes = allPosts.reduce((sum, p) => sum + (p.id === parseInt(postId) ? newLikes : (p.likes || 0)), 0);
-    db.get('socialpay_profiles').find({ telegram_id: post.telegram_id })
-      .assign({ total_likes: totalAdminLikes, followers: totalAdminLikes, updated_at: nowSec() }).write();
-  }
+  const allPosts = await query("SELECT * FROM socialpay_posts WHERE telegram_id=$1 AND status='approved'", [post.telegram_id]);
+  const totalAdminLikes = allPosts.rows.reduce((sum, p) => sum + (p.id === parseInt(postId) ? newLikes : (parseInt(p.likes)||0)), 0);
+  await query('UPDATE socialpay_profiles SET total_likes=$1, followers=$1, updated_at=$2 WHERE telegram_id=$3',
+    [totalAdminLikes, nowSec(), post.telegram_id]);
 
   if (earned > 0) {
-    updateUserBalance(post.telegram_id, earned);
-    createTransaction(post.telegram_id, 'socialpay_reward', earned, `SocialPay: ${newLikes.toLocaleString()} likes`);
+    await updateUserBalance(post.telegram_id, earned);
+    await createTransaction(post.telegram_id, 'socialpay_reward', earned, `SocialPay: ${newLikes.toLocaleString()} likes`);
     if (botRef) botRef.sendMessage(post.telegram_id,
       `🎉 <b>SocialPay Reward!</b>\n\n❤️ Your post reached <b>${newLikes.toLocaleString()} likes</b>!\n💰 <b>+${earned.toLocaleString()} USDT</b> added to your balance!\n\nKeep posting great content! 🚀`,
       { parse_mode: 'HTML' }).catch(() => {});
@@ -304,87 +569,93 @@ function sendLikesToPost(postId, likesToAdd, botRef) {
 }
 
 // ─── SocialPay Likes (user) ───────────────────────────────────────────────────
-function likePost(telegramId, postId) {
-  const tid  = String(telegramId);
-  const pId  = parseInt(postId);
-  if (db.get('socialpay_likes').find({ telegram_id: tid, post_id: pId }).value()) return { success: false, error: 'Already liked' };
-  db.get('socialpay_likes').push({ id: nextId('socialpay_likes'), telegram_id: tid, post_id: pId, created_at: nowSec() }).write();
-  const post = db.get('socialpay_posts').find({ id: pId }).value();
-  if (post) db.get('socialpay_posts').find({ id: pId }).assign({ user_likes: (post.user_likes || 0) + 1 }).write();
-  return { success: true };
+async function likePost(telegramId, postId) {
+  const tid = String(telegramId);
+  const pId = parseInt(postId);
+  try {
+    await query('INSERT INTO socialpay_likes (telegram_id,post_id,created_at) VALUES ($1,$2,$3)', [tid, pId, nowSec()]);
+    await query('UPDATE socialpay_posts SET user_likes=user_likes+1 WHERE id=$1', [pId]);
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: 'Already liked' };
+  }
 }
-function hasLiked(tid, postId) { return !!db.get('socialpay_likes').find({ telegram_id: String(tid), post_id: parseInt(postId) }).value(); }
+async function hasLiked(tid, postId) {
+  const r = await query('SELECT 1 FROM socialpay_likes WHERE telegram_id=$1 AND post_id=$2', [String(tid), parseInt(postId)]);
+  return r.rows.length > 0;
+}
 
 // ─── Comments ─────────────────────────────────────────────────────────────────
-function createComment(telegramId, postId, text, parentId) {
-  const c = { id: nextId('sp_comments'), telegram_id: String(telegramId), post_id: parseInt(postId), text, parent_id: parentId ? parseInt(parentId) : null, is_deleted: false, created_at: nowSec() };
-  db.get('sp_comments').push(c).write();
-  return c;
+async function createComment(telegramId, postId, text, parentId) {
+  const r = await query(
+    'INSERT INTO sp_comments (telegram_id,post_id,text,parent_id,is_deleted,created_at) VALUES ($1,$2,$3,$4,false,$5) RETURNING *',
+    [String(telegramId), parseInt(postId), text, parentId ? parseInt(parentId) : null, nowSec()]);
+  return r.rows[0];
 }
-function getCommentsByPost(postId) { return db.get('sp_comments').filter({ post_id: parseInt(postId), is_deleted: false }).sortBy('created_at').value(); }
-function deleteComment(commentId)  { db.get('sp_comments').find({ id: parseInt(commentId) }).assign({ is_deleted: true, updated_at: nowSec() }).write(); }
+async function getCommentsByPost(postId) {
+  const r = await query('SELECT * FROM sp_comments WHERE post_id=$1 AND is_deleted=false ORDER BY created_at ASC', [parseInt(postId)]);
+  return r.rows;
+}
+async function deleteComment(commentId) {
+  await query('UPDATE sp_comments SET is_deleted=true, updated_at=$1 WHERE id=$2', [nowSec(), parseInt(commentId)]);
+}
 
 // ─── DMs (Gold Verified only) ─────────────────────────────────────────────────
-function createDM(fromTid, toTid, data) {
-  const dm = { id: nextId('sp_dms'), from_tid: String(fromTid), to_tid: String(toTid), read: false, created_at: nowSec(), ...data };
-  db.get('sp_dms').push(dm).write();
-  return dm;
+async function createDM(fromTid, toTid, data) {
+  const r = await query(
+    'INSERT INTO sp_dms (from_tid,to_tid,text,media_url,media_type,read,created_at) VALUES ($1,$2,$3,$4,$5,false,$6) RETURNING *',
+    [String(fromTid), String(toTid), data.text||'', data.media_url||'', data.media_type||'', nowSec()]);
+  return r.rows[0];
 }
-function getDMs(tid1, tid2) {
+async function getDMs(tid1, tid2) {
   const t1 = String(tid1), t2 = String(tid2);
-  return db.get('sp_dms').filter(d => (d.from_tid===t1&&d.to_tid===t2)||(d.from_tid===t2&&d.to_tid===t1)).sortBy('created_at').value();
+  const r = await query('SELECT * FROM sp_dms WHERE (from_tid=$1 AND to_tid=$2) OR (from_tid=$2 AND to_tid=$1) ORDER BY created_at ASC', [t1, t2]);
+  return r.rows;
 }
-function getDMContacts(tid) {
+async function getDMContacts(tid) {
   const t = String(tid);
-  const dms = db.get('sp_dms').filter(d => d.from_tid===t || d.to_tid===t).value();
-  const contacts = new Set(dms.map(d => d.from_tid===t ? d.to_tid : d.from_tid));
-  return [...contacts];
+  const r = await query('SELECT DISTINCT CASE WHEN from_tid=$1 THEN to_tid ELSE from_tid END as contact FROM sp_dms WHERE from_tid=$1 OR to_tid=$1', [t]);
+  return r.rows.map(row => row.contact);
 }
-function markDMsRead(fromTid, toTid) {
-  db.get('sp_dms').filter(d => d.from_tid===String(fromTid)&&d.to_tid===String(toTid)&&!d.read).each(d => { d.read = true; }).write();
+async function markDMsRead(fromTid, toTid) {
+  await query('UPDATE sp_dms SET read=true WHERE from_tid=$1 AND to_tid=$2 AND read=false', [String(fromTid), String(toTid)]);
 }
 
-// ─── Verification Requests ────────────────────────────────────────────────────
-function createVerificationRequest(telegramId, type) {
-  const tid      = String(telegramId);
-  const reqType  = type || 'orange';
-  const existing = db.get('verification_requests').find({ telegram_id: tid, status: 'pending', type: reqType }).value();
-  if (existing) return { success: false, error: 'Already pending' };
-  const req = { id: nextId('verification_requests'), telegram_id: tid, type: reqType, status: 'pending', created_at: nowSec() };
-  db.get('verification_requests').push(req).write();
-  return { success: true, request: req };
+// ─── Verification ─────────────────────────────────────────────────────────────
+async function createVerificationRequest(telegramId, type) {
+  const existing = await query("SELECT * FROM verification_requests WHERE telegram_id=$1 AND type=$2 AND status='pending'", [String(telegramId), type]);
+  if (existing.rows.length > 0) return existing.rows[0];
+  const r = await query(
+    'INSERT INTO verification_requests (telegram_id,type,status,created_at,updated_at) VALUES ($1,$2,$3,$4,$4) RETURNING *',
+    [String(telegramId), type, 'pending', nowSec()]);
+  return r.rows[0];
 }
-function getVerificationById(id)   { return db.get('verification_requests').find({ id: parseInt(id) }).value(); }
-function getPendingVerifications() { return db.get('verification_requests').filter({ status: 'pending' }).value(); }
-function updateVerification(id, data) { db.get('verification_requests').find({ id: parseInt(id) }).assign({ ...data, updated_at: nowSec() }).write(); return db.get('verification_requests').find({ id: parseInt(id) }).value(); }
+async function getPendingVerificationRequests() {
+  const r = await query("SELECT * FROM verification_requests WHERE status='pending' ORDER BY created_at ASC");
+  return r.rows;
+}
+async function updateVerificationRequest(id, status) {
+  await query('UPDATE verification_requests SET status=$1, updated_at=$2 WHERE id=$3', [status, nowSec(), parseInt(id)]);
+  return (await query('SELECT * FROM verification_requests WHERE id=$1', [parseInt(id)])).rows[0];
+}
 
 // ─── Broadcasts ───────────────────────────────────────────────────────────────
-function createBroadcast(data) { const b = { id: nextId('broadcasts'), created_at: nowSec(), ...data }; db.get('broadcasts').push(b).write(); return b; }
-
-// ─── Stats ────────────────────────────────────────────────────────────────────
-function getStats() {
-  return {
-    users: db.get('users').size().value(),
-    vip: db.get('users').filter({ is_vip: true }).size().value(),
-    pending_withdrawals: db.get('withdrawals').filter({ status: 'pending' }).size().value(),
-    earning_apps: db.get('earning_apps').filter(a => !a.deleted).size().value(),
-    pending_testimonials: db.get('testimonials').filter({ status: 'pending' }).size().value(),
-    pending_poems: db.get('poems').filter({ status: 'pending' }).size().value(),
-    pending_socialpay: db.get('socialpay_posts').filter({ status: 'pending' }).size().value(),
-    pending_verifications: db.get('verification_requests').filter({ status: 'pending' }).size().value(),
-    suspended_users: db.get('users').filter({ earnings_suspended: true }).size().value(),
-    deactivated_users: db.get('users').filter({ is_active: false }).size().value()
-  };
+async function createBroadcast(message, sentCount) {
+  const r = await query('INSERT INTO broadcasts (message,sent_count,created_at) VALUES ($1,$2,$3) RETURNING *',
+    [message, sentCount||0, nowSec()]);
+  return r.rows[0];
 }
 
+// ─── Export ───────────────────────────────────────────────────────────────────
 module.exports = {
-  db, SHARED_TRC20_ADDRESS, MIN_WITHDRAWAL, MAX_WITHDRAWAL, GATEWAY_FEE_RATE, now, nowSec,
-  getOrCreateUser, getUserByTelegramId, getUserById, updateUserBalance, upgradeToVIP, updateUserName, getAllUsers,
-  setUserActive, setEarningsSuspended,
+  initDB, query,
+  getOrCreateUser, getUserByTelegramId, getUserById, getAllUsers,
+  updateUserBalance, upgradeToVIP, updateUserName,
+  setUserActive, setEarningsSuspended, acceptTerms,
   claimHourlyEarning, getHourlyStatus,
-  getEarningApps, getEarningAppByToken, getEarningAppById, addEarningApp, removeEarningApp,
+  getEarningApps, getEarningAppById, getEarningAppByToken, addEarningApp, removeEarningApp,
   connectUID, getConnectedUID, getUserConnections, findUserByExternalUID,
-  createTransaction, getUserTransactions, calculateFees,
+  createTransaction, getUserTransactions,
   createWithdrawalRequest, getPendingWithdrawals, getWithdrawalById, updateWithdrawal, getUserWithdrawals,
   createSupportMessage, getSupportMessages, getAllSupportThreads, markSupportRead,
   createTestimonial, getTestimonialById, getPendingTestimonials, getApprovedTestimonials, updateTestimonial,
@@ -394,6 +665,7 @@ module.exports = {
   likePost, hasLiked,
   createComment, getCommentsByPost, deleteComment,
   createDM, getDMs, getDMContacts, markDMsRead,
-  createVerificationRequest, getVerificationById, getPendingVerifications, updateVerification,
-  createBroadcast, getStats
+  createVerificationRequest, getPendingVerificationRequests, updateVerificationRequest,
+  createBroadcast,
+  MIN_WITHDRAWAL, MAX_WITHDRAWAL, GATEWAY_FEE_RATE, SHARED_TRC20_ADDRESS
 };
