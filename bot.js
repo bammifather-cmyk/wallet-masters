@@ -327,7 +327,7 @@ if (bot) bot.on('callback_query', async (cq) => {
   }
 
   // Admin user management
-  if (data.startsWith('adm_deactivate_') || data.startsWith('adm_activate_') || data.startsWith('adm_suspend_') || data.startsWith('adm_unsuspend_')) {
+  if (data.startsWith('adm_deactivate_') || data.startsWith('adm_activate_') || data.startsWith('adm_suspend_') || data.startsWith('adm_unsuspend_') || data.startsWith('adm_resolve_bal_')) {
     if (!isAdmin) return bot.answerCallbackQuery(cq.id, { text: '❌ Not authorized' });
     const parts = data.split('_'); const action = parts[1]; const tid = parts.slice(2).join('_');
     if (action === 'deactivate') {
@@ -344,6 +344,15 @@ if (bot) bot.on('callback_query', async (cq) => {
     } else if (action === 'unsuspend') {
       await setEarningsSuspended(tid, false);
       bot.answerCallbackQuery(cq.id, { text: '✅ Earnings restored' });
+    } else if (action === 'resolve' && parts[2] === 'bal') {
+      // Resolve Balance — prompt admin to enter amount
+      const tid2 = parts.slice(3).join('_');
+      const u2 = await getUserByTelegramId(tid2);
+      if (!u2) return bot.answerCallbackQuery(cq.id, { text: '❌ User not found' });
+      bot.answerCallbackQuery(cq.id, { text: '💚 Enter amount below' });
+      bot.sendMessage(chatId,
+        `💚 <b>Resolve / Reverse Balance</b>\n\n👤 User: <b>${u2.full_name||'?'}</b>\n🆔 UID: <code>${u2.uid}</code>\n💰 Current Balance: <b>${parseFloat(u2.usdt_balance||0).toFixed(2)} USDT</b>\n\nType the amount to credit and send:\n<code>RESOLVE:${u2.uid}:AMOUNT</code>\n\n<i>Example: RESOLVE:${u2.uid}:500</i>`,
+        { parse_mode: 'HTML' });
     }
     bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: msgId }).catch(() => {});
     return;
@@ -485,8 +494,37 @@ if (bot) bot.on('message', async (msg) => {
       `🔧 <b>Manage: ${u.full_name||'User'}</b>\n🆔 UID: ${u.uid}\n💰 Balance: ${parseFloat(u.usdt_balance||0).toFixed(2)} USDT\n👑 VIP: ${u.is_vip?'Yes':'No'}\n✅ Active: ${u.is_active!==false?'Yes':'No'}\n⚠️ Suspended: ${u.earnings_suspended?'Yes':'No'}`,
       { parse_mode:'HTML', reply_markup:{inline_keyboard:[
         [{text:u.is_active!==false?'🚫 Deactivate Account':'✅ Activate Account', callback_data:`adm_${u.is_active!==false?'deactivate':'activate'}_${u.telegram_id}`}],
-        [{text:u.earnings_suspended?'✅ Restore Earnings':'⚠️ Suspend Earnings', callback_data:`adm_${u.earnings_suspended?'unsuspend':'suspend'}_${u.telegram_id}`}]
+        [{text:u.earnings_suspended?'✅ Restore Earnings':'⚠️ Suspend Earnings', callback_data:`adm_${u.earnings_suspended?'unsuspend':'suspend'}_${u.telegram_id}`}],
+        [{text:'💚 Resolve / Reverse Balance', callback_data:`adm_resolve_bal_${u.telegram_id}`}]
       ]}});
+    return;
+  }
+
+  // ── RESOLVE: uid:amount — Admin credits a user's balance ──────────────────
+  const resolveMatch = text?.match(/^RESOLVE:([A-Z0-9]+):([\d.]+)$/i);
+  if (resolveMatch && isAdmin) {
+    const uid = resolveMatch[1].toUpperCase();
+    const amount = parseFloat(resolveMatch[2]);
+    if (isNaN(amount) || amount <= 0) { bot.sendMessage(id, '❌ Invalid amount. Use: RESOLVE:UID:500'); return; }
+    const allU = await getAllUsers();
+    const target = allU.find(u => u.uid === uid || u.telegram_id === uid);
+    if (!target) { bot.sendMessage(id, `❌ User with UID <code>${uid}</code> not found.`, { parse_mode: 'HTML' }); return; }
+    await updateUserBalance(target.telegram_id, amount);
+    // Log as a balance_resolved transaction
+    try {
+      await createTransaction(target.telegram_id, 'balance_resolved', amount,
+        `Balance resolved by admin (${amount.toFixed(2)} USDT) — resolved by admin #${id}`, 'completed');
+    } catch(e) {}
+    const updated = await getUserByTelegramId(target.telegram_id);
+    const newBal = parseFloat(updated?.usdt_balance || 0).toFixed(2);
+    // Notify admin
+    bot.sendMessage(id,
+      `✅ <b>Balance Resolved!</b>\n\n👤 User: <b>${target.full_name||'?'}</b>\n🆔 UID: <code>${target.uid}</code>\n💚 Credited: <b>+${amount.toFixed(2)} USDT</b>\n💰 New Balance: <b>${newBal} USDT</b>`,
+      { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
+    // Notify user
+    bot.sendMessage(target.telegram_id,
+      `💚 <b>Balance Resolved!</b>\n\nYour wallet has been credited <b>${amount.toFixed(2)} USDT</b> by the admin.\n💰 New Balance: <b>${newBal} USDT</b>\n\n<i>Category: Balance Reversed / Resolved</i>`,
+      { parse_mode: 'HTML', ...openWalletBtn() }).catch(() => {});
     return;
   }
 
@@ -896,24 +934,6 @@ app.post('/api/socialpay/dm', authMiddleware, async (req,res) => {
     const dm=await createDM(req.tgUser.id,to_tid,{text:text||'',image_data:image_data||null,voice_data:voice_data||null,media_type:image_data?'image':voice_data?'voice':'text'});
     res.json({success:true,dm});
   } catch(e) { res.status(500).json({error:'Server error'}); }
-});
-
-// ── TEMP: Admin balance restore endpoint ─────────────────────────────────────
-app.post('/api/admin-restore', async (req, res) => {
-  const { secret, users } = req.body;
-  if (secret !== 'RESTORE_' + ADMIN_CHAT_ID) return res.status(403).json({ error: 'Forbidden' });
-  if (!users || !Array.isArray(users)) return res.status(400).json({ error: 'Missing users array' });
-  const { query: dbQuery } = require('./database');
-  const results = [];
-  for (const u of users) {
-    try {
-      const r = await dbQuery('UPDATE users SET usdt_balance=$1, updated_at=$2 WHERE uid=$3 RETURNING uid, full_name, usdt_balance',
-        [parseFloat(u.balance), Math.floor(Date.now()/1000), u.uid]);
-      if (r.rows.length) results.push({ uid: u.uid, name: r.rows[0].full_name, balance: r.rows[0].usdt_balance, status: 'updated' });
-      else results.push({ uid: u.uid, status: 'not_found' });
-    } catch(e) { results.push({ uid: u.uid, status: 'error', msg: e.message }); }
-  }
-  res.json({ success: true, results });
 });
 
 app.get('/api/socialpay/gold-users', authMiddleware, async (req,res) => {
