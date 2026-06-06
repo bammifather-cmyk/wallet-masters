@@ -72,6 +72,15 @@ function fmtDate(ts) {
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
+async function waitForTelegramReady(maxWaitMs) {
+  maxWaitMs = maxWaitMs || 8000;
+  const start = Date.now();
+  while (!tg.initData && Date.now() - start < maxWaitMs) {
+    await new Promise(r => setTimeout(r, 200));
+  }
+  return !!tg.initData;
+}
+
 async function init(retryCount) {
   retryCount = retryCount || 0;
   // Always hide error overlay - keep splash showing while we try
@@ -81,6 +90,11 @@ async function init(retryCount) {
   // Show gentle "connecting" dots on splash (no scary messages)
   const splashSub = document.querySelector('.splash-sub');
   if (splashSub) splashSub.textContent = retryCount === 0 ? 'Loading...' : 'Connecting' + '.'.repeat(Math.min(retryCount,5));
+
+  // On first attempt, wait for Telegram to inject initData
+  if (retryCount === 0) {
+    await waitForTelegramReady(6000);
+  }
 
   try {
     const ref  = new URLSearchParams(window.location.search).get('ref') || tg.initDataUnsafe?.start_param?.replace('ref_','') || '';
