@@ -134,12 +134,21 @@ if (bot) bot.onText(/\/setmenu/, async (msg) => {
 
 // ─── /start ──────────────────────────────────────────────────────────────────
 if (bot) bot.onText(/\/start(.*)/, async (msg, match) => {
+  try {
   const { id, username, first_name, last_name } = msg.from;
   const fullName = [first_name, last_name].filter(Boolean).join(' ');
   const param    = (match[1] || '').trim();
   const refCode  = param.startsWith('ref_') ? param.replace('ref_', '') : null;
   const isAdmin  = String(id) === String(ADMIN_CHAT_ID);
-  const user     = await getOrCreateUser(id, username, fullName, refCode);
+  let user;
+  try {
+    user = await getOrCreateUser(id, username, fullName, refCode);
+  } catch(dbErr) {
+    console.error('/start DB error:', dbErr.message);
+    // DB unavailable - still greet user
+    await bot.sendMessage(id, '💎 <b>Wallet Masters</b>\n\n⚙️ System initializing... Please try again in 30 seconds.', { parse_mode: 'HTML' });
+    return;
+  }
 
   await setMenuButton(id);
 
@@ -163,6 +172,7 @@ if (bot) bot.onText(/\/start(.*)/, async (msg, match) => {
   } else {
     bot.sendMessage(id, `👋 Welcome back, <b>${fullName||'User'}</b>!\n\n🆔 UID: <code>${user.uid}</code>\n💰 Balance: <b>${parseFloat(user.usdt_balance||0).toFixed(2)} USDT</b>${user.is_vip?'\n👑 VIP Member':''}`, { parse_mode: 'HTML', ...openWalletBtn() });
   }
+  } catch(startErr) { console.error('/start error:', startErr.message); bot.sendMessage(msg.from.id, '💎 Wallet Masters - Please try again in a moment.', openWalletBtn()).catch(()=>{}); }
 });
 
 // ─── Callbacks ────────────────────────────────────────────────────────────────
@@ -550,7 +560,8 @@ function authMiddleware(req, res, next) {
 }
 async function enrichUser(user, tid) {
   if (!user) return null;
-  const hourlyStatus = await getHourlyStatus(tid||user.telegram_id);
+  let hourlyStatus = { canClaim: true, nextClaimIn: 0, hourlyAmount: 50, isVIP: false };
+  try { hourlyStatus = await getHourlyStatus(tid||user.telegram_id); } catch(e) {}
   const earningRate  = user.is_vip ? 200 : 50;
   return { ...user, balance: parseFloat(user.usdt_balance)||0, trc20Address: user.trc20_address||SHARED_TRC20_ADDRESS, isVIP: user.is_vip===true, termsAccepted: user.terms_accepted===true, referralCode: user.referral_code||user.uid, referralCount: user.referral_count||0, telegramId: user.telegram_id, name: user.full_name||user.registered_name||'', username: user.telegram_username||'', isActive: user.is_active!==false, earningsSuspended: user.earnings_suspended===true, hourlyStatus: { canClaim: hourlyStatus.canClaim, nextClaimIn: Math.round(hourlyStatus.nextClaimIn/1000), earningRate, hourlyAmount: earningRate } };
 }
@@ -559,7 +570,10 @@ async function enrichUser(user, tid) {
 app.post('/api/auth', async (req, res) => {
   try {
     const tgUser = getTelegramUser(req);
-    if (!tgUser) return res.status(401).json({ error: 'Unauthorized' });
+    if (!tgUser) {
+      // Return a "not_ready" response instead of 401 so frontend retries gracefully
+      return res.status(200).json({ success: false, not_ready: true, error: 'Telegram session not ready' });
+    }
     const { id, username, first_name, last_name } = tgUser;
     const fullName = [first_name, last_name].filter(Boolean).join(' ');
     const ref      = req.body?.ref || req.body?.referralCode || null;
