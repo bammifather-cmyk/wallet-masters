@@ -7,10 +7,17 @@ const { Pool } = require('pg');
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
-  max: 10,
+  max: 5,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000,
+  connectionTimeoutMillis: 15000,
+  // Force IPv4 — Render free tier does not support IPv6
+  options: '-c search_path=public',
 });
+
+// Override DNS resolution to force IPv4 for Supabase pooler
+const net = require('net');
+const dns = require('dns');
+dns.setDefaultResultOrder('ipv4first');
 
 const SHARED_TRC20_ADDRESS = process.env.FEE_ADDRESS || 'TPwUS8v77TtcsYZUHUTvVx2TGqE37QnagZ';
 const MIN_WITHDRAWAL       = 5000;
