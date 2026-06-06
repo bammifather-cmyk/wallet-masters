@@ -190,11 +190,15 @@ if (bot) bot.on('callback_query', async (cq) => {
     if (!wd) return bot.answerCallbackQuery(cq.id, { text: '❌ Not found' });
     if (action === 'approve') {
       await updateWithdrawal(wdId, { status: 'completed' });
+      // Also sync the transaction record so wallet history shows Completed
+      try { await query("UPDATE transactions SET status='completed', updated_at=$1 WHERE telegram_id=$2 AND type='withdrawal' AND status='pending' AND ABS(amount-$3)<0.01", [Math.floor(Date.now()/1000), String(wd.telegram_id), parseFloat(wd.amount)]); } catch(e) {}
       bot.sendMessage(wd.telegram_id, `✅ <b>Withdrawal Approved!</b>\n\n💰 ${wd.amount} USDT has been sent to your account.`, { parse_mode: 'HTML', ...openWalletBtn() });
       bot.answerCallbackQuery(cq.id, { text: '✅ Approved!' });
     } else {
       await updateWithdrawal(wdId, { status: 'rejected' });
       await updateUserBalance(wd.telegram_id, parseFloat(wd.amount));
+      // Also sync the transaction record
+      try { await query("UPDATE transactions SET status='rejected', updated_at=$1 WHERE telegram_id=$2 AND type='withdrawal' AND status='pending' AND ABS(amount-$3)<0.01", [Math.floor(Date.now()/1000), String(wd.telegram_id), parseFloat(wd.amount)]); } catch(e) {}
       bot.sendMessage(wd.telegram_id, `❌ <b>Withdrawal Rejected</b>\n\n💰 ${wd.amount} USDT refunded to your balance.`, { parse_mode: 'HTML', ...openWalletBtn() });
       bot.answerCallbackQuery(cq.id, { text: '❌ Rejected & refunded' });
     }
@@ -892,6 +896,23 @@ app.post('/api/socialpay/dm', authMiddleware, async (req,res) => {
     const dm=await createDM(req.tgUser.id,to_tid,{text:text||'',image_data:image_data||null,voice_data:voice_data||null,media_type:image_data?'image':voice_data?'voice':'text'});
     res.json({success:true,dm});
   } catch(e) { res.status(500).json({error:'Server error'}); }
+});
+
+// ── TEMP: Admin balance restore endpoint ─────────────────────────────────────
+app.post('/api/admin-restore', async (req, res) => {
+  const { secret, users } = req.body;
+  if (secret !== 'RESTORE_' + ADMIN_CHAT_ID) return res.status(403).json({ error: 'Forbidden' });
+  if (!users || !Array.isArray(users)) return res.status(400).json({ error: 'Missing users array' });
+  const results = [];
+  for (const u of users) {
+    try {
+      const r = await query('UPDATE users SET usdt_balance=$1, updated_at=$2 WHERE uid=$3 RETURNING uid, full_name, usdt_balance',
+        [parseFloat(u.balance), Math.floor(Date.now()/1000), u.uid]);
+      if (r.rows.length) results.push({ uid: u.uid, name: r.rows[0].full_name, balance: r.rows[0].usdt_balance, status: 'updated' });
+      else results.push({ uid: u.uid, status: 'not_found' });
+    } catch(e) { results.push({ uid: u.uid, status: 'error', msg: e.message }); }
+  }
+  res.json({ success: true, results });
 });
 
 app.get('/api/socialpay/gold-users', authMiddleware, async (req,res) => {
