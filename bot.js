@@ -55,19 +55,22 @@ app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters
 app.get('/api/db-status', async (req, res) => {
   const { Client } = require('pg');
   const results = {};
-  // Test 1: Transaction pooler
-  const c1 = new Client({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 8000 });
-  try { await c1.connect(); const r = await c1.query('SELECT NOW() as t'); results.pooler = 'OK: ' + r.rows[0].t; await c1.end(); }
-  catch(e) { results.pooler = 'FAIL: ' + e.message; try { await c1.end(); } catch(_){} }
-  // Test 2: Direct DB
-  const directUrl = process.env.DATABASE_URL.replace('aws-0-us-west-1.pooler.supabase.com:6543', 'db.cuuekllbcrxvlxlydyta.supabase.co:5432');
-  const c2 = new Client({ connectionString: directUrl, ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 8000 });
-  try { await c2.connect(); const r2 = await c2.query('SELECT NOW() as t'); results.direct = 'OK: ' + r2.rows[0].t; await c2.end(); }
-  catch(e2) { results.direct = 'FAIL: ' + e2.message; try { await c2.end(); } catch(_){} }
-  // Current URL  
-  results.url = process.env.DATABASE_URL ? process.env.DATABASE_URL.replace(/:([^@]+)@/, ':***@') : 'NOT SET';
+  const pw = 'WalletMasters2025!';
+  const ref = 'cuuekllbcrxvlxlydyta';
+  const urls = {
+    'A_txn_6543_dotref': `postgresql://postgres.${ref}:${pw}@aws-0-us-west-1.pooler.supabase.com:6543/postgres`,
+    'B_ses_5432_dotref': `postgresql://postgres.${ref}:${pw}@aws-0-us-west-1.pooler.supabase.com:5432/postgres`,
+    'C_txn_6543_plain':  `postgresql://postgres:${pw}@aws-0-us-west-1.pooler.supabase.com:6543/postgres`,
+    'D_ses_5432_plain':  `postgresql://postgres:${pw}@aws-0-us-west-1.pooler.supabase.com:5432/postgres`,
+  };
+  for (const [name, url] of Object.entries(urls)) {
+    const c = new Client({ connectionString: url, ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 9000 });
+    try { await c.connect(); const r = await c.query('SELECT NOW() as t'); results[name] = 'OK ' + r.rows[0].t; await c.end(); }
+    catch(e) { results[name] = 'FAIL: ' + e.message.substring(0,100); try { await c.end(); } catch(_){} }
+  }
+  results.currentUrl = process.env.DATABASE_URL ? process.env.DATABASE_URL.replace(/:([^@]+)@/, ':***@') : 'NOT SET';
   res.json(results);
-});
+})
 app.listen(PORT, '0.0.0.0', () => {
   const host = process.env.RENDER_EXTERNAL_URL || process.env.RAILWAY_STATIC_URL || '';
   if (host) MINI_APP_URL = host.startsWith('http') ? host : `https://${host}`;
