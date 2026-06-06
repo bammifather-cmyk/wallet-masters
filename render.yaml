@@ -2,9 +2,11 @@ services:
   - type: web
     name: wallet-masters
     runtime: node
-    buildCommand: cd backend && npm install
-    startCommand: cd backend && node bot.js
+    buildCommand: npm install
+    startCommand: node bot.js
     healthCheckPath: /health
+    plan: free
+    region: oregon
     envVars:
       - key: BOT_TOKEN
         value: 8633930645:AAFWs_DngutMwsrGUjYi7M0f9ymgbJF47Xc
@@ -15,6 +17,8 @@ services:
       - key: FEE_ADDRESS
         value: TPwUS8v77TtcsYZUHUTvVx2TGqE37QnagZ
       - key: MINI_APP_URL
-        value: REPLACE_WITH_YOUR_FRONTEND_URL
+        value: https://wallet-masters.onrender.com
       - key: PORT
         value: "3000"
+      - key: NODE_ENV
+        value: production
