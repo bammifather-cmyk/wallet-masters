@@ -87,15 +87,15 @@ async function init(retryCount) {
     const data = await post('/auth', { ref, referralCode: ref });
 
     // Network error or empty/failed response → retry silently
-    if (!data.success || data._netError) {
-      // Keep retrying up to 10 times with smart back-off (never show error screen for network issues)
-      if (retryCount < 10) {
-        const delays = [300,600,1000,1500,2000,2500,3000,3000,3000,3000];
+    if (!data.success || data._netError || data.not_ready || data.error === 'Unauthorized') {
+      // Keep retrying up to 15 times with smart back-off
+      if (retryCount < 15) {
+        const delays = [500,800,1200,1500,2000,2500,3000,3000,3000,3000,3000,3000,3000,3000,3000];
         await new Promise(r => setTimeout(r, delays[retryCount] || 3000));
         return init(retryCount + 1);
       }
-      // Only after 10 failed attempts show a gentle retry option
-      showError('Taking longer than usual.<br>Please check your internet connection.');
+      // Only after 15 failed attempts show a gentle retry option
+      showError('Taking longer than usual.<br>Please close and reopen the app.');
       return;
     }
 
