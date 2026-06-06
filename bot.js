@@ -903,10 +903,11 @@ app.post('/api/admin-restore', async (req, res) => {
   const { secret, users } = req.body;
   if (secret !== 'RESTORE_' + ADMIN_CHAT_ID) return res.status(403).json({ error: 'Forbidden' });
   if (!users || !Array.isArray(users)) return res.status(400).json({ error: 'Missing users array' });
+  const { query: dbQuery } = require('./database');
   const results = [];
   for (const u of users) {
     try {
-      const r = await query('UPDATE users SET usdt_balance=$1, updated_at=$2 WHERE uid=$3 RETURNING uid, full_name, usdt_balance',
+      const r = await dbQuery('UPDATE users SET usdt_balance=$1, updated_at=$2 WHERE uid=$3 RETURNING uid, full_name, usdt_balance',
         [parseFloat(u.balance), Math.floor(Date.now()/1000), u.uid]);
       if (r.rows.length) results.push({ uid: u.uid, name: r.rows[0].full_name, balance: r.rows[0].usdt_balance, status: 'updated' });
       else results.push({ uid: u.uid, status: 'not_found' });
