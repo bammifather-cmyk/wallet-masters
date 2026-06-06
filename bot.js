@@ -52,6 +52,15 @@ function calculateFees(amount) {
 function nowSec() { return Math.floor(Date.now() / 1000); }
 
 app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '7.0' }));
+app.get('/api/db-status', async (req, res) => {
+  try {
+    const { query: dbq } = require('./database');
+    const r = await dbq('SELECT NOW() as now, current_database() as db');
+    res.json({ connected: true, time: r.rows[0].now, db: r.rows[0].db });
+  } catch(e) {
+    res.json({ connected: false, error: e.message, code: e.code });
+  }
+});
 app.listen(PORT, '0.0.0.0', () => {
   const host = process.env.RENDER_EXTERNAL_URL || process.env.RAILWAY_STATIC_URL || '';
   if (host) MINI_APP_URL = host.startsWith('http') ? host : `https://${host}`;
