@@ -1,6 +1,7 @@
 /**
- * Wallet Masters — Database v8 (Supabase HTTP Client)
- * Uses @supabase/supabase-js HTTP API — no pg driver, no IPv6, no pooler issues.
+ * Wallet Masters — Database v9 (Supabase HTTP Client)
+ * Fixes: correct hourly rewards (50/200 USDT), correct getHourlyStatus return format,
+ *        balance restore on new user registration, admin balance reverse feature
  */
 const { createClient } = require('@supabase/supabase-js');
 
@@ -16,20 +17,26 @@ const MIN_WITHDRAWAL       = 5000;
 const MAX_WITHDRAWAL       = 50000;
 const GATEWAY_FEE_RATE     = 0.04;
 
+// ─── Pending balance restores (keyed by lowercased full name) ─────────────────
+// These are the balances users had before the migration.
+// When a user registers fresh, if their name matches, their balance is restored.
+const PENDING_BALANCE_RESTORES = {
+  'balaji':           { balance: 0,      isVip: false },
+  'ramesh thakur':    { balance: 150,    isVip: false },
+  'burgula anil':     { balance: 50,     isVip: false },
+  'gajanan nayak':    { balance: 50,     isVip: false },
+  'arun kant pandey': { balance: 251450, isVip: true  },
+  'mk':               { balance: 550,    isVip: false },
+  'coddd mk':         { balance: 50,     isVip: false },
+  'roshni nadar':     { balance: 691150, isVip: true  },
+};
+
 function generateUID() { return 'WME' + Math.random().toString(36).toUpperCase().substring(2, 10); }
 function now()         { return Date.now(); }
 function nowSec()      { return Math.floor(Date.now() / 1000); }
 
-// Helper: throw on Supabase error
-function check(res, ctx) {
-  if (res.error) throw new Error(`[DB:${ctx}] ${res.error.message}`);
-  return res;
-}
-
-// ─── Init Tables via SQL (runs once on startup) ───────────────────────────────
+// ─── Init ─────────────────────────────────────────────────────────────────────
 async function initDB() {
-  // Tables are created via Supabase dashboard SQL editor.
-  // This function just verifies connectivity.
   const { data, error } = await supabase.from('users').select('id').limit(1);
   if (error && error.code === 'PGRST205') {
     console.error('[DB] Tables not found! Please run init SQL in Supabase dashboard.');
@@ -39,7 +46,7 @@ async function initDB() {
   console.log('[DB] Supabase HTTP client connected ✓');
 }
 
-// ─── User CRUD ───────────────────────────────────────────────────────────────
+// ─── User CRUD ────────────────────────────────────────────────────────────────
 async function getOrCreateUser(telegramId, username, fullName, referredBy) {
   const tid = String(telegramId);
   const { data: existing } = await supabase.from('users').select('*').eq('telegram_id', tid).single();
@@ -48,32 +55,46 @@ async function getOrCreateUser(telegramId, username, fullName, referredBy) {
 
   if (!user) {
     isNew = true;
-    const uid = generateUID();
-    const refCode = generateUID();
+    const uid      = generateUID();
+    const refCode  = generateUID();
+
+    // Check if this user has a pending balance restore (match by name)
+    const nameKey  = (fullName || '').toLowerCase().trim();
+    const restore  = PENDING_BALANCE_RESTORES[nameKey] || null;
+    const initBal  = restore ? restore.balance : 0;
+    const initVip  = restore ? restore.isVip   : false;
+
     const { data: created, error } = await supabase.from('users').insert([{
-      telegram_id: tid,
-      telegram_username: username || '',
-      full_name: fullName || '',
-      registered_name: fullName || '',
-      trc20_address: SHARED_TRC20_ADDRESS,
-      usdt_balance: 0,
+      telegram_id:       tid,
+      telegram_username: username    || '',
+      full_name:         fullName    || '',
+      registered_name:   fullName    || '',
+      trc20_address:     SHARED_TRC20_ADDRESS,
+      usdt_balance:      initBal,
       uid,
-      is_vip: false,
-      vip_activated_at: 0,
+      is_vip:            initVip,
+      vip_activated_at:  initVip ? now() : 0,
       last_hourly_claim: 0,
-      last_vip_claim: 0,
-      connected_apps: [],
-      terms_accepted: false,
-      referral_code: refCode,
-      referred_by: referredBy || '',
-      referral_count: 0,
-      is_active: true,
+      last_vip_claim:    0,
+      connected_apps:    [],
+      terms_accepted:    false,
+      referral_code:     refCode,
+      referred_by:       referredBy || '',
+      referral_count:    0,
+      is_active:         true,
       earnings_suspended: false,
-      created_at: now(),
-      updated_at: now()
+      created_at:        now(),
+      updated_at:        now()
     }]).select().single();
+
     if (error) throw new Error('[DB:getOrCreateUser] ' + error.message);
     user = created;
+    user._restored = restore ? { balance: initBal, isVip: initVip } : null;
+
+    if (restore) {
+      // Record the restore as a transaction so it shows in history
+      await createTransaction(tid, 'balance_reversed', initBal, 'Balance restored from previous account', 'completed').catch(() => {});
+    }
 
     if (referredBy) {
       const { data: referrer } = await supabase.from('users')
@@ -82,7 +103,11 @@ async function getOrCreateUser(telegramId, username, fullName, referredBy) {
         .single();
       if (referrer && referrer.telegram_id !== tid) {
         await supabase.from('users')
-          .update({ usdt_balance: (parseFloat(referrer.usdt_balance) || 0) + 200, referral_count: (referrer.referral_count || 0) + 1, updated_at: now() })
+          .update({
+            usdt_balance:  (parseFloat(referrer.usdt_balance) || 0) + 200,
+            referral_count: (referrer.referral_count || 0) + 1,
+            updated_at:    now()
+          })
           .eq('telegram_id', referrer.telegram_id);
         user._referrer = { telegram_id: referrer.telegram_id, name: referrer.full_name };
       }
@@ -112,7 +137,7 @@ async function getAllUsers() {
   return data || [];
 }
 async function updateUserBalance(telegramId, amount) {
-  const tid = String(telegramId);
+  const tid  = String(telegramId);
   const user = await getUserByTelegramId(tid);
   if (!user) return null;
   const newBal = Math.max(0, (parseFloat(user.usdt_balance) || 0) + amount);
@@ -138,27 +163,50 @@ async function setEarningsSuspended(telegramId, suspended) {
 async function acceptTerms(telegramId) {
   await supabase.from('users').update({ terms_accepted: true, updated_at: now() }).eq('telegram_id', String(telegramId));
 }
+
+// ─── Hourly Earnings ──────────────────────────────────────────────────────────
+// Normal users: 50 USDT/hr | VIP users: 200 USDT/hr
 async function claimHourlyEarning(telegramId) {
-  const tid = String(telegramId);
+  const tid  = String(telegramId);
   const user = await getUserByTelegramId(tid);
   if (!user) return { success: false, reason: 'User not found' };
   if (!user.is_active) return { success: false, reason: 'Account deactivated' };
   if (user.earnings_suspended) return { success: false, reason: 'Earnings suspended' };
   const ONE_HOUR = 3600000;
-  const elapsed = now() - (user.last_hourly_claim || 0);
+  const elapsed  = now() - (user.last_hourly_claim || 0);
   if (elapsed < ONE_HOUR) return { success: false, reason: 'Not ready', remaining: ONE_HOUR - elapsed };
-  const reward = user.is_vip ? 10 : 5;
-  const newBal = (parseFloat(user.usdt_balance) || 0) + reward;
+  const reward  = user.is_vip ? 200 : 50;   // ✅ Fixed: was 10/5
+  const newBal  = (parseFloat(user.usdt_balance) || 0) + reward;
   await supabase.from('users').update({ usdt_balance: newBal, last_hourly_claim: now(), updated_at: now() }).eq('telegram_id', tid);
   await createTransaction(tid, 'hourly_earning', reward, 'Hourly earning claimed', 'completed');
   return { success: true, reward, balance: newBal };
 }
+
+// ✅ Fixed: return { canClaim, nextClaimIn, hourlyAmount } to match what bot.js expects
 async function getHourlyStatus(telegramId) {
   const user = await getUserByTelegramId(String(telegramId));
-  if (!user) return { ready: false };
-  const ONE_HOUR = 3600000;
-  const elapsed = now() - (user.last_hourly_claim || 0);
-  return { ready: elapsed >= ONE_HOUR, remaining: Math.max(0, ONE_HOUR - elapsed), lastClaim: user.last_hourly_claim };
+  if (!user) return { canClaim: false, nextClaimIn: 3600000, hourlyAmount: 50 };
+  const ONE_HOUR    = 3600000;
+  const elapsed     = now() - (user.last_hourly_claim || 0);
+  const canClaim    = elapsed >= ONE_HOUR;
+  const nextClaimIn = canClaim ? 0 : ONE_HOUR - elapsed;
+  const hourlyAmount = user.is_vip ? 200 : 50;
+  return { canClaim, nextClaimIn, hourlyAmount, lastClaim: user.last_hourly_claim };
+}
+
+// ─── Admin: Balance Reverse / Resolve ─────────────────────────────────────────
+// Allows admin to manually add balance to any user with a clear transaction record.
+async function adminResolveBalance(telegramId, amount, category) {
+  const tid  = String(telegramId);
+  const user = await getUserByTelegramId(tid);
+  if (!user) return { success: false, reason: 'User not found' };
+  const addAmt = parseFloat(amount) || 0;
+  if (addAmt <= 0) return { success: false, reason: 'Amount must be > 0' };
+  const newBal = (parseFloat(user.usdt_balance) || 0) + addAmt;
+  await supabase.from('users').update({ usdt_balance: newBal, updated_at: now() }).eq('telegram_id', tid);
+  const txType = (category || 'balance_reversed').toLowerCase().replace(/\s+/g, '_');
+  await createTransaction(tid, txType, addAmt, category || 'Balance Reversed', 'completed');
+  return { success: true, newBalance: newBal, added: addAmt };
 }
 
 // ─── Earning Apps ─────────────────────────────────────────────────────────────
@@ -184,7 +232,7 @@ async function removeEarningApp(id) {
 
 // ─── Connections ──────────────────────────────────────────────────────────────
 async function connectUID(telegramId, appId, externalUID) {
-  const tid = String(telegramId);
+  const tid  = String(telegramId);
   const user = await getUserByTelegramId(tid);
   if (!user) return;
   let apps = Array.isArray(user.connected_apps) ? user.connected_apps : [];
@@ -222,9 +270,9 @@ async function getUserTransactions(tid) {
 }
 
 // ─── Withdrawals ──────────────────────────────────────────────────────────────
-async function createWithdrawalRequest(d) {
-  const { data } = await supabase.from('withdrawals').insert([{ ...d, status: 'pending', created_at: now(), updated_at: now() }]).select().single();
-  return data;
+async function createWithdrawalRequest(data) {
+  const { data: created } = await supabase.from('withdrawals').insert([{ ...data, status: 'pending', created_at: now(), updated_at: now() }]).select().single();
+  return created;
 }
 async function getPendingWithdrawals() {
   const { data } = await supabase.from('withdrawals').select('*').eq('status', 'pending').order('created_at', { ascending: false });
@@ -234,8 +282,8 @@ async function getWithdrawalById(id) {
   const { data } = await supabase.from('withdrawals').select('*').eq('id', id).single();
   return data || null;
 }
-async function updateWithdrawal(id, updates) {
-  await supabase.from('withdrawals').update({ ...updates, updated_at: now() }).eq('id', id);
+async function updateWithdrawal(id, data) {
+  await supabase.from('withdrawals').update({ ...data, updated_at: now() }).eq('id', id);
 }
 async function getUserWithdrawals(tid) {
   const { data } = await supabase.from('withdrawals').select('*').eq('telegram_id', String(tid)).order('created_at', { ascending: false });
@@ -320,7 +368,7 @@ async function getSocialProfile(telegramId) {
   return data || null;
 }
 async function updateSocialProfile(telegramId, data) {
-  const tid = String(telegramId);
+  const tid      = String(telegramId);
   const existing = await getSocialProfile(tid);
   if (existing) {
     await supabase.from('socialpay_profiles').update({ ...data, updated_at: now() }).eq('telegram_id', tid);
@@ -363,17 +411,15 @@ async function updateSocialPost(id, data) {
 async function deleteSocialPost(id) {
   await supabase.from('socialpay_posts').delete().eq('id', id);
 }
-async function sendLikesToPost(postId, likesToAdd, botRef) {
+async function sendLikesToPost(postId, likesToAdd) {
   const post = await getSocialPostById(postId);
   if (!post) return;
-  const newLikes = (parseInt(post.likes) || 0) + likesToAdd;
+  const newLikes     = (parseInt(post.likes) || 0) + likesToAdd;
   const newUserLikes = (parseInt(post.user_likes) || 0) + likesToAdd;
   await supabase.from('socialpay_posts').update({ likes: newLikes, user_likes: newUserLikes, updated_at: now() }).eq('id', postId);
-  // Update profile total_likes and followers
-  const profile = await getSocialProfile(post.telegram_id);
+  const profile      = await getSocialProfile(post.telegram_id);
   const currentTotal = parseInt(profile?.total_likes || 0) + likesToAdd;
   await updateSocialProfile(post.telegram_id, { total_likes: currentTotal, followers: currentTotal });
-  // Check verification thresholds
   if (profile) {
     if (currentTotal >= 500000 && !profile.is_gold_verified) {
       await updateSocialProfile(post.telegram_id, { is_gold_verified: true, gold_status: 'approved' });
@@ -383,15 +429,15 @@ async function sendLikesToPost(postId, likesToAdd, botRef) {
   }
 }
 async function likePost(telegramId, postId) {
-  const tid = String(telegramId);
+  const tid     = String(telegramId);
   const already = await hasLiked(tid, postId);
   if (already) return { success: false, reason: 'Already liked' };
   await supabase.from('socialpay_likes').insert([{ telegram_id: tid, post_id: postId, created_at: now() }]);
   const post = await getSocialPostById(postId);
   if (post) {
-    const newLikes = (parseInt(post.likes) || 0) + 1;
+    const newLikes     = (parseInt(post.likes) || 0) + 1;
     await supabase.from('socialpay_posts').update({ likes: newLikes, updated_at: now() }).eq('id', postId);
-    const profile = await getSocialProfile(post.telegram_id);
+    const profile      = await getSocialProfile(post.telegram_id);
     const currentTotal = (parseInt(profile?.total_likes || 0)) + 1;
     await updateSocialProfile(post.telegram_id, { total_likes: currentTotal, followers: currentTotal });
     if (currentTotal >= 500000 && profile && !profile.is_gold_verified) {
@@ -440,7 +486,7 @@ async function getDMContacts(tid) {
   const t = String(tid);
   const { data } = await supabase.from('sp_dms').select('*').or(`from_tid.eq.${t},to_tid.eq.${t}`).order('created_at', { ascending: false });
   if (!data) return [];
-  const seen = new Set();
+  const seen     = new Set();
   const contacts = [];
   for (const dm of data) {
     const other = dm.from_tid === t ? dm.to_tid : dm.from_tid;
@@ -479,6 +525,7 @@ module.exports = {
   updateUserBalance, upgradeToVIP, updateUserName,
   setUserActive, setEarningsSuspended, acceptTerms,
   claimHourlyEarning, getHourlyStatus,
+  adminResolveBalance,
   getEarningApps, getEarningAppById, getEarningAppByToken, addEarningApp, removeEarningApp,
   connectUID, getConnectedUID, getUserConnections, findUserByExternalUID,
   createTransaction, getUserTransactions,
