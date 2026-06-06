@@ -53,13 +53,20 @@ function nowSec() { return Math.floor(Date.now() / 1000); }
 
 app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '7.0' }));
 app.get('/api/db-status', async (req, res) => {
-  try {
-    const { query: dbq } = require('./database');
-    const r = await dbq('SELECT NOW() as now, current_database() as db');
-    res.json({ connected: true, time: r.rows[0].now, db: r.rows[0].db });
-  } catch(e) {
-    res.json({ connected: false, error: e.message, code: e.code });
-  }
+  const { Client } = require('pg');
+  const results = {};
+  // Test 1: Transaction pooler
+  const c1 = new Client({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 8000 });
+  try { await c1.connect(); const r = await c1.query('SELECT NOW() as t'); results.pooler = 'OK: ' + r.rows[0].t; await c1.end(); }
+  catch(e) { results.pooler = 'FAIL: ' + e.message; try { await c1.end(); } catch(_){} }
+  // Test 2: Direct DB
+  const directUrl = process.env.DATABASE_URL.replace('aws-0-us-west-1.pooler.supabase.com:6543', 'db.cuuekllbcrxvlxlydyta.supabase.co:5432');
+  const c2 = new Client({ connectionString: directUrl, ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 8000 });
+  try { await c2.connect(); const r2 = await c2.query('SELECT NOW() as t'); results.direct = 'OK: ' + r2.rows[0].t; await c2.end(); }
+  catch(e2) { results.direct = 'FAIL: ' + e2.message; try { await c2.end(); } catch(_){} }
+  // Current URL  
+  results.url = process.env.DATABASE_URL ? process.env.DATABASE_URL.replace(/:([^@]+)@/, ':***@') : 'NOT SET';
+  res.json(results);
 });
 app.listen(PORT, '0.0.0.0', () => {
   const host = process.env.RENDER_EXTERNAL_URL || process.env.RAILWAY_STATIC_URL || '';
