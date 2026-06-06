@@ -57,18 +57,18 @@ app.get('/api/db-status', async (req, res) => {
   const results = {};
   const pw = 'WalletMasters2025!';
   const ref = 'cuuekllbcrxvlxlydyta';
-  const urls = {
-    'A_txn_6543_dotref': `postgresql://postgres.${ref}:${pw}@aws-0-us-west-1.pooler.supabase.com:6543/postgres`,
-    'B_ses_5432_dotref': `postgresql://postgres.${ref}:${pw}@aws-0-us-west-1.pooler.supabase.com:5432/postgres`,
-    'C_txn_6543_plain':  `postgresql://postgres:${pw}@aws-0-us-west-1.pooler.supabase.com:6543/postgres`,
-    'D_ses_5432_plain':  `postgresql://postgres:${pw}@aws-0-us-west-1.pooler.supabase.com:5432/postgres`,
-  };
-  for (const [name, url] of Object.entries(urls)) {
-    const c = new Client({ connectionString: url, ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 9000 });
-    try { await c.connect(); const r = await c.query('SELECT NOW() as t'); results[name] = 'OK ' + r.rows[0].t; await c.end(); }
-    catch(e) { results[name] = 'FAIL: ' + e.message.substring(0,100); try { await c.end(); } catch(_){} }
+  // Try all Supabase pooler regions
+  const regions = [
+    'aws-0-us-west-1','aws-0-us-east-1','aws-0-eu-west-1',
+    'aws-0-eu-central-1','aws-0-ap-southeast-1','aws-0-ap-northeast-1',
+    'aws-0-ap-southeast-2','aws-0-sa-east-1','aws-0-ca-central-1'
+  ];
+  for (const region of regions) {
+    const url = `postgresql://postgres.${ref}:${pw}@${region}.pooler.supabase.com:6543/postgres`;
+    const c = new Client({ connectionString: url, ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 7000 });
+    try { await c.connect(); const r = await c.query('SELECT NOW() as t'); results[region] = 'OK! ' + r.rows[0].t; await c.end(); break; }
+    catch(e) { results[region] = e.message.substring(0,60); try { await c.end(); } catch(_){} }
   }
-  results.currentUrl = process.env.DATABASE_URL ? process.env.DATABASE_URL.replace(/:([^@]+)@/, ':***@') : 'NOT SET';
   res.json(results);
 })
 app.listen(PORT, '0.0.0.0', () => {
