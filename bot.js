@@ -77,7 +77,17 @@ initDB().then(async () => {
       console.log(`Menu button synced for ${ok} users`);
     }, 5000);
   }, 3000);
-}).catch(err => { console.error('[DB] Init failed:', err.message); process.exit(1); });
+}).catch(err => {
+  console.error('[DB] Init failed:', err.message, '- retrying in 15s...');
+  setTimeout(async () => {
+    try {
+      await initDB();
+      console.log('[DB] Reconnected on retry!');
+    } catch(e2) {
+      console.error('[DB] Retry also failed:', e2.message, '- continuing without DB');
+    }
+  }, 15000);
+});
 
 const ADMIN_KEYBOARD = {
   inline_keyboard: [
