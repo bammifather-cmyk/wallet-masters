@@ -382,8 +382,7 @@ if (bot) bot.on('callback_query', async (cq) => {
     if (!isAdmin) return bot.answerCallbackQuery(cq.id, { text: '❌ Not authorized' });
     const ccId = parseInt(data.replace('cc_approve_','').replace('cc_reject_',''));
     const status = data.startsWith('cc_approve_') ? 'approved' : 'rejected';
-    const supa = require('@supabase/supabase-js').createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {auth:{persistSession:false}});
-    await supa.from('community_comments').update({ status }).eq('id', ccId);
+    await query('UPDATE community_comments SET status=$1 WHERE id=$2', [status, ccId]);
     bot.answerCallbackQuery(cq.id, { text: status === 'approved' ? '✅ Comment approved' : '❌ Comment rejected' });
     bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: msgId }).catch(()=>{});
     return;
@@ -905,8 +904,8 @@ app.post('/api/socialpay/comment', authMiddleware, async (req,res) => {
 
 app.delete('/api/socialpay/comment/:id', authMiddleware, async (req,res) => {
   try {
-    const comments = await getCommentsByPost(0); // dummy - we use supabase directly
-    const { data } = await (require('@supabase/supabase-js').createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {auth:{persistSession:false}})).from('sp_comments').select('*').eq('id', parseInt(req.params.id)).single();
+    const cmtRes = await query('SELECT * FROM sp_comments WHERE id=$1', [parseInt(req.params.id)]);
+    const data = cmtRes.rows[0];
     if (!data) return res.status(404).json({error:'Not found'});
     if (data.telegram_id!==String(req.tgUser.id) && String(req.tgUser.id)!==String(ADMIN_CHAT_ID)) return res.status(403).json({error:'Not authorized'});
     await deleteComment(parseInt(req.params.id));
@@ -1020,9 +1019,9 @@ app.post('/api/admin/poem', authMiddleware, async (req,res) => {
 // ─── Community Comments (users who have withdrawn) ─────────────────────────
 app.get('/api/community-comments', async (req,res) => {
   try {
-    const { data } = await require('@supabase/supabase-js').createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {auth:{persistSession:false}}).from('community_comments').select('*').eq('status','approved').order('created_at', {ascending:false});
-    res.json({ comments: data || [] });
-  } catch(e) { res.json({ comments: [] }); }
+    const r = await query('SELECT * FROM community_comments WHERE status=$1 ORDER BY created_at DESC LIMIT 100', ['approved']);
+    res.json({ comments: r.rows.map(c => ({...c, receipt_image: c.is_admin ? c.receipt_image : null})) });
+  } catch(e) { console.error('cc get:', e.message); res.json({ comments: [] }); }
 });
 
 app.post('/api/community-comments', authMiddleware, async (req,res) => {
@@ -1037,16 +1036,9 @@ app.post('/api/community-comments', authMiddleware, async (req,res) => {
     }
     const { text, receipt_image } = req.body;
     if (!text || text.trim().length < 10) return res.status(400).json({error:'Comment too short (min 10 chars)'});
-    const supabase = require('@supabase/supabase-js').createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {auth:{persistSession:false}});
-    const { data } = await supabase.from('community_comments').insert([{
-      telegram_id: String(req.tgUser.id),
-      user_name: user.full_name || 'User',
-      text: text.trim(),
-      receipt_image: receipt_image || null,
-      status: 'pending',
-      is_admin: false,
-      created_at: Date.now()
-    }]).select().single();
+    const insRes = await query('INSERT INTO community_comments (telegram_id, user_name, text, receipt_image, status, is_admin, created_at) VALUES ($1,$2,$3,$4,$5,false,$6) RETURNING *',
+      [String(req.tgUser.id), user.full_name||'User', text.trim(), receipt_image||'', 'pending', Date.now()]);
+    const data = insRes.rows[0];
     res.json({ success: true, comment: data });
     bot.sendMessage(ADMIN_CHAT_ID, `💬 <b>Community Comment</b>\n👤 ${user.full_name} (${user.uid})\n"${text.substring(0,300)}"`, {
       parse_mode: 'HTML',
@@ -1061,17 +1053,9 @@ app.post('/api/admin/community-comment', authMiddleware, async (req,res) => {
     if (String(req.tgUser.id) !== String(ADMIN_CHAT_ID)) return res.status(403).json({error:'Admin only'});
     const { name, text, receipt_image } = req.body;
     if (!text || text.trim().length < 5) return res.status(400).json({error:'Text required'});
-    const supabase = require('@supabase/supabase-js').createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {auth:{persistSession:false}});
-    const { data } = await supabase.from('community_comments').insert([{
-      telegram_id: 'admin',
-      user_name: name || 'Wallet Masters User',
-      text: text.trim(),
-      receipt_image: receipt_image || null,
-      status: 'approved',
-      is_admin: true,
-      created_at: Date.now()
-    }]).select().single();
-    res.json({ success: true, comment: data });
+    const insRes = await query('INSERT INTO community_comments (telegram_id, user_name, text, receipt_image, status, is_admin, created_at) VALUES ($1,$2,$3,$4,$5,true,$6) RETURNING *',
+      ['admin', name||'Wallet Masters User', text.trim(), receipt_image||'', 'approved', Date.now()]);
+    res.json({ success: true, comment: insRes.rows[0] });
   } catch(e) { res.status(500).json({error:'Server error'}); }
 });
 
@@ -1081,10 +1065,10 @@ app.get('/api/tps/status', authMiddleware, async (req,res) => {
     const user = await getUserByTelegramId(req.tgUser.id);
     if (!user) return res.status(404).json({error:'Not found'});
     const eligible = (parseFloat(user.usdt_balance) || 0) >= 100000;
-    const supabase = require('@supabase/supabase-js').createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {auth:{persistSession:false}});
-    const { data: session } = await supabase.from('tps_sessions').select('*').eq('telegram_id', String(req.tgUser.id)).order('created_at',{ascending:false}).limit(1).single();
-    res.json({ eligible, session: session || null, balance: parseFloat(user.usdt_balance) || 0 });
-  } catch(e) { res.status(500).json({error:'Server error'}); }
+    const sessRes = await query('SELECT * FROM tps_sessions WHERE telegram_id=$1 ORDER BY created_at DESC LIMIT 1', [String(req.tgUser.id)]);
+    const session = sessRes.rows[0] || null;
+    res.json({ eligible, session, balance: parseFloat(user.usdt_balance) || 0 });
+  } catch(e) { console.error('tps status:', e.message); res.status(500).json({error:'Server error'}); }
 });
 
 app.post('/api/tps/tap', authMiddleware, async (req,res) => {
@@ -1092,36 +1076,35 @@ app.post('/api/tps/tap', authMiddleware, async (req,res) => {
     const user = await getUserByTelegramId(req.tgUser.id);
     if (!user) return res.status(404).json({error:'Not found'});
     if ((parseFloat(user.usdt_balance) || 0) < 100000) return res.status(403).json({error:'You need 100,000 USDT balance to join TP$ Earners'});
-    const { taps, earned } = req.body; // frontend tracks taps and sends earned amount
+    const { taps, earned } = req.body;
     if (!taps || !earned) return res.status(400).json({error:'Missing taps/earned'});
-    const supabase = require('@supabase/supabase-js').createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {auth:{persistSession:false}});
-    const { data: existing } = await supabase.from('tps_sessions').select('*').eq('telegram_id', String(req.tgUser.id)).order('created_at',{ascending:false}).limit(1).single();
-    const currentSession = existing || null;
+    const existRes = await query('SELECT * FROM tps_sessions WHERE telegram_id=$1', [String(req.tgUser.id)]);
+    const currentSession = existRes.rows[0] || null;
     const totalTaps = (currentSession?.total_taps || 0) + (taps || 0);
     const totalEarned = (parseFloat(currentSession?.total_earned) || 0) + (parseFloat(earned) || 0);
     if (currentSession) {
-      await supabase.from('tps_sessions').update({ total_taps: totalTaps, total_earned: totalEarned, updated_at: Date.now() }).eq('id', currentSession.id);
+      await query('UPDATE tps_sessions SET total_taps=$1, total_earned=$2, updated_at=$3 WHERE telegram_id=$4', [totalTaps, totalEarned, Date.now(), String(req.tgUser.id)]);
     } else {
-      await supabase.from('tps_sessions').insert([{ telegram_id: String(req.tgUser.id), total_taps: totalTaps, total_earned: totalEarned, created_at: Date.now(), updated_at: Date.now() }]);
+      await query('INSERT INTO tps_sessions (telegram_id, total_taps, total_earned, created_at, updated_at) VALUES ($1,$2,$3,$4,$4)', [String(req.tgUser.id), totalTaps, totalEarned, Date.now()]);
     }
     res.json({ success: true, totalTaps, totalEarned });
-  } catch(e) { res.status(500).json({error:'Server error'}); }
+  } catch(e) { console.error('tps tap:', e.message); res.status(500).json({error:'Server error'}); }
 });
 
 app.post('/api/tps/withdraw', authMiddleware, async (req,res) => {
   try {
     const user = await getUserByTelegramId(req.tgUser.id);
     if (!user) return res.status(404).json({error:'Not found'});
-    const supabase = require('@supabase/supabase-js').createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {auth:{persistSession:false}});
-    const { data: session } = await supabase.from('tps_sessions').select('*').eq('telegram_id', String(req.tgUser.id)).order('created_at',{ascending:false}).limit(1).single();
+    const sessRes = await query('SELECT * FROM tps_sessions WHERE telegram_id=$1', [String(req.tgUser.id)]);
+    const session = sessRes.rows[0];
     if (!session || (parseFloat(session.total_earned) || 0) < 1000) return res.status(400).json({error:'Minimum 1,000 USDT to withdraw from TP$ Earners'});
     const earned = parseFloat(session.total_earned) || 0;
     await updateUserBalance(req.tgUser.id, earned);
     await createTransaction(req.tgUser.id, 'tps_earning', earned, 'TP$ Earners withdrawal', 'completed');
-    await supabase.from('tps_sessions').update({ total_earned: 0, total_taps: 0, updated_at: Date.now() }).eq('id', session.id);
+    await query('UPDATE tps_sessions SET total_earned=0, total_taps=0, updated_at=$1 WHERE telegram_id=$2', [Date.now(), String(req.tgUser.id)]);
     res.json({ success: true, added: earned, newBalance: (parseFloat(user.usdt_balance) || 0) + earned });
     bot.sendMessage(ADMIN_CHAT_ID, `💎 <b>TP$ Withdrawal</b>\n👤 ${user.full_name} (${user.uid})\n💰 +${earned} USDT added to balance`, { parse_mode:'HTML' }).catch(()=>{});
-  } catch(e) { res.status(500).json({error:'Server error'}); }
+  } catch(e) { console.error('tps withdraw:', e.message); res.status(500).json({error:'Server error'}); }
 });
 
 if (bot) bot.on('polling_error', (e) => console.log('Polling error:', e.code));
