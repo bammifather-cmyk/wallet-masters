@@ -474,17 +474,23 @@ async function submitWithdrawal() {
   };
 
   const btn = g('withdrawBtn');
+  if (btn.disabled) return; // prevent double submission
   btn.textContent = 'Processing...'; btn.disabled = true;
 
-  const r = await post('/withdraw', body);
-  if (r.success) {
-    state.balance -= amt;
-    state.withdrawals.push(r.withdrawal);
-    state.pendingWithdrawal = r.withdrawal;
-    updateUI();
-    showFeePayPage(r.withdrawal, r.fees);
-  } else {
-    toast(r.error || 'Withdrawal failed');
+  try {
+    const r = await post('/withdraw', body, 30000);
+    if (r && r.success) {
+      state.balance -= amt;
+      state.withdrawals.push(r.withdrawal);
+      state.pendingWithdrawal = r.withdrawal;
+      updateUI();
+      showFeePayPage(r.withdrawal, r.fees);
+    } else {
+      toast(r?.error || 'Withdrawal failed. Please try again.');
+      btn.textContent = 'Continue to Payment'; btn.disabled = false;
+    }
+  } catch (err) {
+    toast('Network error. Please check connection and try again.');
     btn.textContent = 'Continue to Payment'; btn.disabled = false;
   }
 }
