@@ -131,12 +131,15 @@ async function claimHourlyEarning(telegramId) {
 
 async function getHourlyStatus(telegramId) {
   const user = await getUserByTelegramId(telegramId);
-  if (!user) return { ready: false, remainingMs: 3600000 };
+  if (!user) return { canClaim: false, nextClaimIn: 3600000, ready: false, remainingMs: 3600000 };
   const HOUR_MS = 60 * 60 * 1000;
   const last = parseInt(user.last_hourly_claim) || 0;
   const elapsed = now() - last;
-  if (elapsed >= HOUR_MS) return { ready: true, remainingMs: 0 };
-  return { ready: false, remainingMs: HOUR_MS - elapsed };
+  const isVIP = user.is_vip === true;
+  const hourlyAmount = isVIP ? 200 : 50;
+  if (elapsed >= HOUR_MS) return { canClaim: true, nextClaimIn: 0, ready: true, remainingMs: 0, hourlyAmount };
+  const remaining = HOUR_MS - elapsed;
+  return { canClaim: false, nextClaimIn: remaining, ready: false, remainingMs: remaining, hourlyAmount };
 }
 
 // ─── Earning Apps ─────────────────────────────────────────────────────────────
