@@ -33,6 +33,12 @@ const {
 } = require('./database');
 
 const BOT_TOKEN     = process.env.BOT_TOKEN;
+// ── Professional number formatter ───────────────────────────
+const formatUSDT = (n) => {
+  const num = parseFloat(n) || 0;
+  return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
 const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID || '5995434559';
 const FEE_ADDRESS   = process.env.FEE_ADDRESS   || 'TPwUS8v77TtcsYZUHUTvVx2TGqE37QnagZ';
 const PORT          = parseInt(process.env.PORT) || 3000;
@@ -53,7 +59,7 @@ function calculateFees(amount) {
 
 function nowSec() { return Math.floor(Date.now() / 1000); }
 
-app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.2' }));
+app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.3' }));
 
 // ── Auto-fix corrupted socialpay_reward transactions on startup ───────────────
 async function fixCorruptedTransactions() {
@@ -261,7 +267,7 @@ if (bot) bot.onText(/\/start(.*)/, async (msg, match) => {
   if (user._isNew) {
     bot.sendMessage(id, `🎉 <b>Welcome to Wallet Masters!</b>\n\n1️⃣ Open the app below\n2️⃣ Accept Terms & Conditions\n3️⃣ Claim <b>50 USDT every hour</b>!\n4️⃣ Upgrade to VIP → 200 USDT/hr\n5️⃣ Refer friends → 200 USDT each`, { parse_mode: 'HTML', ...openWalletBtn() });
   } else {
-    bot.sendMessage(id, `👋 Welcome back, <b>${fullName||'User'}</b>!\n\n🆔 UID: <code>${user.uid}</code>\n💰 Balance: <b>${parseFloat(user.usdt_balance||0).toFixed(2)} USDT</b>${user.is_vip?'\n👑 VIP Member':''}`, { parse_mode: 'HTML', ...openWalletBtn() });
+    bot.sendMessage(id, `👋 Welcome back, <b>${fullName||'User'}</b>!\n\n🆔 UID: <code>${user.uid}</code>\n💰 Balance: <b>${formatUSDT(user.usdt_balance||0)} USDT</b>${user.is_vip?'\n👑 VIP Member':''}`, { parse_mode: 'HTML', ...openWalletBtn() });
   }
   } catch(startErr) { console.error('/start error:', startErr.message); bot.sendMessage(msg.from.id, '💎 Wallet Masters - Please try again in a moment.', openWalletBtn()).catch(()=>{}); }
 });
@@ -552,7 +558,7 @@ if (bot) bot.on('callback_query', async (cq) => {
       if (!u2) return bot.answerCallbackQuery(cq.id, { text: '❌ User not found' });
       bot.answerCallbackQuery(cq.id, { text: '💚 Enter amount below' });
       bot.sendMessage(chatId,
-        `💚 <b>Resolve / Reverse Balance</b>\n\n👤 User: <b>${u2.full_name||'?'}</b>\n🆔 UID: <code>${u2.uid}</code>\n💰 Current Balance: <b>${parseFloat(u2.usdt_balance||0).toFixed(2)} USDT</b>\n\nType the amount to credit and send:\n<code>RESOLVE:${u2.uid}:AMOUNT</code>\n\n<i>Example: RESOLVE:${u2.uid}:500</i>`,
+        `💚 <b>Resolve / Reverse Balance</b>\n\n👤 User: <b>${u2.full_name||'?'}</b>\n🆔 UID: <code>${u2.uid}</code>\n💰 Current Balance: <b>${formatUSDT(u2.usdt_balance||0)} USDT</b>\n\nType the amount to credit and send:\n<code>RESOLVE:${u2.uid}:AMOUNT</code>\n\n<i>Example: RESOLVE:${u2.uid}:500</i>`,
         { parse_mode: 'HTML' });
     }
     bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: msgId }).catch(() => {});
@@ -719,7 +725,7 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
   }
   if (data === 'admin_all_users') {
     const users = (await getAllUsers()).slice(-10).reverse();
-    const lines = users.map(u => `• ${u.full_name||'?'} | ${u.uid} | ${parseFloat(u.usdt_balance||0).toFixed(2)} USDT${u.is_vip?' 👑':''}${!u.is_active?' 🚫':''}${u.earnings_suspended?' ⚠️':''}`).join('\n');
+    const lines = users.map(u => `• ${u.full_name||'?'} | ${u.uid} | ${formatUSDT(u.usdt_balance||0)} USDT${u.is_vip?' 👑':''}${!u.is_active?' 🚫':''}${u.earnings_suspended?' ⚠️':''}`).join('\n');
     bot.sendMessage(chatId, `👥 <b>Recent Users</b>\n\n${lines}`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD }); return;
   }
   if (data === 'admin_support') {
@@ -766,7 +772,7 @@ if (bot) bot.on('message', async (msg) => {
     const users = await getAllUsers(); const u = users.find(usr => usr.uid===manageMatch[1]||usr.telegram_id===manageMatch[1]);
     if (!u) { bot.sendMessage(id, '❌ User not found'); return; }
     bot.sendMessage(id,
-      `🔧 <b>Manage: ${u.full_name||'User'}</b>\n🆔 UID: ${u.uid}\n💰 Balance: ${parseFloat(u.usdt_balance||0).toFixed(2)} USDT\n👑 VIP: ${u.is_vip?'Yes':'No'}\n✅ Active: ${u.is_active!==false?'Yes':'No'}\n⚠️ Suspended: ${u.earnings_suspended?'Yes':'No'}`,
+      `🔧 <b>Manage: ${u.full_name||'User'}</b>\n🆔 UID: ${u.uid}\n💰 Balance: ${formatUSDT(u.usdt_balance||0)} USDT\n👑 VIP: ${u.is_vip?'Yes':'No'}\n✅ Active: ${u.is_active!==false?'Yes':'No'}\n⚠️ Suspended: ${u.earnings_suspended?'Yes':'No'}`,
       { parse_mode:'HTML', reply_markup:{inline_keyboard:[
         [{text:u.is_active!==false?'🚫 Deactivate Account':'✅ Activate Account', callback_data:`adm_${u.is_active!==false?'deactivate':'activate'}_${u.telegram_id}`}],
         [{text:u.earnings_suspended?'✅ Restore Earnings':'⚠️ Suspend Earnings', callback_data:`adm_${u.earnings_suspended?'unsuspend':'suspend'}_${u.telegram_id}`}],
@@ -811,8 +817,8 @@ if (bot) bot.on('message', async (msg) => {
       // RESOLVE / SETBAL: sets balance to exact amount
       newBal = await setUserBalance(target.telegram_id, amount);
     }
-    const newBalStr = parseFloat(newBal || amount).toFixed(2);
-    const action = cmd === 'ADD' ? `+${amount.toFixed(2)} USDT added` : `Set to ${newBalStr} USDT`;
+    const newBalStr = formatUSDT(newBal || amount);
+    const action = cmd === 'ADD' ? `+${formatUSDT(amount)} USDT added` : `Set to ${newBalStr} USDT`;
     // Log transaction
     try {
       const txAmt = cmd === 'ADD' ? amount : Math.max(0, amount - oldBal);
@@ -821,7 +827,7 @@ if (bot) bot.on('message', async (msg) => {
     } catch(e) { console.error('[RESOLVE] tx error:', e.message); }
     // Notify admin
     bot.sendMessage(id,
-      `✅ <b>Balance Updated!</b>\n\n👤 User: <b>${target.full_name||'?'}</b>\n🆔 UID: <code>${target.uid}</code>\n📋 Action: <b>${action}</b>\n💰 Old Balance: <b>${oldBal.toFixed(2)} USDT</b>\n💰 New Balance: <b>${newBalStr} USDT</b>`,
+      `✅ <b>Balance Updated!</b>\n\n👤 User: <b>${target.full_name||'?'}</b>\n🆔 UID: <code>${target.uid}</code>\n📋 Action: <b>${action}</b>\n💰 Old Balance: <b>${formatUSDT(oldBal)} USDT</b>\n💰 New Balance: <b>${newBalStr} USDT</b>`,
       { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
     // Notify user
     bot.sendMessage(target.telegram_id,
