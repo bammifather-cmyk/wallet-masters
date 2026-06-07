@@ -323,6 +323,9 @@ async function claimHourly() {
 function showPage(name) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.page === name));
+  // Reset scroll to top so sub-pages don't show the gap from home page scrolling
+  const pagesEl = document.getElementById('pages');
+  if (pagesEl) pagesEl.scrollTop = 0;
   const page = g(`page-${name}`);
   if (page) {
     page.classList.add('active');
