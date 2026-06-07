@@ -299,6 +299,11 @@ async function updateTestimonial(id, updates) {
   await supabase.from('testimonials').update({ ...updates, updated_at: now() }).eq('id', id);
 }
 
+async function deleteTestimonial(id) {
+  const { error } = await supabase.from('testimonials').delete().eq('id', id);
+  return !error;
+}
+
 // ─── Poems ────────────────────────────────────────────────────────────────────
 async function createPoem(telegramId, data) {
   const { category, ...rest } = data;
@@ -328,6 +333,11 @@ async function getApprovedPoems() {
 
 async function updatePoem(id, updates) {
   await supabase.from('poems').update({ ...updates, updated_at: now() }).eq('id', id);
+}
+
+async function deletePoem(id) {
+  const { error } = await supabase.from('poems').delete().eq('id', id);
+  return !error;
 }
 
 // ─── SocialPay Profiles ───────────────────────────────────────────────────────
@@ -545,8 +555,8 @@ module.exports = {
   createTransaction, getUserTransactions,
   createWithdrawalRequest, getPendingWithdrawals, getWithdrawalById, updateWithdrawal, getUserWithdrawals,
   createSupportMessage, getSupportMessages, getAllSupportThreads, markSupportRead,
-  createTestimonial, getTestimonialById, getPendingTestimonials, getApprovedTestimonials, updateTestimonial,
-  createPoem, getPoemById, getPendingPoems, getApprovedPoems, updatePoem,
+  createTestimonial, getTestimonialById, getPendingTestimonials, getApprovedTestimonials, updateTestimonial, deleteTestimonial,
+  createPoem, getPoemById, getPendingPoems, getApprovedPoems, updatePoem, deletePoem,
   getSocialProfile, updateSocialProfile, getAllSocialProfiles,
   createSocialPost, getSocialPostById, getPendingSocialPosts, getApprovedSocialPosts, getSocialPostsByUser, updateSocialPost, deleteSocialPost, sendLikesToPost,
   likePost, hasLiked,
