@@ -1,15 +1,15 @@
 /**
- * Wallet Masters — Database v9 (Supabase HTTP Client)
- * Fixes: correct hourly rewards (50/200 USDT), correct getHourlyStatus return format,
- *        balance restore on new user registration, admin balance reverse feature
+ * Wallet Masters — Database v7 (PostgreSQL/Supabase)
+ * Migrated from lowdb flat-file to persistent PostgreSQL
  */
-const { createClient } = require('@supabase/supabase-js');
+const { Pool } = require('pg');
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://cuuekllbcrxvlxlydyta.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
-  auth: { persistSession: false }
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
 });
 
 const SHARED_TRC20_ADDRESS = process.env.FEE_ADDRESS || 'TPwUS8v77TtcsYZUHUTvVx2TGqE37QnagZ';
@@ -17,515 +17,676 @@ const MIN_WITHDRAWAL       = 5000;
 const MAX_WITHDRAWAL       = 50000;
 const GATEWAY_FEE_RATE     = 0.04;
 
-// ─── Pending balance restores (keyed by lowercased full name) ─────────────────
-// These are the balances users had before the migration.
-// When a user registers fresh, if their name matches, their balance is restored.
-const PENDING_BALANCE_RESTORES = {
-  'balaji':           { balance: 0,      isVip: false },
-  'ramesh thakur':    { balance: 150,    isVip: false },
-  'burgula anil':     { balance: 50,     isVip: false },
-  'gajanan nayak':    { balance: 50,     isVip: false },
-  'arun kant pandey': { balance: 251450, isVip: true  },
-  'mk':               { balance: 550,    isVip: false },
-  'coddd mk':         { balance: 50,     isVip: false },
-  'roshni nadar':     { balance: 691150, isVip: true  },
-};
-
 function generateUID() { return 'WME' + Math.random().toString(36).toUpperCase().substring(2, 10); }
 function now()         { return Date.now(); }
 function nowSec()      { return Math.floor(Date.now() / 1000); }
 
-// ─── Init ─────────────────────────────────────────────────────────────────────
-async function initDB() {
-  const { data, error } = await supabase.from('users').select('id').limit(1);
-  if (error && error.code === 'PGRST205') {
-    console.error('[DB] Tables not found! Please run init SQL in Supabase dashboard.');
-    throw new Error('Database tables not initialized. Run init SQL in Supabase.');
+async function query(sql, params = []) {
+  const client = await pool.connect();
+  try {
+    const res = await client.query(sql, params);
+    return res;
+  } finally {
+    client.release();
   }
-  if (error) throw new Error('[DB] Connection failed: ' + error.message);
-  console.log('[DB] Supabase HTTP client connected ✓');
 }
 
-// ─── User CRUD ────────────────────────────────────────────────────────────────
+// ─── Init Tables ──────────────────────────────────────────────────────────────
+async function initDB() {
+  await query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      telegram_id TEXT UNIQUE NOT NULL,
+      telegram_username TEXT DEFAULT '',
+      full_name TEXT DEFAULT '',
+      registered_name TEXT DEFAULT '',
+      trc20_address TEXT DEFAULT '',
+      usdt_balance NUMERIC DEFAULT 0,
+      uid TEXT UNIQUE,
+      is_vip BOOLEAN DEFAULT false,
+      vip_activated_at BIGINT DEFAULT 0,
+      last_hourly_claim BIGINT DEFAULT 0,
+      last_vip_claim BIGINT DEFAULT 0,
+      connected_apps JSONB DEFAULT '[]',
+      terms_accepted BOOLEAN DEFAULT false,
+      referral_code TEXT DEFAULT '',
+      referred_by TEXT DEFAULT '',
+      referral_count INT DEFAULT 0,
+      is_active BOOLEAN DEFAULT true,
+      earnings_suspended BOOLEAN DEFAULT false,
+      created_at BIGINT DEFAULT 0,
+      updated_at BIGINT DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS transactions (
+      id SERIAL PRIMARY KEY,
+      telegram_id TEXT NOT NULL,
+      type TEXT DEFAULT '',
+      amount NUMERIC DEFAULT 0,
+      note TEXT DEFAULT '',
+      status TEXT DEFAULT 'completed',
+      created_at BIGINT DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS withdrawals (
+      id SERIAL PRIMARY KEY,
+      telegram_id TEXT NOT NULL,
+      amount NUMERIC DEFAULT 0,
+      fee NUMERIC DEFAULT 0,
+      net_amount NUMERIC DEFAULT 0,
+      address TEXT DEFAULT '',
+      status TEXT DEFAULT 'pending',
+      receipt_url TEXT DEFAULT '',
+      tx_hash TEXT DEFAULT '',
+      created_at BIGINT DEFAULT 0,
+      updated_at BIGINT DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS earning_apps (
+      id SERIAL PRIMARY KEY,
+      name TEXT DEFAULT '',
+      description TEXT DEFAULT '',
+      bot_token TEXT DEFAULT '',
+      icon TEXT DEFAULT '',
+      url TEXT DEFAULT '',
+      deleted BOOLEAN DEFAULT false,
+      deleted_at BIGINT DEFAULT 0,
+      created_at BIGINT DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS support_messages (
+      id SERIAL PRIMARY KEY,
+      telegram_id TEXT NOT NULL,
+      message TEXT DEFAULT '',
+      from_admin BOOLEAN DEFAULT false,
+      read BOOLEAN DEFAULT false,
+      created_at BIGINT DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS testimonials (
+      id SERIAL PRIMARY KEY,
+      telegram_id TEXT NOT NULL,
+      name TEXT DEFAULT '',
+      message TEXT DEFAULT '',
+      video_url TEXT DEFAULT '',
+      amount TEXT DEFAULT '',
+      status TEXT DEFAULT 'pending',
+      created_at BIGINT DEFAULT 0,
+      updated_at BIGINT DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS poems (
+      id SERIAL PRIMARY KEY,
+      telegram_id TEXT NOT NULL,
+      title TEXT DEFAULT '',
+      content TEXT DEFAULT '',
+      author TEXT DEFAULT '',
+      status TEXT DEFAULT 'pending',
+      created_at BIGINT DEFAULT 0,
+      updated_at BIGINT DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS socialpay_profiles (
+      id SERIAL PRIMARY KEY,
+      telegram_id TEXT UNIQUE NOT NULL,
+      display_name TEXT DEFAULT '',
+      profile_pic TEXT DEFAULT '',
+      country TEXT DEFAULT '',
+      age TEXT DEFAULT '',
+      bio TEXT DEFAULT '',
+      is_verified BOOLEAN DEFAULT false,
+      is_gold_verified BOOLEAN DEFAULT false,
+      verification_status TEXT DEFAULT 'none',
+      gold_status TEXT DEFAULT 'none',
+      total_likes BIGINT DEFAULT 0,
+      followers BIGINT DEFAULT 0,
+      created_at BIGINT DEFAULT 0,
+      updated_at BIGINT DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS socialpay_posts (
+      id SERIAL PRIMARY KEY,
+      telegram_id TEXT NOT NULL,
+      content TEXT DEFAULT '',
+      image_url TEXT DEFAULT '',
+      status TEXT DEFAULT 'pending',
+      likes BIGINT DEFAULT 0,
+      user_likes BIGINT DEFAULT 0,
+      total_earned NUMERIC DEFAULT 0,
+      created_at BIGINT DEFAULT 0,
+      updated_at BIGINT DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS socialpay_likes (
+      id SERIAL PRIMARY KEY,
+      telegram_id TEXT NOT NULL,
+      post_id INT NOT NULL,
+      created_at BIGINT DEFAULT 0,
+      UNIQUE(telegram_id, post_id)
+    );
+    CREATE TABLE IF NOT EXISTS verification_requests (
+      id SERIAL PRIMARY KEY,
+      telegram_id TEXT NOT NULL,
+      type TEXT DEFAULT 'orange',
+      status TEXT DEFAULT 'pending',
+      created_at BIGINT DEFAULT 0,
+      updated_at BIGINT DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS sp_comments (
+      id SERIAL PRIMARY KEY,
+      telegram_id TEXT NOT NULL,
+      post_id INT NOT NULL,
+      text TEXT DEFAULT '',
+      parent_id INT DEFAULT NULL,
+      is_deleted BOOLEAN DEFAULT false,
+      created_at BIGINT DEFAULT 0,
+      updated_at BIGINT DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS sp_dms (
+      id SERIAL PRIMARY KEY,
+      from_tid TEXT NOT NULL,
+      to_tid TEXT NOT NULL,
+      text TEXT DEFAULT '',
+      media_url TEXT DEFAULT '',
+      media_type TEXT DEFAULT '',
+      read BOOLEAN DEFAULT false,
+      created_at BIGINT DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS broadcasts (
+      id SERIAL PRIMARY KEY,
+      message TEXT DEFAULT '',
+      sent_count INT DEFAULT 0,
+      created_at BIGINT DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS community_comments (
+      id BIGSERIAL PRIMARY KEY,
+      telegram_id TEXT NOT NULL,
+      user_name TEXT DEFAULT '',
+      text TEXT DEFAULT '',
+      receipt_image TEXT DEFAULT '',
+      status TEXT DEFAULT 'pending',
+      is_admin BOOLEAN DEFAULT false,
+      created_at BIGINT DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS tps_sessions (
+      id BIGSERIAL PRIMARY KEY,
+      telegram_id TEXT UNIQUE NOT NULL,
+      total_taps BIGINT DEFAULT 0,
+      total_earned NUMERIC DEFAULT 0,
+      created_at BIGINT DEFAULT 0,
+      updated_at BIGINT DEFAULT 0
+    );
+  `);
+  // Add new columns to existing tables if needed
+  try {
+    await query("ALTER TABLE testimonials ADD COLUMN IF NOT EXISTS location TEXT DEFAULT ''");
+    await query("ALTER TABLE testimonials ADD COLUMN IF NOT EXISTS country_flag TEXT DEFAULT ''");
+    await query("ALTER TABLE testimonials ADD COLUMN IF NOT EXISTS user_name TEXT DEFAULT ''");
+    await query("ALTER TABLE testimonials ADD COLUMN IF NOT EXISTS amount_display TEXT DEFAULT ''");
+    await query("ALTER TABLE socialpay_posts ADD COLUMN IF NOT EXISTS caption TEXT DEFAULT ''");
+    await query("ALTER TABLE socialpay_posts ADD COLUMN IF NOT EXISTS post_type TEXT DEFAULT 'text'");
+    await query("ALTER TABLE socialpay_posts ADD COLUMN IF NOT EXISTS has_image BOOLEAN DEFAULT false");
+    await query("ALTER TABLE socialpay_posts ADD COLUMN IF NOT EXISTS has_voice BOOLEAN DEFAULT false");
+    await query("ALTER TABLE socialpay_posts ADD COLUMN IF NOT EXISTS image_data TEXT DEFAULT ''");
+    await query("ALTER TABLE socialpay_posts ADD COLUMN IF NOT EXISTS voice_data TEXT DEFAULT ''");
+    await query("ALTER TABLE poems ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'General'");
+    await query("ALTER TABLE sp_dms ADD COLUMN IF NOT EXISTS image_data TEXT DEFAULT ''");
+    await query("ALTER TABLE sp_dms ADD COLUMN IF NOT EXISTS voice_data TEXT DEFAULT ''");
+  } catch(e) { /* columns may already exist */ }
+  console.log('[DB] PostgreSQL tables initialized');
+}
+
+// ─── User CRUD ───────────────────────────────────────────────────────────────
 async function getOrCreateUser(telegramId, username, fullName, referredBy) {
   const tid = String(telegramId);
-  const { data: existing } = await supabase.from('users').select('*').eq('telegram_id', tid).single();
-  let user = existing || null;
+  const existing = await query('SELECT * FROM users WHERE telegram_id = $1', [tid]);
+  let user = existing.rows[0] || null;
   let isNew = false;
 
   if (!user) {
     isNew = true;
-    const uid      = generateUID();
-    const refCode  = generateUID();
-
-    // Check if this user has a pending balance restore (match by name)
-    const nameKey  = (fullName || '').toLowerCase().trim();
-    const restore  = PENDING_BALANCE_RESTORES[nameKey] || null;
-    const initBal  = restore ? restore.balance : 0;
-    const initVip  = restore ? restore.isVip   : false;
-
-    const { data: created, error } = await supabase.from('users').insert([{
-      telegram_id:       tid,
-      telegram_username: username    || '',
-      full_name:         fullName    || '',
-      registered_name:   fullName    || '',
-      trc20_address:     SHARED_TRC20_ADDRESS,
-      usdt_balance:      initBal,
-      uid,
-      is_vip:            initVip,
-      vip_activated_at:  initVip ? now() : 0,
-      last_hourly_claim: 0,
-      last_vip_claim:    0,
-      connected_apps:    [],
-      terms_accepted:    false,
-      referral_code:     refCode,
-      referred_by:       referredBy || '',
-      referral_count:    0,
-      is_active:         true,
-      earnings_suspended: false,
-      created_at:        now(),
-      updated_at:        now()
-    }]).select().single();
-
-    if (error) throw new Error('[DB:getOrCreateUser] ' + error.message);
-    user = created;
-    user._restored = restore ? { balance: initBal, isVip: initVip } : null;
-
-    if (restore) {
-      // Record the restore as a transaction so it shows in history
-      await createTransaction(tid, 'balance_reversed', initBal, 'Balance restored from previous account', 'completed').catch(() => {});
-    }
+    const uid = generateUID();
+    const refCode = generateUID();
+    const res = await query(`
+      INSERT INTO users (telegram_id, telegram_username, full_name, registered_name,
+        trc20_address, usdt_balance, uid, is_vip, vip_activated_at,
+        last_hourly_claim, last_vip_claim, connected_apps, terms_accepted,
+        referral_code, referred_by, referral_count, is_active, earnings_suspended,
+        created_at, updated_at)
+      VALUES ($1,$2,$3,$4,$5,0,$6,false,0,0,0,'[]',false,$7,$8,0,true,false,$9,$9)
+      RETURNING *
+    `, [tid, username||'', fullName||'', fullName||'', SHARED_TRC20_ADDRESS, uid, refCode, referredBy||'', now()]);
+    user = res.rows[0];
 
     if (referredBy) {
-      const { data: referrer } = await supabase.from('users')
-        .select('*')
-        .or(`referral_code.eq.${referredBy},uid.eq.${referredBy}`)
-        .single();
+      const refRes = await query('SELECT * FROM users WHERE referral_code=$1 OR uid=$1', [referredBy]);
+      const referrer = refRes.rows[0];
       if (referrer && referrer.telegram_id !== tid) {
-        await supabase.from('users')
-          .update({
-            usdt_balance:  (parseFloat(referrer.usdt_balance) || 0) + 200,
-            referral_count: (referrer.referral_count || 0) + 1,
-            updated_at:    now()
-          })
-          .eq('telegram_id', referrer.telegram_id);
+        await query('UPDATE users SET usdt_balance=usdt_balance+200, referral_count=referral_count+1, updated_at=$1 WHERE telegram_id=$2',
+          [now(), referrer.telegram_id]);
         user._referrer = { telegram_id: referrer.telegram_id, name: referrer.full_name };
       }
     }
   } else {
-    const updates = { trc20_address: SHARED_TRC20_ADDRESS, updated_at: now() };
-    if (username) updates.telegram_username = username;
-    if (fullName) updates.full_name = fullName;
-    await supabase.from('users').update(updates).eq('telegram_id', tid);
-    const { data: refreshed } = await supabase.from('users').select('*').eq('telegram_id', tid).single();
-    user = refreshed;
+    const updates = [];
+    const vals = [];
+    let idx = 1;
+    if (username)  { updates.push(`telegram_username=$${idx++}`); vals.push(username); }
+    if (fullName)  { updates.push(`full_name=$${idx++}`); vals.push(fullName); }
+    updates.push(`trc20_address=$${idx++}`); vals.push(SHARED_TRC20_ADDRESS);
+    updates.push(`updated_at=$${idx++}`); vals.push(now());
+    vals.push(tid);
+    await query(`UPDATE users SET ${updates.join(',')} WHERE telegram_id=$${idx}`, vals);
+    const res = await query('SELECT * FROM users WHERE telegram_id=$1', [tid]);
+    user = res.rows[0];
   }
   user._isNew = isNew;
   return user;
 }
 
 async function getUserByTelegramId(tid) {
-  const { data } = await supabase.from('users').select('*').eq('telegram_id', String(tid)).single();
-  return data || null;
+  const r = await query('SELECT * FROM users WHERE telegram_id=$1', [String(tid)]);
+  return r.rows[0] || null;
 }
 async function getUserById(id) {
-  const { data } = await supabase.from('users').select('*').eq('id', id).single();
-  return data || null;
+  const r = await query('SELECT * FROM users WHERE id=$1', [id]);
+  return r.rows[0] || null;
 }
 async function getAllUsers() {
-  const { data } = await supabase.from('users').select('*').order('created_at', { ascending: false });
-  return data || [];
+  const r = await query('SELECT * FROM users ORDER BY created_at DESC');
+  return r.rows;
 }
 async function updateUserBalance(telegramId, amount) {
-  const tid  = String(telegramId);
-  const user = await getUserByTelegramId(tid);
-  if (!user) return null;
-  const newBal = Math.max(0, (parseFloat(user.usdt_balance) || 0) + amount);
-  await supabase.from('users').update({ usdt_balance: newBal, updated_at: now() }).eq('telegram_id', tid);
+  const tid = String(telegramId);
+  await query('UPDATE users SET usdt_balance=GREATEST(0,usdt_balance+$1), updated_at=$2 WHERE telegram_id=$3',
+    [amount, now(), tid]);
   return getUserByTelegramId(tid);
 }
 async function upgradeToVIP(telegramId) {
   const tid = String(telegramId);
-  await supabase.from('users').update({ is_vip: true, vip_activated_at: now(), last_vip_claim: 0, updated_at: now() }).eq('telegram_id', tid);
+  await query('UPDATE users SET is_vip=true, vip_activated_at=$1, last_vip_claim=0, updated_at=$1 WHERE telegram_id=$2',
+    [now(), tid]);
   return getUserByTelegramId(tid);
 }
 async function updateUserName(telegramId, newName) {
   const tid = String(telegramId);
-  await supabase.from('users').update({ registered_name: newName, full_name: newName, updated_at: now() }).eq('telegram_id', tid);
+  await query('UPDATE users SET registered_name=$1, full_name=$1, updated_at=$2 WHERE telegram_id=$3',
+    [newName, now(), tid]);
   return getUserByTelegramId(tid);
 }
 async function setUserActive(telegramId, isActive) {
-  await supabase.from('users').update({ is_active: isActive, updated_at: now() }).eq('telegram_id', String(telegramId));
+  await query('UPDATE users SET is_active=$1, updated_at=$2 WHERE telegram_id=$3',
+    [isActive, now(), String(telegramId)]);
 }
 async function setEarningsSuspended(telegramId, suspended) {
-  await supabase.from('users').update({ earnings_suspended: suspended, updated_at: now() }).eq('telegram_id', String(telegramId));
+  await query('UPDATE users SET earnings_suspended=$1, updated_at=$2 WHERE telegram_id=$3',
+    [suspended, now(), String(telegramId)]);
 }
 async function acceptTerms(telegramId) {
-  await supabase.from('users').update({ terms_accepted: true, updated_at: now() }).eq('telegram_id', String(telegramId));
+  await query('UPDATE users SET terms_accepted=true, updated_at=$1 WHERE telegram_id=$2',
+    [now(), String(telegramId)]);
 }
 
-// ─── Hourly Earnings ──────────────────────────────────────────────────────────
-// Normal users: 50 USDT/hr | VIP users: 200 USDT/hr
+// ─── Hourly Earning ──────────────────────────────────────────────────────────
 async function claimHourlyEarning(telegramId) {
   const tid  = String(telegramId);
   const user = await getUserByTelegramId(tid);
-  if (!user) return { success: false, reason: 'User not found' };
-  if (!user.is_active) return { success: false, reason: 'Account deactivated' };
-  if (user.earnings_suspended) return { success: false, reason: 'Earnings suspended' };
-  const ONE_HOUR = 3600000;
-  const elapsed  = now() - (user.last_hourly_claim || 0);
-  if (elapsed < ONE_HOUR) return { success: false, reason: 'Not ready', remaining: ONE_HOUR - elapsed };
-  const reward  = user.is_vip ? 200 : 50;   // ✅ Fixed: was 10/5
-  const newBal  = (parseFloat(user.usdt_balance) || 0) + reward;
-  await supabase.from('users').update({ usdt_balance: newBal, last_hourly_claim: now(), updated_at: now() }).eq('telegram_id', tid);
-  await createTransaction(tid, 'hourly_earning', reward, 'Hourly earning claimed', 'completed');
-  return { success: true, reward, balance: newBal };
+  if (!user) return { success: false, error: 'User not found' };
+  if (user.earnings_suspended) return { success: false, error: 'Your earnings have been temporarily suspended. Please contact support.' };
+  const isVIP     = user.is_vip === true;
+  const lastField = isVIP ? 'last_vip_claim' : 'last_hourly_claim';
+  const lastClaim = parseInt(user[lastField]) || 0;
+  const hourMs    = 60 * 60 * 1000;
+  if (now() - lastClaim < hourMs) return { success: false, nextIn: hourMs - (now() - lastClaim) };
+  const amount = isVIP ? 200 : 50;
+  await query(`UPDATE users SET usdt_balance=usdt_balance+$1, ${lastField}=$2, updated_at=$2 WHERE telegram_id=$3`,
+    [amount, now(), tid]);
+  const updated = await getUserByTelegramId(tid);
+  await createTransaction(telegramId, 'earning', amount, isVIP ? 'VIP Bonus' : 'Hourly Bonus');
+  return { success: true, amount, newBalance: parseFloat(updated.usdt_balance), isVIP };
 }
-
-// ✅ Fixed: return { canClaim, nextClaimIn, hourlyAmount } to match what bot.js expects
 async function getHourlyStatus(telegramId) {
   const user = await getUserByTelegramId(String(telegramId));
-  if (!user) return { canClaim: false, nextClaimIn: 3600000, hourlyAmount: 50 };
-  const ONE_HOUR    = 3600000;
-  const elapsed     = now() - (user.last_hourly_claim || 0);
-  const canClaim    = elapsed >= ONE_HOUR;
-  const nextClaimIn = canClaim ? 0 : ONE_HOUR - elapsed;
-  const hourlyAmount = user.is_vip ? 200 : 50;
-  return { canClaim, nextClaimIn, hourlyAmount, lastClaim: user.last_hourly_claim };
-}
-
-// ─── Admin: Balance Reverse / Resolve ─────────────────────────────────────────
-// Allows admin to manually add balance to any user with a clear transaction record.
-async function adminResolveBalance(telegramId, amount, category) {
-  const tid  = String(telegramId);
-  const user = await getUserByTelegramId(tid);
-  if (!user) return { success: false, reason: 'User not found' };
-  const addAmt = parseFloat(amount) || 0;
-  if (addAmt <= 0) return { success: false, reason: 'Amount must be > 0' };
-  const newBal = (parseFloat(user.usdt_balance) || 0) + addAmt;
-  await supabase.from('users').update({ usdt_balance: newBal, updated_at: now() }).eq('telegram_id', tid);
-  const txType = (category || 'balance_reversed').toLowerCase().replace(/\s+/g, '_');
-  await createTransaction(tid, txType, addAmt, category || 'Balance Reversed', 'completed');
-  return { success: true, newBalance: newBal, added: addAmt };
+  if (!user) return { canClaim: false, nextClaimIn: 0, hourlyAmount: 50 };
+  const isVIP     = user.is_vip === true;
+  const lastField = isVIP ? 'last_vip_claim' : 'last_hourly_claim';
+  const lastClaim = parseInt(user[lastField]) || 0;
+  const hourMs    = 60 * 60 * 1000;
+  const diff      = now() - lastClaim;
+  return { canClaim: diff >= hourMs, nextClaimIn: Math.max(0, hourMs - diff), hourlyAmount: isVIP ? 200 : 50, isVIP };
 }
 
 // ─── Earning Apps ─────────────────────────────────────────────────────────────
 async function getEarningApps() {
-  const { data } = await supabase.from('earning_apps').select('*').eq('deleted', false).order('created_at', { ascending: false });
-  return data || [];
+  const r = await query('SELECT * FROM earning_apps WHERE deleted=false');
+  return r.rows;
 }
 async function getEarningAppById(id) {
-  const { data } = await supabase.from('earning_apps').select('*').eq('id', id).single();
-  return data || null;
+  const r = await query('SELECT * FROM earning_apps WHERE id=$1', [id]);
+  return r.rows[0] || null;
 }
 async function getEarningAppByToken(tok) {
-  const { data } = await supabase.from('earning_apps').select('*').eq('bot_token', tok).single();
-  return data || null;
+  const r = await query('SELECT * FROM earning_apps WHERE bot_token=$1', [tok]);
+  return r.rows[0] || null;
 }
 async function addEarningApp(data) {
-  const { data: created } = await supabase.from('earning_apps').insert([{ ...data, deleted: false, created_at: now() }]).select().single();
-  return created;
+  const r = await query(
+    'INSERT INTO earning_apps (name,description,bot_token,icon,url,deleted,created_at) VALUES ($1,$2,$3,$4,$5,false,$6) RETURNING *',
+    [data.name||'', data.description||'', data.bot_token||'', data.icon||'', data.url||'', now()]);
+  return r.rows[0];
 }
 async function removeEarningApp(id) {
-  await supabase.from('earning_apps').update({ deleted: true, deleted_at: now() }).eq('id', id);
+  await query('UPDATE earning_apps SET deleted=true, deleted_at=$1 WHERE id=$2', [now(), parseInt(id)]);
+  return true;
 }
 
-// ─── Connections ──────────────────────────────────────────────────────────────
+// ─── UID Connections ──────────────────────────────────────────────────────────
 async function connectUID(telegramId, appId, externalUID) {
   const tid  = String(telegramId);
   const user = await getUserByTelegramId(tid);
-  if (!user) return;
-  let apps = Array.isArray(user.connected_apps) ? user.connected_apps : [];
-  apps = apps.filter(a => a.appId != appId);
-  apps.push({ appId, externalUID, connectedAt: now() });
-  await supabase.from('users').update({ connected_apps: apps, updated_at: now() }).eq('telegram_id', tid);
+  if (!user) return null;
+  const apps = Array.isArray(user.connected_apps) ? user.connected_apps : [];
+  const existing = apps.findIndex(a => a.app_id === appId);
+  if (existing >= 0) { apps[existing].uid = externalUID; apps[existing].updated_at = now(); }
+  else apps.push({ app_id: appId, uid: externalUID, connected_at: now(), updated_at: now() });
+  await query('UPDATE users SET connected_apps=$1, updated_at=$2 WHERE telegram_id=$3',
+    [JSON.stringify(apps), now(), tid]);
+  return getUserByTelegramId(tid);
 }
 async function getConnectedUID(telegramId, appId) {
   const user = await getUserByTelegramId(String(telegramId));
   if (!user) return null;
   const apps = Array.isArray(user.connected_apps) ? user.connected_apps : [];
-  const conn = apps.find(a => a.appId == appId);
-  return conn ? conn.externalUID : null;
+  const conn = apps.find(a => a.app_id === appId);
+  return conn ? conn.uid : null;
 }
 async function getUserConnections(telegramId) {
   const user = await getUserByTelegramId(String(telegramId));
   return user ? (Array.isArray(user.connected_apps) ? user.connected_apps : []) : [];
 }
 async function findUserByExternalUID(externalUID) {
-  const { data: all } = await supabase.from('users').select('*');
-  if (!all) return null;
-  return all.find(u => Array.isArray(u.connected_apps) && u.connected_apps.some(a => a.externalUID === externalUID)) || null;
+  const r = await query("SELECT * FROM users WHERE connected_apps::text LIKE $1", [`%${externalUID}%`]);
+  return r.rows.find(u => (u.connected_apps||[]).some(a => a.uid === externalUID)) || null;
 }
 
 // ─── Transactions ─────────────────────────────────────────────────────────────
 async function createTransaction(telegramId, type, amount, note, status) {
-  const { data } = await supabase.from('transactions').insert([{
-    telegram_id: String(telegramId), type, amount, note, status: status || 'completed', created_at: now()
-  }]).select().single();
-  return data;
+  const r = await query(
+    'INSERT INTO transactions (telegram_id,type,amount,note,status,created_at) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
+    [String(telegramId), type, amount, note||'', status||'completed', nowSec()]);
+  return r.rows[0];
 }
 async function getUserTransactions(tid) {
-  const { data } = await supabase.from('transactions').select('*').eq('telegram_id', String(tid)).order('created_at', { ascending: false });
-  return data || [];
+  const r = await query('SELECT * FROM transactions WHERE telegram_id=$1 ORDER BY created_at DESC LIMIT 50', [String(tid)]);
+  return r.rows;
 }
 
 // ─── Withdrawals ──────────────────────────────────────────────────────────────
 async function createWithdrawalRequest(data) {
-  const { data: created } = await supabase.from('withdrawals').insert([{ ...data, status: 'pending', created_at: now(), updated_at: now() }]).select().single();
-  return created;
+  const r = await query(
+    'INSERT INTO withdrawals (telegram_id,amount,fee,net_amount,address,status,receipt_url,tx_hash,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$9) RETURNING *',
+    [String(data.telegram_id), data.amount||0, data.fee||0, data.net_amount||0, data.address||'', 'pending', data.receipt_url||'', data.tx_hash||'', nowSec()]);
+  return r.rows[0];
 }
 async function getPendingWithdrawals() {
-  const { data } = await supabase.from('withdrawals').select('*').eq('status', 'pending').order('created_at', { ascending: false });
-  return data || [];
+  const r = await query("SELECT * FROM withdrawals WHERE status='pending' ORDER BY created_at DESC");
+  return r.rows;
 }
 async function getWithdrawalById(id) {
-  const { data } = await supabase.from('withdrawals').select('*').eq('id', id).single();
-  return data || null;
+  const r = await query('SELECT * FROM withdrawals WHERE id=$1', [parseInt(id)]);
+  return r.rows[0] || null;
 }
-async function updateWithdrawal(id, data) {
-  await supabase.from('withdrawals').update({ ...data, updated_at: now() }).eq('id', id);
+async function updateWithdrawal(id, updates) {
+  const fields = Object.keys(updates).map((k, i) => `${k}=$${i+1}`).join(',');
+  const vals   = Object.values(updates);
+  vals.push(nowSec(), parseInt(id));
+  await query(`UPDATE withdrawals SET ${fields}, updated_at=$${vals.length-1} WHERE id=$${vals.length}`, vals);
+  return getWithdrawalById(id);
 }
 async function getUserWithdrawals(tid) {
-  const { data } = await supabase.from('withdrawals').select('*').eq('telegram_id', String(tid)).order('created_at', { ascending: false });
-  return data || [];
+  const r = await query('SELECT * FROM withdrawals WHERE telegram_id=$1 ORDER BY created_at DESC', [String(tid)]);
+  return r.rows;
 }
 
 // ─── Support ──────────────────────────────────────────────────────────────────
 async function createSupportMessage(telegramId, message, fromAdmin) {
-  const { data } = await supabase.from('support_messages').insert([{
-    telegram_id: String(telegramId), message, from_admin: fromAdmin || false, read: false, created_at: now()
-  }]).select().single();
-  return data;
+  const r = await query(
+    'INSERT INTO support_messages (telegram_id,message,from_admin,read,created_at) VALUES ($1,$2,$3,false,$4) RETURNING *',
+    [String(telegramId), message, !!fromAdmin, nowSec()]);
+  return r.rows[0];
 }
 async function getSupportMessages(tid) {
-  const { data } = await supabase.from('support_messages').select('*').eq('telegram_id', String(tid)).order('created_at', { ascending: true });
-  return data || [];
+  const r = await query('SELECT * FROM support_messages WHERE telegram_id=$1 ORDER BY created_at ASC', [String(tid)]);
+  return r.rows;
 }
 async function getAllSupportThreads() {
-  const { data } = await supabase.from('support_messages').select('*').order('created_at', { ascending: false });
-  if (!data) return [];
-  const threads = {};
-  for (const msg of data) {
-    if (!threads[msg.telegram_id]) threads[msg.telegram_id] = { telegram_id: msg.telegram_id, messages: [], unread: 0 };
-    threads[msg.telegram_id].messages.push(msg);
-    if (!msg.from_admin && !msg.read) threads[msg.telegram_id].unread++;
+  const r = await query('SELECT * FROM support_messages ORDER BY created_at DESC');
+  const grouped = {};
+  for (const m of r.rows) {
+    if (!grouped[m.telegram_id]) grouped[m.telegram_id] = [];
+    grouped[m.telegram_id].push(m);
   }
-  return Object.values(threads);
+  return grouped;
 }
 async function markSupportRead(tid) {
-  await supabase.from('support_messages').update({ read: true }).eq('telegram_id', String(tid)).eq('from_admin', false);
+  await query("UPDATE support_messages SET read=true WHERE telegram_id=$1 AND from_admin=true AND read=false", [String(tid)]);
 }
 
 // ─── Testimonials ─────────────────────────────────────────────────────────────
 async function createTestimonial(telegramId, data) {
-  const { data: created } = await supabase.from('testimonials').insert([{
-    telegram_id: String(telegramId), ...data, status: 'pending', created_at: now(), updated_at: now()
-  }]).select().single();
-  return created;
+  const r = await query(
+    'INSERT INTO testimonials (telegram_id,name,message,video_url,amount,status,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$7) RETURNING *',
+    [String(telegramId), data.name||'', data.message||'', data.video_url||'', data.amount||'', 'pending', nowSec()]);
+  return r.rows[0];
 }
 async function getTestimonialById(id) {
-  const { data } = await supabase.from('testimonials').select('*').eq('id', id).single();
-  return data || null;
+  const r = await query('SELECT * FROM testimonials WHERE id=$1', [parseInt(id)]);
+  return r.rows[0] || null;
 }
 async function getPendingTestimonials() {
-  const { data } = await supabase.from('testimonials').select('*').eq('status', 'pending').order('created_at', { ascending: false });
-  return data || [];
+  const r = await query("SELECT * FROM testimonials WHERE status='pending'");
+  return r.rows;
 }
 async function getApprovedTestimonials() {
-  const { data } = await supabase.from('testimonials').select('*').eq('status', 'approved').order('created_at', { ascending: false });
-  return data || [];
+  const r = await query("SELECT * FROM testimonials WHERE status='approved' ORDER BY created_at DESC");
+  return r.rows;
 }
 async function updateTestimonial(id, data) {
-  await supabase.from('testimonials').update({ ...data, updated_at: now() }).eq('id', id);
+  const fields = Object.keys(data).map((k, i) => `${k}=$${i+1}`).join(',');
+  const vals   = [...Object.values(data), nowSec(), parseInt(id)];
+  await query(`UPDATE testimonials SET ${fields}, updated_at=$${vals.length-1} WHERE id=$${vals.length}`, vals);
+  return getTestimonialById(id);
 }
 
 // ─── Poems ────────────────────────────────────────────────────────────────────
 async function createPoem(telegramId, data) {
-  const { data: created } = await supabase.from('poems').insert([{
-    telegram_id: String(telegramId), ...data, status: 'pending', created_at: now(), updated_at: now()
-  }]).select().single();
-  return created;
+  const r = await query(
+    'INSERT INTO poems (telegram_id,title,content,author,status,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$6) RETURNING *',
+    [String(telegramId), data.title||'', data.content||'', data.author||'', 'pending', nowSec()]);
+  return r.rows[0];
 }
 async function getPoemById(id) {
-  const { data } = await supabase.from('poems').select('*').eq('id', id).single();
-  return data || null;
+  const r = await query('SELECT * FROM poems WHERE id=$1', [parseInt(id)]);
+  return r.rows[0] || null;
 }
 async function getPendingPoems() {
-  const { data } = await supabase.from('poems').select('*').eq('status', 'pending').order('created_at', { ascending: false });
-  return data || [];
+  const r = await query("SELECT * FROM poems WHERE status='pending' ORDER BY created_at DESC");
+  return r.rows;
 }
 async function getApprovedPoems() {
-  const { data } = await supabase.from('poems').select('*').eq('status', 'approved').order('created_at', { ascending: false });
-  return data || [];
+  const r = await query("SELECT * FROM poems WHERE status='approved' ORDER BY created_at DESC");
+  return r.rows;
 }
 async function updatePoem(id, data) {
-  await supabase.from('poems').update({ ...data, updated_at: now() }).eq('id', id);
+  const fields = Object.keys(data).map((k, i) => `${k}=$${i+1}`).join(',');
+  const vals   = [...Object.values(data), nowSec(), parseInt(id)];
+  await query(`UPDATE poems SET ${fields}, updated_at=$${vals.length-1} WHERE id=$${vals.length}`, vals);
+  return getPoemById(id);
 }
 
 // ─── SocialPay Profiles ───────────────────────────────────────────────────────
 async function getSocialProfile(telegramId) {
-  const { data } = await supabase.from('socialpay_profiles').select('*').eq('telegram_id', String(telegramId)).single();
-  return data || null;
+  const tid = String(telegramId);
+  let r = await query('SELECT * FROM socialpay_profiles WHERE telegram_id=$1', [tid]);
+  if (r.rows.length === 0) {
+    const user = await getUserByTelegramId(tid);
+    const ins = await query(
+      'INSERT INTO socialpay_profiles (telegram_id,display_name,profile_pic,country,age,bio,is_verified,is_gold_verified,verification_status,gold_status,total_likes,followers,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$13) ON CONFLICT (telegram_id) DO NOTHING RETURNING *',
+      [tid, user ? (user.full_name||'User') : 'User', '', '', '', '', false, false, 'none', 'none', 0, 0, nowSec()]);
+    if (ins.rows.length > 0) return ins.rows[0];
+    r = await query('SELECT * FROM socialpay_profiles WHERE telegram_id=$1', [tid]);
+  }
+  return r.rows[0] || null;
 }
 async function updateSocialProfile(telegramId, data) {
-  const tid      = String(telegramId);
-  const existing = await getSocialProfile(tid);
-  if (existing) {
-    await supabase.from('socialpay_profiles').update({ ...data, updated_at: now() }).eq('telegram_id', tid);
-  } else {
-    await supabase.from('socialpay_profiles').insert([{ telegram_id: tid, ...data, created_at: now(), updated_at: now() }]);
-  }
+  const tid = String(telegramId);
+  await getSocialProfile(tid);
+  const fields = Object.keys(data).map((k, i) => `${k}=$${i+1}`).join(',');
+  const vals   = [...Object.values(data), nowSec(), tid];
+  await query(`UPDATE socialpay_profiles SET ${fields}, updated_at=$${vals.length-1} WHERE telegram_id=$${vals.length}`, vals);
   return getSocialProfile(tid);
 }
 async function getAllSocialProfiles() {
-  const { data } = await supabase.from('socialpay_profiles').select('*').order('total_likes', { ascending: false });
-  return data || [];
+  const r = await query('SELECT * FROM socialpay_profiles');
+  return r.rows;
 }
 
 // ─── SocialPay Posts ──────────────────────────────────────────────────────────
 async function createSocialPost(telegramId, data) {
-  const { data: created } = await supabase.from('socialpay_posts').insert([{
-    telegram_id: String(telegramId), ...data, status: 'pending', likes: 0, user_likes: 0, total_earned: 0, created_at: now(), updated_at: now()
-  }]).select().single();
-  return created;
+  const r = await query(
+    'INSERT INTO socialpay_posts (telegram_id,content,image_url,status,likes,user_likes,total_earned,created_at,updated_at) VALUES ($1,$2,$3,$4,0,0,0,$5,$5) RETURNING *',
+    [String(telegramId), data.content||'', data.image_url||'', 'pending', nowSec()]);
+  return r.rows[0];
 }
 async function getSocialPostById(id) {
-  const { data } = await supabase.from('socialpay_posts').select('*').eq('id', id).single();
-  return data || null;
+  const r = await query('SELECT * FROM socialpay_posts WHERE id=$1', [parseInt(id)]);
+  return r.rows[0] || null;
 }
 async function getPendingSocialPosts() {
-  const { data } = await supabase.from('socialpay_posts').select('*').eq('status', 'pending').order('created_at', { ascending: false });
-  return data || [];
+  const r = await query("SELECT * FROM socialpay_posts WHERE status='pending' ORDER BY created_at DESC");
+  return r.rows;
 }
 async function getApprovedSocialPosts() {
-  const { data } = await supabase.from('socialpay_posts').select('*').eq('status', 'approved').order('created_at', { ascending: false });
-  return data || [];
+  const r = await query("SELECT * FROM socialpay_posts WHERE status='approved' ORDER BY created_at DESC");
+  return r.rows;
 }
 async function getSocialPostsByUser(tid) {
-  const { data } = await supabase.from('socialpay_posts').select('*').eq('telegram_id', String(tid)).order('created_at', { ascending: false });
-  return data || [];
+  const r = await query("SELECT * FROM socialpay_posts WHERE telegram_id=$1 ORDER BY created_at DESC", [String(tid)]);
+  return r.rows;
 }
 async function updateSocialPost(id, data) {
-  await supabase.from('socialpay_posts').update({ ...data, updated_at: now() }).eq('id', id);
+  const fields = Object.keys(data).map((k, i) => `${k}=$${i+1}`).join(',');
+  const vals   = [...Object.values(data), nowSec(), parseInt(id)];
+  await query(`UPDATE socialpay_posts SET ${fields}, updated_at=$${vals.length-1} WHERE id=$${vals.length}`, vals);
+  return getSocialPostById(id);
 }
 async function deleteSocialPost(id) {
-  await supabase.from('socialpay_posts').delete().eq('id', id);
+  await query("UPDATE socialpay_posts SET status='deleted', updated_at=$1 WHERE id=$2", [nowSec(), parseInt(id)]);
 }
-async function sendLikesToPost(postId, likesToAdd) {
+
+async function sendLikesToPost(postId, likesToAdd, botRef) {
   const post = await getSocialPostById(postId);
-  if (!post) return;
-  const newLikes     = (parseInt(post.likes) || 0) + likesToAdd;
-  const newUserLikes = (parseInt(post.user_likes) || 0) + likesToAdd;
-  await supabase.from('socialpay_posts').update({ likes: newLikes, user_likes: newUserLikes, updated_at: now() }).eq('id', postId);
-  const profile      = await getSocialProfile(post.telegram_id);
-  const currentTotal = parseInt(profile?.total_likes || 0) + likesToAdd;
-  await updateSocialProfile(post.telegram_id, { total_likes: currentTotal, followers: currentTotal });
-  if (profile) {
-    if (currentTotal >= 500000 && !profile.is_gold_verified) {
-      await updateSocialProfile(post.telegram_id, { is_gold_verified: true, gold_status: 'approved' });
-    } else if (currentTotal >= 1000 && !profile.is_verified) {
-      await updateSocialProfile(post.telegram_id, { is_verified: true, verification_status: 'approved' });
-    }
+  if (!post || post.status !== 'approved') return { success: false, error: 'Post not found or not approved' };
+  const oldLikes = parseInt(post.likes) || 0;
+  const newLikes = oldLikes + likesToAdd;
+  const milestones = [{ threshold:1000000, payout:100000 }, { threshold:100000, payout:10000 }, { threshold:10000, payout:1000 }, { threshold:1000, payout:100 }];
+  let earned = 0;
+  for (const m of milestones) { if (oldLikes < m.threshold && newLikes >= m.threshold) earned += m.payout; }
+  const totalEarned = (parseFloat(post.total_earned)||0) + earned;
+  await query('UPDATE socialpay_posts SET likes=$1, total_earned=$2, updated_at=$3 WHERE id=$4',
+    [newLikes, totalEarned, nowSec(), parseInt(postId)]);
+
+  const allPosts = await query("SELECT * FROM socialpay_posts WHERE telegram_id=$1 AND status='approved'", [post.telegram_id]);
+  const totalAdminLikes = allPosts.rows.reduce((sum, p) => sum + (p.id === parseInt(postId) ? newLikes : (parseInt(p.likes)||0)), 0);
+  await query('UPDATE socialpay_profiles SET total_likes=$1, followers=$1, updated_at=$2 WHERE telegram_id=$3',
+    [totalAdminLikes, nowSec(), post.telegram_id]);
+
+  if (earned > 0) {
+    await updateUserBalance(post.telegram_id, earned);
+    await createTransaction(post.telegram_id, 'socialpay_reward', earned, `SocialPay: ${newLikes.toLocaleString()} likes`);
+    if (botRef) botRef.sendMessage(post.telegram_id,
+      `🎉 <b>SocialPay Reward!</b>\n\n❤️ Your post reached <b>${newLikes.toLocaleString()} likes</b>!\n💰 <b>+${earned.toLocaleString()} USDT</b> added to your balance!\n\nKeep posting great content! 🚀`,
+      { parse_mode: 'HTML' }).catch(() => {});
   }
+  return { success: true, newLikes, earned, totalEarned };
 }
+
+// ─── SocialPay Likes (user) ───────────────────────────────────────────────────
 async function likePost(telegramId, postId) {
-  const tid     = String(telegramId);
-  const already = await hasLiked(tid, postId);
-  if (already) return { success: false, reason: 'Already liked' };
-  await supabase.from('socialpay_likes').insert([{ telegram_id: tid, post_id: postId, created_at: now() }]);
-  const post = await getSocialPostById(postId);
-  if (post) {
-    const newLikes     = (parseInt(post.likes) || 0) + 1;
-    await supabase.from('socialpay_posts').update({ likes: newLikes, updated_at: now() }).eq('id', postId);
-    const profile      = await getSocialProfile(post.telegram_id);
-    const currentTotal = (parseInt(profile?.total_likes || 0)) + 1;
-    await updateSocialProfile(post.telegram_id, { total_likes: currentTotal, followers: currentTotal });
-    if (currentTotal >= 500000 && profile && !profile.is_gold_verified) {
-      await updateSocialProfile(post.telegram_id, { is_gold_verified: true, gold_status: 'approved' });
-    } else if (currentTotal >= 1000 && profile && !profile.is_verified) {
-      await updateSocialProfile(post.telegram_id, { is_verified: true, verification_status: 'approved' });
-    }
+  const tid = String(telegramId);
+  const pId = parseInt(postId);
+  try {
+    await query('INSERT INTO socialpay_likes (telegram_id,post_id,created_at) VALUES ($1,$2,$3)', [tid, pId, nowSec()]);
+    await query('UPDATE socialpay_posts SET user_likes=user_likes+1 WHERE id=$1', [pId]);
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: 'Already liked' };
   }
-  return { success: true };
 }
 async function hasLiked(tid, postId) {
-  const { data } = await supabase.from('socialpay_likes').select('id').eq('telegram_id', String(tid)).eq('post_id', postId).single();
-  return !!data;
+  const r = await query('SELECT 1 FROM socialpay_likes WHERE telegram_id=$1 AND post_id=$2', [String(tid), parseInt(postId)]);
+  return r.rows.length > 0;
 }
 
 // ─── Comments ─────────────────────────────────────────────────────────────────
 async function createComment(telegramId, postId, text, parentId) {
-  const { data } = await supabase.from('sp_comments').insert([{
-    telegram_id: String(telegramId), post_id: postId, text, parent_id: parentId || null, is_deleted: false, created_at: now(), updated_at: now()
-  }]).select().single();
-  return data;
+  const r = await query(
+    'INSERT INTO sp_comments (telegram_id,post_id,text,parent_id,is_deleted,created_at) VALUES ($1,$2,$3,$4,false,$5) RETURNING *',
+    [String(telegramId), parseInt(postId), text, parentId ? parseInt(parentId) : null, nowSec()]);
+  return r.rows[0];
 }
 async function getCommentsByPost(postId) {
-  const { data } = await supabase.from('sp_comments').select('*').eq('post_id', postId).eq('is_deleted', false).order('created_at', { ascending: true });
-  return data || [];
+  const r = await query('SELECT * FROM sp_comments WHERE post_id=$1 AND is_deleted=false ORDER BY created_at ASC', [parseInt(postId)]);
+  return r.rows;
 }
 async function deleteComment(commentId) {
-  await supabase.from('sp_comments').update({ is_deleted: true, updated_at: now() }).eq('id', commentId);
+  await query('UPDATE sp_comments SET is_deleted=true, updated_at=$1 WHERE id=$2', [nowSec(), parseInt(commentId)]);
 }
 
-// ─── DMs ──────────────────────────────────────────────────────────────────────
+// ─── DMs (Gold Verified only) ─────────────────────────────────────────────────
 async function createDM(fromTid, toTid, data) {
-  const { data: created } = await supabase.from('sp_dms').insert([{
-    from_tid: String(fromTid), to_tid: String(toTid), ...data, read: false, created_at: now()
-  }]).select().single();
-  return created;
+  const r = await query(
+    'INSERT INTO sp_dms (from_tid,to_tid,text,media_url,media_type,read,created_at) VALUES ($1,$2,$3,$4,$5,false,$6) RETURNING *',
+    [String(fromTid), String(toTid), data.text||'', data.media_url||'', data.media_type||'', nowSec()]);
+  return r.rows[0];
 }
 async function getDMs(tid1, tid2) {
   const t1 = String(tid1), t2 = String(tid2);
-  const { data } = await supabase.from('sp_dms').select('*')
-    .or(`and(from_tid.eq.${t1},to_tid.eq.${t2}),and(from_tid.eq.${t2},to_tid.eq.${t1})`)
-    .order('created_at', { ascending: true });
-  return data || [];
+  const r = await query('SELECT * FROM sp_dms WHERE (from_tid=$1 AND to_tid=$2) OR (from_tid=$2 AND to_tid=$1) ORDER BY created_at ASC', [t1, t2]);
+  return r.rows;
 }
 async function getDMContacts(tid) {
   const t = String(tid);
-  const { data } = await supabase.from('sp_dms').select('*').or(`from_tid.eq.${t},to_tid.eq.${t}`).order('created_at', { ascending: false });
-  if (!data) return [];
-  const seen     = new Set();
-  const contacts = [];
-  for (const dm of data) {
-    const other = dm.from_tid === t ? dm.to_tid : dm.from_tid;
-    if (!seen.has(other)) { seen.add(other); contacts.push({ tid: other, lastMessage: dm }); }
-  }
-  return contacts;
+  const r = await query('SELECT DISTINCT CASE WHEN from_tid=$1 THEN to_tid ELSE from_tid END as contact FROM sp_dms WHERE from_tid=$1 OR to_tid=$1', [t]);
+  return r.rows.map(row => row.contact);
 }
 async function markDMsRead(fromTid, toTid) {
-  await supabase.from('sp_dms').update({ read: true }).eq('from_tid', String(fromTid)).eq('to_tid', String(toTid));
+  await query('UPDATE sp_dms SET read=true WHERE from_tid=$1 AND to_tid=$2 AND read=false', [String(fromTid), String(toTid)]);
 }
 
-// ─── Verification Requests ────────────────────────────────────────────────────
+// ─── Verification ─────────────────────────────────────────────────────────────
 async function createVerificationRequest(telegramId, type) {
-  const { data } = await supabase.from('verification_requests').insert([{
-    telegram_id: String(telegramId), type, status: 'pending', created_at: now(), updated_at: now()
-  }]).select().single();
-  return data;
+  const existing = await query("SELECT * FROM verification_requests WHERE telegram_id=$1 AND type=$2 AND status='pending'", [String(telegramId), type]);
+  if (existing.rows.length > 0) return existing.rows[0];
+  const r = await query(
+    'INSERT INTO verification_requests (telegram_id,type,status,created_at,updated_at) VALUES ($1,$2,$3,$4,$4) RETURNING *',
+    [String(telegramId), type, 'pending', nowSec()]);
+  return r.rows[0];
 }
 async function getPendingVerificationRequests() {
-  const { data } = await supabase.from('verification_requests').select('*').eq('status', 'pending').order('created_at', { ascending: false });
-  return data || [];
+  const r = await query("SELECT * FROM verification_requests WHERE status='pending' ORDER BY created_at ASC");
+  return r.rows;
 }
 async function updateVerificationRequest(id, status) {
-  await supabase.from('verification_requests').update({ status, updated_at: now() }).eq('id', id);
+  await query('UPDATE verification_requests SET status=$1, updated_at=$2 WHERE id=$3', [status, nowSec(), parseInt(id)]);
+  return (await query('SELECT * FROM verification_requests WHERE id=$1', [parseInt(id)])).rows[0];
 }
 
 // ─── Broadcasts ───────────────────────────────────────────────────────────────
 async function createBroadcast(message, sentCount) {
-  const { data } = await supabase.from('broadcasts').insert([{ message, sent_count: sentCount, created_at: now() }]).select().single();
-  return data;
+  const r = await query('INSERT INTO broadcasts (message,sent_count,created_at) VALUES ($1,$2,$3) RETURNING *',
+    [message, sentCount||0, nowSec()]);
+  return r.rows[0];
 }
 
+// ─── Export ───────────────────────────────────────────────────────────────────
 module.exports = {
-  initDB,
+  initDB, query,
   getOrCreateUser, getUserByTelegramId, getUserById, getAllUsers,
   updateUserBalance, upgradeToVIP, updateUserName,
   setUserActive, setEarningsSuspended, acceptTerms,
   claimHourlyEarning, getHourlyStatus,
-  adminResolveBalance,
   getEarningApps, getEarningAppById, getEarningAppByToken, addEarningApp, removeEarningApp,
   connectUID, getConnectedUID, getUserConnections, findUserByExternalUID,
   createTransaction, getUserTransactions,
@@ -534,13 +695,11 @@ module.exports = {
   createTestimonial, getTestimonialById, getPendingTestimonials, getApprovedTestimonials, updateTestimonial,
   createPoem, getPoemById, getPendingPoems, getApprovedPoems, updatePoem,
   getSocialProfile, updateSocialProfile, getAllSocialProfiles,
-  createSocialPost, getSocialPostById, getPendingSocialPosts, getApprovedSocialPosts,
-  getSocialPostsByUser, updateSocialPost, deleteSocialPost,
-  sendLikesToPost, likePost, hasLiked,
+  createSocialPost, getSocialPostById, getPendingSocialPosts, getApprovedSocialPosts, getSocialPostsByUser, updateSocialPost, deleteSocialPost, sendLikesToPost,
+  likePost, hasLiked,
   createComment, getCommentsByPost, deleteComment,
   createDM, getDMs, getDMContacts, markDMsRead,
   createVerificationRequest, getPendingVerificationRequests, updateVerificationRequest,
   createBroadcast,
-  SHARED_TRC20_ADDRESS, MIN_WITHDRAWAL, MAX_WITHDRAWAL, GATEWAY_FEE_RATE,
-  generateUID, now, nowSec
+  MIN_WITHDRAWAL, MAX_WITHDRAWAL, GATEWAY_FEE_RATE, SHARED_TRC20_ADDRESS
 };
