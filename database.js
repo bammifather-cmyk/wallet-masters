@@ -215,7 +215,26 @@ async function getUserTransactions(tid) {
 
 // ─── Withdrawals ──────────────────────────────────────────────────────────────
 async function createWithdrawalRequest(d) {
-  const { data } = await supabase.from('withdrawals').insert([{ ...d, status: 'pending', created_at: now(), updated_at: now() }]).select().single();
+  // Map all fields to the existing schema columns
+  const { method, account_number, bank_name, country, currency, ...rest } = d;
+  // Store bank/crypto details in address field as readable string
+  let addressStr = account_number || rest.address || '';
+  if (bank_name) addressStr = `${bank_name} | ${addressStr}`;
+  if (country) addressStr = `${addressStr} | ${country}`;
+  if (currency && currency !== 'USDT') addressStr = `${addressStr} | ${currency}`;
+  if (method) addressStr = `[${method.toUpperCase()}] ${addressStr}`;
+  const insertData = {
+    telegram_id: String(d.telegram_id),
+    amount: d.amount,
+    fee: d.fee || 0,
+    net_amount: d.net_amount || d.amount,
+    address: addressStr,
+    status: 'pending',
+    created_at: now(),
+    updated_at: now()
+  };
+  const { data, error } = await supabase.from('withdrawals').insert([insertData]).select().single();
+  if (error) { console.error('createWithdrawalRequest error:', error.message, error.details); return null; }
   return data;
 }
 
@@ -234,7 +253,8 @@ async function updateWithdrawal(id, updates) {
 }
 
 async function getUserWithdrawals(tid) {
-  const { data } = await supabase.from('withdrawals').select('*').eq('telegram_id', String(tid)).order('created_at', { ascending: false });
+  const { data, error } = await supabase.from('withdrawals').select('*').eq('telegram_id', String(tid)).order('created_at', { ascending: false });
+  if (error) { console.error('getUserWithdrawals error:', error.message); return []; }
   return data || [];
 }
 
@@ -282,7 +302,18 @@ async function createTestimonial(telegramId, data) {
 
 async function getTestimonialById(id) {
   const { data } = await supabase.from('testimonials').select('*').eq('id', id).single();
-  return data || null;
+  if (!data) return null;
+  // Detect type from video_url or message prefix so reward is always correct
+  if (!data.type || data.type === 'video') {
+    if (data.video_url && (data.video_url.includes('youtube') || data.video_url.includes('youtu.be'))) {
+      data.type = 'youtube';
+    } else if (data.message && data.message.startsWith('[YOUTUBE]')) {
+      data.type = 'youtube';
+    } else {
+      data.type = data.message && data.message.startsWith('[') ? data.message.split(']')[0].replace('[','').toLowerCase() : 'video';
+    }
+  }
+  return data;
 }
 
 async function getPendingTestimonials() {
