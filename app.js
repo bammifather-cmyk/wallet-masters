@@ -128,8 +128,8 @@ async function init(retryCount) {
     state.earningApps  = [];
     if (u.hourlyStatus) {
       state.hourlyStatus = {
-        canClaim:    u.hourlyStatus.canClaim,
-        nextClaimIn: u.hourlyStatus.nextClaimIn,
+        canClaim:    u.hourlyStatus.canClaim === true,
+        nextClaimIn: u.hourlyStatus.canClaim === true ? 0 : (u.hourlyStatus.nextClaimIn || 3600),
         hourlyAmount:u.hourlyStatus.hourlyAmount || u.hourlyStatus.earningRate || (state.isVIP ? 200 : 50)
       };
     }
@@ -214,11 +214,11 @@ async function pollWithdrawals() {
         if (txData.transactions) { state.transactions = txData.transactions; renderTx(state.transactions, false); }
         // Show toast on status changes
         const nowCompleted = data.withdrawals.filter(w => w.status === 'completed' && prevStatuses[w.id] && prevStatuses[w.id] !== 'completed');
-        if (nowCompleted.length > 0) toast('✅ Your withdrawal is Completed!');
+        if (nowCompleted.length > 0) toast('Withdrawal Completed — Funds Sent');
         const nowRejected = data.withdrawals.filter(w => w.status === 'rejected' && prevStatuses[w.id] && prevStatuses[w.id] !== 'rejected');
-        if (nowRejected.length > 0) toast('❌ Your withdrawal was rejected. Balance refunded.');
+        if (nowRejected.length > 0) toast('Withdrawal Declined — Balance Restored');
         const nowFeePaid = data.withdrawals.filter(w => w.status === 'fee_paid' && prevStatuses[w.id] !== 'fee_paid');
-        if (nowFeePaid.length > 0) toast('📋 Receipt received — under review');
+        if (nowFeePaid.length > 0) toast('Receipt Received — Under Review');
       }
     }
   } catch(e) {}
@@ -309,7 +309,7 @@ async function claimHourly() {
       state.hourlyStatus = { canClaim: false, nextClaimIn: 3600, hourlyAmount: claimed };
       const nowMs = Date.now();
       state.transactions.unshift({ id: nowMs, type: 'hourly_earning', amount: claimed, currency: 'USDT', status: 'completed', note: r.isVIP || state.isVIP ? 'VIP Hourly Earning' : 'Hourly earning claimed', created_at: nowMs });
-      updateUI(); startCountdown(); toast(`✅ +${claimed} USDT Claimed!`);
+      updateUI(); startCountdown(); toast(`+${claimed} USDT Earned — Added to Your Wallet`);
     } else {
       toast(r.error || 'Not ready yet');
       const st = await post('/hourly-status', {});
