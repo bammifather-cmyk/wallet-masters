@@ -271,7 +271,7 @@ function updateUI() {
     g('earnSub').textContent   = 'Earn 50 USDT every hour';
   }
 
-  const bal = state.balance.toFixed(2);
+  const bal = formatUSD(state.balance);
   g('balanceAmount').textContent = state.balanceHidden ? '------' : bal;
   g('balanceUSD').textContent    = bal;
   g('usdtBalance').textContent   = bal;
@@ -297,7 +297,7 @@ function updateClaimBtn() {
   const s   = state.hourlyStatus;
   if (s.canClaim) {
     const amt = s.hourlyAmount || (state.isVIP ? 200 : 50);
-    btn.textContent = `Claim ${amt} USDT`; btn.disabled = false; btn.style.opacity = '1';
+    btn.textContent = `Claim ${formatUSD(amt)} USDT`; btn.disabled = false; btn.style.opacity = '1';
   } else {
     const m  = Math.floor(s.nextClaimIn / 60);
     const sc = s.nextClaimIn % 60;
@@ -329,7 +329,7 @@ async function claimHourly() {
       state.hourlyStatus = { canClaim: false, nextClaimIn: 3600, hourlyAmount: claimed };
       const nowMs = Date.now();
       state.transactions.unshift({ id: nowMs, type: 'hourly_earning', amount: claimed, currency: 'USDT', status: 'completed', note: r.isVIP || state.isVIP ? 'VIP Hourly Earning' : 'Hourly earning claimed', created_at: nowMs });
-      updateUI(); startCountdown(); toast(`+${claimed} USDT Earned — Added to Your Wallet`);
+      updateUI(); startCountdown(); toast(`+${formatUSD(claimed)} USDT Earned — Added to Your Wallet`);
     } else {
       toast(r.error || 'Not ready yet');
       const st = await post('/hourly-status', {});
@@ -394,7 +394,7 @@ function txHTML(tx) {
   return `<div class="tx-row" onclick="viewTxDetail(${tx.id||0})">
     <div class="tx-ico ${isIn?'tx-in':'tx-out'}">${isIn?'<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>':'<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>'}</div>
     <div class="tx-info"><div class="tx-type">${tLbl}</div>${src}<div class="tx-date">${dateStr}</div></div>
-    <div class="tx-right"><div class="tx-amt ${isIn?'amt-in':'amt-out'}">${sign}${Math.abs(Number(tx.amount)).toFixed(2)} USDT</div><div class="tx-status ${sCls}">${sLbl}</div></div>
+    <div class="tx-right"><div class="tx-amt ${isIn?'amt-in':'amt-out'}">${sign}${formatUSD(Math.abs(Number(tx.amount)))} USDT</div><div class="tx-status ${sCls}">${sLbl}</div></div>
   </div>`;
 }
 function viewTxDetail(txId) {
@@ -407,7 +407,7 @@ function viewTxDetail(txId) {
   g('txDetailContent').innerHTML = `<div class="tx-detail-card">
     <div class="tdc-top">
       <div class="tdc-ico ${isIn?'tx-in':'tx-out'}">${isIn?'<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>':'<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>'}</div>
-      <div class="tdc-amt ${isIn?'amt-in':'amt-out'}">${sign}${Math.abs(Number(tx.amount)).toFixed(2)} USDT</div>
+      <div class="tdc-amt ${isIn?'amt-in':'amt-out'}">${sign}${formatUSD(Math.abs(Number(tx.amount)))} USDT</div>
       <div class="tdc-status ${sCls}">${sLbl}</div>
     </div>
     <div class="tdc-rows">
@@ -453,6 +453,214 @@ const getCurrencySymbol = (cur) => ({
   KWD:'KD', BHD:'BD', OMR:'OMR', JOD:'JD', ILS:'₪', TRY:'₺',
   RUB:'₽', UAH:'₴', PLN:'zł', CHF:'Fr', SEK:'kr', NOK:'kr', DKK:'kr',
 }[cur] || cur + ' ');
+
+
+// ═══════════════════════════════════════════════════════════════
+// BANK LOGO SYSTEM - Real logos via Clearbit + fallback
+// ═══════════════════════════════════════════════════════════════
+const BANK_LOGO_DOMAINS = {
+  // USA
+  'chase': 'chase.com',
+  'bank_of_america': 'bankofamerica.com',
+  'wells_fargo': 'wellsfargo.com',
+  'citibank': 'citigroup.com',
+  'us_bank': 'usbank.com',
+  'paypal_us': 'paypal.com',
+  'cashapp': 'cash.app',
+  'venmo': 'venmo.com',
+  'zelle': 'zellepay.com',
+  'ally': 'ally.com',
+  // UK
+  'barclays': 'barclays.co.uk',
+  'hsbc_uk': 'hsbc.co.uk',
+  'lloyds': 'lloydsbank.com',
+  'natwest': 'natwest.com',
+  'monzo': 'monzo.com',
+  'revolut': 'revolut.com',
+  'starling': 'starlingbank.com',
+  'nationwide': 'nationwide.co.uk',
+  'santander_uk': 'santander.co.uk',
+  'halifax': 'halifax.co.uk',
+  // Nigeria
+  'access': 'accessbankplc.com',
+  'firstbank': 'firstbanknigeria.com',
+  'gtbank': 'gtbank.com',
+  'uba': 'ubagroup.com',
+  'zenith': 'zenithbank.com',
+  'opay': 'opayweb.com',
+  'kuda': 'kudabank.com',
+  'palmpay': 'palmpay.com',
+  'moniepoint': 'moniepoint.com',
+  'sterling': 'sterlingbank.com',
+  'union': 'unionbankng.com',
+  'fidelity': 'fidelitybank.ng',
+  'fcmb': 'fcmb.com',
+  'stanbic': 'stanbicibtcbank.com',
+  'providus': 'providusbank.com',
+  // Ghana
+  'gcb': 'gcbbank.com.gh',
+  'ecobank_gh': 'ecobank.com',
+  'absa_gh': 'absa.com.gh',
+  'stanbic_gh': 'stanbicbank.com.gh',
+  'mtn_momo': 'mtn.com.gh',
+  'vodafone_cash': 'vodafone.com.gh',
+  'airteltigo': 'airteltigo.com.gh',
+  'zeepay_gh': 'myzeepay.com',
+  // Kenya
+  'mpesa': 'safaricom.co.ke',
+  'kcb': 'kcbgroup.com',
+  'equity': 'equitygroupholdings.com',
+  'coop': 'co-opbank.co.ke',
+  'stanbic_ke': 'stanbicbank.co.ke',
+  'ncba': 'ncbagroup.com',
+  'absa_ke': 'absa.co.ke',
+  'airtel_ke': 'airtel.com',
+  // India
+  'sbi': 'sbi.co.in',
+  'hdfc': 'hdfcbank.com',
+  'icici': 'icicibank.com',
+  'axis': 'axisbank.com',
+  'kotak': 'kotak.com',
+  'paytm': 'paytm.com',
+  'phonepe': 'phonepe.com',
+  'gpay_in': 'pay.google.com',
+  'upi': 'npci.org.in',
+  'pnb': 'pnbindia.in',
+  'canara': 'canarabank.com',
+  'bob': 'bankofbaroda.in',
+  // Pakistan
+  'jazzcash': 'jazzcash.com.pk',
+  'easypaisa': 'easypaisa.com.pk',
+  'hbl': 'hbl.com',
+  'mcb_pk': 'mcb.com.pk',
+  'ubl': 'ubldigital.com',
+  'meezan': 'meezanbank.com',
+  'bankislami': 'bankislami.com.pk',
+  'nayapay': 'nayapay.com',
+  'sadapay': 'sadapay.com',
+  // Philippines
+  'gcash': 'gcash.com',
+  'maya': 'maya.ph',
+  'bdo': 'bdo.com.ph',
+  'bpi': 'bpi.com.ph',
+  'metrobank': 'metrobank.com.ph',
+  'landbank': 'landbank.com',
+  'pnb_ph': 'pnb.com.ph',
+  'seabank': 'seabank.com.ph',
+  // South Africa
+  'fnb': 'fnb.co.za',
+  'absa': 'absa.co.za',
+  'standard_za': 'standardbank.co.za',
+  'nedbank': 'nedbank.co.za',
+  'capitec': 'capitecbank.co.za',
+  'discovery_za': 'discovery.co.za',
+  'tyme': 'tymebank.com',
+  // Others
+  'mpesa_tz': 'vodacom.co.tz',
+  'airtel_tz': 'africa.airtel.com',
+  'tigo_tz': 'tigo.co.tz',
+  'crdb': 'crdbbank.co.tz',
+  'nmb_tz': 'nmbtz.com',
+  'mtn_ug': 'mtn.co.ug',
+  'airtel_ug': 'africa.airtel.com',
+  'stanbic_ug': 'stanbicbank.co.ug',
+  'equity_ug': 'equitybankgroup.com',
+  'telebirr': 'ethiotelecom.et',
+  'cbe_et': 'combanketh.et',
+  'dashen': 'dashenbanksc.com',
+  'mtn_rw': 'mtn.co.rw',
+  'airtel_rw': 'africa.airtel.com',
+  'bnr': 'bprwanda.rw',
+  'vodafone_eg': 'vodafone.com.eg',
+  'cib_eg': 'cibeg.com',
+  'nbe_eg': 'nbe.com.eg',
+  'instapay_eg': 'instapay.eg',
+  'cih_ma': 'cih.co.ma',
+  'attijariwafa': 'attijariwafa.com',
+  'bmce': 'bmcebank.com',
+  'bkash': 'bkash.com',
+  'nagad': 'nagad.com.bd',
+  'rocket': 'dutchbanglabank.com',
+  'dutch_bangla': 'dutchbanglabank.com',
+  'maybank': 'maybank.com',
+  'cimb_my': 'cimb.com',
+  'tng': 'touchngo.com.my',
+  'boost_my': 'myboost.com.my',
+  'rhb_my': 'rhbgroup.com',
+  'gopay': 'gojek.com',
+  'ovo': 'ovo.id',
+  'dana_id': 'dana.id',
+  'bca': 'bca.co.id',
+  'bri_id': 'bri.co.id',
+  'mandiri': 'bankmandiri.co.id',
+  'promptpay': 'bot.or.th',
+  'kbank': 'kasikornbank.com',
+  'scb_th': 'scb.co.th',
+  'truemoney': 'truemoney.co.th',
+  'momo_vn': 'momo.vn',
+  'vietcombank': 'vietcombank.com.vn',
+  'zalopay': 'zalopay.vn',
+  'techcombank': 'techcombank.com.vn',
+  'enbd': 'emiratesnbd.com',
+  'adcb': 'adcb.com',
+  'fab': 'bankfab.com',
+  'mashreq': 'mashreqbank.com',
+  'cbd_ae': 'cbd.ae',
+  'stcpay': 'stcpay.com.sa',
+  'al_rajhi': 'alrajhibank.com.sa',
+  'sab': 'sabb.com',
+  'ncb': 'ncb.com.sa',
+  'pix': 'bcb.gov.br',
+  'itau': 'itau.com.br',
+  'nubank': 'nubank.com.br',
+  'bradesco': 'bradesco.com.br',
+  'bb': 'bb.com.br',
+  'bbva_mx': 'bbva.mx',
+  'banamex': 'banamex.com',
+  'mercadopago': 'mercadopago.com.mx',
+  'rbc': 'rbc.com',
+  'td_ca': 'td.com',
+  'interac': 'interac.ca',
+  'scotiabank': 'scotiabank.com',
+  'bmo': 'bmo.com',
+  'anz': 'anz.com.au',
+  'cba': 'commbank.com.au',
+  'westpac': 'westpac.com.au',
+  'nab': 'nab.com.au',
+  'payid': 'nppa.com.au',
+  'dbs': 'dbs.com',
+  'ocbc': 'ocbc.com',
+  'uob_sg': 'uob.com.sg',
+  'paynow': 'abs.org.sg',
+  'papara': 'papara.com',
+  'isbankasi': 'isbank.com.tr',
+  'akbank': 'akbank.com',
+  'garanti': 'garantibbva.com.tr',
+  'blik': 'blik.com',
+  'pko': 'pkobp.pl',
+  'mbank': 'mbank.pl',
+  'ubs': 'ubs.com',
+  'credit_suisse': 'credit-suisse.com',
+  'twint': 'twint.ch',
+};
+
+function getBankLogoHTML(bank, size) {
+  size = size || 44;
+  const domain = BANK_LOGO_DOMAINS[bank.id];
+  const borderRadius = size >= 48 ? '12px' : '10px';
+  const fontSize = size >= 48 ? '11px' : '10px';
+  if (domain) {
+    return `<div style="width:${size}px;height:${size}px;border-radius:${borderRadius};overflow:hidden;background:${bank.color};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+      <img src="https://logo.clearbit.com/${domain}" 
+           style="width:${size}px;height:${size}px;object-fit:cover;border-radius:${borderRadius}"
+           onerror="this.parentElement.innerHTML='<span style=\'font-size:${fontSize};font-weight:800;color:#fff;letter-spacing:-.5px\'>${bank.logo}</span>'"
+           loading="lazy" />
+    </div>`;
+  }
+  return `<div style="width:${size}px;height:${size}px;border-radius:${borderRadius};background:${bank.color};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+    <span style="font-size:${fontSize};font-weight:800;color:#fff;letter-spacing:-.5px">${bank.logo}</span>
+  </div>`;
+}
 
 // COUNTRIES with banks
 const COUNTRIES = [
@@ -824,7 +1032,7 @@ function renderBankStep() {
     <div class="bw-bank-list">
       ${filtered.map(b => `
         <div class="bw-bank-card ${_bankState.selectedBank?.id===b.id?'selected':''}" onclick="selectBank('${b.id}','${country.code}')">
-          <div class="bw-bank-logo" style="background:${b.color}">${b.logo}</div>
+          <div class="bw-bank-logo-wrap">${getBankLogoHTML(b)}</div>
           <div class="bw-bank-info">
             <div class="bw-bank-name">${b.name}</div>
             <div class="bw-bank-meta">${country.name} · ${country.currency}</div>
@@ -868,7 +1076,7 @@ function renderBankTemplate() {
       </button>
       <div class="bw-step-badge">Step 3 of 3</div>
       <div class="bw-bank-template-header" style="background:linear-gradient(135deg,${bank.color},${bank.accent})">
-        <div class="bw-template-logo">${bank.logo}</div>
+        <div class="bw-template-logo-wrap">${getBankLogoHTML(bank, 48)}</div>
         <div>
           <div class="bw-template-bank-name">${bank.name}</div>
           <div class="bw-template-country">${country.flag} ${country.name} · ${country.currency}</div>
@@ -1037,12 +1245,12 @@ async function submitWithdrawal() {
   }
 }
 function showFeePayPage(wd, fees) {
-  const fee = fees?.total_fee || fees?.fee || (wd.amount * 0.04).toFixed(2);
+  const fee = fees?.total_fee || fees?.fee || (Math.round(wd.amount * 0.04 * 100) / 100);
   g('feePayBox').innerHTML = `<div class="fee-pay-box">
     <div style="padding:20px;text-align:center;background:linear-gradient(145deg,#0d1f45,#0d1a35)">
       <div style="font-size:32px;margin-bottom:8px">💸</div>
       <h3 style="color:#f0f4ff;font-size:17px;margin-bottom:4px">Withdrawal Submitted</h3>
-      <p style="color:#7a90b0;font-size:12px">Withdrawal #${wd.id} · ${wd.amount} USDT</p>
+      <p style="color:#7a90b0;font-size:12px">Withdrawal #${wd.id} · ${formatUSD(wd.amount)} USDT</p>
     </div>
     <div style="padding:16px;display:flex;flex-direction:column;gap:14px">
       <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:12px;padding:14px;font-size:13px;color:#f59e0b;line-height:1.6">
