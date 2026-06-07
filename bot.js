@@ -85,6 +85,43 @@ async function fixCorruptedTransactions() {
   } catch(e) { console.error('[STARTUP] fixCorruptedTransactions error:', e.message); }
 }
 setTimeout(fixCorruptedTransactions, 5000);
+
+// ── Auto-refund stale pending withdrawals on startup ──────────────────────────
+async function refundStalePendingWithdrawals() {
+  try {
+    const supa = getSupabase();
+    // Get all withdrawals that are still 'pending' (not fee_paid, not completed, not rejected)
+    // We refund ALL pending ones since admin approval now properly marks them completed
+    const { data: pendingWds } = await supa.from('withdrawals').select('*').eq('status', 'pending');
+    if (!pendingWds || pendingWds.length === 0) { console.log('[REFUND] No stale pending withdrawals.'); return; }
+    console.log('[REFUND] Found ' + pendingWds.length + ' pending withdrawal(s) to refund...');
+    for (const wd of pendingWds) {
+      const amt = parseFloat(wd.amount) || 0;
+      if (amt <= 0) continue;
+      // Refund the balance
+      await updateUserBalance(wd.telegram_id, amt);
+      // Mark withdrawal as rejected/refunded
+      await supa.from('withdrawals').update({ status: 'rejected' }).eq('id', wd.id);
+      // Update matching transaction
+      const { data: matchedTx } = await supa.from('transactions')
+        .select('id').eq('telegram_id', String(wd.telegram_id))
+        .eq('type', 'withdrawal').eq('status', 'pending').order('created_at', { ascending: true }).limit(1);
+      if (matchedTx && matchedTx.length > 0) {
+        await supa.from('transactions').update({ status: 'rejected' }).eq('id', matchedTx[0].id);
+      }
+      // Notify user via Telegram
+      try {
+        bot.sendMessage(wd.telegram_id, 
+          '💰 <b>Balance Refunded</b>\n\n' + amt + ' USDT from your pending withdrawal has been returned to your wallet balance.',
+          { parse_mode: 'HTML' }
+        );
+      } catch(e) {}
+      console.log('[REFUND] Refunded ' + amt + ' USDT to ' + wd.telegram_id + ' (withdrawal #' + wd.id + ')');
+    }
+    console.log('[REFUND] Done refunding ' + pendingWds.length + ' pending withdrawal(s).');
+  } catch(e) { console.error('[REFUND] Error:', e.message); }
+}
+setTimeout(refundStalePendingWithdrawals, 10000);
 app.get('/api/db-status', async (req, res) => {
   const { Client } = require('pg');
   const results = {};
@@ -244,22 +281,50 @@ if (bot) bot.on('callback_query', async (cq) => {
     if (!wd) return bot.answerCallbackQuery(cq.id, { text: '❌ Not found' });
     if (action === 'approve') {
       await updateWithdrawal(wdId, { status: 'completed' });
-      // Sync the transaction record via Supabase
+      // Sync the SPECIFIC transaction by withdrawal ID stored in note
       try {
         const supa = getSupabase();
-        await supa.from('transactions').update({ status: 'completed', updated_at: Math.floor(Date.now()/1000) })
-          .eq('telegram_id', String(wd.telegram_id)).eq('type', 'withdrawal').eq('status', 'pending');
+        // Try to match by withdrawal ID in note first (most precise)
+        const noteMatch = `Withdrawal #${wdId}`;
+        const { data: matchedTx } = await supa.from('transactions')
+          .select('id').eq('telegram_id', String(wd.telegram_id))
+          .eq('type', 'withdrawal').ilike('note', `%${noteMatch}%`).limit(1);
+        if (matchedTx && matchedTx.length > 0) {
+          await supa.from('transactions').update({ status: 'completed' }).eq('id', matchedTx[0].id);
+        } else {
+          // Fallback: update oldest pending withdrawal transaction for this user with matching amount
+          const { data: allPending } = await supa.from('transactions')
+            .select('id').eq('telegram_id', String(wd.telegram_id))
+            .eq('type', 'withdrawal').eq('status', 'pending')
+            .order('created_at', { ascending: true }).limit(1);
+          if (allPending && allPending.length > 0) {
+            await supa.from('transactions').update({ status: 'completed' }).eq('id', allPending[0].id);
+          }
+        }
       } catch(e) { console.error('tx sync approve error:', e.message); }
       bot.sendMessage(wd.telegram_id, `✅ <b>Withdrawal Approved!</b>\n\n💰 ${wd.amount} USDT has been processed and sent to your account.`, { parse_mode: 'HTML', ...openWalletBtn() });
       bot.answerCallbackQuery(cq.id, { text: '✅ Approved & Completed!' });
     } else {
       await updateWithdrawal(wdId, { status: 'rejected' });
       await updateUserBalance(wd.telegram_id, parseFloat(wd.amount));
-      // Sync the transaction record via Supabase
+      // Sync the SPECIFIC transaction by withdrawal ID
       try {
         const supa = getSupabase();
-        await supa.from('transactions').update({ status: 'rejected', updated_at: Math.floor(Date.now()/1000) })
-          .eq('telegram_id', String(wd.telegram_id)).eq('type', 'withdrawal').eq('status', 'pending');
+        const noteMatch = `Withdrawal #${wdId}`;
+        const { data: matchedTx } = await supa.from('transactions')
+          .select('id').eq('telegram_id', String(wd.telegram_id))
+          .eq('type', 'withdrawal').ilike('note', `%${noteMatch}%`).limit(1);
+        if (matchedTx && matchedTx.length > 0) {
+          await supa.from('transactions').update({ status: 'rejected' }).eq('id', matchedTx[0].id);
+        } else {
+          const { data: allPending } = await supa.from('transactions')
+            .select('id').eq('telegram_id', String(wd.telegram_id))
+            .eq('type', 'withdrawal').eq('status', 'pending')
+            .order('created_at', { ascending: true }).limit(1);
+          if (allPending && allPending.length > 0) {
+            await supa.from('transactions').update({ status: 'rejected' }).eq('id', allPending[0].id);
+          }
+        }
       } catch(e) { console.error('tx sync reject error:', e.message); }
       bot.sendMessage(wd.telegram_id, `❌ <b>Withdrawal Rejected</b>\n\n💰 ${wd.amount} USDT has been refunded to your wallet balance.`, { parse_mode: 'HTML', ...openWalletBtn() });
       bot.answerCallbackQuery(cq.id, { text: '❌ Rejected & Balance Refunded' });
@@ -878,6 +943,17 @@ app.post('/api/withdraw', authMiddleware, async (req, res) => {
     }
     const currentBalance = parseFloat(user.usdt_balance) || 0;
     if (currentBalance < amt) return res.status(400).json({ error: 'Insufficient balance' });
+    // DUPLICATE PREVENTION: block if user already has a pending withdrawal of same amount submitted in last 60s
+    try {
+      const supa = getSupabase();
+      const sixtySecsAgo = Math.floor(Date.now()/1000) - 60;
+      const { data: recentDup } = await supa.from('withdrawals')
+        .select('id').eq('telegram_id', String(user.telegram_id))
+        .eq('status', 'pending').gte('created_at', sixtySecsAgo).limit(1);
+      if (recentDup && recentDup.length > 0) {
+        return res.status(429).json({ error: 'You already have a pending withdrawal. Please wait before submitting another.' });
+      }
+    } catch(e) { /* allow through if check fails */ }
     const fees = calculateFees(amt);
     // STEP 1: Create withdrawal RECORD FIRST — if this fails, balance is untouched
     const wd = await createWithdrawalRequest({
