@@ -52,7 +52,7 @@ function calculateFees(amount) {
 
 function nowSec() { return Math.floor(Date.now() / 1000); }
 
-app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '7.0' }));
+app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '9.0' }));
 app.get('/api/db-status', async (req, res) => {
   const { Client } = require('pg');
   const results = {};
@@ -1069,7 +1069,7 @@ app.get('/api/tps/status', authMiddleware, async (req,res) => {
     const sessRes = await query('SELECT * FROM tps_sessions WHERE telegram_id=$1 ORDER BY created_at DESC LIMIT 1', [String(req.tgUser.id)]);
     const session = sessRes.rows[0] || null;
     res.json({ eligible, session, balance: parseFloat(user.usdt_balance) || 0 });
-  } catch(e) { console.error('tps status:', e.message); res.status(500).json({error:'Server error'}); }
+  } catch(e) { console.error('tps status error:', e.message, e.code); res.status(500).json({error: e.message || 'Server error'}); }
 });
 
 app.post('/api/tps/tap', authMiddleware, async (req,res) => {
