@@ -352,7 +352,19 @@ async function getAllSocialProfiles() {
 
 // ─── SocialPay Posts ──────────────────────────────────────────────────────────
 async function createSocialPost(telegramId, data) {
-  const { data: d } = await supabase.from('socialpay_posts').insert([{ telegram_id: String(telegramId), ...data, status: 'pending', likes: 0, user_likes: 0, total_earned: 0, created_at: now(), updated_at: now() }]).select().single();
+  // Map fields to actual DB schema: content, image_url (no caption/post_type/has_image/voice_data)
+  const { caption, post_type, image_data, voice_data, has_image, has_voice, content, image_url, ...rest } = data;
+  const insertData = {
+    telegram_id: String(telegramId),
+    content: caption || content || '',
+    image_url: image_data || image_url || null,  // store base64 or URL
+    status: 'pending', likes: 0, user_likes: 0, total_earned: 0,
+    created_at: now(), updated_at: now()
+  };
+  const { data: d, error } = await supabase.from('socialpay_posts').insert([insertData]).select().single();
+  if (error) { console.error('createSocialPost error:', error); return null; }
+  // Attach post_type for admin notification (not in DB)
+  if (d) { d.post_type = post_type || 'text'; d.caption = d.content; }
   return d;
 }
 
