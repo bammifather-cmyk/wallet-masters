@@ -1108,6 +1108,14 @@ app.post('/api/tps/withdraw', authMiddleware, async (req,res) => {
   } catch(e) { console.error('tps withdraw:', e.message); res.status(500).json({error:'Server error'}); }
 });
 
+// ─── Debug DB ───────────────────────────────────────────────────────────────
+app.get('/api/admin/db-test', async (req,res) => {
+  try {
+    const r = await query('SELECT table_name FROM information_schema.tables WHERE table_schema=$1 ORDER BY table_name', ['public']);
+    res.json({ tables: r.rows.map(t=>t.table_name), count: r.rows.length });
+  } catch(e) { res.status(500).json({ error: e.message, code: e.code }); }
+});
+
 // ─── Admin: Run Migrations ───────────────────────────────────────────────────
 app.post('/api/admin/run-migrations', authMiddleware, async (req,res) => {
   try {
