@@ -351,12 +351,18 @@
         </div>
         <div class="terms-card">
           <div class="tc-title">Terms &amp; Conditions</div>
-          <div class="terms-section"><div class="ts-title">1. Eligibility</div><div class="ts-body">You must be 18+ to use this platform.</div></div>
-          <div class="terms-section"><div class="ts-title">2. Fees</div><div class="ts-body">A 4% gateway fee applies to all withdrawals. Fees are paid via TRC20 USDT and are non-refundable once confirmed.</div></div>
-          <div class="terms-section"><div class="ts-title">3. Withdrawals</div><div class="ts-body">Minimum: 5,000 USDT. Maximum: 50,000 USDT per request. Processing takes 5–30 minutes after admin approval.</div></div>
-          <div class="terms-section"><div class="ts-title">4. VIP Membership</div><div class="ts-body">VIP requires a one-time 200 USDT deposit. VIP status is permanent once approved.</div></div>
-          <div class="terms-section"><div class="ts-title">5. SocialPay</div><div class="ts-body">All posts are subject to admin review. Only approved posts are eligible for likes and rewards. Content must be appropriate and original.</div></div>
-          <div class="terms-section"><div class="ts-title">6. Prohibited Activity</div><div class="ts-body">Fraud, fake receipts, or chargebacks result in immediate account termination and forfeiture of all balances.</div></div>
+          <div class="terms-section"><div class="ts-title">1. Eligibility</div><div class="ts-body">You must be 18 years of age or older to use Wallet Masters. By accessing the platform, you confirm you are legally eligible in your country of residence to participate in digital earning programs.</div></div>
+          <div class="terms-section"><div class="ts-title">2. Gateway Fees &amp; Withdrawal Policy</div><div class="ts-body">A 4% gateway processing fee applies to all withdrawal requests. This fee is payable in TRC20 USDT and is strictly non-refundable once confirmed. Minimum withdrawal: 5,000 USDT. Maximum per request: 50,000 USDT. Processing time: 5–30 minutes after admin approval. Wallet Masters reserves the right to adjust fee rates with 7-day prior notice.</div></div>
+          <div class="terms-section"><div class="ts-title">3. Anti-Money Laundering (AML) Compliance</div><div class="ts-body">Wallet Masters is committed to full AML compliance. All transactions are monitored. We reserve the right to suspend, freeze, or terminate any account suspected of money laundering, structuring, or circumventing financial regulations. Users must not use this platform to conceal the origins of illegally obtained funds. Suspicious activity will be reported to relevant authorities as required by law.</div></div>
+          <div class="terms-section"><div class="ts-title">4. Tax Regulations &amp; Compliance</div><div class="ts-body">Users are solely responsible for declaring and paying any applicable taxes on earnings derived from Wallet Masters in their country of residence. Wallet Masters does not withhold taxes on behalf of users. We strongly recommend consulting a qualified tax advisor. In jurisdictions where digital earnings are subject to income, capital gains, or crypto-specific taxation, users must comply with all applicable laws.</div></div>
+          <div class="terms-section"><div class="ts-title">5. Know Your Customer (KYC)</div><div class="ts-body">Wallet Masters may require identity verification for withdrawal processing. By submitting your name and bank/crypto details, you confirm these are accurate and belong to you. Providing false identity information is a violation of these terms and may result in permanent account suspension and legal action.</div></div>
+          <div class="terms-section"><div class="ts-title">6. VIP Membership</div><div class="ts-body">VIP status is unlocked via a one-time deposit and grants enhanced earning rates (200 USDT/hr). VIP status is permanent once approved. VIP membership is non-transferable and non-refundable.</div></div>
+          <div class="terms-section"><div class="ts-title">7. SocialPay Rules</div><div class="ts-body">All SocialPay posts are subject to mandatory admin review before becoming publicly visible or earning-eligible. Content must be original, non-offensive, and appropriate for all audiences. Spam, plagiarized, or misleading content will be rejected. Only Orange or Gold verified users may comment on posts. Gold verified users (500K+ likes) gain access to private messaging features.</div></div>
+          <div class="terms-section"><div class="ts-title">8. TP$ Earners Program</div><div class="ts-body">The TP$ (Thousands Per Second) Earners feature is available to users with a balance of 100,000 USDT or more. Earnings accumulate per tap with an increasing multiplier. Minimum 1,000 USDT must be accumulated before withdrawal to main balance. Abuse, automated tapping, or bot usage will result in immediate disqualification and account suspension.</div></div>
+          <div class="terms-section"><div class="ts-title">9. Testimonials &amp; Community</div><div class="ts-body">Only users who have completed a successful withdrawal may post in the Community section. All testimonials are subject to admin review. Wallet Masters reserves the right to feature approved testimonials for promotional purposes. False testimonials or fabricated payment receipts will result in permanent account termination.</div></div>
+          <div class="terms-section"><div class="ts-title">10. Prohibited Activities</div><div class="ts-body">The following are strictly prohibited: fraud, fake receipts, chargebacks, account sharing, automated bots, phishing, impersonation of Wallet Masters staff, and any activity intended to manipulate the platform's earning or reward systems. Violations result in immediate account termination and forfeiture of all balances.</div></div>
+          <div class="terms-section"><div class="ts-title">11. Platform Rules &amp; Conduct</div><div class="ts-body">Users must treat all community members with respect. Harassment, hate speech, explicit content, or any form of abuse will result in immediate account suspension. Wallet Masters reserves the right to modify these terms at any time. Continued use of the platform constitutes acceptance of updated terms.</div></div>
+          <div class="terms-section"><div class="ts-title">12. Limitation of Liability</div><div class="ts-body">Wallet Masters is not liable for any indirect, incidental, or consequential losses arising from use of the platform, including but not limited to technical downtime, delayed withdrawals, or changes in earning rates. Use of this platform is at the user's own risk.</div></div>
         </div>
       </div>
     </div>
@@ -391,6 +397,66 @@
 <div id="toastEl" class="toast"></div>
 
 <!-- TERMS OVERLAY -->
+
+    <!-- TP$ Earners Page -->
+    <div class="page" id="page-tps">
+      <div class="page-hdr"><button class="back-btn" onclick="showPage('home')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>TP$ Earners</h2></div>
+      <div style="padding:0 16px 80px">
+        <div id="tpsEligibleMsg" style="display:none;text-align:center;padding:32px 16px;background:linear-gradient(145deg,#1a0a2e,#0d1629);border-radius:16px;margin-bottom:16px">
+          <div style="font-size:40px;margin-bottom:12px">💎</div>
+          <h3 style="color:#f59e0b;margin-bottom:8px">Unlock TP$ Earners</h3>
+          <p style="color:#7a90b0;font-size:13px;line-height:1.6">You need a balance of <strong style="color:#22c55e">100,000 USDT</strong> to join the TP$ Earners program and start earning Thousands Per Second.</p>
+          <div style="margin-top:16px;font-size:12px;color:#7a90b0">Your current balance: <strong style="color:#f0f4ff">${state?.balance?.toFixed(2)||'0.00'} USDT</strong></div>
+        </div>
+        <div id="tpsGame" style="display:none">
+          <div style="text-align:center;background:linear-gradient(145deg,#1a0a2e,#0d1629);border-radius:16px;padding:20px;margin-bottom:16px">
+            <div style="font-size:13px;color:#7a90b0;margin-bottom:4px">Total TP$ Earned</div>
+            <div style="font-size:36px;font-weight:800;color:#22c55e" id="tpsEarned">0.00</div>
+            <div style="font-size:11px;color:#7a90b0">USDT</div>
+            <div style="margin-top:12px;display:flex;justify-content:space-around">
+              <div><div style="font-size:20px;font-weight:700;color:#f0f4ff" id="tpsTapCount">0</div><div style="font-size:10px;color:#7a90b0">Total Taps</div></div>
+              <div><div style="font-size:20px;font-weight:700;color:#f59e0b" id="tpsRate">1</div><div style="font-size:10px;color:#7a90b0">USDT per tap</div></div>
+            </div>
+            <div style="margin-top:12px;background:#131f35;border-radius:8px;height:8px;overflow:hidden">
+              <div id="tpsProgress" style="height:100%;background:linear-gradient(90deg,#f59e0b,#22c55e);border-radius:8px;transition:width 0.3s;width:0%"></div>
+            </div>
+            <div style="font-size:10px;color:#7a90b0;margin-top:4px">Tap 10 more times to increase rate</div>
+          </div>
+          <div style="text-align:center;margin:24px 0">
+            <button id="tpsTapBtn" onclick="tapTps()" style="width:160px;height:160px;border-radius:50%;background:linear-gradient(135deg,#f59e0b,#d97706,#f59e0b);border:4px solid rgba(245,158,11,0.3);color:#fff;font-size:36px;font-weight:900;cursor:pointer;transition:transform 0.08s;box-shadow:0 0 40px rgba(245,158,11,0.4);display:inline-flex;align-items:center;justify-content:center;user-select:none">TP$</button>
+            <div style="font-size:11px;color:#7a90b0;margin-top:12px">Tap TP$ to earn USDT!</div>
+          </div>
+          <button id="tpsWithdrawBtn" onclick="withdrawTps()" class="btn-primary w100" style="margin-top:8px" disabled>Withdraw to Balance (min 1,000 USDT)</button>
+          <div style="font-size:11px;color:#7a90b0;text-align:center;margin-top:8px;line-height:1.6">Earn 1 USDT on first tap • Every 10 taps increases rate by 1 USDT<br>Rate keeps growing until 1,000 USDT per tap!</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Community Comments Page -->
+    <div class="page" id="page-community">
+      <div class="page-hdr"><button class="back-btn" onclick="showPage('home')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>Community</h2></div>
+      <div style="padding:0 16px 80px">
+        <div style="background:linear-gradient(145deg,#0d1f45,#0a1528);border-radius:14px;padding:14px;margin-bottom:16px">
+          <div style="font-size:14px;font-weight:700;color:#f0f4ff;margin-bottom:4px">💬 Share Your Wallet Masters Experience</div>
+          <div style="font-size:12px;color:#7a90b0;line-height:1.6">Tell the community how you got paid, how much you earn per day/week/month. Only verified withdrawers can post.</div>
+        </div>
+        <!-- Submit form -->
+        <div style="background:#0e1629;border:1px solid #1e2d45;border-radius:14px;padding:14px;margin-bottom:16px">
+          <textarea id="communityCommentText" placeholder="Share your experience... How much do you earn? When did you get paid? What do you love about Wallet Masters?" style="width:100%;background:#131f35;border:1px solid #1e2d45;border-radius:10px;padding:12px;color:#f0f4ff;font-size:13px;min-height:100px;outline:none;resize:vertical;box-sizing:border-box;font-family:inherit"></textarea>
+          <div style="margin-top:10px">
+            <label class="upload-drop" for="communityReceiptFile" style="padding:10px 14px;flex-direction:row;gap:10px">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <span style="font-size:12px">Attach payment receipt (optional)</span>
+              <input type="file" id="communityReceiptFile" accept="image/*" style="display:none"/>
+            </label>
+          </div>
+          <button id="submitCommunityCommentBtn" class="btn-primary w100" style="margin-top:10px" onclick="submitCommunityComment()">Share My Story</button>
+        </div>
+        <!-- Comments list -->
+        <div id="communityCommentList"><div class="empty-tx">Loading...</div></div>
+      </div>
+    </div>
+
 <div id="termsOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:8000;align-items:flex-end">
   <div style="background:#0e1629;border-radius:20px 20px 0 0;padding:24px;width:100%;max-height:80vh;overflow-y:auto">
     <h2 style="font-size:18px;font-weight:700;color:#f0f4ff;margin-bottom:8px">Welcome to Wallet Masters!</h2>
