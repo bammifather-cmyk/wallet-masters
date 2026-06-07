@@ -1108,5 +1108,27 @@ app.post('/api/tps/withdraw', authMiddleware, async (req,res) => {
   } catch(e) { console.error('tps withdraw:', e.message); res.status(500).json({error:'Server error'}); }
 });
 
+// ─── Admin: Run Migrations ───────────────────────────────────────────────────
+app.post('/api/admin/run-migrations', authMiddleware, async (req,res) => {
+  try {
+    if (String(req.tgUser.id) !== String(ADMIN_CHAT_ID)) return res.status(403).json({error:'Admin only'});
+    const results = [];
+    const migrations = [
+      "CREATE TABLE IF NOT EXISTS community_comments (id BIGSERIAL PRIMARY KEY, telegram_id TEXT NOT NULL, user_name TEXT DEFAULT '', text TEXT DEFAULT '', receipt_image TEXT DEFAULT '', status TEXT DEFAULT 'pending', is_admin BOOLEAN DEFAULT false, created_at BIGINT DEFAULT 0)",
+      "CREATE TABLE IF NOT EXISTS tps_sessions (id BIGSERIAL PRIMARY KEY, telegram_id TEXT UNIQUE NOT NULL, total_taps BIGINT DEFAULT 0, total_earned NUMERIC DEFAULT 0, created_at BIGINT DEFAULT 0, updated_at BIGINT DEFAULT 0)",
+      "ALTER TABLE testimonials ADD COLUMN IF NOT EXISTS location TEXT DEFAULT ''",
+      "ALTER TABLE testimonials ADD COLUMN IF NOT EXISTS country_flag TEXT DEFAULT ''",
+      "ALTER TABLE testimonials ADD COLUMN IF NOT EXISTS user_name TEXT DEFAULT ''",
+      "ALTER TABLE testimonials ADD COLUMN IF NOT EXISTS amount_display TEXT DEFAULT ''",
+      "ALTER TABLE poems ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'General'",
+    ];
+    for (const sql of migrations) {
+      try { await query(sql); results.push({ sql: sql.substring(0,60), ok: true }); }
+      catch(e) { results.push({ sql: sql.substring(0,60), error: e.message }); }
+    }
+    res.json({ success: true, results });
+  } catch(e) { res.status(500).json({error: e.message}); }
+});
+
 if (bot) bot.on('polling_error', (e) => console.log('Polling error:', e.code));
 console.log('Wallet Masters v7 bot.js loaded');
