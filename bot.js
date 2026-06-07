@@ -653,7 +653,8 @@ app.post('/api/auth', async (req, res) => {
     const fullName = [first_name, last_name].filter(Boolean).join(' ');
     const ref      = req.body?.ref || req.body?.referralCode || null;
     const user     = await getOrCreateUser(id, username, fullName, ref);
-    if (!user.is_active) return res.status(403).json({ error: 'Account deactivated', deactivated: true });
+    if (!user) return res.status(500).json({ error: 'Could not load user' });
+    if (user.is_active === false) return res.status(403).json({ error: 'Account deactivated', deactivated: true });
     const [txs, conns, wds] = await Promise.all([getUserTransactions(id), getUserConnections(id), getUserWithdrawals(id)]);
     res.json({ success: true, user: await enrichUser(user, id), transactions: txs.slice(0,20), connections: conns, withdrawals: wds });
   } catch(e) { console.error('/api/auth error:', e); res.status(500).json({ error: 'Server error' }); }
