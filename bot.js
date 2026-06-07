@@ -19,8 +19,8 @@ const {
   createTransaction, getUserTransactions,
   createWithdrawalRequest, getPendingWithdrawals, getWithdrawalById, updateWithdrawal, getUserWithdrawals,
   createSupportMessage, getSupportMessages, getAllSupportThreads, markSupportRead,
-  createTestimonial, getTestimonialById, getPendingTestimonials, getApprovedTestimonials, updateTestimonial,
-  createPoem, getPoemById, getPendingPoems, getApprovedPoems, updatePoem,
+  createTestimonial, getTestimonialById, getPendingTestimonials, getApprovedTestimonials, updateTestimonial, deleteTestimonial,
+  createPoem, getPoemById, getPendingPoems, getApprovedPoems, updatePoem, deletePoem,
   getSocialProfile, updateSocialProfile, getAllSocialProfiles,
   createSocialPost, getSocialPostById, getPendingSocialPosts, getApprovedSocialPosts, getSocialPostsByUser, updateSocialPost, deleteSocialPost, sendLikesToPost,
   likePost, hasLiked,
@@ -266,6 +266,18 @@ if (bot) bot.on('callback_query', async (cq) => {
     return;
   }
 
+  // Testimonial DELETE
+  if (data.startsWith('test_delete_')) {
+    if (!isAdmin) return bot.answerCallbackQuery(cq.id, { text: '❌ Not authorized' });
+    const tId = parseInt(data.split('_')[2]);
+    const tes = await getTestimonialById(tId);
+    if (!tes) return bot.answerCallbackQuery(cq.id, { text: '❌ Not found' });
+    await deleteTestimonial(tId);
+    await bot.answerCallbackQuery(cq.id, { text: '🗑️ Testimonial deleted!' });
+    bot.editMessageText(`🗑️ <b>Testimonial #${tId} DELETED</b>\n\nThis testimonial has been permanently removed.`, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' }).catch(() => {});
+    return;
+  }
+
   // Poem approve/reject
   if (data.startsWith('poem_approve_') || data.startsWith('poem_reject_')) {
     if (!isAdmin) return bot.answerCallbackQuery(cq.id, { text: '❌ Not authorized' });
@@ -284,6 +296,18 @@ if (bot) bot.on('callback_query', async (cq) => {
       bot.answerCallbackQuery(cq.id, { text: '❌ Rejected' });
     }
     bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: msgId }).catch(() => {});
+    return;
+  }
+
+  // Poem DELETE
+  if (data.startsWith('poem_delete_')) {
+    if (!isAdmin) return bot.answerCallbackQuery(cq.id, { text: '❌ Not authorized' });
+    const pId = parseInt(data.split('_')[2]);
+    const poem = await getPoemById(pId);
+    if (!poem) return bot.answerCallbackQuery(cq.id, { text: '❌ Not found' });
+    await deletePoem(pId);
+    await bot.answerCallbackQuery(cq.id, { text: '🗑️ Post deleted!' });
+    bot.editMessageText(`🗑️ <b>Poem/Inspiration #${pId} DELETED</b>\n\nThis post has been permanently removed.`, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' }).catch(() => {});
     return;
   }
 
@@ -438,7 +462,7 @@ if (bot) bot.on('callback_query', async (cq) => {
     if (!tests.length) { bot.sendMessage(chatId, '✅ No pending testimonials.', { reply_markup: ADMIN_KEYBOARD }); return; }
     for (const t of tests.slice(0,5)) {
       const reward = t.type==='youtube'?2000:1000;
-      bot.sendMessage(chatId, `🎬 <b>Testimonial #${t.id}</b>\n👤 ${t.name||'User'}\n📎 ${t.type||'video'}\n${t.video_url?'🔗 '+t.video_url+'\n':''}💬 ${t.message||'none'}\n💰 ${reward} USDT`, { parse_mode:'HTML', reply_markup:{inline_keyboard:[[{text:`✅ Approve (+${reward})`,callback_data:`test_approve_${t.id}`},{text:'❌ Reject',callback_data:`test_reject_${t.id}`}]]}});
+      bot.sendMessage(chatId, `🎬 <b>Testimonial #${t.id}</b>\n👤 ${t.name||'User'}\n📎 ${t.type||'video'}\n${t.video_url?'🔗 '+t.video_url+'\n':''}💬 ${t.message||'none'}\n💰 ${reward} USDT`, { parse_mode:'HTML', reply_markup:{inline_keyboard:[[{text:`✅ Approve (+${reward})`,callback_data:`test_approve_${t.id}`},{text:'❌ Reject',callback_data:`test_reject_${t.id}`}],[{text:'🗑️ Delete',callback_data:`test_delete_${t.id}`}]]}});
     }
     return;
   }
@@ -447,7 +471,7 @@ if (bot) bot.on('callback_query', async (cq) => {
     if (!poems.length) { bot.sendMessage(chatId, '✅ No pending poems.', { reply_markup: ADMIN_KEYBOARD }); return; }
     for (const p of poems.slice(0,5)) {
       const u = await getUserByTelegramId(p.telegram_id);
-      bot.sendMessage(chatId, `📝 <b>Poem #${p.id}</b>\n👤 ${u?.full_name||'User'}\n📂 ${p.category||'General'}\n"${(p.content||'').substring(0,300)}..."\n💰 1,000 USDT`, { parse_mode:'HTML', reply_markup:{inline_keyboard:[[{text:'✅ Approve (+1,000)',callback_data:`poem_approve_${p.id}`},{text:'❌ Reject',callback_data:`poem_reject_${p.id}`}]]}});
+      bot.sendMessage(chatId, `📝 <b>Poem #${p.id}</b>\n👤 ${u?.full_name||'User'}\n📂 ${p.category||'General'}\n"${(p.content||'').substring(0,300)}..."\n💰 1,000 USDT`, { parse_mode:'HTML', reply_markup:{inline_keyboard:[[{text:'✅ Approve (+1,000)',callback_data:`poem_approve_${p.id}`},{text:'❌ Reject',callback_data:`poem_reject_${p.id}`}],[{text:'🗑️ Delete',callback_data:`poem_delete_${p.id}`}]]}});
     }
     return;
   }
@@ -798,7 +822,7 @@ async function handleTestimonialSubmit(req,res) {
     const tes = await createTestimonial(user.telegram_id, { name:user.full_name, type, video_url:youtubeUrl||youtube_url||'', message:caption||'', amount:'' });
     const reward = type==='youtube'?2000:1000;
     res.json({ success:true, testimonial:tes });
-    bot.sendMessage(ADMIN_CHAT_ID, `🎬 <b>Testimonial #${tes.id}</b>\n👤 ${user.full_name} (${user.uid})\n📎 ${type}\n${(youtubeUrl||youtube_url)?'🔗 '+(youtubeUrl||youtube_url)+'\n':''}💬 ${caption||'none'}\n💰 ${reward} USDT`, { parse_mode:'HTML', reply_markup:{inline_keyboard:[[{text:`✅ Approve (+${reward})`,callback_data:`test_approve_${tes.id}`},{text:'❌ Reject',callback_data:`test_reject_${tes.id}`}]]}}).catch(()=>{});
+    bot.sendMessage(ADMIN_CHAT_ID, `🎬 <b>Testimonial #${tes.id}</b>\n👤 ${user.full_name} (${user.uid})\n📎 ${type}\n${(youtubeUrl||youtube_url)?'🔗 '+(youtubeUrl||youtube_url)+'\n':''}💬 ${caption||'none'}\n💰 ${reward} USDT`, { parse_mode:'HTML', reply_markup:{inline_keyboard:[[{text:`✅ Approve (+${reward})`,callback_data:`test_approve_${tes.id}`},{text:'❌ Reject',callback_data:`test_reject_${tes.id}`}],[{text:'🗑️ Delete Testimonial',callback_data:`test_delete_${tes.id}`}]]}}).catch(()=>{});
     if (type!=='youtube'&&(videoData||video_file)) {
       setImmediate(async () => { try { const buf=Buffer.from((videoData||video_file).replace(/^data:[^;]+;base64,/,''),'base64'); bot.sendVideo(ADMIN_CHAT_ID,buf,{caption:`🎥 Testimonial #${tes.id} — ${user.full_name}`}).catch(()=>{}); } catch(e){} });
     }
@@ -822,7 +846,7 @@ app.post('/api/poem/submit', authMiddleware, async (req,res) => {
     const poem=await createPoem(user.telegram_id,{title:title||'',category:category||'General',content:content.trim(),author:user.full_name});
     if (!poem) return res.status(500).json({error:'Could not save submission. Please try again.'});
     res.json({success:true,poem});
-    bot.sendMessage(ADMIN_CHAT_ID,`📝 <b>New Poem/Inspiration #${poem.id}</b>\n👤 ${user.full_name||'User'} (${user.uid||'?'})\n📂 Category: ${category||'General'}\n\n"${content.substring(0,400)}"\n\n💰 Reward: 1,000 USDT`,{parse_mode:'HTML',reply_markup:{inline_keyboard:[[{text:'✅ Approve (+1,000)',callback_data:'poem_approve_'+poem.id},{text:'❌ Reject',callback_data:'poem_reject_'+poem.id}]]}}).catch(e=>console.error('Admin notify poem error:',e.message));
+    bot.sendMessage(ADMIN_CHAT_ID,`📝 <b>New Poem/Inspiration #${poem.id}</b>\n👤 ${user.full_name||'User'} (${user.uid||'?'})\n📂 Category: ${category||'General'}\n\n"${content.substring(0,400)}"\n\n💰 Reward: 1,000 USDT`,{parse_mode:'HTML',reply_markup:{inline_keyboard:[[{text:'✅ Approve (+1,000)',callback_data:'poem_approve_'+poem.id},{text:'❌ Reject',callback_data:'poem_reject_'+poem.id}],[{text:'🗑️ Delete Post',callback_data:'poem_delete_'+poem.id}]]}}).catch(e=>console.error('Admin notify poem error:',e.message));
   } catch(e) { res.status(500).json({error:'Server error'}); }
 });
 app.get('/api/poems', async (req,res) => { try { res.json({ poems: await getApprovedPoems() }); } catch(e){res.json({poems:[]});} });
