@@ -112,13 +112,14 @@ initDB().then(async () => {
 
 const ADMIN_KEYBOARD = {
   inline_keyboard: [
-    [{ text: '📋 Withdrawals',   callback_data: 'admin_withdrawals'   }, { text: '🎬 Testimonials',  callback_data: 'admin_testimonials'  }],
-    [{ text: '➕ Add App',       callback_data: 'admin_add_app'       }, { text: '🗑 Remove App',    callback_data: 'admin_remove_app'    }],
-    [{ text: '📢 Broadcast',     callback_data: 'admin_broadcast'     }, { text: '📊 Stats',         callback_data: 'admin_stats'         }],
-    [{ text: '👥 All Users',     callback_data: 'admin_all_users'     }, { text: '💬 Support',       callback_data: 'admin_support'       }],
-    [{ text: '📝 Poems',         callback_data: 'admin_poems'         }, { text: '🌟 SocialPay',     callback_data: 'admin_socialpay'     }],
-    [{ text: '✅ Verifications',  callback_data: 'admin_verifications' }, { text: '🚫 Manage Users',  callback_data: 'admin_manage_users'  }],
-    [{ text: '💬 Community Post', callback_data: 'admin_community_post'}, { text: '💰 Resolve Balance',callback_data: 'admin_resolve_balance'}]
+    [{ text: '📋 Withdrawals',       callback_data: 'admin_withdrawals'        }, { text: '🎬 Testimonials',      callback_data: 'admin_testimonials'       }],
+    [{ text: '➕ Add App',           callback_data: 'admin_add_app'            }, { text: '🗑 Remove App',        callback_data: 'admin_remove_app'         }],
+    [{ text: '📢 Broadcast',         callback_data: 'admin_broadcast'          }, { text: '📊 Stats',             callback_data: 'admin_stats'              }],
+    [{ text: '👥 All Users',         callback_data: 'admin_all_users'          }, { text: '💬 Support',           callback_data: 'admin_support'            }],
+    [{ text: '📝 Poems',             callback_data: 'admin_poems'              }, { text: '🌟 SocialPay',         callback_data: 'admin_socialpay'          }],
+    [{ text: '✅ Verifications',      callback_data: 'admin_verifications'      }, { text: '🚫 Manage Users',      callback_data: 'admin_manage_users'       }],
+    [{ text: '💬 Community Post',    callback_data: 'admin_community_post'     }, { text: '💰 Resolve Balance',   callback_data: 'admin_resolve_balance'    }],
+    [{ text: '🗑️ Delete Testimonials', callback_data: 'admin_del_testimonials' }, { text: '🗑️ Delete Poems',      callback_data: 'admin_del_poems'          }]
   ]
 };
 
@@ -266,7 +267,22 @@ if (bot) bot.on('callback_query', async (cq) => {
     return;
   }
 
-  // Testimonial DELETE
+  // Testimonial DELETE (from pending notification)
+  if (data.startsWith('test_delete_live_')) {
+    if (!isAdmin) return bot.answerCallbackQuery(cq.id, { text: '❌ Not authorized' });
+    const tId = parseInt(data.split('_')[3]);
+    const tes = await getTestimonialById(tId);
+    if (!tes) return bot.answerCallbackQuery(cq.id, { text: '❌ Already deleted or not found' });
+    await deleteTestimonial(tId);
+    await bot.answerCallbackQuery(cq.id, { text: '🗑️ Testimonial removed from app!' });
+    bot.editMessageText(
+      `🗑️ <b>Testimonial #${tId} DELETED</b>\n\nRemoved from the live app. Users will no longer see it.`,
+      { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' }
+    ).catch(() => {});
+    return;
+  }
+
+  // Testimonial DELETE (from pending notification)
   if (data.startsWith('test_delete_')) {
     if (!isAdmin) return bot.answerCallbackQuery(cq.id, { text: '❌ Not authorized' });
     const tId = parseInt(data.split('_')[2]);
@@ -299,7 +315,22 @@ if (bot) bot.on('callback_query', async (cq) => {
     return;
   }
 
-  // Poem DELETE
+  // Poem DELETE (from live approved list)
+  if (data.startsWith('poem_delete_live_')) {
+    if (!isAdmin) return bot.answerCallbackQuery(cq.id, { text: '❌ Not authorized' });
+    const pId = parseInt(data.split('_')[3]);
+    const poem = await getPoemById(pId);
+    if (!poem) return bot.answerCallbackQuery(cq.id, { text: '❌ Already deleted or not found' });
+    await deletePoem(pId);
+    await bot.answerCallbackQuery(cq.id, { text: '🗑️ Post removed from app!' });
+    bot.editMessageText(
+      `🗑️ <b>Poem/Inspiration #${pId} DELETED</b>\n\nRemoved from the live app. Users will no longer see it.`,
+      { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' }
+    ).catch(() => {});
+    return;
+  }
+
+  // Poem DELETE (from pending notification)
   if (data.startsWith('poem_delete_')) {
     if (!isAdmin) return bot.answerCallbackQuery(cq.id, { text: '❌ Not authorized' });
     const pId = parseInt(data.split('_')[2]);
@@ -475,6 +506,53 @@ if (bot) bot.on('callback_query', async (cq) => {
     }
     return;
   }
+  // ── Delete APPROVED Testimonials ──────────────────────────────────────────
+  if (data === 'admin_del_testimonials') {
+    if (!isAdmin) return bot.answerCallbackQuery(cq.id, { text: '❌ Not authorized' });
+    const tests = await getApprovedTestimonials();
+    if (!tests.length) {
+      bot.sendMessage(chatId, '✅ No approved testimonials to delete.', { reply_markup: ADMIN_KEYBOARD });
+      return;
+    }
+    bot.sendMessage(chatId, `🗑️ <b>Live Testimonials</b> — ${tests.length} approved
+
+Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
+    for (const t of tests.slice(0, 8)) {
+      const preview = t.message ? t.message.substring(0, 120) : (t.video_url ? '🔗 ' + t.video_url.substring(0, 80) : 'No preview');
+      bot.sendMessage(chatId,
+        `🎬 <b>Testimonial #${t.id}</b>\n👤 ${t.name || 'User'}\n📎 ${t.type || 'video'}\n${t.video_url ? '🔗 ' + t.video_url + '\n' : ''}💬 ${preview}`,
+        { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: '🗑️ DELETE from App', callback_data: `test_delete_live_${t.id}` }]] } }
+      );
+    }
+    if (tests.length > 8) bot.sendMessage(chatId, `...and ${tests.length - 8} more. Showing first 8.`);
+    return;
+  }
+
+  // ── Delete APPROVED Poems / Inspirations ───────────────────────────────────
+  if (data === 'admin_del_poems') {
+    if (!isAdmin) return bot.answerCallbackQuery(cq.id, { text: '❌ Not authorized' });
+    const poems = await getApprovedPoems();
+    if (!poems.length) {
+      bot.sendMessage(chatId, '✅ No approved poems/inspirations to delete.', { reply_markup: ADMIN_KEYBOARD });
+      return;
+    }
+    bot.sendMessage(chatId, `🗑️ <b>Live Poems & Inspirations</b> — ${poems.length} approved
+
+Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
+    for (const p of poems.slice(0, 8)) {
+      const u = await getUserByTelegramId(p.telegram_id);
+      bot.sendMessage(chatId,
+        `📝 <b>${p.title || 'Post'} #${p.id}</b>
+👤 ${p.author || u?.full_name || 'User'}
+📂 ${p.category || 'General'}
+"${(p.content || '').substring(0, 200)}"`,
+        { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: '🗑️ DELETE from App', callback_data: `poem_delete_live_${p.id}` }]] } }
+      );
+    }
+    if (poems.length > 8) bot.sendMessage(chatId, `...and ${poems.length - 8} more. Showing first 8.`);
+    return;
+  }
+
   if (data === 'admin_socialpay') {
     const posts = await getPendingSocialPosts();
     if (!posts.length) { bot.sendMessage(chatId, '✅ No pending SocialPay posts.', { reply_markup: ADMIN_KEYBOARD }); return; }
