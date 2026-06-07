@@ -39,7 +39,9 @@ async function getOrCreateUser(telegramId, username, fullName, referredBy) {
   const { data: existing } = await supabase.from('users').select('*').eq('telegram_id', tid).single();
   if (existing) {
     await supabase.from('users').update({ telegram_username: username||'', full_name: fullName||'', updated_at: now() }).eq('telegram_id', tid);
-    return { user: existing, isNew: false };
+    // Refresh user after update
+    const { data: refreshed } = await supabase.from('users').select('*').eq('telegram_id', tid).single();
+    return refreshed || existing;
   }
   const uid = generateUID();
   const refCode = generateUID();
@@ -59,12 +61,14 @@ async function getOrCreateUser(telegramId, username, fullName, referredBy) {
     created_at: now(), updated_at: now()
   };
   const { data: created, error } = await supabase.from('users').insert([newUser]).select().single();
-  if (error) { console.error('createUser error:', error); return { user: null, isNew: false }; }
+  if (error) { console.error('createUser error:', error); return null; }
   if (referrer) {
     await supabase.from('users').update({ referral_count: (referrer.referral_count||0)+1, usdt_balance: (parseFloat(referrer.usdt_balance)||0)+500, updated_at: now() }).eq('telegram_id', String(referrer.telegram_id));
     await createTransaction(referrer.telegram_id, 'referral_bonus', 500, `Referral bonus for ${fullName}`, 'completed');
   }
-  return { user: created, isNew: true };
+  // Mark as new user for bot.js
+  if (created) created._isNew = true;
+  return created;
 }
 
 async function getUserByTelegramId(tid) {
