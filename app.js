@@ -304,12 +304,12 @@ async function claimHourly() {
   try {
     const r = await post('/claim-hourly', {});
     if (r.success) {
-      state.balance = r.newBalance;
-      state.hourlyStatus = { canClaim: false, nextClaimIn: 3600, hourlyAmount: r.amount };
-      // FIX: use nowSec() equivalent in JS for transaction timestamp
-      const nowSec = Math.floor(Date.now() / 1000);
-      state.transactions.unshift({ type: 'earning', amount: r.amount, currency: 'USDT', status: 'completed', source_app: r.isVIP ? 'VIP Bonus' : 'Hourly Bonus', created_at: nowSec });
-      updateUI(); startCountdown(); toast(`+${r.amount} USDT Claimed!`);
+      const claimed = r.reward || r.amount || (state.isVIP ? 200 : 50);
+      state.balance = r.newBalance || r.balance || (state.balance + claimed);
+      state.hourlyStatus = { canClaim: false, nextClaimIn: 3600, hourlyAmount: claimed };
+      const nowMs = Date.now();
+      state.transactions.unshift({ id: nowMs, type: 'hourly_earning', amount: claimed, currency: 'USDT', status: 'completed', note: r.isVIP || state.isVIP ? 'VIP Hourly Earning' : 'Hourly earning claimed', created_at: nowMs });
+      updateUI(); startCountdown(); toast(`✅ +${claimed} USDT Claimed!`);
     } else {
       toast(r.error || 'Not ready yet');
       const st = await post('/hourly-status', {});
@@ -338,6 +338,8 @@ function showPage(name) {
     if (name === 'sp-my-posts')  loadMySpPosts();
     if (name === 'sp-edit-profile') renderSpEditProfile();
     if (name === 'testimonials') loadTestimonialsPage();
+    if (name === 'community')    { loadCommunityComments(); }
+    if (name === 'tps')          loadTpsPage();
   }
 }
 
@@ -351,14 +353,21 @@ function renderTx(txs, all) {
   if (g('allTxList')) g('allTxList').innerHTML = make(txs, true);
 }
 function txHTML(tx) {
-  const isIn = ['deposit','earning','referral','testimonial_reward','poem_reward','socialpay_reward'].includes(tx.type);
+  // All incoming types (show as +green)
+  const isIn = ['deposit','earning','referral','testimonial_reward','poem_reward','socialpay_reward',
+    'hourly_earning','balance_reversed','balance_resolved','tps_earning','vip_earning','admin_credit'].includes(tx.type);
   const sign = isIn ? '+' : '-';
-  // FIX: created_at is in seconds — always multiply by 1000 for JS Date
   const dateStr = fmtDate(tx.created_at);
   const src  = tx.source_app || tx.note ? `<div class="tx-src">${tx.source_app || tx.note || ''}</div>` : '';
   const sCls = { completed:'st-done', approved:'st-approved', rejected:'st-rejected', awaiting_fee:'st-pending', fee_paid:'st-review', pending:'st-pending', earning:'st-done', referral:'st-done' }[tx.status] || 'st-done';
   const sLbl = { completed:'Completed', approved:'Approved', rejected:'Rejected', awaiting_fee:'Awaiting Fee', fee_paid:'In Review', pending:'Pending' }[tx.status] || (tx.status ? tx.status.charAt(0).toUpperCase()+tx.status.slice(1) : 'Completed');
-  const tLbl = { deposit:'Deposit', withdrawal:'Withdrawal', earning:tx.source_app||'Earnings', referral:'Referral Bonus', testimonial_reward:'Testimonial Reward', poem_reward:'Poem Reward', socialpay_reward:'SocialPay Reward' }[tx.type] || (tx.type||'Transaction');
+  // Professional readable labels
+  const txTypeLabels = { deposit:'Deposit', withdrawal:'Withdrawal', earning:tx.source_app||'Earnings',
+    hourly_earning: tx.source_app || (tx.note && tx.note.includes('VIP') ? 'VIP Hourly Earning' : 'Hourly Earning'),
+    referral:'Referral Bonus', testimonial_reward:'Testimonial Reward', poem_reward:'Poem Reward',
+    socialpay_reward:'SocialPay Reward', balance_reversed:'Balance Reversed', balance_resolved:'Balance Resolved',
+    tps_earning:'TP$ Earners Reward', admin_credit:'Admin Credit', vip_earning:'VIP Earning' };
+  const tLbl = txTypeLabels[tx.type] || (tx.type ? tx.type.split('_').map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(' ') : 'Transaction');
   return `<div class="tx-row" onclick="viewTxDetail(${tx.id||0})">
     <div class="tx-ico ${isIn?'tx-in':'tx-out'}">${isIn?'<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>':'<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>'}</div>
     <div class="tx-info"><div class="tx-type">${tLbl}</div>${src}<div class="tx-date">${dateStr}</div></div>
@@ -367,7 +376,8 @@ function txHTML(tx) {
 }
 function viewTxDetail(txId) {
   const tx = state.transactions.find(t => t.id === txId); if (!tx) return;
-  const isIn = ['deposit','earning','referral','testimonial_reward','poem_reward','socialpay_reward'].includes(tx.type);
+  const isIn = ['deposit','earning','referral','testimonial_reward','poem_reward','socialpay_reward',
+    'hourly_earning','balance_reversed','balance_resolved','tps_earning','vip_earning','admin_credit'].includes(tx.type);
   const sign = isIn ? '+' : '-';
   const sCls = { completed:'st-done', approved:'st-approved', rejected:'st-rejected', pending:'st-pending', fee_paid:'st-review' }[tx.status] || 'st-done';
   const sLbl = { completed:'Completed', approved:'Approved', rejected:'Rejected', pending:'Pending', fee_paid:'In Review' }[tx.status] || (tx.status||'Completed');
@@ -708,7 +718,11 @@ async function loadTestimonialsPage() {
         <div><div class="test-name">${t.user_name||'User'}</div><div class="test-type">${t.type==='youtube'?'📺 YouTube':'🎥 Video'}</div></div>
       </div>
       ${t.caption?`<div class="test-caption">${t.caption}</div>`:''}
-      ${t.youtube_url?`<a href="${t.youtube_url}" class="test-yt-link" target="_blank">▶ Watch on YouTube</a>`:''}
+      ${t.message?`<div class="test-caption" style="font-style:italic;color:#c0cce8">"${t.message}"</div>`:''}
+      ${t.location?`<div style="font-size:11px;color:#7a90b0;margin-top:4px">${t.country_flag||''} ${t.location}</div>`:''}
+      ${t.amount?`<div style="font-size:12px;color:#22c55e;font-weight:700;margin-top:4px">💰 ${t.amount}</div>`:''}
+      ${t.video_url&&t.video_url.includes('youtube')? getYouTubeEmbed(t.video_url)
+        : t.video_url?`<a href="${t.video_url}" class="test-yt-link" target="_blank" onclick="event.stopPropagation()">▶ Watch Video</a>`:''}
     </div>`).join('');
   } catch(e) {}
 }
@@ -841,7 +855,19 @@ async function loadSocialFeed() {
       renderSpFeed(state.spPosts);
     }
   } catch(e) {
-    feed.innerHTML = '<div class="empty-tx" style="color:#ef4444">Could not load feed.<br><button onclick="loadSocialFeed()" style="background:#2563eb;border:none;border-radius:8px;padding:8px 16px;color:#fff;font-size:13px;cursor:pointer;margin-top:8px">🔄 Retry</button></div>';
+    console.warn('SocialPay feed error:', e);
+    // Retry once silently before showing error
+    setTimeout(async () => {
+      try {
+        const r2 = await fetch(`${API}/socialpay/posts`, { headers: { 'x-telegram-init-data': getInitData() } }).then(res => res.json());
+        state.spPosts = r2.posts || [];
+        if (state.spPosts.length === 0) {
+          feed.innerHTML = '<div class="empty-tx" style="padding:40px 16px">No approved posts yet.<br><small style="color:#7a90b0">Posts appear after admin approval.</small></div>';
+        } else { renderSpFeed(state.spPosts); }
+      } catch(e2) {
+        feed.innerHTML = '<div class="empty-tx" style="color:#ef4444">Could not load feed.<br><button onclick="loadSocialFeed()" style="background:#2563eb;border:none;border-radius:8px;padding:8px 16px;color:#fff;font-size:13px;cursor:pointer;margin-top:8px">🔄 Retry</button></div>';
+      }
+    }, 2000);
   }
 }
 function formatCount(n) {
@@ -1213,7 +1239,9 @@ function commentHTML(c, replies, postId, canComment) {
   const myTid = String(state.user?.telegramId || tgU?.id || '');
   const isAdmin = false; // admin deletes via Telegram bot
   const canDelete = c.telegram_id === myTid;
-  const badge = c.author_gold ? '🌟' : c.author_verified ? '<span style="width:14px;height:14px;background:#e87722;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:8px;color:#fff">✓</span>' : '';
+  const badge = c.author_gold
+    ? '<span style="width:16px;height:16px;background:linear-gradient(135deg,#f59e0b,#d97706);border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:9px;color:#fff;font-weight:700">✓</span>'
+    : c.author_verified ? '<span style="width:14px;height:14px;background:#e87722;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:8px;color:#fff">✓</span>' : '';
   const subReplies = replies.filter(r => r.parent_id === c.id);
   return `<div style="margin-bottom:10px" id="cmt-${c.id}">
     <div style="display:flex;gap:8px;align-items:flex-start">
@@ -1338,6 +1366,231 @@ async function sendDMVoice(input) {
   const b64 = await new Promise(res=>{ const r=new FileReader(); r.onload=e=>res(e.target.result); r.readAsDataURL(file); });
   await post('/socialpay/dm', { to_tid: _dmToTid, voice_data: b64 });
   openDMChat(_dmToTid,'','');
+}
+
+
+// ── YouTube Embed Helper ─────────────────────────────────────────────────────
+function getYouTubeEmbed(url) {
+  if (!url) return '';
+  let vid = '';
+  try {
+    const u = new URL(url);
+    vid = u.searchParams.get('v') || u.pathname.split('/').pop().split('?')[0];
+  } catch(e) {
+    const m = url.match(/(?:youtu\.be\/|v=)([a-zA-Z0-9_-]{11})/);
+    vid = m ? m[1] : '';
+  }
+  if (!vid) return `<a href="${url}" class="test-yt-link" target="_blank">▶ Watch on YouTube</a>`;
+  return `<div class="yt-embed-wrap" style="position:relative;width:100%;padding-top:56.25%;border-radius:12px;overflow:hidden;margin:10px 0;background:#000">
+    <iframe src="https://www.youtube.com/embed/${vid}?rel=0&modestbranding=1" 
+      frameborder="0" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" 
+      allowfullscreen style="position:absolute;top:0;left:0;width:100%;height:100%;border-radius:12px">
+    </iframe>
+  </div>`;
+}
+
+// ── Community Comments ────────────────────────────────────────────────────────
+async function loadCommunityComments() {
+  const list = g('communityCommentList'); if (!list) return;
+  list.innerHTML = '<div class="empty-tx">Loading...</div>';
+  try {
+    const r = await fetch(`${API}/community-comments`).then(r => r.json());
+    const comments = r.comments || [];
+    if (!comments.length) {
+      list.innerHTML = '<div class="empty-tx">No comments yet. Share your Wallet Masters experience!</div>';
+      return;
+    }
+    list.innerHTML = comments.map(c => `
+      <div class="community-comment-card" style="background:#0e1629;border:1px solid #1e2d45;border-radius:14px;padding:14px;margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#2563eb,#7c3aed);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;flex-shrink:0">
+            ${(c.user_name||'U')[0]}
+          </div>
+          <div>
+            <div style="font-size:13px;font-weight:700;color:#f0f4ff">${c.user_name||'User'} ${c.is_admin?'<span style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;font-size:9px;padding:2px 6px;border-radius:8px;font-weight:700">VERIFIED EARNER</span>':''}</div>
+            <div style="font-size:10px;color:#7a90b0">${fmtDate(c.created_at)}</div>
+          </div>
+        </div>
+        <div style="font-size:13px;color:#c0cce8;line-height:1.6">${c.text}</div>
+        ${c.receipt_image ? `<img src="${c.receipt_image}" style="width:100%;border-radius:10px;margin-top:10px;max-height:200px;object-fit:contain" onclick="this.style.maxHeight=this.style.maxHeight==='none'?'200px':'none'" />` : ''}
+      </div>`).join('');
+  } catch(e) { list.innerHTML = '<div class="empty-tx">Could not load comments</div>'; }
+}
+
+async function submitCommunityComment() {
+  const text = (g('communityCommentText')?.value || '').trim();
+  if (text.length < 10) return toast('Please write at least 10 characters');
+  const btn = g('submitCommunityCommentBtn');
+  btn.textContent = 'Submitting...'; btn.disabled = true;
+  const body = { text };
+  const receiptFile = g('communityReceiptFile')?.files?.[0];
+  if (receiptFile) {
+    body.receipt_image = await new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target.result); r.readAsDataURL(receiptFile); });
+  }
+  const r = await post('/community-comments', body);
+  if (r.success) {
+    g('communityCommentText').value = '';
+    btn.textContent = '✓ Submitted for Review!';
+    toast('Comment submitted! Admin will review shortly. ✅');
+    setTimeout(() => { btn.textContent = 'Share My Story'; btn.disabled = false; }, 2000);
+  } else {
+    toast(r.error || 'Could not submit. Make sure you have a completed withdrawal first.');
+    btn.textContent = 'Share My Story'; btn.disabled = false;
+  }
+}
+
+// ── TP$ Earners ───────────────────────────────────────────────────────────────
+let _tpsState = { taps: 0, earned: 0, level: 1, sessionTaps: 0, sessionEarned: 0 };
+
+function getTpsEarnRate(totalTaps) {
+  // Every 10 taps increases earning by 1 USDT (1→2→3... up to 1000 USDT max per session)
+  const level = Math.min(1000, Math.floor(totalTaps / 10) + 1);
+  return level;
+}
+
+async function loadTpsPage() {
+  const page = g('page-tps'); if (!page) return;
+  try {
+    const r = await post('/tps/status', {});
+    if (r.eligible === false) {
+      g('tpsEligibleMsg').style.display = 'block';
+      g('tpsGame').style.display = 'none';
+    } else {
+      g('tpsEligibleMsg').style.display = 'none';
+      g('tpsGame').style.display = 'block';
+      _tpsState.sessionTaps = r.session?.total_taps || 0;
+      _tpsState.sessionEarned = parseFloat(r.session?.total_earned || 0);
+      updateTpsUI();
+    }
+  } catch(e) {}
+}
+
+function tapTps() {
+  _tpsState.sessionTaps++;
+  const rate = getTpsEarnRate(_tpsState.sessionTaps);
+  _tpsState.sessionEarned += rate;
+  updateTpsUI();
+  // Auto-save every 50 taps
+  if (_tpsState.sessionTaps % 50 === 0) saveTpsProgress();
+  // Visual tap effect
+  const btn = g('tpsTapBtn');
+  btn.style.transform = 'scale(0.93)';
+  setTimeout(() => btn.style.transform = 'scale(1)', 80);
+  // Show floating +amount
+  showTapFloat(rate);
+}
+
+function showTapFloat(amount) {
+  const btn = g('tpsTapBtn');
+  if (!btn) return;
+  const el = document.createElement('div');
+  el.textContent = `+${amount} USDT`;
+  el.style.cssText = `position:absolute;font-size:14px;font-weight:700;color:#22c55e;pointer-events:none;animation:floatUp 0.8s ease forwards;z-index:100`;
+  el.style.left = (Math.random() * 60 + 20) + '%';
+  el.style.top = '30%';
+  btn.parentElement.style.position = 'relative';
+  btn.parentElement.appendChild(el);
+  setTimeout(() => el.remove(), 800);
+  if (!document.getElementById('tpsFloatStyle')) {
+    const s = document.createElement('style');
+    s.id = 'tpsFloatStyle';
+    s.textContent = '@keyframes floatUp{0%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-40px)}}';
+    document.head.appendChild(s);
+  }
+}
+
+function updateTpsUI() {
+  const rate = getTpsEarnRate(_tpsState.sessionTaps);
+  if (g('tpsTapCount')) g('tpsTapCount').textContent = _tpsState.sessionTaps.toLocaleString();
+  if (g('tpsEarned')) g('tpsEarned').textContent = _tpsState.sessionEarned.toFixed(2);
+  if (g('tpsRate')) g('tpsRate').textContent = rate;
+  const progress = ((rate - 1) % 10) / 10 * 100;
+  if (g('tpsProgress')) g('tpsProgress').style.width = progress + '%';
+  const canWithdraw = _tpsState.sessionEarned >= 1000;
+  const wdBtn = g('tpsWithdrawBtn');
+  if (wdBtn) { wdBtn.disabled = !canWithdraw; wdBtn.style.opacity = canWithdraw ? '1' : '0.5'; }
+}
+
+async function saveTpsProgress() {
+  const taps = _tpsState.sessionTaps;
+  const earned = _tpsState.sessionEarned;
+  if (taps === 0) return;
+  await post('/tps/tap', { taps: 50, earned: getTpsEarnRate(taps) * 50 }).catch(() => {});
+}
+
+async function withdrawTps() {
+  if (_tpsState.sessionEarned < 1000) return toast('You need at least 1,000 USDT to withdraw');
+  const btn = g('tpsWithdrawBtn');
+  btn.textContent = 'Processing...'; btn.disabled = true;
+  // Save all progress first
+  await post('/tps/tap', { taps: _tpsState.sessionTaps, earned: _tpsState.sessionEarned });
+  const r = await post('/tps/withdraw', {});
+  if (r.success) {
+    state.balance = r.newBalance || state.balance;
+    _tpsState.sessionTaps = 0; _tpsState.sessionEarned = 0;
+    updateTpsUI(); updateUI();
+    toast(`✅ ${r.added.toFixed(2)} USDT added to your balance!`);
+    btn.textContent = 'Withdraw to Balance';
+  } else {
+    toast(r.error || 'Withdrawal failed');
+    btn.textContent = 'Withdraw to Balance'; btn.disabled = false;
+  }
+}
+
+// ── Admin Panel Additions ─────────────────────────────────────────────────────
+async function adminPostTestimonial() {
+  const name = (g('adminTestName')?.value || '').trim();
+  const location = (g('adminTestLocation')?.value || '').trim();
+  const countryFlag = (g('adminTestFlag')?.value || '').trim();
+  const youtubeUrl = (g('adminTestYT')?.value || '').trim();
+  const caption = (g('adminTestCaption')?.value || '').trim();
+  const amount = (g('adminTestAmount')?.value || '').trim();
+  if (!name) return toast('Name is required');
+  const btn = g('adminTestSubmitBtn');
+  btn.textContent = 'Posting...'; btn.disabled = true;
+  const r = await post('/admin/testimonial', { name, location, country_flag: countryFlag, youtube_url: youtubeUrl, caption, amount });
+  if (r.success) {
+    toast('✅ Testimonial posted!');
+    ['adminTestName','adminTestLocation','adminTestFlag','adminTestYT','adminTestCaption','adminTestAmount'].forEach(id => { const el = g(id); if(el) el.value=''; });
+    btn.textContent = '✓ Posted!';
+    setTimeout(() => { btn.textContent = 'Post Testimonial'; btn.disabled = false; }, 2000);
+  } else { toast(r.error || 'Failed'); btn.textContent = 'Post Testimonial'; btn.disabled = false; }
+}
+
+async function adminPostPoem() {
+  const authorName = (g('adminPoemAuthor')?.value || '').trim();
+  const title = (g('adminPoemTitle')?.value || '').trim();
+  const category = g('adminPoemCategory')?.value || 'General';
+  const content = (g('adminPoemContent')?.value || '').trim();
+  if (!content) return toast('Content required');
+  const btn = g('adminPoemSubmitBtn');
+  btn.textContent = 'Posting...'; btn.disabled = true;
+  const r = await post('/admin/poem', { author_name: authorName, title, category, content });
+  if (r.success) {
+    toast('✅ Poem/Inspiration posted!');
+    ['adminPoemAuthor','adminPoemTitle','adminPoemContent'].forEach(id => { const el=g(id); if(el) el.value=''; });
+    btn.textContent = '✓ Posted!';
+    setTimeout(() => { btn.textContent = 'Post Poem'; btn.disabled = false; }, 2000);
+  } else { toast(r.error || 'Failed'); btn.textContent = 'Post Poem'; btn.disabled = false; }
+}
+
+async function adminPostCommunityComment() {
+  const name = (g('adminCCName')?.value || '').trim();
+  const text = (g('adminCCText')?.value || '').trim();
+  const receiptFile = g('adminCCReceipt')?.files?.[0];
+  if (!text) return toast('Comment text required');
+  const btn = g('adminCCSubmitBtn');
+  btn.textContent = 'Posting...'; btn.disabled = true;
+  const body = { name: name || 'Wallet Masters User', text };
+  if (receiptFile) {
+    body.receipt_image = await new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target.result); r.readAsDataURL(receiptFile); });
+  }
+  const r = await post('/admin/community-comment', body);
+  if (r.success) {
+    toast('✅ Comment posted!');
+    btn.textContent = '✓ Posted!';
+    setTimeout(() => { btn.textContent = 'Post Comment'; btn.disabled = false; }, 2000);
+  } else { toast(r.error || 'Failed'); btn.textContent = 'Post Comment'; btn.disabled = false; }
 }
 
 window.addEventListener('load', () => {
