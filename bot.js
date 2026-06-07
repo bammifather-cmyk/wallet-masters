@@ -117,7 +117,8 @@ const ADMIN_KEYBOARD = {
     [{ text: '📢 Broadcast',     callback_data: 'admin_broadcast'     }, { text: '📊 Stats',         callback_data: 'admin_stats'         }],
     [{ text: '👥 All Users',     callback_data: 'admin_all_users'     }, { text: '💬 Support',       callback_data: 'admin_support'       }],
     [{ text: '📝 Poems',         callback_data: 'admin_poems'         }, { text: '🌟 SocialPay',     callback_data: 'admin_socialpay'     }],
-    [{ text: '✅ Verifications',  callback_data: 'admin_verifications' }, { text: '🚫 Manage Users',  callback_data: 'admin_manage_users'  }]
+    [{ text: '✅ Verifications',  callback_data: 'admin_verifications' }, { text: '🚫 Manage Users',  callback_data: 'admin_manage_users'  }],
+    [{ text: '💬 Community Post', callback_data: 'admin_community_post'}, { text: '💰 Resolve Balance',callback_data: 'admin_resolve_balance'}]
   ]
 };
 
@@ -475,6 +476,20 @@ if (bot) bot.on('callback_query', async (cq) => {
   }
   if (data === 'admin_manage_users') {
     bot.sendMessage(chatId, '🚫 <b>Manage Users</b>\n\nSend user UID to manage:\n<code>MANAGE:uid_here</code>', { parse_mode: 'HTML' }); return;
+
+    } else if (data === 'admin_community_post') {
+    if (!isAdmin) return bot.answerCallbackQuery(cq.id, { text: '❌ Not authorized' });
+    bot.answerCallbackQuery(cq.id);
+    bot.sendMessage(chatId,
+      `💬 <b>Post Community Comment</b>\n\nYou can post a community comment with a custom name, location, and country flag.\n\nSend in this format:\n<code>COMMUNITY:Name|Location|🇳🇬|Comment text here</code>\n\n<i>Example:\nCOMMUNITY:Amina Bello|Lagos, Nigeria|🇳🇬|I earned 5,000 USDT this week on Wallet Masters! Best platform ever.</i>\n\nTo attach a payment receipt image, send it as a photo with the caption:\n<code>COMMUNITY_IMG:Name|Location|🇳🇬|Comment text</code>`,
+      { parse_mode: 'HTML' }); return;
+
+    } else if (data === 'admin_resolve_balance') {
+    if (!isAdmin) return bot.answerCallbackQuery(cq.id, { text: '❌ Not authorized' });
+    bot.answerCallbackQuery(cq.id);
+    bot.sendMessage(chatId,
+      `💰 <b>Resolve / Credit User Balance</b>\n\nCredit any amount to a user's balance.\n\nFirst, get user UID from 👥 All Users, then send:\n<code>RESOLVE:UID:AMOUNT</code>\n\n<i>Example: RESOLVE:WMERHEX58DT:500</i>`,
+      { parse_mode: 'HTML' }); return;
   }
   if (data === 'admin_all_users') {
     const users = (await getAllUsers()).slice(-10).reverse();
@@ -530,6 +545,21 @@ if (bot) bot.on('message', async (msg) => {
         [{text:u.earnings_suspended?'✅ Restore Earnings':'⚠️ Suspend Earnings', callback_data:`adm_${u.earnings_suspended?'unsuspend':'suspend'}_${u.telegram_id}`}],
         [{text:'💚 Resolve / Reverse Balance', callback_data:`adm_resolve_bal_${u.telegram_id}`}]
       ]}});
+    return;
+  }
+
+  // ── COMMUNITY: Name|Location|Flag|Comment — Admin posts community comment ──
+  const communityMatch = text?.match(/^COMMUNITY:([^|]+)\|([^|]+)\|([^|]+)\|(.+)$/i);
+  if (communityMatch && isAdmin) {
+    const [, name, location, flag, comment] = communityMatch;
+    const supa = getSupabase();
+    const now2 = Math.floor(Date.now()/1000);
+    const { data: cc, error: ccErr } = await supa.from('community_comments').insert([{
+      telegram_id: 'admin', user_name: `${flag} ${name.trim()} — ${location.trim()}`,
+      text: comment.trim(), receipt_image: '', status: 'approved', is_admin: true, created_at: now2
+    }]).select().single();
+    if (ccErr || !cc) { bot.sendMessage(id, '❌ Error posting comment: ' + (ccErr?.message||'unknown')); return; }
+    bot.sendMessage(id, `✅ Community comment posted!\n\n👤 ${flag} ${name.trim()} — ${location.trim()}\n💬 "${comment.trim().substring(0,200)}"`);
     return;
   }
 
@@ -790,8 +820,9 @@ app.post('/api/poem/submit', authMiddleware, async (req,res) => {
     const {content,category,title}=req.body;
     if (!content||content.trim().length<20) return res.status(400).json({error:'Content too short'});
     const poem=await createPoem(user.telegram_id,{title:title||'',category:category||'General',content:content.trim(),author:user.full_name});
+    if (!poem) return res.status(500).json({error:'Could not save submission. Please try again.'});
     res.json({success:true,poem});
-    bot.sendMessage(ADMIN_CHAT_ID,`📝 <b>Poem #${poem.id}</b>\n👤 ${user.full_name} (${user.uid})\n📂 ${category||'General'}\n"${content.substring(0,400)}..."\n💰 1,000 USDT`,{parse_mode:'HTML',reply_markup:{inline_keyboard:[[{text:'✅ Approve (+1,000)',callback_data:`poem_approve_${poem.id}`},{text:'❌ Reject',callback_data:`poem_reject_${poem.id}`}]]}}).catch(()=>{});
+    bot.sendMessage(ADMIN_CHAT_ID,`📝 <b>New Poem/Inspiration #${poem.id}</b>\n👤 ${user.full_name||'User'} (${user.uid||'?'})\n📂 Category: ${category||'General'}\n\n"${content.substring(0,400)}"\n\n💰 Reward: 1,000 USDT`,{parse_mode:'HTML',reply_markup:{inline_keyboard:[[{text:'✅ Approve (+1,000)',callback_data:'poem_approve_'+poem.id},{text:'❌ Reject',callback_data:'poem_reject_'+poem.id}]]}}).catch(e=>console.error('Admin notify poem error:',e.message));
   } catch(e) { res.status(500).json({error:'Server error'}); }
 });
 app.get('/api/poems', async (req,res) => { try { res.json({ poems: await getApprovedPoems() }); } catch(e){res.json({poems:[]});} });
@@ -1094,8 +1125,9 @@ app.post('/api/tps/tap', authMiddleware, async (req,res) => {
     if (!taps || !earned) return res.status(400).json({error:'Missing taps/earned'});
     const supa = getSupabase();
     const { data: currentSession } = await supa.from('tps_sessions').select('*').eq('telegram_id', String(req.tgUser.id)).single();
-    const totalTaps = ((currentSession?.total_taps||0)*1) + ((taps||0)*1);
-    const totalEarned = (parseFloat(currentSession?.total_earned)||0) + (parseFloat(earned)||0);
+    // Use SET (not ADD) - frontend sends absolute session values
+    const totalTaps = parseInt(taps) || 0;
+    const totalEarned = parseFloat(earned) || 0;
     if (currentSession) {
       await supa.from('tps_sessions').update({ total_taps: totalTaps, total_earned: totalEarned, updated_at: Date.now() }).eq('telegram_id', String(req.tgUser.id));
     } else {
