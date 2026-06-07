@@ -1451,7 +1451,7 @@ function getTpsEarnRate(totalTaps) {
 async function loadTpsPage() {
   const page = g('page-tps'); if (!page) return;
   try {
-    const r = await post('/tps/status', {});
+    const r = await get('/tps/status');
     if (r.eligible === false) {
       g('tpsEligibleMsg').style.display = 'block';
       g('tpsGame').style.display = 'none';
