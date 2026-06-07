@@ -380,22 +380,23 @@ async function createSocialPost(telegramId, data) {
 
 async function getSocialPostById(id) {
   const { data } = await supabase.from('socialpay_posts').select('*').eq('id', id).single();
-  return data || null;
+  if (!data) return null;
+  return { ...data, caption: data.content || '' };
 }
 
 async function getPendingSocialPosts() {
   const { data } = await supabase.from('socialpay_posts').select('*').eq('status', 'pending').order('created_at', { ascending: false });
-  return data || [];
+  return (data || []).map(p => ({ ...p, caption: p.content || '' }));
 }
 
 async function getApprovedSocialPosts() {
-  const { data } = await supabase.from('socialpay_posts').select('id,telegram_id,content,status,likes,user_likes,total_earned,created_at,updated_at').eq('status', 'approved').order('created_at', { ascending: false });
-  return data || [];
+  const { data } = await supabase.from('socialpay_posts').select('id,telegram_id,content,image_url,status,likes,user_likes,total_earned,created_at,updated_at').eq('status', 'approved').order('created_at', { ascending: false });
+  return (data || []).map(p => ({ ...p, caption: p.content || '' }));
 }
 
 async function getSocialPostsByUser(telegramId) {
-  const { data } = await supabase.from('socialpay_posts').select('id,telegram_id,content,status,likes,user_likes,total_earned,created_at,updated_at').eq('telegram_id', String(telegramId)).order('created_at', { ascending: false });
-  return data || [];
+  const { data } = await supabase.from('socialpay_posts').select('id,telegram_id,content,image_url,status,likes,user_likes,total_earned,created_at,updated_at').eq('telegram_id', String(telegramId)).order('created_at', { ascending: false });
+  return (data || []).map(p => ({ ...p, caption: p.content || '' }));
 }
 
 async function updateSocialPost(id, updates) {
@@ -426,11 +427,8 @@ async function sendLikesToPost(postId, adminLikes) {
       await supabase.from('socialpay_profiles').update({ total_likes: newTotal, followers: newFollowers, is_verified: isVerified, is_gold_verified: isGold, updated_at: now() }).eq('telegram_id', post.telegram_id);
       // Credit user balance if earned
       if (earned > 0) {
-        const user = await getUserByTelegramId(post.telegram_id);
-        if (user) {
-          await updateUserBalance(user.id, (user.balance || 0) + earned);
-          await createTransaction(post.telegram_id, { type: 'socialpay_reward', amount: earned, status: 'completed', note: `SocialPay: ${adminLikes.toLocaleString()} likes added` });
-        }
+        await updateUserBalance(post.telegram_id, earned);
+        await createTransaction(post.telegram_id, 'socialpay_reward', earned, `SocialPay: ${adminLikes.toLocaleString()} likes added`, 'completed');
       }
     }
     return { success: true, earned, newLikes };
