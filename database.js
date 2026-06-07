@@ -94,6 +94,12 @@ async function updateUserBalance(telegramId, amount) {
   return newBalance;
 }
 
+async function setUserBalance(telegramId, amount) {
+  const newBalance = parseFloat(amount) || 0;
+  await supabase.from('users').update({ usdt_balance: newBalance, updated_at: now() }).eq('telegram_id', String(telegramId));
+  return newBalance;
+}
+
 async function upgradeToVIP(telegramId) {
   await supabase.from('users').update({ is_vip: true, vip_activated_at: now(), updated_at: now() }).eq('telegram_id', String(telegramId));
 }
@@ -581,7 +587,7 @@ module.exports = {
   claimHourlyEarning, getHourlyStatus,
   getEarningApps, getEarningAppByToken, getEarningAppById, addEarningApp, removeEarningApp,
   connectUID, getConnectedUID, getUserConnections, findUserByExternalUID,
-  createTransaction, getUserTransactions,
+  createTransaction, getUserTransactions, setUserBalance,
   createWithdrawalRequest, getPendingWithdrawals, getWithdrawalById, updateWithdrawal, getUserWithdrawals,
   createSupportMessage, getSupportMessages, getAllSupportThreads, markSupportRead,
   createTestimonial, getTestimonialById, getPendingTestimonials, getApprovedTestimonials, updateTestimonial, deleteTestimonial,
