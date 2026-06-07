@@ -206,10 +206,18 @@ async function pollWithdrawals() {
       // Check if any status changed
       let statusChanged = false;
       data.withdrawals.forEach(w => {
-        if (prevStatuses[w.id] && prevStatuses[w.id] !== w.status) statusChanged = true;
+        if (prevStatuses[w.id] && prevStatuses[w.id] !== w.status) {
+          statusChanged = true;
+          // Immediately update matching transaction in local state so UI reflects change
+          const note = 'Withdrawal #' + w.id;
+          const txMatch = (state.transactions || []).find(t => t.type === 'withdrawal' && (t.note === note || t.note === 'Withdrawal request') && t.status === 'pending');
+          if (txMatch) txMatch.status = w.status;
+        }
       });
       if (statusChanged) {
-        // Refresh transactions to reflect updated status
+        // Re-render immediately with local state update
+        renderTx(state.transactions, false);
+        // Then fetch fresh data from server to confirm
         const txData = await get('/transactions');
         if (txData.transactions) { state.transactions = txData.transactions; renderTx(state.transactions, false); }
         // Show toast on status changes
@@ -456,7 +464,9 @@ function onWithdrawInput() {
   const okBank   = state.withdrawType === 'bank' && state.selectedPayment && (g('bankAccount')?.value || '').length > 3;
   btn.disabled = !(amt >= MIN_WD && amt <= MAX_WD && amt <= state.balance && (okCrypto || okBank));
 }
+let _withdrawSubmitting = false;
 async function submitWithdrawal() {
+  if (_withdrawSubmitting) { toast('Please wait, processing...'); return; }
   const amt    = parseFloat(g('withdrawAmount')?.value || 0);
   const isBank = state.withdrawType === 'bank';
   const body   = isBank ? {
@@ -475,6 +485,7 @@ async function submitWithdrawal() {
 
   const btn = g('withdrawBtn');
   if (btn.disabled) return; // prevent double submission
+  _withdrawSubmitting = true;
   btn.textContent = 'Processing...'; btn.disabled = true;
 
   try {
@@ -488,10 +499,12 @@ async function submitWithdrawal() {
     } else {
       toast(r?.error || 'Withdrawal failed. Please try again.');
       btn.textContent = 'Continue to Payment'; btn.disabled = false;
+      _withdrawSubmitting = false;
     }
   } catch (err) {
     toast('Network error. Please check connection and try again.');
     btn.textContent = 'Continue to Payment'; btn.disabled = false;
+    _withdrawSubmitting = false;
   }
 }
 function showFeePayPage(wd, fees) {
