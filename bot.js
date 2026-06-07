@@ -27,7 +27,8 @@ const {
   createComment, getCommentsByPost, deleteComment,
   createDM, getDMs, getDMContacts, markDMsRead,
   createVerificationRequest, getPendingVerificationRequests, updateVerificationRequest,
-  createBroadcast
+  createBroadcast,
+  query
 } = require('./database');
 
 const BOT_TOKEN     = process.env.BOT_TOKEN;
