@@ -267,7 +267,16 @@ async function markSupportRead(telegramId) {
 
 // ─── Testimonials ─────────────────────────────────────────────────────────────
 async function createTestimonial(telegramId, data) {
-  const { data: d } = await supabase.from('testimonials').insert([{ telegram_id: String(telegramId), ...data, status: 'pending', created_at: now(), updated_at: now() }]).select().single();
+  // Map 'type' into 'amount' field (stores type info) since schema has no 'type' column
+  const { type, category, ...rest } = data;
+  const insertData = { ...rest, telegram_id: String(telegramId), status: 'pending', created_at: now(), updated_at: now() };
+  if (type) insertData.amount = insertData.amount || type; // store type in amount if no amount
+  if (type && !insertData.message) insertData.message = '';
+  // Store type in message prefix for admin to see
+  if (type) insertData.message = `[${type.toUpperCase()}] ${insertData.message||''}`.trim();
+  const { data: d, error } = await supabase.from('testimonials').insert([insertData]).select().single();
+  if (error) { console.error('createTestimonial error:', error); return null; }
+  if (d && type) d.type = type; // reattach for bot.js use
   return d;
 }
 
@@ -292,7 +301,13 @@ async function updateTestimonial(id, updates) {
 
 // ─── Poems ────────────────────────────────────────────────────────────────────
 async function createPoem(telegramId, data) {
-  const { data: d } = await supabase.from('poems').insert([{ telegram_id: String(telegramId), ...data, status: 'pending', created_at: now(), updated_at: now() }]).select().single();
+  const { category, ...rest } = data;
+  // Store category in title prefix
+  const title = category && rest.title ? `[${category}] ${rest.title}` : (category || rest.title || '');
+  const insertData = { ...rest, title, telegram_id: String(telegramId), status: 'pending', created_at: now(), updated_at: now() };
+  const { data: d, error } = await supabase.from('poems').insert([insertData]).select().single();
+  if (error) { console.error('createPoem error:', error); return null; }
+  if (d && category) d.category = category;
   return d;
 }
 
