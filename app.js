@@ -797,8 +797,8 @@ function renderPoems(poems) {
   if (!poems.length) { list.innerHTML = '<div class="empty-tx">No posts yet. Be the first to share!</div>'; return; }
   list.innerHTML = poems.map(p => `<div class="poem-card">
     <div class="poem-card-header">
-      <div class="poem-author-av">${(p.user_name||'U')[0]}</div>
-      <div><div class="poem-author">${p.user_name||'User'}</div><div class="poem-cat">${p.category||'General'}</div></div>
+      <div class="poem-author-av">${(p.author||p.user_name||'U')[0].toUpperCase()}</div>
+      <div><div class="poem-author">${p.author||p.user_name||'Anonymous'}</div><div class="poem-cat">${p.category||'General'}</div></div>
     </div>
     ${p.title?`<div class="poem-title-text">${p.title}</div>`:''}
     <div class="poem-body">${(p.content||'').substring(0,500)}${(p.content||'').length>500?'...':''}</div>
