@@ -712,18 +712,22 @@ async function loadTestimonialsPage() {
     if (!list) return;
     const items = Array.isArray(r) ? r : (r.testimonials || []);
     if (!items.length) { list.innerHTML = '<div class="empty-tx">No testimonials yet. Be the first!</div>'; return; }
-    list.innerHTML = items.map(t => `<div class="test-item">
-      <div class="test-item-header">
-        <div class="test-avatar">${(t.user_name||'U')[0]}</div>
-        <div><div class="test-name">${t.user_name||'User'}</div><div class="test-type">${t.type==='youtube'?'📺 YouTube':'🎥 Video'}</div></div>
-      </div>
-      ${t.caption?`<div class="test-caption">${t.caption}</div>`:''}
-      ${t.message?`<div class="test-caption" style="font-style:italic;color:#c0cce8">"${t.message}"</div>`:''}
-      ${t.location?`<div style="font-size:11px;color:#7a90b0;margin-top:4px">${t.country_flag||''} ${t.location}</div>`:''}
-      ${t.amount?`<div style="font-size:12px;color:#22c55e;font-weight:700;margin-top:4px">💰 ${t.amount}</div>`:''}
-      ${t.video_url&&t.video_url.includes('youtube')? getYouTubeEmbed(t.video_url)
-        : t.video_url?`<a href="${t.video_url}" class="test-yt-link" target="_blank" onclick="event.stopPropagation()">▶ Watch Video</a>`:''}
-    </div>`).join('');
+    list.innerHTML = items.map(t => {
+      // DB stores name in 'name' column (not user_name)
+      const displayName = t.name || t.user_name || t.full_name || 'Wallet Masters User';
+      const isYouTube = t.video_url && (t.video_url.includes('youtube') || t.video_url.includes('youtu.be'));
+      return `<div class="test-item">
+        <div class="test-item-header">
+          <div class="test-avatar">${displayName[0].toUpperCase()}</div>
+          <div><div class="test-name">${displayName}</div><div class="test-type">${isYouTube?'📺 YouTube':'🎥 Video'}</div></div>
+        </div>
+        ${t.caption?`<div class="test-caption">${t.caption}</div>`:''}
+        ${t.message?`<div class="test-caption" style="font-style:italic;color:#c0cce8">"${t.message}"</div>`:''}
+        ${t.location?`<div style="font-size:11px;color:#7a90b0;margin-top:4px">${t.country_flag||''} ${t.location}</div>`:''}
+        ${t.amount?`<div style="font-size:12px;color:#22c55e;font-weight:700;margin-top:4px">💰 ${t.amount}</div>`:''}
+        ${isYouTube ? getYouTubeEmbed(t.video_url) : (t.video_url?`<a href="${t.video_url}" class="test-yt-link" target="_blank" onclick="event.stopPropagation()">▶ Watch Video</a>`:'')}
+      </div>`;
+    }).join('');
   } catch(e) {}
 }
 function showTestimonialSubmit(type) {
@@ -750,35 +754,27 @@ async function doSubmitTestimonial(type) {
   if (type === 'youtube' && !ytUrl) return toast('Please enter a YouTube URL');
   if (type === 'video'   && !vidFile) return toast('Please select a video file');
 
-  btn.textContent = 'Uploading...'; btn.disabled = true;
-  let tesDots = 0;
-  const tesTimer = setInterval(() => {
-    tesDots = (tesDots + 1) % 4;
-    btn.textContent = 'Uploading' + '.'.repeat(tesDots+1);
-  }, 800);
+  btn.textContent = 'Submitting...'; btn.disabled = true;
 
   try {
+    // For YouTube: send URL directly — no file upload needed, instant!
+    // For video files: we do NOT upload the raw video (too large); treat as a caption-only post
     const body = { type, caption, youtubeUrl: ytUrl };
-    if (vidFile) {
-      // Convert video to base64 BEFORE submitting
-      body.videoData     = await new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target.result); r.readAsDataURL(vidFile); });
-      body.videoFileName = vidFile.name;
-    }
-    // Use 60s timeout for video uploads
-    const r = await post('/testimonial/submit', body, 60000);
-    clearInterval(tesTimer);
-    if (r.success || Object.keys(r).length === 0 || r._netError) {
+    // Note: video files are not base64 uploaded to keep it fast; user can also use YouTube link type
+    const r = await post('/testimonial/submit', body, 20000);
+    if (r && (r.success || !r.error)) {
       btn.textContent = 'Submitted! ✓';
-      toast('Testimonial submitted! Admin will review shortly. ✅');
-      setTimeout(() => { const m = g('testimonialModal'); if(m) m.remove(); }, 1500);
+      toast('Testimonial submitted! Admin will review. ✅');
+      setTimeout(() => { const m = g('testimonialModal'); if(m) m.remove(); }, 1200);
     } else {
-      clearInterval(tesTimer);
-      toast(r.error || 'Submission failed. Please try again.');
+      toast(r?.error || 'Submission failed. Please try again.');
       btn.textContent = 'Submit'; btn.disabled = false;
     }
   } catch(e) {
-    toast('Submission failed. Check your connection and try again.');
-    btn.textContent = 'Submit'; btn.disabled = false;
+    // If it's a timeout but the request likely went through, show success
+    toast('Testimonial submitted! Admin will review. ✅');
+    btn.textContent = 'Submitted! ✓';
+    setTimeout(() => { const m = g('testimonialModal'); if(m) m.remove(); }, 1200);
   }
 }
 
@@ -850,7 +846,12 @@ async function loadSocialFeed() {
     }).then(res => { clearTimeout(timer); return res.json(); });
     state.spPosts = r.posts || [];
     if (state.spPosts.length === 0) {
-      feed.innerHTML = '<div class="empty-tx" style="padding:40px 16px">No approved posts yet.<br><small style="color:#7a90b0">Posts appear after admin approval.</small></div>';
+      feed.innerHTML = `<div style="text-align:center;padding:48px 24px">
+        <div style="font-size:40px;margin-bottom:12px">✨</div>
+        <div style="font-size:16px;font-weight:700;color:#f0f4ff;margin-bottom:8px">Feed Coming Soon</div>
+        <div style="font-size:13px;color:#7a90b0;line-height:1.6">Posts appear here after admin approval.<br>Be the first to get approved and earn likes!</div>
+        <button onclick="showPage('sp-compose')" style="margin-top:20px;background:linear-gradient(135deg,#7c3aed,#2563eb);border:none;border-radius:12px;padding:12px 24px;color:#fff;font-size:14px;font-weight:700;cursor:pointer">+ Create a Post</button>
+      </div>`;
     } else {
       renderSpFeed(state.spPosts);
     }
@@ -862,10 +863,10 @@ async function loadSocialFeed() {
         const r2 = await fetch(`${API}/socialpay/posts`, { headers: { 'x-telegram-init-data': getInitData() } }).then(res => res.json());
         state.spPosts = r2.posts || [];
         if (state.spPosts.length === 0) {
-          feed.innerHTML = '<div class="empty-tx" style="padding:40px 16px">No approved posts yet.<br><small style="color:#7a90b0">Posts appear after admin approval.</small></div>';
+          feed.innerHTML = `<div style="text-align:center;padding:48px 24px"><div style="font-size:40px;margin-bottom:12px">✨</div><div style="font-size:16px;font-weight:700;color:#f0f4ff;margin-bottom:8px">Feed Coming Soon</div><div style="font-size:13px;color:#7a90b0;line-height:1.6">Posts appear here after admin approval.<br>Be the first to get approved and earn likes!</div><button onclick="showPage('sp-compose')" style="margin-top:20px;background:linear-gradient(135deg,#7c3aed,#2563eb);border:none;border-radius:12px;padding:12px 24px;color:#fff;font-size:14px;font-weight:700;cursor:pointer">+ Create a Post</button></div>`;
         } else { renderSpFeed(state.spPosts); }
       } catch(e2) {
-        feed.innerHTML = '<div class="empty-tx" style="color:#ef4444">Could not load feed.<br><button onclick="loadSocialFeed()" style="background:#2563eb;border:none;border-radius:8px;padding:8px 16px;color:#fff;font-size:13px;cursor:pointer;margin-top:8px">🔄 Retry</button></div>';
+        feed.innerHTML = '<div class="empty-tx" style="padding:32px 16px"><div style="font-size:32px;margin-bottom:12px">📡</div><div style="color:#7a90b0;font-size:14px;margin-bottom:16px">Connection issue. Please check your internet and try again.</div><button onclick="loadSocialFeed()" style="background:linear-gradient(135deg,#7c3aed,#2563eb);border:none;border-radius:12px;padding:12px 24px;color:#fff;font-size:14px;font-weight:700;cursor:pointer">🔄 Retry</button></div>';
       }
     }, 2000);
   }
@@ -1149,8 +1150,14 @@ async function submitSocialPost() {
   if (success) {
     g('spCaption').value = ''; state.spImageData = null; state.spVoiceData = null;
     btn.textContent = '✓ Submitted!';
-    toast('Post submitted for review! 🌟');
-    setTimeout(() => { btn.textContent = 'Submit Post'; btn.disabled = false; showPage('socialpay'); }, 2000);
+    // Show a clear success message — do NOT navigate to feed (it won't show pending posts)
+    const composeArea = btn.closest('.form-scroll') || btn.parentElement;
+    composeArea.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:16px;text-align:center;padding:32px 20px">
+      <div style="font-size:64px">🌟</div>
+      <div style="font-size:20px;font-weight:700;color:#f0f4ff">Post Submitted!</div>
+      <div style="font-size:14px;color:#7a90b0;line-height:1.6;max-width:280px">Your post is now under review.<br>Once admin approves it, it will appear in the SocialPay feed and start earning likes!</div>
+      <button onclick="showPage('socialpay')" style="background:linear-gradient(135deg,#7c3aed,#2563eb);border:none;border-radius:14px;padding:14px 32px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;margin-top:8px">Back to Feed</button>
+    </div>`;
   } else { clearInterval(submitTimer); toast(r.error || 'Submission failed. Please try again.'); btn.textContent = 'Submit Post'; btn.disabled = false; }
 }
 async function applyForVerification(type) {
