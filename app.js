@@ -1455,11 +1455,14 @@ async function loadTpsPage() {
     if (r.eligible === false) {
       g('tpsEligibleMsg').style.display = 'block';
       g('tpsGame').style.display = 'none';
+      const balEl = g('tpsCurrentBal');
+      if (balEl) balEl.innerHTML = 'Your balance: <strong style="color:#f0f4ff">'+(state.balance||0).toFixed(2)+' USDT</strong>';
     } else {
       g('tpsEligibleMsg').style.display = 'none';
       g('tpsGame').style.display = 'block';
-      _tpsState.sessionTaps = r.session?.total_taps || 0;
-      _tpsState.sessionEarned = parseFloat(r.session?.total_earned || 0);
+      // Always start fresh session for this play session
+      _tpsState.sessionTaps = 0;
+      _tpsState.sessionEarned = 0;
       updateTpsUI();
     }
   } catch(e) {}
@@ -1509,13 +1512,16 @@ function updateTpsUI() {
   const canWithdraw = _tpsState.sessionEarned >= 1000;
   const wdBtn = g('tpsWithdrawBtn');
   if (wdBtn) { wdBtn.disabled = !canWithdraw; wdBtn.style.opacity = canWithdraw ? '1' : '0.5'; }
+  const tapsToNext = 10 - (_tpsState.sessionTaps % 10);
+  const hintEl = g('tpsRateHint');
+  if (hintEl) hintEl.textContent = tapsToNext === 10 ? 'Rate increased!' : `Tap ${tapsToNext} more time${tapsToNext===1?'':'s'} to increase rate`;
 }
 
 async function saveTpsProgress() {
   const taps = _tpsState.sessionTaps;
   const earned = _tpsState.sessionEarned;
   if (taps === 0) return;
-  await post('/tps/tap', { taps: 50, earned: getTpsEarnRate(taps) * 50 }).catch(() => {});
+  await post('/tps/tap', { taps, earned }).catch(() => {});
 }
 
 async function withdrawTps() {
@@ -1529,7 +1535,7 @@ async function withdrawTps() {
     state.balance = r.newBalance || state.balance;
     _tpsState.sessionTaps = 0; _tpsState.sessionEarned = 0;
     updateTpsUI(); updateUI();
-    toast(`✅ ${r.added.toFixed(2)} USDT added to your balance!`);
+    toast(`${r.added.toFixed(2)} USDT Transferred to Your Wallet`);
     btn.textContent = 'Withdraw to Balance';
   } else {
     toast(r.error || 'Withdrawal failed');
