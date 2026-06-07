@@ -53,7 +53,7 @@ function calculateFees(amount) {
 
 function nowSec() { return Math.floor(Date.now() / 1000); }
 
-app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '9.8' }));
+app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.1' }));
 
 // ── Auto-fix corrupted socialpay_reward transactions on startup ───────────────
 async function fixCorruptedTransactions() {
@@ -284,21 +284,33 @@ if (bot) bot.on('callback_query', async (cq) => {
       // Sync the SPECIFIC transaction by withdrawal ID stored in note
       try {
         const supa = getSupabase();
-        // Try to match by withdrawal ID in note first (most precise)
+        // Match by withdrawal ID in note OR by amount (most recent pending match)
         const noteMatch = `Withdrawal #${wdId}`;
-        const { data: matchedTx } = await supa.from('transactions')
+        const { data: byNote } = await supa.from('transactions')
           .select('id').eq('telegram_id', String(wd.telegram_id))
           .eq('type', 'withdrawal').ilike('note', `%${noteMatch}%`).limit(1);
-        if (matchedTx && matchedTx.length > 0) {
-          await supa.from('transactions').update({ status: 'completed' }).eq('id', matchedTx[0].id);
+        if (byNote && byNote.length > 0) {
+          await supa.from('transactions').update({ status: 'completed' }).eq('id', byNote[0].id);
+          console.log('[APPROVE] Updated tx by note match:', byNote[0].id);
         } else {
-          // Fallback: update oldest pending withdrawal transaction for this user with matching amount
-          const { data: allPending } = await supa.from('transactions')
+          // Fallback: match by amount — get most recent pending withdrawal tx with same amount
+          const { data: byAmt } = await supa.from('transactions')
             .select('id').eq('telegram_id', String(wd.telegram_id))
-            .eq('type', 'withdrawal').eq('status', 'pending')
-            .order('created_at', { ascending: true }).limit(1);
-          if (allPending && allPending.length > 0) {
-            await supa.from('transactions').update({ status: 'completed' }).eq('id', allPending[0].id);
+            .eq('type', 'withdrawal').eq('status', 'pending').eq('amount', String(wd.amount))
+            .order('created_at', { ascending: false }).limit(1);
+          if (byAmt && byAmt.length > 0) {
+            await supa.from('transactions').update({ status: 'completed' }).eq('id', byAmt[0].id);
+            console.log('[APPROVE] Updated tx by amount match:', byAmt[0].id);
+          } else {
+            // Last resort: oldest pending withdrawal tx
+            const { data: oldest } = await supa.from('transactions')
+              .select('id').eq('telegram_id', String(wd.telegram_id))
+              .eq('type', 'withdrawal').eq('status', 'pending')
+              .order('created_at', { ascending: true }).limit(1);
+            if (oldest && oldest.length > 0) {
+              await supa.from('transactions').update({ status: 'completed' }).eq('id', oldest[0].id);
+              console.log('[APPROVE] Updated tx by oldest match:', oldest[0].id);
+            }
           }
         }
       } catch(e) { console.error('tx sync approve error:', e.message); }
@@ -310,19 +322,27 @@ if (bot) bot.on('callback_query', async (cq) => {
       // Sync the SPECIFIC transaction by withdrawal ID
       try {
         const supa = getSupabase();
-        const noteMatch = `Withdrawal #${wdId}`;
-        const { data: matchedTx } = await supa.from('transactions')
+        const noteMatchR = `Withdrawal #${wdId}`;
+        const { data: byNoteR } = await supa.from('transactions')
           .select('id').eq('telegram_id', String(wd.telegram_id))
-          .eq('type', 'withdrawal').ilike('note', `%${noteMatch}%`).limit(1);
-        if (matchedTx && matchedTx.length > 0) {
-          await supa.from('transactions').update({ status: 'rejected' }).eq('id', matchedTx[0].id);
+          .eq('type', 'withdrawal').ilike('note', `%${noteMatchR}%`).limit(1);
+        if (byNoteR && byNoteR.length > 0) {
+          await supa.from('transactions').update({ status: 'rejected' }).eq('id', byNoteR[0].id);
         } else {
-          const { data: allPending } = await supa.from('transactions')
+          const { data: byAmtR } = await supa.from('transactions')
             .select('id').eq('telegram_id', String(wd.telegram_id))
-            .eq('type', 'withdrawal').eq('status', 'pending')
-            .order('created_at', { ascending: true }).limit(1);
-          if (allPending && allPending.length > 0) {
-            await supa.from('transactions').update({ status: 'rejected' }).eq('id', allPending[0].id);
+            .eq('type', 'withdrawal').eq('status', 'pending').eq('amount', String(wd.amount))
+            .order('created_at', { ascending: false }).limit(1);
+          if (byAmtR && byAmtR.length > 0) {
+            await supa.from('transactions').update({ status: 'rejected' }).eq('id', byAmtR[0].id);
+          } else {
+            const { data: oldestR } = await supa.from('transactions')
+              .select('id').eq('telegram_id', String(wd.telegram_id))
+              .eq('type', 'withdrawal').eq('status', 'pending')
+              .order('created_at', { ascending: true }).limit(1);
+            if (oldestR && oldestR.length > 0) {
+              await supa.from('transactions').update({ status: 'rejected' }).eq('id', oldestR[0].id);
+            }
           }
         }
       } catch(e) { console.error('tx sync reject error:', e.message); }
@@ -973,7 +993,7 @@ app.post('/api/withdraw', authMiddleware, async (req, res) => {
     }
     // STEP 2: Deduct balance and record transaction ONLY after record is safely in DB
     await updateUserBalance(user.telegram_id, -amt);
-    await createTransaction(user.telegram_id, 'withdrawal', amt, 'Withdrawal request', 'pending');
+    await createTransaction(user.telegram_id, 'withdrawal', amt, `Withdrawal #${wd.id}`, 'pending');
     // STEP 3: Notify admin
     bot.sendMessage(ADMIN_CHAT_ID,
       `💸 <b>Withdrawal Request #${wd.id}</b>\n👤 ${user.full_name} (${user.uid})\n💰 ${amt} USDT\n🏦 ${bankName||method||'Crypto'} — ${accountNumber||toAddress||''}\n🌍 ${bankCountry||''} ${localCurrency||''}`,
