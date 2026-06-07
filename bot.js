@@ -11,7 +11,7 @@ const crypto      = require('crypto');
 
 const {
   initDB, SHARED_TRC20_ADDRESS, MIN_WITHDRAWAL, MAX_WITHDRAWAL, GATEWAY_FEE_RATE,
-  getOrCreateUser, getUserByTelegramId, getUserById, updateUserBalance, upgradeToVIP,
+  getOrCreateUser, getUserByTelegramId, getUserById, updateUserBalance, setUserBalance, upgradeToVIP,
   updateUserName, getAllUsers, setUserActive, setEarningsSuspended, acceptTerms,
   claimHourlyEarning, getHourlyStatus,
   getEarningApps, getEarningAppByToken, getEarningAppById, addEarningApp, removeEarningApp,
@@ -53,7 +53,7 @@ function calculateFees(amount) {
 
 function nowSec() { return Math.floor(Date.now() / 1000); }
 
-app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.1' }));
+app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.2' }));
 
 // ── Auto-fix corrupted socialpay_reward transactions on startup ───────────────
 async function fixCorruptedTransactions() {
@@ -714,7 +714,7 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
     if (!isAdmin) return bot.answerCallbackQuery(cq.id, { text: '❌ Not authorized' });
     bot.answerCallbackQuery(cq.id);
     bot.sendMessage(chatId,
-      `💰 <b>Resolve / Credit User Balance</b>\n\nCredit any amount to a user's balance.\n\nFirst, get user UID from 👥 All Users, then send:\n<code>RESOLVE:UID:AMOUNT</code>\n\n<i>Example: RESOLVE:WMERHEX58DT:500</i>`,
+      `💰 <b>Resolve / Set User Balance</b>\n\n<b>RESOLVE:UID:AMOUNT</b> — Sets balance to exact amount\n<b>ADD:UID:AMOUNT</b> — Adds amount to existing balance\n\nGet UID from 👥 All Users, then send:\n<code>RESOLVE:UID:AMOUNT</code>\n<code>ADD:UID:AMOUNT</code>\n\n<i>Example (set to 5000): RESOLVE:WMERHEX58DT:5000</i>\n<i>Example (add 500): ADD:WMERHEX58DT:500</i>`,
       { parse_mode: 'HTML' }); return;
   }
   if (data === 'admin_all_users') {
@@ -744,6 +744,7 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
 
 // ─── Admin text ───────────────────────────────────────────────────────────────
 if (bot) bot.on('message', async (msg) => {
+  try {
   const id = String(msg.from?.id);
   if (id !== String(ADMIN_CHAT_ID)) return;
   if (msg.web_app_data) return;
@@ -790,29 +791,41 @@ if (bot) bot.on('message', async (msg) => {
   }
 
   // ── RESOLVE: uid:amount — Admin credits a user's balance ──────────────────
-  const resolveMatch = text?.match(/^RESOLVE:([A-Z0-9]+):([\d.]+)$/i);
+  // ── RESOLVE:UID:AMOUNT — SETS balance to exact amount ─────────────────────
+  // ── ADD:UID:AMOUNT — ADDS amount to existing balance ─────────────────────
+  const resolveMatch = text?.match(/^(RESOLVE|ADD|SETBAL):([A-Z0-9]+):([\d.]+)$/i);
   if (resolveMatch && isAdmin) {
-    const uid = resolveMatch[1].toUpperCase();
-    const amount = parseFloat(resolveMatch[2]);
-    if (isNaN(amount) || amount <= 0) { bot.sendMessage(id, '❌ Invalid amount. Use: RESOLVE:UID:500'); return; }
+    const cmd = resolveMatch[1].toUpperCase();
+    const uid = resolveMatch[2].toUpperCase();
+    const amount = parseFloat(resolveMatch[3]);
+    if (isNaN(amount) || amount < 0) { bot.sendMessage(id, '❌ Invalid amount.'); return; }
     const allU = await getAllUsers();
-    const target = allU.find(u => u.uid === uid || u.telegram_id === uid);
-    if (!target) { bot.sendMessage(id, `❌ User with UID <code>${uid}</code> not found.`, { parse_mode: 'HTML' }); return; }
-    await updateUserBalance(target.telegram_id, amount);
-    // Log as a balance_resolved transaction
+    const target = allU.find(u => (u.uid||'').toUpperCase() === uid || u.telegram_id === uid);
+    if (!target) { bot.sendMessage(id, `❌ User with UID <code>${uid}</code> not found.\n\nGet correct UID from 👥 All Users.`, { parse_mode: 'HTML' }); return; }
+    const oldBal = parseFloat(target.usdt_balance || 0);
+    let newBal;
+    if (cmd === 'ADD') {
+      // ADD: adds to existing balance
+      newBal = await updateUserBalance(target.telegram_id, amount);
+    } else {
+      // RESOLVE / SETBAL: sets balance to exact amount
+      newBal = await setUserBalance(target.telegram_id, amount);
+    }
+    const newBalStr = parseFloat(newBal || amount).toFixed(2);
+    const action = cmd === 'ADD' ? `+${amount.toFixed(2)} USDT added` : `Set to ${newBalStr} USDT`;
+    // Log transaction
     try {
-      await createTransaction(target.telegram_id, 'balance_resolved', amount,
-        `Balance resolved by admin (${amount.toFixed(2)} USDT) — resolved by admin #${id}`, 'completed');
-    } catch(e) {}
-    const updated = await getUserByTelegramId(target.telegram_id);
-    const newBal = parseFloat(updated?.usdt_balance || 0).toFixed(2);
+      const txAmt = cmd === 'ADD' ? amount : Math.max(0, amount - oldBal);
+      await createTransaction(target.telegram_id, 'balance_resolved', txAmt > 0 ? txAmt : amount,
+        `${cmd === 'ADD' ? 'Balance added' : 'Balance set'} by admin (${action})`, 'completed');
+    } catch(e) { console.error('[RESOLVE] tx error:', e.message); }
     // Notify admin
     bot.sendMessage(id,
-      `✅ <b>Balance Resolved!</b>\n\n👤 User: <b>${target.full_name||'?'}</b>\n🆔 UID: <code>${target.uid}</code>\n💚 Credited: <b>+${amount.toFixed(2)} USDT</b>\n💰 New Balance: <b>${newBal} USDT</b>`,
+      `✅ <b>Balance Updated!</b>\n\n👤 User: <b>${target.full_name||'?'}</b>\n🆔 UID: <code>${target.uid}</code>\n📋 Action: <b>${action}</b>\n💰 Old Balance: <b>${oldBal.toFixed(2)} USDT</b>\n💰 New Balance: <b>${newBalStr} USDT</b>`,
       { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
     // Notify user
     bot.sendMessage(target.telegram_id,
-      `💚 <b>Balance Resolved!</b>\n\nYour wallet has been credited <b>${amount.toFixed(2)} USDT</b> by the admin.\n💰 New Balance: <b>${newBal} USDT</b>\n\n<i>Category: Balance Reversed / Resolved</i>`,
+      `💚 <b>Balance Updated!</b>\n\nYour wallet balance has been updated by admin.\n\n💰 New Balance: <b>${newBalStr} USDT</b>\n\n<i>If you have any questions contact support.</i>`,
       { parse_mode: 'HTML', ...openWalletBtn() }).catch(() => {});
     return;
   }
@@ -863,6 +876,7 @@ if (bot) bot.on('message', async (msg) => {
     bot.sendMessage(id,`✅ Added ${amount} USDT to ${u.full_name}`,{reply_markup:ADMIN_KEYBOARD});
     return;
   }
+  } catch(e) { console.error('[MSG HANDLER ERROR]', e?.message || e); try { bot.sendMessage(String(ADMIN_CHAT_ID), '⚠️ Admin handler error: ' + (e?.message||'unknown')); } catch(_){} }
 });
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
@@ -1446,3 +1460,6 @@ app.post('/api/admin/run-migrations', authMiddleware, async (req,res) => {
 
 if (bot) bot.on('polling_error', (e) => console.log('Polling error:', e.code));
 console.log('Wallet Masters v7 bot.js loaded');
+
+process.on('unhandledRejection', (r) => { console.error('[UNHANDLED]', r?.message||r); });
+process.on('uncaughtException', (e) => { console.error('[UNCAUGHT]', e.message); });
