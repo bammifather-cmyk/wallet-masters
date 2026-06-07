@@ -1,6 +1,6 @@
 {
   "name": "wallet-masters-bot",
-  "version": "7.0.0",
+  "version": "9.0.0",
   "description": "Wallet Masters Telegram Mini App Bot - PostgreSQL/Supabase",
   "main": "bot.js",
   "scripts": {
