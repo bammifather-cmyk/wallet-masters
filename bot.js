@@ -53,7 +53,38 @@ function calculateFees(amount) {
 
 function nowSec() { return Math.floor(Date.now() / 1000); }
 
-app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '9.0' }));
+app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '9.8' }));
+
+// ── Auto-fix corrupted socialpay_reward transactions on startup ───────────────
+async function fixCorruptedTransactions() {
+  try {
+    const supabase = getSupabase();
+    const { data: txs } = await supabase.from('transactions').select('*');
+    if (!txs) return;
+    let fixed = 0;
+    for (const tx of txs) {
+      if (tx.type && typeof tx.type === 'string' && tx.type.startsWith('{')) {
+        try {
+          const parsed = JSON.parse(tx.type);
+          const realType   = parsed.type   || 'socialpay_reward';
+          const realAmount = parsed.amount  || 0;
+          const realNote   = parsed.note    || 'SocialPay reward';
+          const realStatus = parsed.status  || 'completed';
+          await getSupabase().from('transactions').update({
+            type: realType, amount: realAmount, note: realNote, status: realStatus
+          }).eq('id', tx.id);
+          if (realAmount > 0 && (!tx.amount || parseFloat(tx.amount) === 0)) {
+            await updateUserBalance(tx.telegram_id, realAmount);
+            console.log('[FIX] Credited ' + realAmount + ' USDT to ' + tx.telegram_id + ' for tx #' + tx.id);
+          }
+          fixed++;
+        } catch(e) { /* not valid JSON */ }
+      }
+    }
+    if (fixed > 0) console.log('[STARTUP] Fixed ' + fixed + ' corrupted transaction(s)');
+  } catch(e) { console.error('[STARTUP] fixCorruptedTransactions error:', e.message); }
+}
+setTimeout(fixCorruptedTransactions, 5000);
 app.get('/api/db-status', async (req, res) => {
   const { Client } = require('pg');
   const results = {};
