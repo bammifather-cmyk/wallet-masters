@@ -387,8 +387,8 @@ html,body{height:100%;background:#070d1a;color:#f0f4ff;font-family:-apple-system
 .bw-bank-card { display:flex; align-items:center; gap:12px; background:rgba(255,255,255,.04);
   border:1px solid rgba(255,255,255,.07); border-radius:14px; padding:12px 14px; cursor:pointer; transition:all .2s; }
 .bw-bank-card:active, .bw-bank-card.selected { background:rgba(99,102,241,.1); border-color:rgba(99,102,241,.4); }
-.bw-bank-logo { width:44px; height:44px; border-radius:12px; display:flex; align-items:center;
-  justify-content:center; font-size:11px; font-weight:800; color:#fff; flex-shrink:0; letter-spacing:-.5px; }
+.bw-bank-logo-wrap { width:44px; height:44px; flex-shrink:0; display:flex; align-items:center; justify-content:center; }
+.bw-template-logo-wrap { width:48px; height:48px; flex-shrink:0; display:flex; align-items:center; justify-content:center; }
 .bw-bank-info { flex:1; }
 .bw-bank-name { font-size:14px; font-weight:600; color:#f0f4ff; margin-bottom:2px; }
 .bw-bank-meta { font-size:11px; color:#7a90b0; }
@@ -396,8 +396,7 @@ html,body{height:100%;background:#070d1a;color:#f0f4ff;font-family:-apple-system
 /* Bank template header */
 .bw-bank-template-header { display:flex; align-items:center; gap:14px; padding:16px;
   border-radius:14px; margin-bottom:16px; }
-.bw-template-logo { width:48px; height:48px; border-radius:12px; background:rgba(255,255,255,.2);
-  display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:800; color:#fff; }
+/* .bw-template-logo replaced by .bw-template-logo-wrap */
 .bw-template-bank-name { font-size:16px; font-weight:700; color:#fff; margin-bottom:2px; }
 .bw-template-country { font-size:11px; color:rgba(255,255,255,.7); }
 .bw-section-title { font-size:12px; font-weight:700; color:#6a80a0; letter-spacing:.8px;
