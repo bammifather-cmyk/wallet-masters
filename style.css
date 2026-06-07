@@ -357,3 +357,68 @@ html,body{height:100%;background:#070d1a;color:#f0f4ff;font-family:-apple-system
 
 /* POEM SUBMIT FORM */
 .poem-submit-card{background:#0e1629;border:1px solid #1e2d45;border-radius:18px;overflow:hidden}
+
+/* ═══════════════════════════════════════════════════════════════ */
+/* ADVANCED BANK WITHDRAWAL SYSTEM                                  */
+/* ═══════════════════════════════════════════════════════════════ */
+.bw-step-header { margin-bottom: 16px; }
+.bw-step-badge { display:inline-block; background:rgba(99,102,241,.15); color:#818cf8;
+  font-size:11px; font-weight:700; padding:3px 10px; border-radius:20px; margin-bottom:8px; letter-spacing:.5px; }
+.bw-step-title { font-size:17px; font-weight:700; color:#f0f4ff; margin-bottom:4px; }
+.bw-step-sub { font-size:12px; color:#7a90b0; }
+.bw-back-btn { background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1);
+  color:#a0b4d0; padding:6px 14px; border-radius:20px; font-size:12px; cursor:pointer;
+  display:flex; align-items:center; gap:5px; margin-bottom:12px; }
+.bw-back-btn:active { opacity:.7; }
+.bw-search-wrap { display:flex; align-items:center; gap:8px; background:rgba(255,255,255,.05);
+  border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:10px 14px; margin-bottom:14px; }
+.bw-search { flex:1; background:none; border:none; outline:none; color:#f0f4ff; font-size:14px; }
+.bw-search::placeholder { color:#4a5c7a; }
+/* Country grid */
+.bw-country-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+.bw-country-card { background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.07);
+  border-radius:14px; padding:12px 8px; text-align:center; cursor:pointer; transition:all .2s; }
+.bw-country-card:active { transform:scale(.95); background:rgba(99,102,241,.12); border-color:rgba(99,102,241,.4); }
+.bw-country-flag { font-size:26px; margin-bottom:4px; }
+.bw-country-name { font-size:10px; font-weight:600; color:#c0d0e8; line-height:1.2; margin-bottom:2px; }
+.bw-country-cur { font-size:9px; color:#6a80a0; font-weight:500; }
+/* Bank list */
+.bw-bank-list { display:flex; flex-direction:column; gap:8px; }
+.bw-bank-card { display:flex; align-items:center; gap:12px; background:rgba(255,255,255,.04);
+  border:1px solid rgba(255,255,255,.07); border-radius:14px; padding:12px 14px; cursor:pointer; transition:all .2s; }
+.bw-bank-card:active, .bw-bank-card.selected { background:rgba(99,102,241,.1); border-color:rgba(99,102,241,.4); }
+.bw-bank-logo { width:44px; height:44px; border-radius:12px; display:flex; align-items:center;
+  justify-content:center; font-size:11px; font-weight:800; color:#fff; flex-shrink:0; letter-spacing:-.5px; }
+.bw-bank-info { flex:1; }
+.bw-bank-name { font-size:14px; font-weight:600; color:#f0f4ff; margin-bottom:2px; }
+.bw-bank-meta { font-size:11px; color:#7a90b0; }
+.bw-bank-arrow { font-size:22px; color:#4a5c7a; }
+/* Bank template header */
+.bw-bank-template-header { display:flex; align-items:center; gap:14px; padding:16px;
+  border-radius:14px; margin-bottom:16px; }
+.bw-template-logo { width:48px; height:48px; border-radius:12px; background:rgba(255,255,255,.2);
+  display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:800; color:#fff; }
+.bw-template-bank-name { font-size:16px; font-weight:700; color:#fff; margin-bottom:2px; }
+.bw-template-country { font-size:11px; color:rgba(255,255,255,.7); }
+.bw-section-title { font-size:12px; font-weight:700; color:#6a80a0; letter-spacing:.8px;
+  text-transform:uppercase; margin-bottom:10px; }
+.bw-field-group { margin-bottom:12px; }
+.bw-field-label { display:block; font-size:12px; color:#a0b4d0; margin-bottom:5px; font-weight:500; }
+.bw-field-input { width:100%; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1);
+  border-radius:10px; padding:11px 14px; color:#f0f4ff; font-size:14px; outline:none; box-sizing:border-box; }
+.bw-field-input:focus { border-color:rgba(99,102,241,.5); background:rgba(99,102,241,.06); }
+/* Amount section */
+.bw-amount-label { font-size:13px; color:#a0b4d0; margin-bottom:8px; }
+.bw-amount-wrap { display:flex; align-items:center; background:rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.1); border-radius:12px; padding:3px 14px; margin-bottom:12px; gap:8px; }
+.bw-currency-sym { font-size:18px; font-weight:700; color:#818cf8; flex-shrink:0; }
+.bw-amount-input { flex:1; background:none; border:none; outline:none; color:#f0f4ff;
+  font-size:22px; font-weight:700; padding:10px 0; min-width:0; }
+.bw-currency-code { font-size:13px; font-weight:600; color:#7a90b0; flex-shrink:0; }
+/* Conversion display */
+.bw-conversion-display { background:rgba(99,102,241,.06); border:1px solid rgba(99,102,241,.15);
+  border-radius:12px; padding:14px; margin-bottom:16px; }
+.bw-conv-row { display:flex; justify-content:space-between; align-items:center; padding:4px 0; }
+.bw-conv-row.small { font-size:11px; color:#7a90b0; border-top:1px solid rgba(255,255,255,.05); margin-top:4px; padding-top:6px; }
+.bw-conv-row span:first-child { color:#a0b4d0; font-size:13px; }
+.bw-conv-usd { font-size:20px; font-weight:700; color:#4ade80; }
