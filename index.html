@@ -94,14 +94,7 @@
           <div class="form-group"><label>Recipient Address</label><input id="withdrawAddress" type="text" placeholder="Enter TRC20 wallet address" oninput="onWithdrawInput()"/></div>
         </div>
         <div id="bankFields" class="hidden">
-          <div class="form-group"><label>Search Bank or Payment Method</label><input id="bankSearchInput" type="text" placeholder="Search by country, bank, or currency..." oninput="renderPaymentMethodSelector(this.value)"/></div>
-          <div id="selectedPaymentDisplay"></div>
-          <div id="paymentSelector"><div id="paymentMethodBox" class="payment-method-box"></div></div>
-          <div id="bankAccountFields" class="hidden">
-            <div class="form-group"><label>Account Number / Phone / ID</label><input id="bankAccount" type="text" placeholder="Account number or ID" oninput="onWithdrawInput()"/></div>
-            <div class="form-group"><label>Account Name</label><input id="bankName" type="text" placeholder="Full account name" oninput="onWithdrawInput()"/></div>
-            <div id="localCurrencyDisplay" class="local-currency-hint"></div>
-          </div>
+          <!-- Dynamically rendered by initBankWithdrawal() -->
         </div>
         <div class="form-group">
           <label>Amount <span class="avail-tag">Available: <span id="availBalance">0.00</span> USDT</span></label>
