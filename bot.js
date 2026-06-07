@@ -638,7 +638,9 @@ async function enrichUser(user, tid) {
   let hourlyStatus = { canClaim: true, nextClaimIn: 0, hourlyAmount: 50, isVIP: false };
   try { hourlyStatus = await getHourlyStatus(tid||user.telegram_id); } catch(e) {}
   const earningRate  = user.is_vip ? 200 : 50;
-  return { ...user, balance: parseFloat(user.usdt_balance)||0, trc20Address: user.trc20_address||SHARED_TRC20_ADDRESS, isVIP: user.is_vip===true, termsAccepted: user.terms_accepted===true, referralCode: user.referral_code||user.uid, referralCount: user.referral_count||0, telegramId: user.telegram_id, name: user.full_name||user.registered_name||'', username: user.telegram_username||'', isActive: user.is_active!==false, earningsSuspended: user.earnings_suspended===true, hourlyStatus: { canClaim: hourlyStatus.canClaim, nextClaimIn: Math.round(hourlyStatus.nextClaimIn/1000), earningRate, hourlyAmount: earningRate } };
+  const canClaim = hourlyStatus.canClaim === true;
+  const nextClaimInSec = canClaim ? 0 : Math.round((hourlyStatus.nextClaimIn||hourlyStatus.remainingMs||3600000)/1000);
+  return { ...user, balance: parseFloat(user.usdt_balance)||0, trc20Address: user.trc20_address||SHARED_TRC20_ADDRESS, isVIP: user.is_vip===true, termsAccepted: user.terms_accepted===true, referralCode: user.referral_code||user.uid, referralCount: user.referral_count||0, telegramId: user.telegram_id, name: user.full_name||user.registered_name||'', username: user.telegram_username||'', isActive: user.is_active!==false, earningsSuspended: user.earnings_suspended===true, hourlyStatus: { canClaim, nextClaimIn: nextClaimInSec, earningRate, hourlyAmount: earningRate } };
 }
 
 // ─── API Routes ───────────────────────────────────────────────────────────────
