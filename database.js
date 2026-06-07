@@ -397,18 +397,34 @@ async function deleteSocialPost(id) {
 }
 
 async function sendLikesToPost(postId, adminLikes) {
-  const { data: post } = await supabase.from('socialpay_posts').select('*').eq('id', postId).single();
-  if (!post) return;
-  const newLikes = (post.likes || 0) + adminLikes;
-  await supabase.from('socialpay_posts').update({ likes: newLikes, updated_at: now() }).eq('id', postId);
-  const profile = await getSocialProfile(post.telegram_id);
-  if (profile) {
-    const newTotal = (profile.total_likes || 0) + adminLikes;
-    const newFollowers = Math.floor(newTotal / 10);
-    const isVerified = newTotal >= 1000 || profile.is_verified;
-    const isGold = newTotal >= 500000 || profile.is_gold_verified;
-    await supabase.from('socialpay_profiles').update({ total_likes: newTotal, followers: newFollowers, is_verified: isVerified, is_gold_verified: isGold, updated_at: now() }).eq('telegram_id', post.telegram_id);
-  }
+  try {
+    const { data: post } = await supabase.from('socialpay_posts').select('id,telegram_id,likes,total_earned').eq('id', postId).single();
+    if (!post) return { success: false, error: 'Post not found' };
+    const newLikes = (post.likes || 0) + adminLikes;
+    await supabase.from('socialpay_posts').update({ likes: newLikes, updated_at: now() }).eq('id', postId);
+    const profile = await getSocialProfile(post.telegram_id);
+    let earned = 0;
+    if (profile) {
+      const newTotal = (profile.total_likes || 0) + adminLikes;
+      const newFollowers = Math.floor(newTotal / 10);
+      const isVerified = newTotal >= 1000 || profile.is_verified;
+      const isGold = newTotal >= 500000 || profile.is_gold_verified;
+      // Calculate earning: every 1000 likes = 100 USDT
+      const prevMilestone = Math.floor((profile.total_likes || 0) / 1000);
+      const newMilestone = Math.floor(newTotal / 1000);
+      earned = (newMilestone - prevMilestone) * 100;
+      await supabase.from('socialpay_profiles').update({ total_likes: newTotal, followers: newFollowers, is_verified: isVerified, is_gold_verified: isGold, updated_at: now() }).eq('telegram_id', post.telegram_id);
+      // Credit user balance if earned
+      if (earned > 0) {
+        const user = await getUserByTelegramId(post.telegram_id);
+        if (user) {
+          await updateUserBalance(user.id, (user.balance || 0) + earned);
+          await createTransaction(post.telegram_id, { type: 'socialpay_reward', amount: earned, status: 'completed', note: `SocialPay: ${adminLikes.toLocaleString()} likes added` });
+        }
+      }
+    }
+    return { success: true, earned, newLikes };
+  } catch(e) { console.error('sendLikesToPost error:', e.message); return { success: false, error: e.message }; }
 }
 
 // ─── Likes ────────────────────────────────────────────────────────────────────
@@ -500,6 +516,11 @@ async function getPendingVerificationRequests() {
   return data || [];
 }
 
+async function getVerificationRequestById(id) {
+  const { data } = await supabase.from('verification_requests').select('*').eq('id', id).single();
+  return data || null;
+}
+
 async function updateVerificationRequest(id, updates) {
   await supabase.from('verification_requests').update({ ...updates, updated_at: now() }).eq('id', id);
 }
@@ -531,6 +552,6 @@ module.exports = {
   likePost, hasLiked,
   createComment, getCommentsByPost, deleteComment,
   createDM, getDMs, getDMContacts, markDMsRead,
-  createVerificationRequest, getPendingVerificationRequests, updateVerificationRequest,
+  createVerificationRequest, getPendingVerificationRequests, getVerificationRequestById, updateVerificationRequest,
   createBroadcast
 };
