@@ -26,7 +26,7 @@ const {
   likePost, hasLiked,
   createComment, getCommentsByPost, deleteComment,
   createDM, getDMs, getDMContacts, markDMsRead,
-  createVerificationRequest, getPendingVerificationRequests, updateVerificationRequest,
+  createVerificationRequest, getPendingVerificationRequests, getVerificationRequestById, updateVerificationRequest,
   createBroadcast,
   query,
   getSupabase
@@ -295,8 +295,8 @@ if (bot) bot.on('callback_query', async (cq) => {
     if (!post) return bot.answerCallbackQuery(cq.id, { text: '❌ Not found' });
     if (action === 'approve') {
       await updateSocialPost(spId, { status: 'approved' });
-      bot.sendMessage(post.telegram_id, `🌟 SocialPay Post Approved!\n\n✅ Your post is live!\n\n❤️ 1K likes → 100 USDT\n❤️ 10K → 1,000 USDT\n❤️ 100K → 10,000 USDT\n❤️ 1M → 100,000 USDT`, { parse_mode: 'HTML', ...openWalletBtn() });
-      bot.answerCallbackQuery(cq.id, { text: '✅ Post approved!' });
+      await bot.answerCallbackQuery(cq.id, { text: '✅ Post approved!' });
+      bot.sendMessage(String(post.telegram_id), '🌟 SocialPay Post Approved!\n\n✅ Your post is now live in the feed!\n\n❤️ 1K likes → 100 USDT\n❤️ 10K → 1,000 USDT\n❤️ 100K → 10,000 USDT\n❤️ 1M → 100,000 USDT\n\nShare your post link and start earning!', { ...openWalletBtn() }).catch(e=>console.error('SP approve notify err:',e.message));
     } else {
       await updateSocialPost(spId, { status: 'rejected' });
       bot.sendMessage(post.telegram_id, `❌ SocialPay post rejected. Please review guidelines and try again.`, openWalletBtn());
@@ -323,7 +323,7 @@ if (bot) bot.on('callback_query', async (cq) => {
     if (!isAdmin) return bot.answerCallbackQuery(cq.id, { text: '❌ Not authorized' });
     const parts = data.split('_'); const action = parts[1]; const vId = parseInt(parts[2]);
     const vers = await getPendingVerificationRequests();
-    const ver = (await (async()=>{ const r = require('./database').query; const res = await r('SELECT * FROM verification_requests WHERE id=$1',[vId]); return res.rows[0]; })());
+    const ver = await getVerificationRequestById(vId);
     if (!ver) return bot.answerCallbackQuery(cq.id, { text: '❌ Not found' });
     const isGold = ver.type === 'gold';
     if (action === 'approve') {
