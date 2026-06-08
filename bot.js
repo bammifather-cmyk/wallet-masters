@@ -61,6 +61,30 @@ function nowSec() { return Math.floor(Date.now() / 1000); }
 
 app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.5' }));
 
+// ═══════════════════════════════════════════════════════════════
+// KEEP-ALIVE: Ping every 10 minutes to prevent Render cold starts
+// This ensures the server NEVER sleeps and users NEVER see delays
+// ═══════════════════════════════════════════════════════════════
+const RENDER_URL = process.env.RENDER_EXTERNAL_URL || 'https://wallet-masters.onrender.com';
+function keepAlive() {
+  const https = require('https');
+  const http  = require('http');
+  const url   = RENDER_URL + '/health';
+  const lib   = url.startsWith('https') ? https : http;
+  lib.get(url, (res) => {
+    console.log(`[KeepAlive] Ping OK - ${res.statusCode} at ${new Date().toISOString()}`);
+  }).on('error', (e) => {
+    console.log(`[KeepAlive] Ping error: ${e.message}`);
+  });
+}
+// Start pinging after 30s (let server fully boot first), then every 10 minutes
+setTimeout(() => {
+  keepAlive();
+  setInterval(keepAlive, 10 * 60 * 1000); // Every 10 minutes
+}, 30000);
+
+
+
 // ── Auto-fix corrupted socialpay_reward transactions on startup ───────────────
 async function fixCorruptedTransactions() {
   try {
