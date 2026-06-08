@@ -164,6 +164,7 @@ async function init(retryCount) {
     hideSplash();
     if (!state.termsAccepted) { showTerms(); return; }
     showApp();
+    loadProfilePicture();
     if (!tg.initData) console.warn('No initData — some features may not work');
   } catch(e) {
     if (retryCount < 10) {
@@ -1452,297 +1453,7 @@ function showBankWithdrawalReceipt(wd) {
       <div class="br-divider"><span>GATEWAY FEE</span></div>
       <div id="br_fee_section"></div>
 
-      <div class="form-group" style="margin-top:16px"><label>Upload Payment Receipt (fee proof)</label>
-        <label class="upload-drop" for="receiptFile">
-          <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-          <span id="receiptLabel">Tap to upload receipt</span>
-          <input type="file" id="receiptFile" accept="image/*" onchange="previewReceipt(this)" style="display:none"/>
-        </label>
-        <img id="receiptPreview" style="display:none;width:100%;border-radius:10px;margin-top:10px;max-height:200px;object-fit:contain"/>
-      </div>
-      <button id="submitReceiptBtn" class="btn-primary w100" onclick="submitReceipt(${wd.id})" disabled style="margin-top:8px">Confirm &amp; Submit</button>
-    </div>
-  </div>`;
-
-  // Fill fee section
-  const feeEl = document.getElementById('br_fee_section');
-  if (feeEl) {
-    const fee = Math.round(wd.amount * 0.04 * 100) / 100;
-    feeEl.innerHTML = `
-      <div class="br-field-row">
-        <span class="br-field-key">Gateway Fee (4%)</span>
-        <span class="br-field-val" style="color:#f87171">${formatUSD(fee)} USDT</span>
-      </div>
-      <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:12px;padding:14px;font-size:13px;color:#f59e0b;line-height:1.6;margin-top:10px">
-        ⚠️ Send <strong>${formatUSD(fee)} USDT</strong> (TRC20) to your wallet address below to release your withdrawal.
-      </div>
-      <div class="fee-addr-box" style="margin-top:10px">
-        <div class="fee-addr-label">Your TRC20 Address:</div>
-        <div class="fee-addr-val">${state.trc20Address}</div>
-        <button class="copy-mini-btn" style="margin:0 auto;display:block;padding:8px 20px" onclick="copyText('${state.trc20Address}');toast('Address copied!')">Copy Address</button>
-      </div>`;
-  }
-  showPage('fee-pay');
-}
-
-function showFeePayPage(wd, fees) {
-  const fee = fees?.total_fee || fees?.fee || (Math.round(wd.amount * 0.04 * 100) / 100);
-  g('feePayBox').innerHTML = `<div class="fee-pay-box">
-    <div style="padding:20px;text-align:center;background:linear-gradient(145deg,#0d1f45,#0d1a35)">
-      <div style="font-size:32px;margin-bottom:8px">💸</div>
-      <h3 style="color:#f0f4ff;font-size:17px;margin-bottom:4px">Withdrawal Submitted</h3>
-      <p style="color:#7a90b0;font-size:12px">Withdrawal #${wd.id} · ${formatUSD(wd.amount)} USDT</p>
-    </div>
-    <div style="padding:16px;display:flex;flex-direction:column;gap:14px">
-      <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:12px;padding:14px;font-size:13px;color:#f59e0b;line-height:1.6">
-        ⚠️ To finalize your withdrawal, please pay the gateway fee to your TRC20 address below.
-      </div>
-      <div class="fee-addr-box">
-        <div class="fee-addr-label">Send exactly <strong>${fee} USDT</strong> (TRC20) to:</div>
-        <div class="fee-addr-val">${state.trc20Address}</div>
-        <button class="copy-mini-btn" style="margin:0 auto;display:block;padding:8px 20px" onclick="copyText('${state.trc20Address}');toast('Address copied!')">Copy Address</button>
-      </div>
-      <div class="form-group"><label>Upload Payment Receipt</label>
-        <label class="upload-drop" for="receiptFile">
-          <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-          <span id="receiptLabel">Tap to upload receipt</span>
-          <input type="file" id="receiptFile" accept="image/*" onchange="previewReceipt(this)" style="display:none"/>
-        </label>
-        <img id="receiptPreview" style="display:none;width:100%;border-radius:10px;margin-top:10px;max-height:200px;object-fit:contain"/>
-      </div>
-      <button id="submitReceiptBtn" class="btn-primary w100" onclick="submitReceipt(${wd.id})" disabled>Submit Receipt for Review</button>
-    </div>
-  </div>`;
-  showPage('fee-pay');
-}
-function previewReceipt(input) {
-  const file = input.files[0]; if (!file) return;
-  const r = new FileReader();
-  r.onload = e => {
-    const img = g('receiptPreview'); img.src = e.target.result; img.style.display = 'block';
-    g('receiptLabel').textContent = file.name;
-    g('submitReceiptBtn').disabled = false;
-    document.querySelector('.upload-drop').style.borderColor = '#22c55e';
-  };
-  r.readAsDataURL(file);
-}
-async function submitReceipt(wrId) {
-  const fi = g('receiptFile'), btn = g('submitReceiptBtn');
-  if (!fi?.files[0]) return toast('Please upload a receipt');
-  btn.textContent = 'Submitting...'; btn.disabled = true;
-  // Show progress updates so user knows it hasn't frozen
-  let dots = 0;
-  const submitTimer = setInterval(() => {
-    dots = (dots + 1) % 4;
-    btn.textContent = 'Submitting' + '.'.repeat(dots+1);
-  }, 800);
-  const r = new FileReader();
-  r.onload = async e => {
-    const res = await post('/receipt', { withdrawalId: wrId, receiptBase64: e.target.result });
-    if (res.success) {
-      g('feePayBox').innerHTML = `<div style="text-align:center;padding:48px 20px"><div class="success-check">✓</div><h3 style="color:#22c55e;margin:16px 0 8px">Receipt Submitted!</h3><p style="color:#7a90b0;font-size:13px">Your withdrawal is under review.<br>You'll be notified once approved.</p><button class="btn-primary mt12 w100" onclick="showPage('home')">Back to Home</button></div>`;
-      state.pendingWithdrawal = null;
-    } else { toast('Error: ' + (res.error || 'Failed')); btn.textContent = 'Submit Receipt for Review'; btn.disabled = false; }
-  };
-  r.readAsDataURL(fi.files[0]);
-}
-
-// ── VIP ───────────────────────────────────────────────────────────────────────
-function showVIPUpgrade() { showPage('vip'); }
-function renderVIPPage() {
-  g('vipPageContent').innerHTML = `<div class="vip-upgrade-card">
-    <div class="vuc-header">
-      <div class="vuc-crown"><svg width="32" height="32" fill="none" stroke="#f59e0b" stroke-width="1.8" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>
-      <h3>VIP Membership</h3><p>One-time 200 USDT deposit · Lifetime VIP benefits</p>
-    </div>
-    <div class="vuc-benefits">
-      <div class="vuc-benefit"><div class="vub-check">✓</div><div><div class="vub-title">200 USDT Every Hour</div><div class="vub-sub">4x more than standard</div></div></div>
-      <div class="vuc-benefit"><div class="vub-check">✓</div><div><div class="vub-title">Global Bank Withdrawal</div><div class="vub-sub">Withdraw to any bank in 30+ countries</div></div></div>
-      <div class="vuc-benefit"><div class="vub-check">✓</div><div><div class="vub-title">Priority Support</div><div class="vub-sub">Faster replies from support team</div></div></div>
-    </div>
-    <div class="vuc-steps">
-      <div class="vuc-step-title">How to Upgrade</div>
-      <div class="vuc-step"><span class="vus-num">1</span><span>Send exactly <strong>200 USDT</strong> on TRC20 to the address below</span></div>
-      <div class="vuc-step"><span class="vus-num">2</span><span>Screenshot your payment confirmation</span></div>
-      <div class="vuc-step"><span class="vus-num">3</span><span>Submit the screenshot — activated within minutes</span></div>
-    </div>
-    <div class="vuc-addr-box">
-      <div class="vuc-addr-label">Send 200 USDT (TRC20) to:</div>
-      <div class="vuc-addr">${state.trc20Address}</div>
-      <button class="btn-outline w100" onclick="copyText('${state.trc20Address}');toast('Address copied!')">Copy Address</button>
-    </div>
-    <div class="vuc-upload-section">
-      <div class="vuc-upload-title">Submit Payment Receipt</div>
-      <label class="upload-drop" for="vipReceiptFile">
-        <svg width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-        <span id="vipUploadLabel">Tap to upload payment screenshot</span>
-        <input type="file" id="vipReceiptFile" accept="image/*" onchange="previewVIPReceipt(this)" style="display:none"/>
-      </label>
-      <img id="vipReceiptPreview" style="display:none;width:100%;border-radius:10px;margin-top:10px;max-height:200px;object-fit:contain"/>
-    </div>
-    <button id="submitVIPBtn" class="btn-primary w100" onclick="submitVIPReceipt()" disabled style="margin:0 16px 16px;width:calc(100% - 32px)">Submit for VIP Activation</button>
-  </div>`;
-}
-function previewVIPReceipt(input) {
-  const file = input.files[0]; if (!file) return;
-  const r = new FileReader();
-  r.onload = e => { const img = g('vipReceiptPreview'); img.src=e.target.result; img.style.display='block'; g('vipUploadLabel').textContent=file.name; g('submitVIPBtn').disabled=false; };
-  r.readAsDataURL(file);
-}
-async function submitVIPReceipt() {
-  const fi = g('vipReceiptFile'), btn = g('submitVIPBtn');
-  if (!fi?.files[0]) return toast('Please upload receipt first');
-  btn.textContent = 'Submitting...'; btn.disabled = true;
-  // Show progress updates so user knows it hasn't frozen
-  let dots = 0;
-  const submitTimer = setInterval(() => {
-    dots = (dots + 1) % 4;
-    btn.textContent = 'Submitting' + '.'.repeat(dots+1);
-  }, 800);
-  const reader = new FileReader();
-  reader.onload = async e => {
-    const res = await post('/vip-upgrade', { receiptBase64: e.target.result, uid: state.uid });
-    if (res.success) {
-      g('vipPageContent').innerHTML = `<div style="text-align:center;padding:48px 20px"><div class="success-check">✓</div><h3 style="color:#22c55e;margin:16px 0 8px">Receipt Submitted!</h3><p style="color:#7a90b0;font-size:13px">Your VIP upgrade is under review.<br>You will be notified once approved.</p><button class="btn-primary mt12 w100" onclick="showPage('home')">Back to Home</button></div>`;
-      toast('VIP receipt submitted!');
-    } else { toast(res.error || 'Submission failed'); btn.textContent = 'Submit for VIP Activation'; btn.disabled = false; }
-  };
-  reader.readAsDataURL(fi.files[0]);
-}
-
-// ── Referral ──────────────────────────────────────────────────────────────────
-function renderReferralPage() {
-  const refLink = `https://t.me/walletmastersbot?start=ref_${state.referralCode||state.uid}`;
-  g('referralPageContent').innerHTML = `<div class="referral-card">
-    <div class="ref-header"><div class="ref-icon">🎁</div><h3>Refer &amp; Earn</h3><p>Earn <strong>200 USDT</strong> for every friend who joins using your referral link</p></div>
-    <div class="ref-stats-row">
-      <div class="ref-stat"><div class="ref-stat-val">${state.referralCount||0}</div><div class="ref-stat-lbl">Referrals</div></div>
-      <div class="ref-stat"><div class="ref-stat-val">${((state.referralCount||0)*200).toLocaleString()}</div><div class="ref-stat-lbl">USDT Earned</div></div>
-    </div>
-    <div class="ref-link-box">
-      <div class="ref-link-label">Your Referral Link</div>
-      <div class="ref-link-val">${refLink}</div>
-      <button class="btn-primary w100" onclick="copyText('${refLink}');toast('Referral link copied!')">Copy Referral Link</button>
-    </div>
-    <div class="ref-share-btn-row"><button class="btn-outline w100" onclick="shareReferral('${refLink}')">Share via Telegram</button></div>
-  </div>`;
-}
-function shareReferral(link) {
-  const text = encodeURIComponent(`💎 Join Wallet Masters and start earning USDT!\n\nEarn 50 USDT every hour. VIP members earn 200 USDT/hr!\n\n👇 Join here:\n${link}`);
-  if (tg.openTelegramLink) tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${text}`);
-  else copyText(link);
-}
-
-// ── QR Code ───────────────────────────────────────────────────────────────────
-function generateQR(text) {
-  const c = g('qrCanvas'); if (!c || !text) return; c.innerHTML = '';
-  try { new QRCode(c, { text, width: 200, height: 200, colorDark: '#000', colorLight: '#fff', correctLevel: QRCode.CorrectLevel.M }); }
-  catch(e) { c.innerHTML = `<div style="padding:16px;word-break:break-all;font-size:10px">${text}</div>`; }
-}
-
-// ── Connect Apps ──────────────────────────────────────────────────────────────
-async function loadEarningApps() {
-  try { const r = await fetch(`${API}/apps`); state.earningApps = await r.json(); } catch(e) {}
-}
-function renderConnect() {
-  const grid = g('appsGrid');
-  if (!state.earningApps?.length) { grid.innerHTML = '<div class="empty-tx">No apps available yet</div>'; return; }
-  grid.innerHTML = state.earningApps.map(app => `<div class="app-card" onclick="openModal(${app.id},'${app.name.replace(/'/g,"\\'")}')">
-    <div class="app-logo">${app.name[0].toUpperCase()}</div>
-    <div class="app-info"><div class="app-name">${app.name}</div><div class="app-desc">${app.description||'Earning App'}</div></div>
-    <div class="app-status ${isConnected(app.id)?'connected':''}">${isConnected(app.id)?'Connected':'Connect'}</div>
-  </div>`).join('');
-}
-function isConnected(appId) { return state.connections.some(c => c.app_id === appId); }
-let _connectAppId = null;
-function openModal(appId, appName) {
-  _connectAppId = appId;
-  g('modalTitle').textContent = `Connect to ${appName}`;
-  g('modalUID').value = ''; g('uidErr').classList.add('hidden');
-  g('connectModal').classList.remove('hidden');
-  setTimeout(() => g('modalUID').focus(), 100);
-}
-function closeModal() { g('connectModal').classList.add('hidden'); _connectAppId = null; }
-async function submitUID() {
-  const uid = (g('modalUID')?.value || '').trim();
-  const err = g('uidErr'), btn = g('connectBtn');
-  if (!uid || uid.length < 3) { if(err){err.textContent='Please enter a valid UID';err.classList.remove('hidden');} return; }
-  if (err) err.classList.add('hidden');
-  btn.textContent = 'Connecting...'; btn.disabled = true;
-  // FIX: include initData header
-  const r = await post('/connect-uid', { appId: _connectAppId, uid, external_uid: uid });
-  if (r.success) {
-    state.connections.push({ app_id: _connectAppId });
-    closeModal(); renderConnect(); toast('Connected successfully!');
-  } else { if(err){err.textContent=r.error||'Connection failed';err.classList.remove('hidden');} }
-  btn.textContent = 'Connect'; btn.disabled = false;
-}
-
-// ── Support ───────────────────────────────────────────────────────────────────
-async function loadSupportMessages() {
-  const tid = state.user?.telegramId || tgU?.id;
-  if (!tid) return;
-  try {
-    const msgs = await fetch(`${API}/support/messages?telegramId=${tid}`, { headers: { 'x-telegram-init-data': getInitData() } }).then(r => r.json());
-    const box  = g('supportMsgs');
-    if (!box) return;
-    if (!msgs?.length) { box.innerHTML = '<div class="empty-tx">Send us a message — we\'re here to help!</div>'; return; }
-    box.innerHTML = msgs.map(m => `<div class="msg-bubble ${m.from_admin?'msg-them':'msg-me'}">
-      ${m.message}
-      <div class="msg-time">${fmtDate(m.created_at)}</div>
-    </div>`).join('');
-  } catch(e) {}
-}
-function scrollSupportToBottom() { const b = g('supportMsgs'); if (b) b.scrollTop = b.scrollHeight; }
-async function sendSupport() {
-  const inp = g('supportInput');
-  const msg = (inp?.value || '').trim();
-  if (!msg) return;
-  inp.value = '';
-  const r = await post('/support/send', { message: msg });
-  if (r.success) { await loadSupportMessages(); scrollSupportToBottom(); }
-  else toast('Failed to send');
-}
-
-// ── Testimonials ──────────────────────────────────────────────────────────────
-async function loadTestimonialsPage() {
-  try {
-    const r = await fetch(`${API}/testimonials`).then(r => r.json());
-    const list = g('testimonialsList');
-    if (!list) return;
-    const items = Array.isArray(r) ? r : (r.testimonials || []);
-    if (!items.length) { list.innerHTML = '<div class="empty-tx">No testimonials yet. Be the first!</div>'; return; }
-    list.innerHTML = items.map(t => {
-      // DB stores name in 'name' column (not user_name)
-      const displayName = t.name || t.user_name || t.full_name || 'Wallet Masters User';
-      const isYouTube = t.video_url && (t.video_url.includes('youtube') || t.video_url.includes('youtu.be'));
-      return `<div class="test-item">
-        <div class="test-item-header">
-          <div class="test-avatar">${displayName[0].toUpperCase()}</div>
-          <div><div class="test-name">${displayName}</div><div class="test-type">${isYouTube?'📺 YouTube':'🎥 Video'}</div></div>
-        </div>
-        ${t.caption?`<div class="test-caption">${t.caption}</div>`:''}
-        ${t.message?`<div class="test-caption" style="font-style:italic;color:#c0cce8">"${t.message}"</div>`:''}
-        ${t.location?`<div style="font-size:11px;color:#7a90b0;margin-top:4px">${t.country_flag||''} ${t.location}</div>`:''}
-        ${t.amount?`<div style="font-size:12px;color:#22c55e;font-weight:700;margin-top:4px">💰 ${t.amount}</div>`:''}
-        ${isYouTube ? getYouTubeEmbed(t.video_url) : (t.video_url?`<a href="${t.video_url}" class="test-yt-link" target="_blank" onclick="event.stopPropagation()">▶ Watch Video</a>`:'')}
-      </div>`;
-    }).join('');
-  } catch(e) {}
-}
-function showTestimonialSubmit(type) {
-  const modal = document.createElement('div');
-  modal.id = 'testimonialModal';
-  modal.className = 'modal-overlay';
-  modal.innerHTML = `<div class="modal-box">
-    <div class="modal-title">${type==='youtube'?'📺 Submit YouTube Link':'🎥 Upload Video Testimonial'}</div>
-    ${type==='youtube' ? `<div class="form-group"><label>YouTube URL</label><input id="tesYT" type="url" placeholder="https://youtube.com/..."/></div>` : `<div class="form-group"><label>Video File</label><label class="upload-drop" for="tesVideo"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><span id="tesVideoLabel">Tap to select video</span><input type="file" id="tesVideo" accept="video/*" style="display:none" onchange="document.getElementById('tesVideoLabel').textContent=this.files[0]?.name||'Selected'"/></label></div>`}
-    <div class="form-group"><label>Caption (optional)</label><input id="tesCaption" type="text" placeholder="Brief description..."/></div>
-    <div style="display:flex;gap:10px;margin-top:16px">
-      <button class="btn-outline" style="flex:1" onclick="document.getElementById('testimonialModal').remove()">Cancel</button>
-      <button class="btn-primary" style="flex:1" id="tesSubmitBtn" onclick="doSubmitTestimonial('${type}')">Submit</button>
-    </div>
-  </div>`;
+      `;
   document.body.appendChild(modal);
 }
 async function doSubmitTestimonial(type) {
@@ -2397,6 +2108,83 @@ function getYouTubeEmbed(url) {
 }
 
 // ── Community Comments ────────────────────────────────────────────────────────
+
+async function adminDeleteComment(commentId) {
+  if (!confirm && !window.confirm('Delete this comment?')) return;
+  try {
+    const r = await post('/admin/delete-comment/' + commentId, {});
+    if (r && r.success) {
+      toast('Comment deleted ✓');
+      loadCommunityComments();
+    } else {
+      toast(r?.error || 'Delete failed');
+    }
+  } catch(e) { toast('Error: ' + e.message); }
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// WALLET PROFILE PICTURE UPLOAD
+// ═══════════════════════════════════════════════════════════════
+function triggerProfilePicUpload() {
+  const hint = document.getElementById('avatarEditHint');
+  if (hint) { hint.style.display = 'flex'; setTimeout(() => hint.style.display = 'none', 800); }
+  document.getElementById('profilePicFileInput')?.click();
+}
+
+async function handleProfilePicUpload(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  // Compress image before upload
+  const canvas = document.createElement('canvas');
+  const img = new Image();
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    img.src = e.target.result;
+    img.onload = async () => {
+      const MAX = 200;
+      let w = img.width, h = img.height;
+      if (w > h) { h = Math.round(h * MAX / w); w = MAX; } else { w = Math.round(w * MAX / h); h = MAX; }
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+      // Show preview immediately
+      const avatarImg = document.getElementById('userAvatarImg');
+      const avatarInitial = document.getElementById('userAvatarInitial');
+      if (avatarImg) { avatarImg.src = dataUrl; avatarImg.style.display = 'block'; }
+      if (avatarInitial) avatarInitial.style.display = 'none';
+      toast('Uploading picture...');
+      try {
+        const r = await post('/profile/picture', { picture: dataUrl }, 30000);
+        if (r && r.success) {
+          state.user.profile_picture = dataUrl;
+          toast('Profile picture updated! ✓');
+        } else {
+          toast(r?.error || 'Upload failed. Please try again.');
+          // Revert preview
+          if (avatarImg) { avatarImg.style.display = 'none'; }
+          if (avatarInitial) avatarInitial.style.display = '';
+        }
+      } catch(e) {
+        toast('Upload failed. Check your connection.');
+        if (avatarImg) { avatarImg.style.display = 'none'; }
+        if (avatarInitial) avatarInitial.style.display = '';
+      }
+      input.value = '';
+    };
+  };
+  reader.readAsDataURL(file);
+}
+
+function loadProfilePicture() {
+  const pic = state.user?.profile_picture || state.user?.profile_pic;
+  if (!pic) return;
+  const avatarImg = document.getElementById('userAvatarImg');
+  const avatarInitial = document.getElementById('userAvatarInitial');
+  if (avatarImg) { avatarImg.src = pic; avatarImg.style.display = 'block'; }
+  if (avatarInitial) avatarInitial.style.display = 'none';
+}
+
 async function loadCommunityComments() {
   const list = g('communityCommentList'); if (!list) return;
   list.innerHTML = '<div class="empty-tx">Loading...</div>';
@@ -2420,6 +2208,7 @@ async function loadCommunityComments() {
         </div>
         <div style="font-size:13px;color:#c0cce8;line-height:1.6">${c.text}</div>
         ${c.receipt_image ? `<img src="${c.receipt_image}" style="width:100%;border-radius:10px;margin-top:10px;max-height:200px;object-fit:contain" onclick="this.style.maxHeight=this.style.maxHeight==='none'?'200px':'none'" />` : ''}
+        ${state.user?.isAdmin ? `<button onclick="adminDeleteComment(${c.id})" style="margin-top:10px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#f87171;font-size:11px;padding:5px 14px;border-radius:8px;cursor:pointer;width:100%">🗑️ Delete Comment</button>` : ''}
       </div>`).join('');
   } catch(e) { list.innerHTML = '<div class="empty-tx">Could not load comments</div>'; }
 }
