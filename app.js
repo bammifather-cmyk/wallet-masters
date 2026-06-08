@@ -95,13 +95,29 @@ async function waitForTelegramReady(maxWaitMs) {
 
 async function init(retryCount) {
   retryCount = retryCount || 0;
-  // Always hide error overlay - keep splash showing while we try
   const errEl = document.getElementById('_errOverlay');
   if (errEl) errEl.style.display = 'none';
 
-  // Show gentle "connecting" dots on splash (no scary messages)
-  const splashSub = document.querySelector('.splash-sub');
-  if (splashSub) splashSub.textContent = retryCount === 0 ? 'Loading...' : 'Connecting' + '.'.repeat(Math.min(retryCount,5));
+  const splashSub  = document.querySelector('.splash-sub');
+  const splashBar  = document.querySelector('.splash-fill');
+  const splashIcon = document.querySelector('.splash-logo-wrap');
+
+  // ── Dynamic splash messages based on retry count ──────────────
+  function setSplashMsg(msg, progress) {
+    if (splashSub)  splashSub.innerHTML = msg;
+    if (splashBar && progress !== undefined) {
+      splashBar.style.width = progress + '%';
+      splashBar.style.transition = 'width 1s ease';
+    }
+  }
+
+  if (retryCount === 0)  setSplashMsg('Loading your wallet...', 15);
+  else if (retryCount === 1) setSplashMsg('Connecting to server...', 30);
+  else if (retryCount === 2) setSplashMsg('Almost there...', 45);
+  else if (retryCount === 3) setSplashMsg('Waking up server, please wait...', 55);
+  else if (retryCount <= 6)  setSplashMsg('Server is starting up&nbsp;&bull;&nbsp;This takes up to 30s once...', 65);
+  else if (retryCount <= 10) setSplashMsg('Still connecting&nbsp;&bull;&nbsp;Please keep the app open...', 75);
+  else                       setSplashMsg('Almost ready&nbsp;&bull;&nbsp;Just a few more seconds...', 85);
 
   // On first attempt, wait for Telegram to inject initData
   if (retryCount === 0) {
@@ -114,14 +130,13 @@ async function init(retryCount) {
 
     // Network error or empty/failed response → retry silently
     if (!data.success || data._netError || data.not_ready || data.error === 'Unauthorized') {
-      // Keep retrying up to 15 times with smart back-off
-      if (retryCount < 15) {
-        const delays = [500,800,1200,1500,2000,2500,3000,3000,3000,3000,3000,3000,3000,3000,3000];
+      if (retryCount < 20) {
+        // Fast retries first, then slow down during cold start window
+        const delays = [500,800,1200,1500,2000,2500,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000];
         await new Promise(r => setTimeout(r, delays[retryCount] || 3000));
         return init(retryCount + 1);
       }
-      // Only after 15 failed attempts show a gentle retry option
-      showError('Taking longer than usual.<br>Please close and reopen the app.');
+      showError('Server took too long to respond.<br><br>Please close and reopen the app — it will connect instantly next time.');
       return;
     }
 
@@ -159,6 +174,78 @@ async function init(retryCount) {
     showError('Taking longer than usual.<br>Please check your internet connection.');
   }
 }
+
+
+// ═══════════════════════════════════════════════════════════════
+// RECONNECT ON VISIBILITY — Re-init when user returns to app
+// Fixes the "stuck screen after coming back" issue
+// ═══════════════════════════════════════════════════════════════
+let _lastActiveTime = Date.now();
+let _reconnectTimer = null;
+
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState === 'visible') {
+    const awayTime = Date.now() - _lastActiveTime;
+    // If away for more than 3 minutes, silently refresh state
+    if (awayTime > 3 * 60 * 1000) {
+      console.log(`[Reconnect] Back after ${Math.round(awayTime/1000)}s — refreshing state`);
+      // Show subtle "syncing" toast rather than full reload
+      if (typeof state !== 'undefined' && state.user) {
+        // App already loaded — just refresh data silently
+        try {
+          const ref = state.referralCode || '';
+          const data = await post('/auth', { ref }, 15000);
+          if (data && data.success && data.user) {
+            const u = data.user;
+            state.balance      = u.balance || state.balance;
+            state.transactions = data.transactions || state.transactions;
+            state.withdrawals  = data.withdrawals  || state.withdrawals;
+            state.hourlyStatus = u.hourlyStatus ? {
+              canClaim:     u.hourlyStatus.canClaim === true,
+              nextClaimIn:  u.hourlyStatus.canClaim === true ? 0 : (u.hourlyStatus.nextClaimIn || 3600),
+              hourlyAmount: u.hourlyStatus.hourlyAmount || u.hourlyStatus.earningRate || (state.isVIP ? 200 : 50)
+            } : state.hourlyStatus;
+            updateUI();
+            console.log('[Reconnect] State refreshed silently');
+          }
+        } catch(e) {
+          console.log('[Reconnect] Silent refresh failed:', e.message);
+          // Don't show error — user is already in the app
+        }
+      } else {
+        // App not loaded yet — reinit from splash
+        const splash = document.getElementById('splash');
+        if (splash) {
+          splash.style.display = 'flex';
+          splash.style.opacity = '1';
+        }
+        init(0);
+      }
+    }
+    _lastActiveTime = Date.now();
+  } else {
+    // Going invisible — record time
+    _lastActiveTime = Date.now();
+  }
+});
+
+// Also handle network coming back online
+window.addEventListener('online', async () => {
+  console.log('[Network] Back online — refreshing');
+  if (typeof state !== 'undefined' && state.user) {
+    try {
+      const data = await post('/auth', { ref: state.referralCode || '' }, 10000);
+      if (data && data.success) {
+        state.balance = data.user?.balance || state.balance;
+        state.transactions = data.transactions || state.transactions;
+        updateUI();
+        toast('Connection restored ✓');
+      }
+    } catch(e) {}
+  } else {
+    init(0);
+  }
+});
 
 function hideSplash() {
   const splash = g('splash');
