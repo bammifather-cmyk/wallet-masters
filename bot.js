@@ -59,7 +59,7 @@ function calculateFees(amount) {
 
 function nowSec() { return Math.floor(Date.now() / 1000); }
 
-app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.9' }));
+app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.10' }));
 
 // ═══════════════════════════════════════════════════════════════
 // KEEP-ALIVE: Ping every 10 minutes to prevent Render cold starts
@@ -1204,20 +1204,22 @@ app.post('/api/profile/picture', authMiddleware, async (req, res) => {
     if (!picture) return res.status(400).json({ error: 'No picture provided' });
     if (!picture.startsWith('data:image/')) return res.status(400).json({ error: 'Invalid image format' });
     const tid = String(req.tgUser.id);
+    const supa = getSupabase(); // ← FIX: use getSupabase() not bare 'supabase'
+
     // Save to users table (column may not exist yet — ignore error gracefully)
-    const { error: userErr } = await supabase.from('users')
+    const { error: userErr } = await supa.from('users')
       .update({ profile_picture: picture, updated_at: now() })
       .eq('telegram_id', tid);
-    if (userErr) console.warn('users profile_picture save (column may not exist):', userErr.message);
+    if (userErr) console.warn('users profile_picture save:', userErr.message);
+
     // Also upsert into socialpay_profiles so it's definitely stored
     const existingProf = await getSocialProfile(tid);
     if (existingProf) {
-      await supabase.from('socialpay_profiles')
+      await supa.from('socialpay_profiles')
         .update({ profile_pic: picture, updated_at: now() })
         .eq('telegram_id', tid);
     } else {
-      // Create a minimal socialpay profile to store the pic
-      await supabase.from('socialpay_profiles').insert([{
+      await supa.from('socialpay_profiles').insert([{
         telegram_id: tid,
         display_name: req.tgUser.first_name || 'User',
         bio: '',
@@ -1230,8 +1232,11 @@ app.post('/api/profile/picture', authMiddleware, async (req, res) => {
         updated_at: now()
       }]);
     }
-    res.json({ success: true });
-  } catch(e) { console.error('profile pic error:', e.message); res.status(500).json({ error: 'Server error: ' + e.message }); }
+    res.json({ success: true, message: 'Profile picture saved!' });
+  } catch(e) {
+    console.error('profile pic error:', e.message);
+    res.status(500).json({ error: 'Failed to save picture. Please try again.' });
+  }
 });
 
 // ─── Admin Delete Community Comment ──────────────────────────────────────────
