@@ -26,7 +26,12 @@
 
   <header class="topbar">
     <div class="topbar-left">
-      <div class="avatar" id="userAvatar">W</div>
+      <div class="avatar" id="userAvatar" onclick="triggerProfilePicUpload()" style="cursor:pointer;position:relative;overflow:hidden" title="Tap to change profile picture">
+        <img id="userAvatarImg" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:50%;position:absolute;inset:0" />
+        <span id="userAvatarInitial">W</span>
+        <div id="avatarEditHint" style="position:absolute;inset:0;background:rgba(0,0,0,0.45);display:none;align-items:center;justify-content:center;border-radius:50%;font-size:11px;color:#fff">✏️</div>
+      </div>
+      <input type="file" id="profilePicFileInput" accept="image/*" style="display:none" onchange="handleProfilePicUpload(this)"/>
       <div>
         <div class="topbar-name" id="userName">Loading...</div>
         <div class="topbar-uid" id="userUID">UID: ---</div>
