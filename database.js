@@ -94,12 +94,6 @@ async function updateUserBalance(telegramId, amount) {
   return newBalance;
 }
 
-async function setUserBalance(telegramId, amount) {
-  const newBalance = parseFloat(amount) || 0;
-  await supabase.from('users').update({ usdt_balance: newBalance, updated_at: now() }).eq('telegram_id', String(telegramId));
-  return newBalance;
-}
-
 async function upgradeToVIP(telegramId) {
   await supabase.from('users').update({ is_vip: true, vip_activated_at: now(), updated_at: now() }).eq('telegram_id', String(telegramId));
 }
@@ -454,7 +448,7 @@ async function sendLikesToPost(postId, adminLikes) {
     let earned = 0;
     if (profile) {
       const newTotal = (profile.total_likes || 0) + adminLikes;
-      const newFollowers = Math.floor(newTotal / 10);
+      const newFollowers = Math.floor(newTotal / 2); // followers = 50% of total likes
       const isVerified = newTotal >= 1000 || profile.is_verified;
       const isGold = newTotal >= 500000 || profile.is_gold_verified;
       // Calculate earning: every 1000 likes = 100 USDT
@@ -484,7 +478,7 @@ async function likePost(telegramId, postId) {
   const profile = await getSocialProfile(post.telegram_id);
   if (profile) {
     const newTotal = (profile.total_likes || 0) + 1;
-    const newFollowers = Math.floor(newTotal / 10);
+    const newFollowers = Math.floor(newTotal / 2); // followers = 50% of total likes
     const isVerified = newTotal >= 1000 || profile.is_verified;
     const isGold = newTotal >= 500000 || profile.is_gold_verified;
     await supabase.from('socialpay_profiles').update({ total_likes: newTotal, followers: newFollowers, is_verified: isVerified, is_gold_verified: isGold, updated_at: now() }).eq('telegram_id', post.telegram_id);
@@ -579,7 +573,39 @@ async function createBroadcast(message, sentCount) {
 // ─── Supabase direct client (for bot.js new endpoints) ────────────────────────
 function getSupabase() { return supabase; }
 
+
+// ─── Delete Community Comment ────────────────────────────────────────────────
+async function deleteCommunityComment(commentId) {
+  try {
+    const { error } = await supabase.from('community_comments').delete().eq('id', commentId);
+    return !error;
+  } catch(e) { console.error('deleteCommunityComment error:', e.message); return false; }
+}
+
+
+// ─── Admin post YouTube Testimonial ──────────────────────────────────────────
+async function createAdminTestimonial(data) {
+  const { caption, youtube_url } = data;
+  const row = {
+    telegram_id: 'ADMIN',
+    name: 'Wallet Masters',
+    type: 'youtube',
+    video_url: youtube_url,
+    message: '',        // users cannot set caption; only admin can
+    caption: caption || '',
+    status: 'approved', // admin posts go live instantly
+    created_at: now(),
+    updated_at: now(),
+    is_admin_post: true
+  };
+  const { data: created, error } = await supabase.from('testimonials').insert([row]).select().single();
+  if (error) throw error;
+  return created;
+}
+
 module.exports = {
+  createAdminTestimonial,
+  deleteCommunityComment,
   initDB, query, getSupabase,
   SHARED_TRC20_ADDRESS, MIN_WITHDRAWAL, MAX_WITHDRAWAL, GATEWAY_FEE_RATE,
   getOrCreateUser, getUserByTelegramId, getUserById, updateUserBalance, upgradeToVIP,
@@ -587,7 +613,7 @@ module.exports = {
   claimHourlyEarning, getHourlyStatus,
   getEarningApps, getEarningAppByToken, getEarningAppById, addEarningApp, removeEarningApp,
   connectUID, getConnectedUID, getUserConnections, findUserByExternalUID,
-  createTransaction, getUserTransactions, setUserBalance,
+  createTransaction, getUserTransactions,
   createWithdrawalRequest, getPendingWithdrawals, getWithdrawalById, updateWithdrawal, getUserWithdrawals,
   createSupportMessage, getSupportMessages, getAllSupportThreads, markSupportRead,
   createTestimonial, getTestimonialById, getPendingTestimonials, getApprovedTestimonials, updateTestimonial, deleteTestimonial,
