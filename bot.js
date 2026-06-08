@@ -29,8 +29,8 @@ const {
   createVerificationRequest, getPendingVerificationRequests, getVerificationRequestById, updateVerificationRequest,
   createBroadcast,
   query,
-  getSupabase
-} = require('./database');
+  getSupabase,
+  deleteCommunityComment, createAdminTestimonial} = require('./database');
 
 const BOT_TOKEN     = process.env.BOT_TOKEN;
 // ── Professional number formatter ───────────────────────────
@@ -59,7 +59,7 @@ function calculateFees(amount) {
 
 function nowSec() { return Math.floor(Date.now() / 1000); }
 
-app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.6' }));
+app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.7' }));
 
 // ═══════════════════════════════════════════════════════════════
 // KEEP-ALIVE: Ping every 10 minutes to prevent Render cold starts
@@ -217,7 +217,8 @@ const ADMIN_KEYBOARD = {
     [{ text: '📝 Poems',             callback_data: 'admin_poems'              }, { text: '🌟 SocialPay',         callback_data: 'admin_socialpay'          }],
     [{ text: '✅ Verifications',      callback_data: 'admin_verifications'      }, { text: '🚫 Manage Users',      callback_data: 'admin_manage_users'       }],
     [{ text: '💬 Community Post',    callback_data: 'admin_community_post'     }, { text: '💰 Resolve Balance',   callback_data: 'admin_resolve_balance'    }],
-    [{ text: '🗑️ Delete Testimonials', callback_data: 'admin_del_testimonials' }, { text: '🗑️ Delete Poems',      callback_data: 'admin_del_poems'          }]
+    [{ text: '🗑️ Delete Testimonials', callback_data: 'admin_del_testimonials' }, { text: '🗑️ Delete Poems',      callback_data: 'admin_del_poems'          }],
+    [{ text: '🗑️ Delete Comments',    callback_data: 'admin_del_comments'       }, { text: '📺 Post YT Testimonial', callback_data: 'admin_post_yt_test'      }]
   ]
 };
 
@@ -527,7 +528,47 @@ if (bot) bot.on('callback_query', async (cq) => {
     return;
   }
 
-  // Verification approve/reject
+  
+  if (data === 'admin_post_yt_test') {
+    if (!isAdmin) return bot.answerCallbackQuery(cq.id, { text: '❌ Not authorized' });
+    bot.sendMessage(chatId,
+      `📺 <b>Post YouTube Testimonial</b>\n\nSend your testimonial in this format:\n<code>YTTEST:https://youtube.com/...|Caption text here</code>\n\n<i>Example:</i>\n<code>YTTEST:https://youtu.be/abc123|This user earned $10,000 on Wallet Masters!</code>\n\n• The name will show as <b>Wallet Masters</b> with a verified badge\n• Caption is optional — leave blank after | if not needed`,
+      { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD }
+    );
+    return;
+  }
+
+
+  if (data === 'admin_del_comments') {
+    if (!isAdmin) return bot.answerCallbackQuery(cq.id, { text: '❌ Not authorized' });
+    const { data: comments } = await supabase.from('community_comments').select('*').order('created_at', { ascending: false }).limit(30);
+    if (!comments || !comments.length) {
+      bot.sendMessage(chatId, '✅ No community comments to delete.', { reply_markup: ADMIN_KEYBOARD });
+      return;
+    }
+    const rows = comments.map(c => [{
+      text: `🗑️ #${c.id} — ${(c.name||'User').substring(0,18)}: ${(c.text||c.message||'').substring(0,30)}...`,
+      callback_data: `del_comment_${c.id}`
+    }]);
+    bot.sendMessage(chatId, `🗑️ <b>Delete Community Comment</b>
+
+Select a comment to delete:`, {
+      parse_mode: 'HTML',
+      reply_markup: { inline_keyboard: rows }
+    });
+    return;
+  }
+
+  if (data.startsWith('del_comment_')) {
+    if (!isAdmin) return bot.answerCallbackQuery(cq.id, { text: '❌ Not authorized' });
+    const commentId = parseInt(data.split('_')[2]);
+    const ok = await deleteCommunityComment(commentId);
+    bot.answerCallbackQuery(cq.id, { text: ok ? '🗑️ Comment deleted!' : '❌ Failed to delete' });
+    bot.editMessageText(ok ? `🗑️ <b>Comment #${commentId} deleted successfully.</b>` : '❌ Delete failed.', { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' }).catch(() => {});
+    return;
+  }
+
+// Verification approve/reject
   if (data.startsWith('ver_approve_') || data.startsWith('ver_reject_')) {
     if (!isAdmin) return bot.answerCallbackQuery(cq.id, { text: '❌ Not authorized' });
     const parts = data.split('_'); const action = parts[1]; const vId = parseInt(parts[2]);
@@ -802,6 +843,24 @@ if (bot) bot.on('message', async (msg) => {
         [{text:u.earnings_suspended?'✅ Restore Earnings':'⚠️ Suspend Earnings', callback_data:`adm_${u.earnings_suspended?'unsuspend':'suspend'}_${u.telegram_id}`}],
         [{text:'💚 Resolve / Reverse Balance', callback_data:`adm_resolve_bal_${u.telegram_id}`}]
       ]}});
+    return;
+  }
+
+
+  // ── YTTEST:url|caption — Admin posts YouTube testimonial as Wallet Masters ──
+  if (text && text.startsWith('YTTEST:')) {
+    if (!isAdmin) return;
+    const raw = text.slice(7).trim();
+    const pipeIdx = raw.indexOf('|');
+    const youtube_url = pipeIdx > -1 ? raw.slice(0, pipeIdx).trim() : raw.trim();
+    const caption = pipeIdx > -1 ? raw.slice(pipeIdx + 1).trim() : '';
+    if (!youtube_url) return bot.sendMessage(chatId, '❌ Please include a YouTube URL.', { reply_markup: ADMIN_KEYBOARD });
+    try {
+      const tes = await createAdminTestimonial({ youtube_url, caption });
+      bot.sendMessage(chatId, `✅ <b>YouTube Testimonial Posted!</b>\n\n📺 URL: ${youtube_url}\n💬 Caption: ${caption || 'none'}\n\nShows as: <b>Wallet Masters ✅</b>\nStatus: Live immediately`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
+    } catch(e) {
+      bot.sendMessage(chatId, `❌ Failed to post: ${e.message}`, { reply_markup: ADMIN_KEYBOARD });
+    }
     return;
   }
 
@@ -1117,6 +1176,35 @@ async function handleTestimonialSubmit(req,res) {
 }
 app.post('/api/testimonial',        authMiddleware, handleTestimonialSubmit);
 app.post('/api/testimonial/submit', authMiddleware, handleTestimonialSubmit);
+
+// ─── Wallet Profile Picture Upload ───────────────────────────────────────────
+app.post('/api/profile/picture', authMiddleware, async (req, res) => {
+  try {
+    const { picture } = req.body;
+    if (!picture) return res.status(400).json({ error: 'No picture provided' });
+    // Validate it's a base64 image
+    if (!picture.startsWith('data:image/')) return res.status(400).json({ error: 'Invalid image format' });
+    // Save to user record
+    const { error } = await supabase.from('users')
+      .update({ profile_picture: picture, updated_at: new Date().toISOString() })
+      .eq('telegram_id', String(req.tgUser.id));
+    if (error) throw error;
+    res.json({ success: true });
+  } catch(e) { console.error('profile pic error:', e); res.status(500).json({ error: 'Server error' }); }
+});
+
+// ─── Admin Delete Community Comment ──────────────────────────────────────────
+app.post('/api/admin/delete-comment/:id', authMiddleware, async (req, res) => {
+  try {
+    const user = await getUserByTelegramId(req.tgUser.id);
+    if (!user?.is_admin) return res.status(403).json({ error: 'Not authorized' });
+    const commentId = parseInt(req.params.id);
+    const ok = await deleteCommunityComment(commentId);
+    res.json({ success: ok });
+  } catch(e) { console.error('delete comment error:', e); res.status(500).json({ error: 'Server error' }); }
+});
+
+
 app.get('/api/testimonials', async (req,res) => { try { res.json({ testimonials: await getApprovedTestimonials() }); } catch(e){res.json({testimonials:[]});} });
 
 app.get('/api/earning-apps', async (req,res) => { try { res.json({ apps: await getEarningApps() }); } catch(e){res.json({apps:[]});} });
