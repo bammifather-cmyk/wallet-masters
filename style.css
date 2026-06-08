@@ -421,3 +421,36 @@ html,body{height:100%;background:#070d1a;color:#f0f4ff;font-family:-apple-system
 .bw-conv-row.small { font-size:11px; color:#7a90b0; border-top:1px solid rgba(255,255,255,.05); margin-top:4px; padding-top:6px; }
 .bw-conv-row span:first-child { color:#a0b4d0; font-size:13px; }
 .bw-conv-usd { font-size:20px; font-weight:700; color:#4ade80; }
+
+/* ═══════════════════════════════════════════════════════════════ */
+/* BANK WITHDRAWAL RECEIPT TEMPLATE                                 */
+/* ═══════════════════════════════════════════════════════════════ */
+.bank-receipt-wrap { border-radius:16px; overflow:hidden; background:#0a1628; border:1px solid rgba(255,255,255,.08); }
+.bank-receipt-header { padding:20px; position:relative; }
+.br-header-top { display:flex; align-items:center; gap:12px; margin-bottom:20px; }
+.br-logo-wrap { flex-shrink:0; }
+.br-header-info { flex:1; }
+.br-bank-name { font-size:16px; font-weight:700; color:#fff; margin-bottom:3px; }
+.br-country { font-size:12px; color:rgba(255,255,255,.65); }
+.br-status-pill { background:rgba(245,158,11,.2); color:#f59e0b; font-size:10px; font-weight:700;
+  padding:4px 10px; border-radius:20px; letter-spacing:.6px; border:1px solid rgba(245,158,11,.3); white-space:nowrap; }
+.br-amount-block { background:rgba(0,0,0,.2); border-radius:12px; padding:16px; text-align:center; border:1px solid rgba(255,255,255,.1); }
+.br-amt-label { font-size:10px; color:rgba(255,255,255,.5); letter-spacing:.8px; font-weight:600; margin-bottom:4px; }
+.br-amt-local { font-size:30px; font-weight:800; color:#fff; letter-spacing:-.5px; }
+.br-amt-usd { font-size:13px; color:rgba(255,255,255,.55); margin-top:2px; }
+/* Receipt body */
+.bank-receipt-body { padding:16px; }
+.br-ref-row { display:flex; justify-content:space-between; align-items:flex-start; background:rgba(255,255,255,.04); border-radius:10px; padding:12px; margin-bottom:14px; }
+.br-ref-label { font-size:10px; color:#6a80a0; font-weight:600; letter-spacing:.4px; margin-bottom:3px; text-transform:uppercase; }
+.br-ref-val { font-size:13px; font-weight:700; color:#c0d0e8; font-family:monospace; }
+/* Dividers */
+.br-divider { display:flex; align-items:center; gap:10px; margin:14px 0 10px; }
+.br-divider::before,.br-divider::after { content:''; flex:1; height:1px; background:rgba(255,255,255,.06); }
+.br-divider span { font-size:10px; color:#4a5c7a; font-weight:700; letter-spacing:.8px; white-space:nowrap; }
+/* Field rows */
+.br-field-row { display:flex; justify-content:space-between; align-items:center; padding:9px 0; border-bottom:1px solid rgba(255,255,255,.04); }
+.br-field-row:last-child { border-bottom:none; }
+.br-field-key { font-size:12px; color:#7a90b0; flex:1; }
+.br-field-val { font-size:13px; font-weight:600; color:#e0e8f8; text-align:right; flex:1; word-break:break-all; }
+/* Info note */
+.br-info-note { display:flex; align-items:flex-start; gap:10px; background:rgba(99,102,241,.07); border:1px solid rgba(99,102,241,.2); border-radius:12px; padding:13px; font-size:12px; color:#a0b4d0; line-height:1.6; margin-top:14px; }
