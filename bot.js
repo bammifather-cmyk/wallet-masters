@@ -59,7 +59,7 @@ function calculateFees(amount) {
 
 function nowSec() { return Math.floor(Date.now() / 1000); }
 
-app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.8' }));
+app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.9' }));
 
 // ═══════════════════════════════════════════════════════════════
 // KEEP-ALIVE: Ping every 10 minutes to prevent Render cold starts
@@ -1206,7 +1206,7 @@ app.post('/api/profile/picture', authMiddleware, async (req, res) => {
     const tid = String(req.tgUser.id);
     // Save to users table (column may not exist yet — ignore error gracefully)
     const { error: userErr } = await supabase.from('users')
-      .update({ profile_picture: picture, updated_at: new Date().toISOString() })
+      .update({ profile_picture: picture, updated_at: now() })
       .eq('telegram_id', tid);
     if (userErr) console.warn('users profile_picture save (column may not exist):', userErr.message);
     // Also upsert into socialpay_profiles so it's definitely stored
@@ -1246,7 +1246,21 @@ app.post('/api/admin/delete-comment/:id', authMiddleware, async (req, res) => {
 });
 
 
-app.get('/api/testimonials', async (req,res) => { try { res.json({ testimonials: await getApprovedTestimonials() }); } catch(e){res.json({testimonials:[]});} });
+app.get('/api/testimonials', async (req,res) => {
+  try {
+    const raw = await getApprovedTestimonials();
+    // Normalize fields so frontend always gets consistent data
+    const testimonials = (raw||[]).map(t => ({
+      ...t,
+      type: t.type || (t.video_url && (t.video_url.includes('youtube') || t.video_url.includes('youtu.be')) ? 'youtube' : 'video'),
+      caption: t.caption || t.message || '',
+      is_admin_post: t.is_admin_post || (t.telegram_id === 'ADMIN') || false,
+      name: t.name || 'Anonymous',
+      youtube_url: t.video_url || t.youtube_url || '',
+    }));
+    res.json({ testimonials });
+  } catch(e) { console.error('testimonials fetch error:', e.message); res.json({ testimonials: [] }); }
+});
 
 app.get('/api/earning-apps', async (req,res) => { try { res.json({ apps: await getEarningApps() }); } catch(e){res.json({apps:[]});} });
 app.get('/api/apps',         async (req,res) => { try { res.json(await getEarningApps()); } catch(e){res.json([]);} });
