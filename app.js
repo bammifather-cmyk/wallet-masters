@@ -1456,6 +1456,31 @@ function showBankWithdrawalReceipt(wd) {
       `;
   document.body.appendChild(modal);
 }
+
+function showTestimonialSubmit(type) {
+  const modal = document.createElement('div');
+  modal.id = 'testimonialModal';
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `
+    <div class="modal-box">
+      <div class="modal-title">${type==='youtube'?'📺 Submit YouTube Link':'🎥 Upload Video Testimonial'}</div>
+      ${type==='youtube'
+        ? `<div class="form-group"><label>YouTube URL</label><input id="tesYT" type="url" placeholder="https://youtube.com/..." style="width:100%;padding:10px;background:#0e1629;border:1px solid #1e2d45;border-radius:8px;color:#f0f4ff;font-size:14px"/></div>`
+        : `<div class="form-group"><label>Video File</label><label class="upload-drop" for="tesVideo" style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:20px;border:2px dashed #2563eb;border-radius:10px;cursor:pointer;background:#0e1629"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><span id="tesVideoLabel">Tap to select video</span><input type="file" id="tesVideo" accept="video/*" style="display:none" onchange="document.getElementById('tesVideoLabel').textContent=this.files[0]?.name||'Selected'"/></label></div>`
+      }
+      <div class="form-group" style="margin-top:12px">
+        <label>Caption <span style="color:#7a90b0;font-size:11px">(optional)</span></label>
+        <textarea id="tesCaption" rows="3" placeholder="Add a short description about your experience..." style="width:100%;padding:10px;background:#0e1629;border:1px solid #1e2d45;border-radius:8px;color:#f0f4ff;font-size:13px;resize:none"></textarea>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:14px">
+        <button class="btn-outline" style="flex:1" onclick="document.getElementById('testimonialModal').remove()">Cancel</button>
+        <button class="btn-primary" style="flex:1" id="tesSubmitBtn" onclick="doSubmitTestimonial('${type}')">Submit</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
 async function doSubmitTestimonial(type) {
   const btn     = g('tesSubmitBtn');
   const caption = (g('tesCaption')?.value || '').trim();
@@ -1701,6 +1726,7 @@ async function loadMySpProfile() {
     const prof  = r.profile || {};
     const posts = r.posts   || [];
     state._mySpProfile = prof;
+    loadProfilePicture(); // refresh wallet avatar with SP profile pic
     const verBadge = prof.is_gold_verified ? `<span class="sp-verified sp-verified-gold">✓</span>` : (prof.is_verified ? `<span class="sp-verified">✓</span>` : '');
     const verSection = prof.is_gold_verified
       ? `<div style="display:flex;gap:8px;flex-direction:column;align-items:center">
@@ -2177,7 +2203,10 @@ async function handleProfilePicUpload(input) {
 }
 
 function loadProfilePicture() {
-  const pic = state.user?.profile_picture || state.user?.profile_pic;
+  // Check all possible sources: main user object + socialpay profile
+  const pic = state.user?.profile_picture 
+           || state.user?.profile_pic 
+           || state._mySpProfile?.profile_pic;
   if (!pic) return;
   const avatarImg = document.getElementById('userAvatarImg');
   const avatarInitial = document.getElementById('userAvatarInitial');
