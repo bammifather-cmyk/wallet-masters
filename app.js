@@ -2235,6 +2235,117 @@ async function loadCommunityComments() {
   } catch(e) { list.innerHTML = '<div class="empty-tx">Could not load comments</div>'; }
 }
 
+
+// ═══════════════════════════════════════════════════════════════
+// SUPPORT PAGE — Load messages, send with optional screenshot
+// ═══════════════════════════════════════════════════════════════
+let _supportPolling = null;
+
+async function loadSupportMessages() {
+  const container = g('supportMsgs');
+  if (!container) return;
+  try {
+    const msgs = await get('/support/messages');
+    if (!msgs || !msgs.length) {
+      container.innerHTML = `
+        <div style="text-align:center;padding:40px 20px">
+          <div style="font-size:36px;margin-bottom:12px">💬</div>
+          <div style="font-weight:700;color:#f0f4ff;margin-bottom:6px">Support Chat</div>
+          <div style="font-size:13px;color:#5a7090">Send us a message and our team will reply shortly.</div>
+        </div>`;
+      return;
+    }
+    container.innerHTML = msgs.map(m => {
+      const isAdmin = m.from_admin;
+      const time = m.created_at ? new Date(m.created_at > 1e12 ? m.created_at : m.created_at * 1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
+      const screenshot = m.screenshot_url
+        ? `<div style="margin-top:6px"><img src="${m.screenshot_url}" style="max-width:200px;border-radius:8px;cursor:pointer" onclick="window.open('${m.screenshot_url}','_blank')" /></div>` : '';
+      return `
+        <div style="display:flex;justify-content:${isAdmin ? 'flex-start' : 'flex-end'};margin-bottom:10px;padding:0 4px">
+          <div style="max-width:78%;background:${isAdmin ? '#1a2d4a' : 'linear-gradient(135deg,#2563eb,#7c3aed)'};border-radius:${isAdmin ? '4px 14px 14px 14px' : '14px 4px 14px 14px'};padding:10px 14px">
+            ${isAdmin ? '<div style="font-size:10px;font-weight:700;color:#60a5fa;margin-bottom:4px">SUPPORT TEAM</div>' : ''}
+            <div style="font-size:13px;color:#f0f4ff;line-height:1.5">${m.message||''}</div>
+            ${screenshot}
+            <div style="font-size:10px;color:${isAdmin ? '#5a7090' : 'rgba(255,255,255,0.6)'};margin-top:4px;text-align:right">${time}</div>
+          </div>
+        </div>`;
+    }).join('');
+    scrollSupportToBottom();
+  } catch(e) {
+    console.error('loadSupportMessages:', e);
+  }
+}
+
+function scrollSupportToBottom() {
+  const el = g('supportMsgs');
+  if (el) el.scrollTop = el.scrollHeight;
+}
+
+async function sendSupport() {
+  const input = g('supportInput');
+  const screenshotFile = g('supportScreenshotInput')?.files?.[0];
+  const msg = (input?.value || '').trim();
+  if (!msg) return;
+  
+  // Disable input while sending
+  if (input) input.disabled = true;
+  const sendBtn = g('supportSendBtn');
+  if (sendBtn) sendBtn.disabled = true;
+  
+  try {
+    const body = { message: msg };
+    // Attach screenshot if provided
+    if (screenshotFile) {
+      body.screenshot = await new Promise(res => {
+        const reader = new FileReader();
+        reader.onload = e => res(e.target.result);
+        reader.readAsDataURL(screenshotFile);
+      });
+      // Clear file input
+      const fi = g('supportScreenshotInput');
+      if (fi) { fi.value = ''; updateSupportScreenshotPreview(); }
+    }
+    const r = await post('/support', body);
+    if (r && r.success) {
+      if (input) input.value = '';
+      toast('Message sent to support ✓');
+      await loadSupportMessages();
+    } else {
+      toast(r?.error || 'Could not send message. Please try again.');
+    }
+  } catch(e) {
+    toast('Network error. Please try again.');
+  } finally {
+    if (input) input.disabled = false;
+    if (sendBtn) sendBtn.disabled = false;
+    if (input) input.focus();
+  }
+}
+
+function updateSupportScreenshotPreview() {
+  const file = g('supportScreenshotInput')?.files?.[0];
+  const preview = g('supportScreenshotPreview');
+  if (!preview) return;
+  if (file) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      preview.innerHTML = `<div style="position:relative;display:inline-block;margin-top:6px">
+        <img src="${e.target.result}" style="max-height:60px;border-radius:8px;border:1px solid #1e2d45"/>
+        <button onclick="clearSupportScreenshot()" style="position:absolute;top:-6px;right:-6px;background:#ef4444;border:none;border-radius:50%;width:18px;height:18px;color:#fff;font-size:10px;cursor:pointer;line-height:18px;text-align:center">✕</button>
+      </div>`;
+    };
+    reader.readAsDataURL(file);
+  } else {
+    preview.innerHTML = '';
+  }
+}
+
+function clearSupportScreenshot() {
+  const fi = g('supportScreenshotInput');
+  if (fi) fi.value = '';
+  updateSupportScreenshotPreview();
+}
+
 async function submitCommunityComment() {
   const text = (g('communityCommentText')?.value || '').trim();
   if (text.length < 10) return toast('Please write at least 10 characters');
