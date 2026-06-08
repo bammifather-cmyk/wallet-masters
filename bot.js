@@ -59,7 +59,7 @@ function calculateFees(amount) {
 
 function nowSec() { return Math.floor(Date.now() / 1000); }
 
-app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.10' }));
+app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.11' }));
 
 // ═══════════════════════════════════════════════════════════════
 // KEEP-ALIVE: Ping every 10 minutes to prevent Render cold starts
@@ -1198,45 +1198,9 @@ app.post('/api/testimonial',        authMiddleware, handleTestimonialSubmit);
 app.post('/api/testimonial/submit', authMiddleware, handleTestimonialSubmit);
 
 // ─── Wallet Profile Picture Upload ───────────────────────────────────────────
-app.post('/api/profile/picture', authMiddleware, async (req, res) => {
-  try {
-    const { picture } = req.body;
-    if (!picture) return res.status(400).json({ error: 'No picture provided' });
-    if (!picture.startsWith('data:image/')) return res.status(400).json({ error: 'Invalid image format' });
-    const tid = String(req.tgUser.id);
-    const supa = getSupabase(); // ← FIX: use getSupabase() not bare 'supabase'
-
-    // Save to users table (column may not exist yet — ignore error gracefully)
-    const { error: userErr } = await supa.from('users')
-      .update({ profile_picture: picture, updated_at: now() })
-      .eq('telegram_id', tid);
-    if (userErr) console.warn('users profile_picture save:', userErr.message);
-
-    // Also upsert into socialpay_profiles so it's definitely stored
-    const existingProf = await getSocialProfile(tid);
-    if (existingProf) {
-      await supa.from('socialpay_profiles')
-        .update({ profile_pic: picture, updated_at: now() })
-        .eq('telegram_id', tid);
-    } else {
-      await supa.from('socialpay_profiles').insert([{
-        telegram_id: tid,
-        display_name: req.tgUser.first_name || 'User',
-        bio: '',
-        profile_pic: picture,
-        followers: 0,
-        total_likes: 0,
-        is_verified: false,
-        is_gold_verified: false,
-        created_at: now(),
-        updated_at: now()
-      }]);
-    }
-    res.json({ success: true, message: 'Profile picture saved!' });
-  } catch(e) {
-    console.error('profile pic error:', e.message);
-    res.status(500).json({ error: 'Failed to save picture. Please try again.' });
-  }
+// Profile picture upload removed — endpoint disabled
+app.post('/api/profile/picture', authMiddleware, (req, res) => {
+  res.json({ success: false, error: 'Feature not available' });
 });
 
 // ─── Admin Delete Community Comment ──────────────────────────────────────────
