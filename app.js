@@ -167,12 +167,12 @@ async function init(retryCount) {
     loadProfilePicture();
     if (!tg.initData) console.warn('No initData — some features may not work');
   } catch(e) {
-    if (retryCount < 10) {
-      const delays = [300,600,1000,1500,2000,2500,3000,3000,3000,3000];
+    if (retryCount < 20) {
+      const delays = [300,600,1000,1500,2000,2500,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000];
       await new Promise(r => setTimeout(r, delays[retryCount] || 3000));
       return init(retryCount + 1);
     }
-    showError('Taking longer than usual.<br>Please check your internet connection.');
+    showError('Taking longer than usual.<br>Please close and reopen the app to reconnect.');
   }
 }
 
