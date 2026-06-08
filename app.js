@@ -458,211 +458,213 @@ const getCurrencySymbol = (cur) => ({
 // ═══════════════════════════════════════════════════════════════
 // BANK LOGO SYSTEM - Real logos via Clearbit + fallback
 // ═══════════════════════════════════════════════════════════════
-const BANK_LOGO_DOMAINS = {
-  // USA
-  'chase': 'chase.com',
-  'bank_of_america': 'bankofamerica.com',
-  'wells_fargo': 'wellsfargo.com',
-  'citibank': 'citigroup.com',
-  'us_bank': 'usbank.com',
-  'paypal_us': 'paypal.com',
-  'cashapp': 'cash.app',
-  'venmo': 'venmo.com',
-  'zelle': 'zellepay.com',
-  'ally': 'ally.com',
-  // UK
-  'barclays': 'barclays.co.uk',
-  'hsbc_uk': 'hsbc.co.uk',
-  'lloyds': 'lloydsbank.com',
-  'natwest': 'natwest.com',
-  'monzo': 'monzo.com',
-  'revolut': 'revolut.com',
-  'starling': 'starlingbank.com',
-  'nationwide': 'nationwide.co.uk',
-  'santander_uk': 'santander.co.uk',
-  'halifax': 'halifax.co.uk',
-  // Nigeria
-  'access': 'accessbankplc.com',
-  'firstbank': 'firstbanknigeria.com',
-  'gtbank': 'gtbank.com',
-  'uba': 'ubagroup.com',
-  'zenith': 'zenithbank.com',
-  'opay': 'opayweb.com',
-  'kuda': 'kudabank.com',
-  'palmpay': 'palmpay.com',
-  'moniepoint': 'moniepoint.com',
-  'sterling': 'sterlingbank.com',
-  'union': 'unionbankng.com',
-  'fidelity': 'fidelitybank.ng',
-  'fcmb': 'fcmb.com',
-  'stanbic': 'stanbicibtcbank.com',
-  'providus': 'providusbank.com',
-  // Ghana
-  'gcb': 'gcbbank.com.gh',
-  'ecobank_gh': 'ecobank.com',
-  'absa_gh': 'absa.com.gh',
-  'stanbic_gh': 'stanbicbank.com.gh',
-  'mtn_momo': 'mtn.com.gh',
-  'vodafone_cash': 'vodafone.com.gh',
-  'airteltigo': 'airteltigo.com.gh',
-  'zeepay_gh': 'myzeepay.com',
-  // Kenya
-  'mpesa': 'safaricom.co.ke',
-  'kcb': 'kcbgroup.com',
-  'equity': 'equitygroupholdings.com',
-  'coop': 'co-opbank.co.ke',
-  'stanbic_ke': 'stanbicbank.co.ke',
-  'ncba': 'ncbagroup.com',
-  'absa_ke': 'absa.co.ke',
-  'airtel_ke': 'airtel.com',
-  // India
-  'sbi': 'sbi.co.in',
-  'hdfc': 'hdfcbank.com',
-  'icici': 'icicibank.com',
-  'axis': 'axisbank.com',
-  'kotak': 'kotak.com',
-  'paytm': 'paytm.com',
-  'phonepe': 'phonepe.com',
-  'gpay_in': 'pay.google.com',
-  'upi': 'npci.org.in',
-  'pnb': 'pnbindia.in',
-  'canara': 'canarabank.com',
-  'bob': 'bankofbaroda.in',
-  // Pakistan
-  'jazzcash': 'jazzcash.com.pk',
-  'easypaisa': 'easypaisa.com.pk',
-  'hbl': 'hbl.com',
-  'mcb_pk': 'mcb.com.pk',
-  'ubl': 'ubldigital.com',
-  'meezan': 'meezanbank.com',
-  'bankislami': 'bankislami.com.pk',
-  'nayapay': 'nayapay.com',
-  'sadapay': 'sadapay.com',
-  // Philippines
-  'gcash': 'gcash.com',
-  'maya': 'maya.ph',
-  'bdo': 'bdo.com.ph',
-  'bpi': 'bpi.com.ph',
-  'metrobank': 'metrobank.com.ph',
-  'landbank': 'landbank.com',
-  'pnb_ph': 'pnb.com.ph',
-  'seabank': 'seabank.com.ph',
-  // South Africa
-  'fnb': 'fnb.co.za',
-  'absa': 'absa.co.za',
-  'standard_za': 'standardbank.co.za',
-  'nedbank': 'nedbank.co.za',
-  'capitec': 'capitecbank.co.za',
-  'discovery_za': 'discovery.co.za',
-  'tyme': 'tymebank.com',
-  // Others
-  'mpesa_tz': 'vodacom.co.tz',
-  'airtel_tz': 'africa.airtel.com',
-  'tigo_tz': 'tigo.co.tz',
-  'crdb': 'crdbbank.co.tz',
-  'nmb_tz': 'nmbtz.com',
-  'mtn_ug': 'mtn.co.ug',
-  'airtel_ug': 'africa.airtel.com',
-  'stanbic_ug': 'stanbicbank.co.ug',
-  'equity_ug': 'equitybankgroup.com',
-  'telebirr': 'ethiotelecom.et',
-  'cbe_et': 'combanketh.et',
-  'dashen': 'dashenbanksc.com',
-  'mtn_rw': 'mtn.co.rw',
-  'airtel_rw': 'africa.airtel.com',
-  'bnr': 'bprwanda.rw',
-  'vodafone_eg': 'vodafone.com.eg',
-  'cib_eg': 'cibeg.com',
-  'nbe_eg': 'nbe.com.eg',
-  'instapay_eg': 'instapay.eg',
-  'cih_ma': 'cih.co.ma',
-  'attijariwafa': 'attijariwafa.com',
-  'bmce': 'bmcebank.com',
-  'bkash': 'bkash.com',
-  'nagad': 'nagad.com.bd',
-  'rocket': 'dutchbanglabank.com',
-  'dutch_bangla': 'dutchbanglabank.com',
-  'maybank': 'maybank.com',
-  'cimb_my': 'cimb.com',
-  'tng': 'touchngo.com.my',
-  'boost_my': 'myboost.com.my',
-  'rhb_my': 'rhbgroup.com',
-  'gopay': 'gojek.com',
-  'ovo': 'ovo.id',
-  'dana_id': 'dana.id',
-  'bca': 'bca.co.id',
-  'bri_id': 'bri.co.id',
-  'mandiri': 'bankmandiri.co.id',
-  'promptpay': 'bot.or.th',
-  'kbank': 'kasikornbank.com',
-  'scb_th': 'scb.co.th',
-  'truemoney': 'truemoney.co.th',
-  'momo_vn': 'momo.vn',
-  'vietcombank': 'vietcombank.com.vn',
-  'zalopay': 'zalopay.vn',
-  'techcombank': 'techcombank.com.vn',
-  'enbd': 'emiratesnbd.com',
-  'adcb': 'adcb.com',
-  'fab': 'bankfab.com',
-  'mashreq': 'mashreqbank.com',
-  'cbd_ae': 'cbd.ae',
-  'stcpay': 'stcpay.com.sa',
-  'al_rajhi': 'alrajhibank.com.sa',
-  'sab': 'sabb.com',
-  'ncb': 'ncb.com.sa',
-  'pix': 'bcb.gov.br',
-  'itau': 'itau.com.br',
-  'nubank': 'nubank.com.br',
-  'bradesco': 'bradesco.com.br',
-  'bb': 'bb.com.br',
-  'bbva_mx': 'bbva.mx',
-  'banamex': 'banamex.com',
-  'mercadopago': 'mercadopago.com.mx',
-  'rbc': 'rbc.com',
-  'td_ca': 'td.com',
-  'interac': 'interac.ca',
-  'scotiabank': 'scotiabank.com',
-  'bmo': 'bmo.com',
-  'anz': 'anz.com.au',
-  'cba': 'commbank.com.au',
-  'westpac': 'westpac.com.au',
-  'nab': 'nab.com.au',
-  'payid': 'nppa.com.au',
-  'dbs': 'dbs.com',
-  'ocbc': 'ocbc.com',
-  'uob_sg': 'uob.com.sg',
-  'paynow': 'abs.org.sg',
-  'papara': 'papara.com',
-  'isbankasi': 'isbank.com.tr',
-  'akbank': 'akbank.com',
-  'garanti': 'garantibbva.com.tr',
-  'blik': 'blik.com',
-  'pko': 'pkobp.pl',
-  'mbank': 'mbank.pl',
-  'ubs': 'ubs.com',
-  'credit_suisse': 'credit-suisse.com',
-  'twint': 'twint.ch',
+
+// ═══════════════════════════════════════════════════════════════
+// BANK LOGO SYSTEM — Pure inline SVG, zero external calls
+// ═══════════════════════════════════════════════════════════════
+const BANK_LOGOS = {
+  // ── USA ─────────────────────────────────────────────────────
+  chase: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#117ACA"/><rect x="22" y="8" width="14" height="14" fill="white"/><rect x="8" y="22" width="14" height="14" fill="white"/><rect x="22" y="22" width="14" height="14" fill="white" opacity="0.4"/><rect x="8" y="8" width="14" height="14" fill="white" opacity="0.4"/></svg>`,
+  bank_of_america: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#E31837"/><text x="22" y="29" text-anchor="middle" font-size="13" font-weight="900" fill="white" font-family="Arial">BofA</text></svg>`,
+  wells_fargo: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#CD2026"/><rect x="7" y="14" width="30" height="16" rx="3" fill="#FFCC00"/><text x="22" y="26" text-anchor="middle" font-size="9" font-weight="900" fill="#CD2026" font-family="Arial">WELLS</text></svg>`,
+  citibank: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#003B80"/><text x="22" y="27" text-anchor="middle" font-size="12" font-weight="900" fill="white" font-family="Arial">citi</text><path d="M30 18 Q34 14 34 18" stroke="#E31837" stroke-width="3" fill="none" stroke-linecap="round"/></svg>`,
+  us_bank: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#003082"/><text x="22" y="24" text-anchor="middle" font-size="10" font-weight="900" fill="white" font-family="Arial">U.S.</text><text x="22" y="34" text-anchor="middle" font-size="10" font-weight="900" fill="white" font-family="Arial">BANK</text></svg>`,
+  paypal_us: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#003087"/><text x="21" y="29" text-anchor="middle" font-size="22" font-weight="900" fill="#009cde" font-family="Arial">P</text><text x="26" y="29" text-anchor="middle" font-size="22" font-weight="900" fill="white" font-family="Arial">P</text></svg>`,
+  cashapp: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#00C244"/><text x="22" y="30" text-anchor="middle" font-size="22" font-weight="900" fill="white" font-family="Arial">$</text></svg>`,
+  venmo: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#3396CD"/><text x="22" y="30" text-anchor="middle" font-size="20" font-weight="900" fill="white" font-family="Arial">V</text></svg>`,
+  zelle: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#6D1ED4"/><text x="22" y="30" text-anchor="middle" font-size="20" font-weight="900" fill="white" font-family="Arial">Z</text></svg>`,
+  ally: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#7B2282"/><text x="22" y="29" text-anchor="middle" font-size="13" font-weight="900" fill="white" font-family="Arial">ally</text></svg>`,
+  // ── UK ──────────────────────────────────────────────────────
+  barclays: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#00AEEF"/><path d="M22 10 C22 10 14 16 14 22 C14 28 18 34 22 34 C26 34 30 28 30 22 C30 16 22 10 22 10Z" fill="white" opacity="0.9"/></svg>`,
+  hsbc_uk: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#DB0011"/><polygon points="22,8 36,22 22,36 8,22" fill="white" opacity="0.9"/><polygon points="22,14 30,22 22,30 14,22" fill="#DB0011"/></svg>`,
+  lloyds: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#024638"/><path d="M17 10 Q22 8 22 14 Q22 20 16 24 Q22 28 22 34 Q22 38 17 36" stroke="#006B3C" stroke-width="0" fill="none"/><ellipse cx="22" cy="22" rx="8" ry="12" fill="#006B3C" opacity="0.8"/><text x="22" y="26" text-anchor="middle" font-size="12" font-weight="900" fill="white" font-family="Arial">L</text></svg>`,
+  natwest: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#42145F"/><rect x="10" y="16" width="10" height="12" rx="2" fill="white"/><rect x="24" y="16" width="10" height="12" rx="2" fill="#DA291C"/><rect x="17" y="20" width="10" height="4" fill="white" opacity="0.6"/></svg>`,
+  monzo: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#FF3464"/><path d="M10 30 L16 14 L22 26 L28 14 L34 30" stroke="white" stroke-width="3" fill="none" stroke-linejoin="round" stroke-linecap="round"/></svg>`,
+  revolut: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#191C1F"/><text x="22" y="30" text-anchor="middle" font-size="12" font-weight="900" fill="white" font-family="Arial">revolut</text></svg>`,
+  starling: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#7033FF"/><circle cx="22" cy="22" r="10" fill="none" stroke="white" stroke-width="3"/><circle cx="22" cy="22" r="4" fill="white"/></svg>`,
+  nationwide: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#1C2D6E"/><text x="22" y="24" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">Nation</text><text x="22" y="34" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">wide</text></svg>`,
+  santander_uk: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#EC0000"/><circle cx="15" cy="22" r="7" fill="white" opacity="0.9"/><circle cx="22" cy="22" r="7" fill="white" opacity="0.9"/><circle cx="29" cy="22" r="7" fill="white" opacity="0.9"/></svg>`,
+  halifax: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#003882"/><text x="22" y="29" text-anchor="middle" font-size="11" font-weight="900" fill="white" font-family="Arial">HFAX</text></svg>`,
+  // ── NIGERIA ─────────────────────────────────────────────────
+  access: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#E60026"/><path d="M22 8 L28 22 L22 36 L16 22 Z" fill="white" opacity="0.9"/></svg>`,
+  firstbank: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#004A97"/><text x="22" y="24" text-anchor="middle" font-size="10" font-weight="900" fill="white" font-family="Arial">First</text><text x="22" y="34" text-anchor="middle" font-size="10" font-weight="900" fill="#FFC20E" font-family="Arial">BANK</text></svg>`,
+  gtbank: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#F58220"/><text x="22" y="28" text-anchor="middle" font-size="16" font-weight="900" fill="white" font-family="Arial">GT</text></svg>`,
+  uba: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#C8102E"/><text x="22" y="29" text-anchor="middle" font-size="13" font-weight="900" fill="white" font-family="Arial">UBA</text></svg>`,
+  zenith: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#862633"/><polygon points="22,8 36,36 8,36" fill="none" stroke="white" stroke-width="2.5"/><text x="22" y="32" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">ZENITH</text></svg>`,
+  opay: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#00B140"/><text x="22" y="29" text-anchor="middle" font-size="13" font-weight="900" fill="white" font-family="Arial">OPay</text></svg>`,
+  kuda: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#40196B"/><text x="22" y="29" text-anchor="middle" font-size="13" font-weight="900" fill="white" font-family="Arial">kuda</text></svg>`,
+  palmpay: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#01A15A"/><path d="M14 30 Q14 14 22 14 Q30 14 30 22 Q30 30 22 30" fill="white" opacity="0.9"/></svg>`,
+  moniepoint: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#0166FF"/><text x="22" y="27" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">monie</text><text x="22" y="36" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">point</text></svg>`,
+  sterling: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#DA291C"/><text x="22" y="27" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">Sterling</text><text x="22" y="36" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">BANK</text></svg>`,
+  union: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#042B61"/><text x="22" y="27" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">Union</text><text x="22" y="36" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">BANK</text></svg>`,
+  fidelity: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#006755"/><text x="22" y="27" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">Fidelity</text><text x="22" y="36" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">BANK</text></svg>`,
+  fcmb: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#32127A"/><text x="22" y="29" text-anchor="middle" font-size="12" font-weight="900" fill="white" font-family="Arial">FCMB</text></svg>`,
+  stanbic: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#009FDF"/><path d="M10 28 L22 10 L34 28" stroke="white" stroke-width="3" fill="none"/><text x="22" y="37" text-anchor="middle" font-size="8" font-weight="900" fill="white" font-family="Arial">STANBIC</text></svg>`,
+  providus: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#8B2FC9"/><text x="22" y="29" text-anchor="middle" font-size="11" font-weight="900" fill="white" font-family="Arial">PVB</text></svg>`,
+  // ── GHANA ───────────────────────────────────────────────────
+  gcb: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#006341"/><text x="22" y="29" text-anchor="middle" font-size="13" font-weight="900" fill="white" font-family="Arial">GCB</text></svg>`,
+  ecobank_gh: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#003087"/><text x="22" y="24" text-anchor="middle" font-size="10" font-weight="900" fill="white" font-family="Arial">eco</text><text x="22" y="34" text-anchor="middle" font-size="10" font-weight="900" fill="#FFC20E" font-family="Arial">bank</text></svg>`,
+  absa_gh: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#DC0032"/><circle cx="22" cy="22" r="9" fill="none" stroke="white" stroke-width="3"/><text x="22" y="26" text-anchor="middle" font-size="10" font-weight="900" fill="white" font-family="Arial">absa</text></svg>`,
+  stanbic_gh: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#009FDF"/><path d="M10 28 L22 10 L34 28" stroke="white" stroke-width="3" fill="none"/></svg>`,
+  mtn_momo: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#FFC403"/><text x="22" y="24" text-anchor="middle" font-size="12" font-weight="900" fill="#1C1C1C" font-family="Arial">MTN</text><text x="22" y="34" text-anchor="middle" font-size="9" font-weight="900" fill="#1C1C1C" font-family="Arial">MoMo</text></svg>`,
+  vodafone_cash: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#E60000"/><circle cx="22" cy="20" r="9" fill="none" stroke="white" stroke-width="3"/><path d="M28 26 Q32 32 22 36" stroke="white" stroke-width="3" fill="none" stroke-linecap="round"/></svg>`,
+  airteltigo: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#FF0000"/><path d="M8 30 Q22 6 36 30" stroke="white" stroke-width="3" fill="none"/><path d="M14 30 Q22 14 30 30" stroke="white" stroke-width="2" fill="none"/></svg>`,
+  zeepay_gh: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#0066CC"/><text x="22" y="29" text-anchor="middle" font-size="11" font-weight="900" fill="white" font-family="Arial">ZeePay</text></svg>`,
+  // ── KENYA ───────────────────────────────────────────────────
+  mpesa: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#00A650"/><text x="22" y="24" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">M-PESA</text><circle cx="22" cy="32" r="4" fill="white" opacity="0.9"/></svg>`,
+  kcb: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#006633"/><text x="22" y="29" text-anchor="middle" font-size="13" font-weight="900" fill="white" font-family="Arial">KCB</text></svg>`,
+  equity: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#AA0000"/><path d="M12 14 L32 14 L32 18 L12 18 Z" fill="white"/><path d="M12 20 L26 20 L26 24 L12 24 Z" fill="white"/><path d="M12 26 L32 26 L32 30 L12 30 Z" fill="white"/></svg>`,
+  coop: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#003580"/><text x="22" y="24" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">Co-op</text><text x="22" y="34" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">Bank</text></svg>`,
+  stanbic_ke: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#009FDF"/><path d="M10 28 L22 10 L34 28" stroke="white" stroke-width="3" fill="none"/></svg>`,
+  ncba: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#1C2D6E"/><text x="22" y="29" text-anchor="middle" font-size="12" font-weight="900" fill="white" font-family="Arial">NCBA</text></svg>`,
+  absa_ke: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#DC0032"/><circle cx="22" cy="22" r="9" fill="none" stroke="white" stroke-width="3"/><text x="22" y="26" text-anchor="middle" font-size="10" font-weight="900" fill="white" font-family="Arial">absa</text></svg>`,
+  airtel_ke: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#FF0000"/><path d="M8 30 Q22 6 36 30" stroke="white" stroke-width="3" fill="none"/></svg>`,
+  // ── INDIA ───────────────────────────────────────────────────
+  sbi: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#2C3E7F"/><circle cx="22" cy="18" r="7" fill="none" stroke="white" stroke-width="2"/><path d="M15 18 Q22 28 29 18" fill="#2C3E7F"/><text x="22" y="35" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">SBI</text></svg>`,
+  hdfc: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#004C8F"/><text x="22" y="29" text-anchor="middle" font-size="11" font-weight="900" fill="white" font-family="Arial">HDFC</text></svg>`,
+  icici: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#F6821F"/><text x="22" y="24" text-anchor="middle" font-size="10" font-weight="900" fill="white" font-family="Arial">ICICI</text><text x="22" y="34" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">Bank</text></svg>`,
+  axis: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#800000"/><path d="M12 30 L22 12 L32 30" stroke="white" stroke-width="2.5" fill="none"/><path d="M16 24 L28 24" stroke="white" stroke-width="2.5"/></svg>`,
+  kotak: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#ED1C24"/><text x="22" y="24" text-anchor="middle" font-size="10" font-weight="900" fill="white" font-family="Arial">Kotak</text><text x="22" y="34" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">811</text></svg>`,
+  paytm: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#00BAF2"/><text x="22" y="29" text-anchor="middle" font-size="11" font-weight="900" fill="white" font-family="Arial">Paytm</text></svg>`,
+  phonepe: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#5F259F"/><text x="22" y="24" text-anchor="middle" font-size="10" font-weight="900" fill="white" font-family="Arial">Phone</text><text x="22" y="34" text-anchor="middle" font-size="10" font-weight="900" fill="white" font-family="Arial">Pe</text></svg>`,
+  gpay_in: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#ffffff"/><text x="13" y="27" font-size="16" font-weight="900" fill="#4285F4" font-family="Arial">G</text><text x="24" y="27" font-size="16" font-weight="900" fill="#EA4335" font-family="Arial">P</text></svg>`,
+  upi: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#097939"/><text x="22" y="29" text-anchor="middle" font-size="14" font-weight="900" fill="white" font-family="Arial">UPI</text></svg>`,
+  pnb: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#E00000"/><text x="22" y="29" text-anchor="middle" font-size="13" font-weight="900" fill="white" font-family="Arial">PNB</text></svg>`,
+  canara: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#003087"/><text x="22" y="29" text-anchor="middle" font-size="11" font-weight="900" fill="white" font-family="Arial">Canara</text></svg>`,
+  bob: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#F26C20"/><text x="22" y="29" text-anchor="middle" font-size="13" font-weight="900" fill="white" font-family="Arial">BOB</text></svg>`,
+  // ── PAKISTAN ────────────────────────────────────────────────
+  jazzcash: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#E31837"/><text x="22" y="24" text-anchor="middle" font-size="10" font-weight="900" fill="white" font-family="Arial">Jazz</text><text x="22" y="34" text-anchor="middle" font-size="10" font-weight="900" fill="white" font-family="Arial">Cash</text></svg>`,
+  easypaisa: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#59B200"/><text x="22" y="24" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">easy</text><text x="22" y="34" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">paisa</text></svg>`,
+  hbl: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#00563F"/><text x="22" y="29" text-anchor="middle" font-size="14" font-weight="900" fill="white" font-family="Arial">HBL</text></svg>`,
+  mcb_pk: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#BE0000"/><text x="22" y="29" text-anchor="middle" font-size="13" font-weight="900" fill="white" font-family="Arial">MCB</text></svg>`,
+  ubl: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#00539B"/><text x="22" y="29" text-anchor="middle" font-size="14" font-weight="900" fill="white" font-family="Arial">UBL</text></svg>`,
+  meezan: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#00856F"/><path d="M12 26 Q17 12 22 20 Q27 28 32 14" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round"/><text x="22" y="37" text-anchor="middle" font-size="8" font-weight="900" fill="white" font-family="Arial">MEEZAN</text></svg>`,
+  bankislami: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#006838"/><path d="M22 10 Q30 16 30 22 Q30 28 22 34 Q14 28 14 22 Q14 16 22 10Z" fill="none" stroke="white" stroke-width="2"/></svg>`,
+  nayapay: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#7B4AF8"/><text x="22" y="29" text-anchor="middle" font-size="10" font-weight="900" fill="white" font-family="Arial">NayaPay</text></svg>`,
+  sadapay: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#00D09C"/><text x="22" y="29" text-anchor="middle" font-size="10" font-weight="900" fill="white" font-family="Arial">SadaPay</text></svg>`,
+  // ── PHILIPPINES ─────────────────────────────────────────────
+  gcash: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#007DFF"/><text x="22" y="29" text-anchor="middle" font-size="11" font-weight="900" fill="white" font-family="Arial">GCash</text></svg>`,
+  maya: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#59C15A"/><text x="22" y="29" text-anchor="middle" font-size="12" font-weight="900" fill="white" font-family="Arial">maya</text></svg>`,
+  bdo: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#003087"/><text x="22" y="29" text-anchor="middle" font-size="14" font-weight="900" fill="white" font-family="Arial">BDO</text></svg>`,
+  bpi: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#CC0001"/><text x="22" y="29" text-anchor="middle" font-size="15" font-weight="900" fill="white" font-family="Arial">BPI</text></svg>`,
+  metrobank: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#002366"/><rect x="10" y="17" width="24" height="4" rx="2" fill="white"/><rect x="10" y="23" width="24" height="4" rx="2" fill="white"/></svg>`,
+  landbank: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#006633"/><text x="22" y="24" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">Land</text><text x="22" y="34" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">Bank</text></svg>`,
+  pnb_ph: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#003082"/><text x="22" y="29" text-anchor="middle" font-size="13" font-weight="900" fill="white" font-family="Arial">PNB</text></svg>`,
+  seabank: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#EE3524"/><path d="M8 26 Q14 18 22 22 Q30 26 36 18" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>`,
+  // ── SOUTH AFRICA ────────────────────────────────────────────
+  fnb: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#006A4D"/><text x="22" y="29" text-anchor="middle" font-size="14" font-weight="900" fill="white" font-family="Arial">FNB</text></svg>`,
+  absa: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#DC0032"/><circle cx="22" cy="22" r="9" fill="none" stroke="white" stroke-width="3"/><text x="22" y="26" text-anchor="middle" font-size="10" font-weight="900" fill="white" font-family="Arial">absa</text></svg>`,
+  standard_za: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#00529B"/><rect x="10" y="16" width="24" height="3" rx="1.5" fill="white"/><rect x="10" y="21" width="18" height="3" rx="1.5" fill="white"/><rect x="10" y="26" width="24" height="3" rx="1.5" fill="white"/></svg>`,
+  nedbank: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#009B77"/><path d="M12 30 L12 14 L22 26 L32 14 L32 30" stroke="white" stroke-width="2.5" fill="none" stroke-linejoin="round"/></svg>`,
+  capitec: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#0098DB"/><text x="22" y="24" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">capitec</text><text x="22" y="34" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">bank</text></svg>`,
+  discovery_za: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#003087"/><circle cx="22" cy="20" r="8" fill="none" stroke="white" stroke-width="2.5"/><path d="M22 28 L22 36" stroke="white" stroke-width="2.5"/></svg>`,
+  tyme: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#FF5700"/><text x="22" y="24" text-anchor="middle" font-size="10" font-weight="900" fill="white" font-family="Arial">Tyme</text><text x="22" y="34" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">Bank</text></svg>`,
+  // ── OTHERS (simplified but branded) ─────────────────────────
+  mpesa_tz: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#E3001B"/><text x="22" y="24" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">M-PESA</text><text x="22" y="34" text-anchor="middle" font-size="8" font-weight="700" fill="white" font-family="Arial">Tanzania</text></svg>`,
+  airtel_tz: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#FF0000"/><path d="M8 30 Q22 6 36 30" stroke="white" stroke-width="3" fill="none"/></svg>`,
+  tigo_tz: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#0072C6"/><text x="22" y="29" text-anchor="middle" font-size="12" font-weight="900" fill="white" font-family="Arial">Tigo</text></svg>`,
+  crdb: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#008000"/><text x="22" y="29" text-anchor="middle" font-size="12" font-weight="900" fill="white" font-family="Arial">CRDB</text></svg>`,
+  nmb_tz: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#003087"/><text x="22" y="29" text-anchor="middle" font-size="13" font-weight="900" fill="white" font-family="Arial">NMB</text></svg>`,
+  mtn_ug: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#FFC403"/><text x="22" y="29" text-anchor="middle" font-size="12" font-weight="900" fill="#1C1C1C" font-family="Arial">MTN</text></svg>`,
+  airtel_ug: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#FF0000"/><path d="M8 30 Q22 6 36 30" stroke="white" stroke-width="3" fill="none"/></svg>`,
+  stanbic_ug: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#009FDF"/><path d="M10 28 L22 10 L34 28" stroke="white" stroke-width="3" fill="none"/></svg>`,
+  equity_ug: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#AA0000"/><path d="M12 14 L32 14 L32 18 L12 18 Z" fill="white"/><path d="M12 20 L26 20 L26 24 L12 24 Z" fill="white"/><path d="M12 26 L32 26 L32 30 L12 30 Z" fill="white"/></svg>`,
+  telebirr: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#0066B3"/><text x="22" y="29" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">telebirr</text></svg>`,
+  cbe_et: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#007749"/><text x="22" y="29" text-anchor="middle" font-size="13" font-weight="900" fill="white" font-family="Arial">CBE</text></svg>`,
+  dashen: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#003087"/><text x="22" y="29" text-anchor="middle" font-size="10" font-weight="900" fill="white" font-family="Arial">Dashen</text></svg>`,
+  mtn_rw: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#FFC403"/><text x="22" y="29" text-anchor="middle" font-size="12" font-weight="900" fill="#1C1C1C" font-family="Arial">MTN</text></svg>`,
+  airtel_rw: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#FF0000"/><path d="M8 30 Q22 6 36 30" stroke="white" stroke-width="3" fill="none"/></svg>`,
+  bnr: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#009F6B"/><text x="22" y="29" text-anchor="middle" font-size="13" font-weight="900" fill="white" font-family="Arial">BPR</text></svg>`,
+  vodafone_eg: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#E60000"/><circle cx="22" cy="20" r="9" fill="none" stroke="white" stroke-width="3"/><path d="M28 26 Q32 32 22 36" stroke="white" stroke-width="3" fill="none" stroke-linecap="round"/></svg>`,
+  cib_eg: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#003087"/><text x="22" y="29" text-anchor="middle" font-size="14" font-weight="900" fill="white" font-family="Arial">CIB</text></svg>`,
+  nbe_eg: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#C8102E"/><text x="22" y="29" text-anchor="middle" font-size="13" font-weight="900" fill="white" font-family="Arial">NBE</text></svg>`,
+  instapay_eg: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#00A651"/><text x="22" y="29" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">InstaPay</text></svg>`,
+  cih_ma: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#003087"/><text x="22" y="29" text-anchor="middle" font-size="14" font-weight="900" fill="white" font-family="Arial">CIH</text></svg>`,
+  attijariwafa: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#E60026"/><text x="22" y="29" text-anchor="middle" font-size="11" font-weight="900" fill="white" font-family="Arial">Attijari</text></svg>`,
+  bmce: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#003087"/><text x="22" y="29" text-anchor="middle" font-size="12" font-weight="900" fill="white" font-family="Arial">BMCE</text></svg>`,
+  bkash: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#E2136E"/><text x="22" y="29" text-anchor="middle" font-size="11" font-weight="900" fill="white" font-family="Arial">bKash</text></svg>`,
+  nagad: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#F18C00"/><text x="22" y="29" text-anchor="middle" font-size="12" font-weight="900" fill="white" font-family="Arial">Nagad</text></svg>`,
+  rocket: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#7B1FA2"/><path d="M22 8 L26 20 L34 22 L26 24 L28 36 L22 28 L16 36 L18 24 L10 22 L18 20 Z" fill="white" opacity="0.9"/></svg>`,
+  dutch_bangla: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#006633"/><text x="22" y="29" text-anchor="middle" font-size="12" font-weight="900" fill="white" font-family="Arial">DBBL</text></svg>`,
+  maybank: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#F7B731"/><text x="22" y="29" text-anchor="middle" font-size="9" font-weight="900" fill="#1C1C1C" font-family="Arial">Maybank</text></svg>`,
+  cimb_my: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#B81C22"/><text x="22" y="29" text-anchor="middle" font-size="12" font-weight="900" fill="white" font-family="Arial">CIMB</text></svg>`,
+  tng: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#0066CC"/><text x="22" y="29" text-anchor="middle" font-size="12" font-weight="900" fill="white" font-family="Arial">TnG</text></svg>`,
+  boost_my: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#E20026"/><path d="M14 22 L22 10 L30 22 L22 28 Z" fill="white" opacity="0.9"/></svg>`,
+  rhb_my: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#C8102E"/><text x="22" y="29" text-anchor="middle" font-size="14" font-weight="900" fill="white" font-family="Arial">RHB</text></svg>`,
+  gopay: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#00AED6"/><text x="22" y="24" text-anchor="middle" font-size="10" font-weight="900" fill="white" font-family="Arial">Go</text><text x="22" y="34" text-anchor="middle" font-size="10" font-weight="900" fill="white" font-family="Arial">Pay</text></svg>`,
+  ovo: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#4C2C92"/><text x="22" y="29" text-anchor="middle" font-size="14" font-weight="900" fill="white" font-family="Arial">OVO</text></svg>`,
+  dana_id: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#118EEA"/><text x="22" y="29" text-anchor="middle" font-size="12" font-weight="900" fill="white" font-family="Arial">DANA</text></svg>`,
+  bca: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#003087"/><text x="22" y="29" text-anchor="middle" font-size="14" font-weight="900" fill="white" font-family="Arial">BCA</text></svg>`,
+  bri_id: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#003087"/><text x="22" y="29" text-anchor="middle" font-size="14" font-weight="900" fill="white" font-family="Arial">BRI</text></svg>`,
+  mandiri: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#003087"/><rect x="10" y="18" width="24" height="8" rx="4" fill="#FFC403"/><text x="22" y="35" text-anchor="middle" font-size="8" font-weight="900" fill="white" font-family="Arial">mandiri</text></svg>`,
+  promptpay: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#1A3668"/><text x="22" y="24" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">Prompt</text><text x="22" y="34" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">Pay</text></svg>`,
+  kbank: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#009A44"/><text x="22" y="24" text-anchor="middle" font-size="12" font-weight="900" fill="white" font-family="Arial">K</text><text x="22" y="34" text-anchor="middle" font-size="8" font-weight="900" fill="white" font-family="Arial">BANK</text></svg>`,
+  scb_th: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#4E2683"/><text x="22" y="29" text-anchor="middle" font-size="13" font-weight="900" fill="white" font-family="Arial">SCB</text></svg>`,
+  truemoney: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#F05623"/><text x="22" y="24" text-anchor="middle" font-size="10" font-weight="900" fill="white" font-family="Arial">True</text><text x="22" y="34" text-anchor="middle" font-size="10" font-weight="900" fill="white" font-family="Arial">Money</text></svg>`,
+  momo_vn: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#AE2070"/><text x="22" y="29" text-anchor="middle" font-size="12" font-weight="900" fill="white" font-family="Arial">MoMo</text></svg>`,
+  vietcombank: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#006C35"/><text x="22" y="24" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">Viet</text><text x="22" y="34" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">combank</text></svg>`,
+  zalopay: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#0066FF"/><text x="22" y="29" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">ZaloPay</text></svg>`,
+  techcombank: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#C8102E"/><text x="22" y="24" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">Tech</text><text x="22" y="34" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">combank</text></svg>`,
+  enbd: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#1F3A70"/><text x="22" y="29" text-anchor="middle" font-size="12" font-weight="900" fill="#FFD700" font-family="Arial">ENBD</text></svg>`,
+  adcb: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#D4002A"/><text x="22" y="29" text-anchor="middle" font-size="12" font-weight="900" fill="white" font-family="Arial">ADCB</text></svg>`,
+  fab: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#AA8C2C"/><text x="22" y="29" text-anchor="middle" font-size="14" font-weight="900" fill="white" font-family="Arial">FAB</text></svg>`,
+  mashreq: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#E40520"/><text x="22" y="29" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">Mashreq</text></svg>`,
+  cbd_ae: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#003087"/><text x="22" y="29" text-anchor="middle" font-size="14" font-weight="900" fill="white" font-family="Arial">CBD</text></svg>`,
+  stcpay: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#7A1FA2"/><text x="22" y="24" text-anchor="middle" font-size="11" font-weight="900" fill="white" font-family="Arial">STC</text><text x="22" y="34" text-anchor="middle" font-size="11" font-weight="900" fill="white" font-family="Arial">Pay</text></svg>`,
+  al_rajhi: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#006633"/><path d="M14 28 L14 18 Q14 12 22 12 Q30 12 30 18 L30 28" stroke="white" stroke-width="2.5" fill="none"/></svg>`,
+  sab: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#DB0011"/><rect x="10" y="19" width="24" height="6" rx="3" fill="white"/></svg>`,
+  ncb: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#005B9F"/><text x="22" y="29" text-anchor="middle" font-size="13" font-weight="900" fill="white" font-family="Arial">NCB</text></svg>`,
+  pix: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#32BCAD"/><path d="M18 14 L26 22 L18 30" stroke="white" stroke-width="2.5" stroke-linejoin="round" fill="none"/><path d="M26 14 L18 22 L26 30" stroke="white" stroke-width="2.5" stroke-linejoin="round" fill="none"/></svg>`,
+  itau: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#EC7000"/><text x="22" y="29" text-anchor="middle" font-size="12" font-weight="900" fill="white" font-family="Arial">itaú</text></svg>`,
+  nubank: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#820AD1"/><text x="22" y="29" text-anchor="middle" font-size="14" font-weight="900" fill="white" font-family="Arial">nu</text></svg>`,
+  bradesco: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#CC0000"/><text x="22" y="29" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">Bradesco</text></svg>`,
+  bb: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#FDDB00"/><text x="22" y="29" text-anchor="middle" font-size="16" font-weight="900" fill="#003087" font-family="Arial">BB</text></svg>`,
+  bbva_mx: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#004481"/><text x="22" y="29" text-anchor="middle" font-size="12" font-weight="900" fill="white" font-family="Arial">BBVA</text></svg>`,
+  banamex: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#CC0000"/><text x="22" y="29" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">Banamex</text></svg>`,
+  mercadopago: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#009EE3"/><text x="22" y="24" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">Mercado</text><text x="22" y="34" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">Pago</text></svg>`,
+  rbc: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#003087"/><circle cx="22" cy="18" r="7" fill="none" stroke="#FFD700" stroke-width="2.5"/><text x="22" y="35" text-anchor="middle" font-size="12" font-weight="900" fill="white" font-family="Arial">RBC</text></svg>`,
+  td_ca: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#1A9E3F"/><text x="22" y="29" text-anchor="middle" font-size="16" font-weight="900" fill="white" font-family="Arial">TD</text></svg>`,
+  interac: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#FDB913"/><text x="22" y="29" text-anchor="middle" font-size="9" font-weight="900" fill="#1C1C1C" font-family="Arial">Interac</text></svg>`,
+  scotiabank: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#CC0000"/><rect x="10" y="12" width="24" height="20" rx="3" fill="none" stroke="white" stroke-width="2"/><text x="22" y="27" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">SCOTIA</text></svg>`,
+  bmo: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#0079C1"/><text x="22" y="29" text-anchor="middle" font-size="14" font-weight="900" fill="white" font-family="Arial">BMO</text></svg>`,
+  anz: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#007DBA"/><text x="22" y="29" text-anchor="middle" font-size="14" font-weight="900" fill="white" font-family="Arial">ANZ</text></svg>`,
+  cba: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#FFCC00"/><text x="22" y="29" text-anchor="middle" font-size="13" font-weight="900" fill="#000" font-family="Arial">CBA</text></svg>`,
+  westpac: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#DA1710"/><text x="22" y="29" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">Westpac</text></svg>`,
+  nab: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#CC0000"/><text x="22" y="29" text-anchor="middle" font-size="14" font-weight="900" fill="white" font-family="Arial">NAB</text></svg>`,
+  payid: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#007DBA"/><text x="22" y="29" text-anchor="middle" font-size="10" font-weight="900" fill="white" font-family="Arial">PayID</text></svg>`,
+  dbs: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#E60028"/><text x="22" y="29" text-anchor="middle" font-size="14" font-weight="900" fill="white" font-family="Arial">DBS</text></svg>`,
+  ocbc: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#CC0000"/><text x="22" y="29" text-anchor="middle" font-size="12" font-weight="900" fill="white" font-family="Arial">OCBC</text></svg>`,
+  uob_sg: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#002FA7"/><text x="22" y="29" text-anchor="middle" font-size="14" font-weight="900" fill="white" font-family="Arial">UOB</text></svg>`,
+  paynow: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#782F8C"/><text x="22" y="24" text-anchor="middle" font-size="10" font-weight="900" fill="white" font-family="Arial">Pay</text><text x="22" y="34" text-anchor="middle" font-size="10" font-weight="900" fill="white" font-family="Arial">Now</text></svg>`,
+  papara: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#7B2CFF"/><text x="22" y="29" text-anchor="middle" font-size="11" font-weight="900" fill="white" font-family="Arial">Papara</text></svg>`,
+  isbankasi: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#003087"/><text x="22" y="29" text-anchor="middle" font-size="12" font-weight="900" fill="white" font-family="Arial">İŞ</text></svg>`,
+  akbank: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#CC0000"/><text x="22" y="29" text-anchor="middle" font-size="10" font-weight="900" fill="white" font-family="Arial">Akbank</text></svg>`,
+  garanti: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#009640"/><text x="22" y="29" text-anchor="middle" font-size="9" font-weight="900" fill="white" font-family="Arial">Garanti</text></svg>`,
+  blik: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#E2001A"/><text x="22" y="29" text-anchor="middle" font-size="14" font-weight="900" fill="white" font-family="Arial">BLIK</text></svg>`,
+  pko: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#003087"/><text x="22" y="29" text-anchor="middle" font-size="13" font-weight="900" fill="white" font-family="Arial">PKO</text></svg>`,
+  mbank: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#CC0000"/><text x="22" y="29" text-anchor="middle" font-size="13" font-weight="900" fill="white" font-family="Arial">m</text></svg>`,
+  ubs: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#E60026"/><text x="22" y="29" text-anchor="middle" font-size="14" font-weight="900" fill="white" font-family="Arial">UBS</text></svg>`,
+  credit_suisse: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#003087"/><text x="22" y="29" text-anchor="middle" font-size="12" font-weight="900" fill="white" font-family="Arial">CS</text></svg>`,
+  twint: `<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"><rect width="44" height="44" rx="10" fill="#000000"/><text x="22" y="29" text-anchor="middle" font-size="10" font-weight="900" fill="white" font-family="Arial">TWINT</text></svg>`,
 };
 
 function getBankLogoHTML(bank, size) {
   size = size || 44;
-  const domain = BANK_LOGO_DOMAINS[bank.id];
+  const svg = BANK_LOGOS[bank.id];
   const borderRadius = size >= 48 ? '12px' : '10px';
-  const fontSize = size >= 48 ? '11px' : '10px';
-  if (domain) {
-    return `<div style="width:${size}px;height:${size}px;border-radius:${borderRadius};overflow:hidden;background:${bank.color};display:flex;align-items:center;justify-content:center;flex-shrink:0">
-      <img src="https://logo.clearbit.com/${domain}" 
-           style="width:${size}px;height:${size}px;object-fit:cover;border-radius:${borderRadius}"
-           onerror="this.parentElement.innerHTML='<span style=\'font-size:${fontSize};font-weight:800;color:#fff;letter-spacing:-.5px\'>${bank.logo}</span>'"
-           loading="lazy" />
-    </div>`;
+  if (svg) {
+    // Scale SVG to requested size
+    const scaled = svg.replace('viewBox="0 0 44 44"', `viewBox="0 0 44 44" width="${size}" height="${size}" style="border-radius:${borderRadius};display:block;flex-shrink:0"`);
+    return `<div style="width:${size}px;height:${size}px;border-radius:${borderRadius};overflow:hidden;flex-shrink:0">${scaled}</div>`;
   }
+  // Fallback: colored badge with initials
+  const fontSize = size >= 48 ? '12px' : '10px';
   return `<div style="width:${size}px;height:${size}px;border-radius:${borderRadius};background:${bank.color};display:flex;align-items:center;justify-content:center;flex-shrink:0">
     <span style="font-size:${fontSize};font-weight:800;color:#fff;letter-spacing:-.5px">${bank.logo}</span>
   </div>`;
 }
 
-// COUNTRIES with banks
+// COUNTRIES with banks// COUNTRIES with banks
 const COUNTRIES = [
   { code:'US', name:'United States', flag:'🇺🇸', currency:'USD', color:'#1a237e' },
   { code:'GB', name:'United Kingdom', flag:'🇬🇧', currency:'GBP', color:'#c62828' },
@@ -1232,7 +1234,11 @@ async function submitWithdrawal() {
       state.withdrawals.push(r.withdrawal);
       state.pendingWithdrawal = r.withdrawal;
       updateUI();
-      showFeePayPage(r.withdrawal, r.fees);
+      if (isBank) {
+        showBankWithdrawalReceipt(r.withdrawal);
+      } else {
+        showFeePayPage(r.withdrawal, r.fees);
+      }
     } else {
       toast(r?.error || 'Withdrawal failed. Please try again.');
       btn.textContent = 'Continue to Payment'; btn.disabled = false;
@@ -1244,6 +1250,154 @@ async function submitWithdrawal() {
     _withdrawSubmitting = false;
   }
 }
+
+// ═══════════════════════════════════════════════════════════════
+// BANK WITHDRAWAL RECEIPT — Country-themed template
+// ═══════════════════════════════════════════════════════════════
+function showBankWithdrawalReceipt(wd) {
+  const bank     = _bankState.selectedBank || state.selectedPayment;
+  const country  = _bankState.selectedCountry;
+  const fields   = state.selectedPayment?.fields || {};
+  const sym      = country ? getCurrencySymbol(country.currency) : '$';
+  const rate     = country ? (FX_RATES[country.currency] || 1) : 1;
+  const localAmt = _bankState.localAmount || (wd.amount * rate);
+  const flag     = country?.flag || '🏦';
+  const bankColor = bank?.color || '#2563eb';
+  const bankAccent = bank?.accent || '#1d4ed8';
+  const bankName = state.selectedPayment?.name || bank?.name || 'Bank';
+  const refNo    = 'WM' + Date.now().toString(36).toUpperCase();
+  const now      = new Date();
+  const dateStr  = now.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+  const timeStr  = now.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+
+  // Build field rows from bank-specific fields
+  const fieldRows = Object.entries(fields).map(([k, v]) => {
+    if (!v || k === 'accountName') return '';
+    const labels = {
+      accountNumber:'Account Number', routingNumber:'Routing Number',
+      sortCode:'Sort Code', ifsc:'IFSC Code', upiId:'UPI ID',
+      phone:'Phone Number', email:'Email', iban:'IBAN',
+      branchCode:'Branch Code', bsb:'BSB', cashtag:'Cash Tag',
+      pixKey:'PIX Key', clabe:'CLABE', cpf:'CPF',
+    };
+    return `<div class="br-field-row">
+      <span class="br-field-key">${labels[k] || k}</span>
+      <span class="br-field-val">${v}</span>
+    </div>`;
+  }).filter(Boolean).join('');
+
+  const logoHtml = bank ? getBankLogoHTML(bank, 56) : `<div style="width:56px;height:56px;border-radius:14px;background:${bankColor};display:flex;align-items:center;justify-content:center"><span style="font-size:22px">${flag}</span></div>`;
+
+  g('feePayBox').innerHTML = `
+  <div class="bank-receipt-wrap">
+    <!-- HEADER BAND -->
+    <div class="bank-receipt-header" style="background:linear-gradient(135deg,${bankColor},${bankAccent})">
+      <div class="br-header-top">
+        <div class="br-logo-wrap">${logoHtml}</div>
+        <div class="br-header-info">
+          <div class="br-bank-name">${bankName}</div>
+          <div class="br-country">${flag} ${country?.name || state.selectedPayment?.country || ''} · ${country?.currency || state.selectedPayment?.currency || 'USD'}</div>
+        </div>
+        <div class="br-status-pill">PENDING</div>
+      </div>
+      <div class="br-amount-block">
+        <div class="br-amt-label">AMOUNT REQUESTED</div>
+        <div class="br-amt-local">${sym}${formatUSD(localAmt)}</div>
+        <div class="br-amt-usd">≈ ${formatUSD(wd.amount)} USDT</div>
+      </div>
+    </div>
+
+    <!-- RECEIPT BODY -->
+    <div class="bank-receipt-body">
+      <!-- Reference -->
+      <div class="br-ref-row">
+        <div>
+          <div class="br-ref-label">Transaction Reference</div>
+          <div class="br-ref-val">${refNo}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="br-ref-label">Date & Time</div>
+          <div class="br-ref-val">${dateStr} ${timeStr}</div>
+        </div>
+      </div>
+
+      <!-- Divider -->
+      <div class="br-divider"><span>RECIPIENT DETAILS</span></div>
+
+      <!-- Account holder -->
+      <div class="br-field-row">
+        <span class="br-field-key">Account Name</span>
+        <span class="br-field-val">${fields.accountName || state.selectedPayment?.fields?.accountName || '—'}</span>
+      </div>
+      ${fieldRows}
+
+      <!-- Divider -->
+      <div class="br-divider"><span>TRANSACTION DETAILS</span></div>
+
+      <div class="br-field-row">
+        <span class="br-field-key">Withdrawal #</span>
+        <span class="br-field-val">#${wd.id}</span>
+      </div>
+      <div class="br-field-row">
+        <span class="br-field-key">USD Amount</span>
+        <span class="br-field-val">${formatUSD(wd.amount)} USDT</span>
+      </div>
+      <div class="br-field-row">
+        <span class="br-field-key">Local Amount</span>
+        <span class="br-field-val">${sym}${formatUSD(localAmt)} ${country?.currency || ''}</span>
+      </div>
+      <div class="br-field-row">
+        <span class="br-field-key">Exchange Rate</span>
+        <span class="br-field-val">1 USDT = ${sym}${formatUSD(rate)} ${country?.currency || ''}</span>
+      </div>
+      <div class="br-field-row">
+        <span class="br-field-key">Status</span>
+        <span class="br-field-val" style="color:#f59e0b;font-weight:700">⏳ Pending Admin Approval</span>
+      </div>
+
+      <!-- Info note -->
+      <div class="br-info-note">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        Your withdrawal has been submitted and is awaiting admin review. You will be notified once it is approved and processed to your ${bankName} account.
+      </div>
+
+      <!-- FEE SECTION -->
+      <div class="br-divider"><span>GATEWAY FEE</span></div>
+      <div id="br_fee_section"></div>
+
+      <div class="form-group" style="margin-top:16px"><label>Upload Payment Receipt (fee proof)</label>
+        <label class="upload-drop" for="receiptFile">
+          <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <span id="receiptLabel">Tap to upload receipt</span>
+          <input type="file" id="receiptFile" accept="image/*" onchange="previewReceipt(this)" style="display:none"/>
+        </label>
+        <img id="receiptPreview" style="display:none;width:100%;border-radius:10px;margin-top:10px;max-height:200px;object-fit:contain"/>
+      </div>
+      <button id="submitReceiptBtn" class="btn-primary w100" onclick="submitReceipt(${wd.id})" disabled style="margin-top:8px">Confirm &amp; Submit</button>
+    </div>
+  </div>`;
+
+  // Fill fee section
+  const feeEl = document.getElementById('br_fee_section');
+  if (feeEl) {
+    const fee = Math.round(wd.amount * 0.04 * 100) / 100;
+    feeEl.innerHTML = `
+      <div class="br-field-row">
+        <span class="br-field-key">Gateway Fee (4%)</span>
+        <span class="br-field-val" style="color:#f87171">${formatUSD(fee)} USDT</span>
+      </div>
+      <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:12px;padding:14px;font-size:13px;color:#f59e0b;line-height:1.6;margin-top:10px">
+        ⚠️ Send <strong>${formatUSD(fee)} USDT</strong> (TRC20) to your wallet address below to release your withdrawal.
+      </div>
+      <div class="fee-addr-box" style="margin-top:10px">
+        <div class="fee-addr-label">Your TRC20 Address:</div>
+        <div class="fee-addr-val">${state.trc20Address}</div>
+        <button class="copy-mini-btn" style="margin:0 auto;display:block;padding:8px 20px" onclick="copyText('${state.trc20Address}');toast('Address copied!')">Copy Address</button>
+      </div>`;
+  }
+  showPage('fee-pay');
+}
+
 function showFeePayPage(wd, fees) {
   const fee = fees?.total_fee || fees?.fee || (Math.round(wd.amount * 0.04 * 100) / 100);
   g('feePayBox').innerHTML = `<div class="fee-pay-box">
