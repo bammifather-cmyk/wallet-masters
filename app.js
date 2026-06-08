@@ -136,8 +136,10 @@ async function init(retryCount) {
         await new Promise(r => setTimeout(r, delays[retryCount] || 3000));
         return init(retryCount + 1);
       }
-      showError('Server took too long to respond.<br><br>Please close and reopen the app — it will connect instantly next time.');
-      return;
+      // Keep retrying silently instead of showing error
+      setSplashMsg('Still connecting... Please wait.', 90);
+      await new Promise(r => setTimeout(r, 5000));
+      return init(retryCount + 1);
     }
 
     const u = data.user;
@@ -164,7 +166,6 @@ async function init(retryCount) {
     hideSplash();
     if (!state.termsAccepted) { showTerms(); return; }
     showApp();
-    loadProfilePicture();
     if (!tg.initData) console.warn('No initData — some features may not work');
   } catch(e) {
     if (retryCount < 20) {
@@ -172,7 +173,10 @@ async function init(retryCount) {
       await new Promise(r => setTimeout(r, delays[retryCount] || 3000));
       return init(retryCount + 1);
     }
-    showError('Taking longer than usual.<br>Please close and reopen the app to reconnect.');
+    // Keep retrying silently instead of showing error
+    setSplashMsg('Reconnecting... Please wait.', 85);
+    await new Promise(r => setTimeout(r, 5000));
+    return init(retryCount + 1);
   }
 }
 
@@ -1776,7 +1780,6 @@ async function loadMySpProfile() {
     const prof  = r.profile || {};
     const posts = r.posts   || [];
     state._mySpProfile = prof;
-    loadProfilePicture(); // refresh wallet avatar with SP profile pic
     const verBadge = prof.is_gold_verified ? `<span class="sp-verified sp-verified-gold">✓</span>` : (prof.is_verified ? `<span class="sp-verified">✓</span>` : '');
     const verSection = prof.is_gold_verified
       ? `<div style="display:flex;gap:8px;flex-direction:column;align-items:center">
@@ -2199,70 +2202,10 @@ async function adminDeleteComment(commentId) {
 }
 
 
-// ═══════════════════════════════════════════════════════════════
-// WALLET PROFILE PICTURE UPLOAD
-// ═══════════════════════════════════════════════════════════════
-function triggerProfilePicUpload() {
-  const hint = document.getElementById('avatarEditHint');
-  if (hint) { hint.style.display = 'flex'; setTimeout(() => hint.style.display = 'none', 800); }
-  document.getElementById('profilePicFileInput')?.click();
-}
-
-async function handleProfilePicUpload(input) {
-  const file = input.files?.[0];
-  if (!file) return;
-  // Compress image before upload
-  const canvas = document.createElement('canvas');
-  const img = new Image();
-  const reader = new FileReader();
-  reader.onload = async (e) => {
-    img.src = e.target.result;
-    img.onload = async () => {
-      const MAX = 200;
-      let w = img.width, h = img.height;
-      if (w > h) { h = Math.round(h * MAX / w); w = MAX; } else { w = Math.round(w * MAX / h); h = MAX; }
-      canvas.width = w; canvas.height = h;
-      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
-      // Show preview immediately
-      const avatarImg = document.getElementById('userAvatarImg');
-      const avatarInitial = document.getElementById('userAvatarInitial');
-      if (avatarImg) { avatarImg.src = dataUrl; avatarImg.style.display = 'block'; }
-      if (avatarInitial) avatarInitial.style.display = 'none';
-      toast('Uploading picture...');
-      try {
-        const r = await post('/profile/picture', { picture: dataUrl }, 30000);
-        if (r && r.success) {
-          state.user.profile_picture = dataUrl;
-          toast('Profile picture updated! ✓');
-        } else {
-          toast(r?.error || 'Upload failed. Please try again.');
-          // Revert preview
-          if (avatarImg) { avatarImg.style.display = 'none'; }
-          if (avatarInitial) avatarInitial.style.display = '';
-        }
-      } catch(e) {
-        toast('Upload failed. Check your connection.');
-        if (avatarImg) { avatarImg.style.display = 'none'; }
-        if (avatarInitial) avatarInitial.style.display = '';
-      }
-      input.value = '';
-    };
-  };
-  reader.readAsDataURL(file);
-}
-
-function loadProfilePicture() {
-  // Check all possible sources: main user object + socialpay profile
-  const pic = state.user?.profile_picture 
-           || state.user?.profile_pic 
-           || state._mySpProfile?.profile_pic;
-  if (!pic) return;
-  const avatarImg = document.getElementById('userAvatarImg');
-  const avatarInitial = document.getElementById('userAvatarInitial');
-  if (avatarImg) { avatarImg.src = pic; avatarImg.style.display = 'block'; }
-  if (avatarInitial) avatarInitial.style.display = 'none';
-}
+// Profile picture upload removed — avatar shows user initial only
+function triggerProfilePicUpload() { /* removed */ }
+function handleProfilePicUpload() { /* removed */ }
+function loadProfilePicture() { /* no-op — avatar uses initial letter */ }
 
 async function loadCommunityComments() {
   const list = g('communityCommentList'); if (!list) return;
