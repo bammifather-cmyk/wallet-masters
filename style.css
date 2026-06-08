@@ -9,7 +9,19 @@ html,body{height:100%;background:#070d1a;color:#f0f4ff;font-family:-apple-system
 .splash-title{font-size:26px;font-weight:700;letter-spacing:-.5px;margin-bottom:6px;color:#f0f4ff}
 .splash-sub{color:#7a90b0;font-size:13px;margin-bottom:32px}
 .splash-bar{width:160px;height:3px;background:#1a2740;border-radius:2px;margin:0 auto;overflow:hidden}
-.splash-fill{height:100%;width:40%;background:linear-gradient(90deg,#2563eb,#7c3aed);animation:load 1.8s ease-in-out infinite}
+.splash-fill {
+  height: 100%;
+  width: 15%;
+  background: linear-gradient(90deg, #2563eb, #7c3aed, #2563eb);
+  background-size: 200% 100%;
+  border-radius: 4px;
+  animation: shimmerBar 1.8s ease-in-out infinite;
+  transition: width 1.2s ease;
+}
+@keyframes shimmerBar {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
 @keyframes load{0%{margin-left:0;width:30%}50%{margin-left:35%;width:30%}100%{margin-left:70%;width:30%}}
 
 /* APP */
