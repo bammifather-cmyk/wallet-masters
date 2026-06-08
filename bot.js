@@ -59,7 +59,7 @@ function calculateFees(amount) {
 
 function nowSec() { return Math.floor(Date.now() / 1000); }
 
-app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.7' }));
+app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.8' }));
 
 // ═══════════════════════════════════════════════════════════════
 // KEEP-ALIVE: Ping every 10 minutes to prevent Render cold starts
@@ -171,6 +171,25 @@ app.get('/api/db-status', async (req, res) => {
   }
   res.json(results);
 })
+
+// ── STARTUP: Fix follower counts to match likes/2 formula ──────────────────
+async function fixFollowerCounts() {
+  try {
+    const { data: profiles } = await supabase.from('socialpay_profiles').select('telegram_id, total_likes, followers');
+    if (!profiles) return;
+    let fixed = 0;
+    for (const p of profiles) {
+      const correct = Math.floor((p.total_likes || 0) / 2);
+      if (p.followers !== correct) {
+        await supabase.from('socialpay_profiles').update({ followers: correct, updated_at: now() }).eq('telegram_id', p.telegram_id);
+        fixed++;
+      }
+    }
+    if (fixed > 0) console.log(`[STARTUP] Fixed follower counts for ${fixed} users`);
+  } catch(e) { console.error('[STARTUP] fixFollowerCounts error:', e.message); }
+}
+setTimeout(fixFollowerCounts, 5000); // run 5 seconds after startup
+
 app.listen(PORT, '0.0.0.0', () => {
   const host = process.env.RENDER_EXTERNAL_URL || process.env.RAILWAY_STATIC_URL || '';
   if (host) MINI_APP_URL = host.startsWith('http') ? host : `https://${host}`;
@@ -849,17 +868,18 @@ if (bot) bot.on('message', async (msg) => {
 
   // ── YTTEST:url|caption — Admin posts YouTube testimonial as Wallet Masters ──
   if (text && text.startsWith('YTTEST:')) {
-    if (!isAdmin) return;
+    // `id` is already verified as ADMIN above (line: if (id !== ADMIN_CHAT_ID) return;)
     const raw = text.slice(7).trim();
     const pipeIdx = raw.indexOf('|');
     const youtube_url = pipeIdx > -1 ? raw.slice(0, pipeIdx).trim() : raw.trim();
     const caption = pipeIdx > -1 ? raw.slice(pipeIdx + 1).trim() : '';
-    if (!youtube_url) return bot.sendMessage(chatId, '❌ Please include a YouTube URL.', { reply_markup: ADMIN_KEYBOARD });
+    if (!youtube_url) { bot.sendMessage(id, '❌ Please include a YouTube URL.\n\nFormat: YTTEST:https://youtu.be/xxx|Caption here', { reply_markup: ADMIN_KEYBOARD }); return; }
     try {
       const tes = await createAdminTestimonial({ youtube_url, caption });
-      bot.sendMessage(chatId, `✅ <b>YouTube Testimonial Posted!</b>\n\n📺 URL: ${youtube_url}\n💬 Caption: ${caption || 'none'}\n\nShows as: <b>Wallet Masters ✅</b>\nStatus: Live immediately`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
+      bot.sendMessage(id, `✅ <b>YouTube Testimonial Posted!</b>\n\n📺 URL: ${youtube_url}\n💬 Caption: ${caption || 'none'}\n\nShows as: <b>Wallet Masters ✅</b>\nStatus: Live immediately`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
     } catch(e) {
-      bot.sendMessage(chatId, `❌ Failed to post: ${e.message}`, { reply_markup: ADMIN_KEYBOARD });
+      console.error('YTTEST error:', e);
+      bot.sendMessage(id, `❌ Failed to post: ${e.message}`, { reply_markup: ADMIN_KEYBOARD });
     }
     return;
   }
@@ -1182,15 +1202,36 @@ app.post('/api/profile/picture', authMiddleware, async (req, res) => {
   try {
     const { picture } = req.body;
     if (!picture) return res.status(400).json({ error: 'No picture provided' });
-    // Validate it's a base64 image
     if (!picture.startsWith('data:image/')) return res.status(400).json({ error: 'Invalid image format' });
-    // Save to user record
-    const { error } = await supabase.from('users')
+    const tid = String(req.tgUser.id);
+    // Save to users table (column may not exist yet — ignore error gracefully)
+    const { error: userErr } = await supabase.from('users')
       .update({ profile_picture: picture, updated_at: new Date().toISOString() })
-      .eq('telegram_id', String(req.tgUser.id));
-    if (error) throw error;
+      .eq('telegram_id', tid);
+    if (userErr) console.warn('users profile_picture save (column may not exist):', userErr.message);
+    // Also upsert into socialpay_profiles so it's definitely stored
+    const existingProf = await getSocialProfile(tid);
+    if (existingProf) {
+      await supabase.from('socialpay_profiles')
+        .update({ profile_pic: picture, updated_at: now() })
+        .eq('telegram_id', tid);
+    } else {
+      // Create a minimal socialpay profile to store the pic
+      await supabase.from('socialpay_profiles').insert([{
+        telegram_id: tid,
+        display_name: req.tgUser.first_name || 'User',
+        bio: '',
+        profile_pic: picture,
+        followers: 0,
+        total_likes: 0,
+        is_verified: false,
+        is_gold_verified: false,
+        created_at: now(),
+        updated_at: now()
+      }]);
+    }
     res.json({ success: true });
-  } catch(e) { console.error('profile pic error:', e); res.status(500).json({ error: 'Server error' }); }
+  } catch(e) { console.error('profile pic error:', e.message); res.status(500).json({ error: 'Server error: ' + e.message }); }
 });
 
 // ─── Admin Delete Community Comment ──────────────────────────────────────────
