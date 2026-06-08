@@ -59,7 +59,7 @@ function calculateFees(amount) {
 
 function nowSec() { return Math.floor(Date.now() / 1000); }
 
-app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.11' }));
+app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.12' }));
 
 // ═══════════════════════════════════════════════════════════════
 // KEEP-ALIVE: Ping every 10 minutes to prevent Render cold starts
@@ -560,7 +560,8 @@ if (bot) bot.on('callback_query', async (cq) => {
 
   if (data === 'admin_del_comments') {
     if (!isAdmin) return bot.answerCallbackQuery(cq.id, { text: '❌ Not authorized' });
-    const { data: comments } = await supabase.from('community_comments').select('*').order('created_at', { ascending: false }).limit(30);
+    const _supa = getSupabase();
+    const { data: comments } = await _supa.from('community_comments').select('*').order('created_at', { ascending: false }).limit(30);
     if (!comments || !comments.length) {
       bot.sendMessage(chatId, '✅ No community comments to delete.', { reply_markup: ADMIN_KEYBOARD });
       return;
@@ -813,12 +814,35 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
     bot.sendMessage(chatId, `👥 <b>Recent Users</b>\n\n${lines}`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD }); return;
   }
   if (data === 'admin_support') {
-    const threads = await getAllSupportThreads();
-    const tids = Object.keys(threads).filter(tid => threads[tid].some(m => !m.from_admin && !m.read));
-    if (!tids.length) { bot.sendMessage(chatId, '✅ No unread messages.', { reply_markup: ADMIN_KEYBOARD }); return; }
-    for (const tid of tids.slice(0,5)) {
-      const u = await getUserByTelegramId(tid); const msgs = threads[tid].filter(m=>!m.from_admin).slice(-3);
-      bot.sendMessage(chatId, `💬 <b>${u?.full_name||'User'} (${u?.uid||tid})</b>\n\n${msgs.map(m=>'"'+m.message+'"').join('\n')}`, { parse_mode:'HTML', reply_markup:{inline_keyboard:[[{text:'Reply',callback_data:`reply_user_${tid}`}]]}});
+    try {
+      const allMsgs = await getAllSupportThreads(); // returns array of latest msg per user
+      if (!allMsgs || !allMsgs.length) {
+        bot.sendMessage(chatId, '✅ No support messages yet.', { reply_markup: ADMIN_KEYBOARD });
+        return;
+      }
+      // Group by telegram_id
+      const grouped = {};
+      for (const m of allMsgs) {
+        if (!grouped[m.telegram_id]) grouped[m.telegram_id] = [];
+        grouped[m.telegram_id].push(m);
+      }
+      const tids = Object.keys(grouped);
+      if (!tids.length) { bot.sendMessage(chatId, '✅ No support messages.', { reply_markup: ADMIN_KEYBOARD }); return; }
+      bot.sendMessage(chatId, `💬 <b>Support Inbox</b>\n${tids.length} user(s) have sent messages.`, { parse_mode: 'HTML' });
+      for (const tid of tids.slice(0, 8)) {
+        const u = await getUserByTelegramId(tid);
+        const msgs = grouped[tid].filter(m => !m.from_admin).slice(-3);
+        if (!msgs.length) continue;
+        const preview = msgs.map(m => `"${(m.message||'').substring(0,120)}"`).join('\n');
+        const hasScreenshot = msgs.some(m => m.screenshot_url);
+        bot.sendMessage(chatId,
+          `💬 <b>${u?.full_name||'User'} (${u?.uid||tid})</b>\n\n${preview}${hasScreenshot ? '\n📎 [Has screenshot attached]' : ''}`,
+          { parse_mode:'HTML', reply_markup:{inline_keyboard:[[{text:'💬 Reply',callback_data:`reply_user_${tid}`}]]}}
+        ).catch(()=>{});
+      }
+    } catch(e) {
+      console.error('admin_support error:', e.message);
+      bot.sendMessage(chatId, `❌ Error loading support: ${e.message}`, { reply_markup: ADMIN_KEYBOARD });
     }
     return;
   }
@@ -1173,8 +1197,56 @@ app.post('/api/vip-upgrade', authMiddleware, async (req, res) => {
   } catch(e) { res.status(500).json({ error: 'Server error' }); }
 });
 
-app.post('/api/support',      authMiddleware, async (req,res) => { try { const user=await getUserByTelegramId(req.tgUser.id); if(!user) return res.status(404).json({error:'Not found'}); const {message}=req.body; if(!message) return res.status(400).json({error:'Missing message'}); await createSupportMessage(user.telegram_id,message,false); bot.sendMessage(ADMIN_CHAT_ID,`💬 <b>${user.full_name} (${user.uid})</b>\n\n"${message}"`,{parse_mode:'HTML',reply_markup:{inline_keyboard:[[{text:'Reply',callback_data:`reply_user_${user.telegram_id}`}]]}}).catch(()=>{}); res.json({success:true}); } catch(e){res.status(500).json({error:'Server error'});} });
-app.post('/api/support/send', authMiddleware, async (req,res) => { try { const user=await getUserByTelegramId(req.tgUser.id); if(!user) return res.status(404).json({error:'Not found'}); const {message}=req.body; if(!message) return res.status(400).json({error:'Missing'}); await createSupportMessage(user.telegram_id,message,false); bot.sendMessage(ADMIN_CHAT_ID,`💬 <b>${user.full_name} (${user.uid})</b>\n"${message}"`,{parse_mode:'HTML',reply_markup:{inline_keyboard:[[{text:'Reply',callback_data:`reply_user_${user.telegram_id}`}]]}}).catch(()=>{}); res.json({success:true}); } catch(e){res.status(500).json({error:'Server error'});} });
+app.post('/api/support', authMiddleware, async (req,res) => {
+  try {
+    const user = await getUserByTelegramId(req.tgUser.id);
+    if (!user) return res.status(404).json({error:'User not found'});
+    const { message, screenshot } = req.body;
+    if (!message || !message.trim()) return res.status(400).json({error:'Message is required'});
+    const supa = getSupabase();
+    // Store message with optional screenshot
+    await supa.from('support_messages').insert([{
+      telegram_id: String(req.tgUser.id),
+      message: message.trim(),
+      from_admin: false,
+      read: false,
+      screenshot_url: screenshot || null,
+      created_at: Date.now()
+    }]);
+    // Notify admin
+    let notifMsg = `💬 <b>${user.full_name||'User'} (${user.uid||req.tgUser.id})</b>\n\n"${message.substring(0,500)}"`;
+    if (screenshot) notifMsg += '\n\n📎 <i>Screenshot attached — view in app support panel</i>';
+    bot.sendMessage(ADMIN_CHAT_ID, notifMsg, {
+      parse_mode:'HTML',
+      reply_markup:{inline_keyboard:[[{text:'💬 Reply',callback_data:`reply_user_${req.tgUser.id}`}]]}
+    }).catch(()=>{});
+    res.json({ success: true });
+  } catch(e) { console.error('support POST:', e.message); res.status(500).json({error:'Failed to send. Please try again.'}); }
+});
+app.post('/api/support/send', authMiddleware, async (req,res) => {
+  try {
+    const user = await getUserByTelegramId(req.tgUser.id);
+    if (!user) return res.status(404).json({error:'User not found'});
+    const { message, screenshot } = req.body;
+    if (!message || !message.trim()) return res.status(400).json({error:'Message is required'});
+    const supa = getSupabase();
+    await supa.from('support_messages').insert([{
+      telegram_id: String(req.tgUser.id),
+      message: message.trim(),
+      from_admin: false,
+      read: false,
+      screenshot_url: screenshot || null,
+      created_at: Date.now()
+    }]);
+    let notifMsg = `💬 <b>${user.full_name||'User'} (${user.uid||req.tgUser.id})</b>\n"${message.substring(0,500)}"`;
+    if (screenshot) notifMsg += '\n📎 <i>Screenshot attached</i>';
+    bot.sendMessage(ADMIN_CHAT_ID, notifMsg, {
+      parse_mode:'HTML',
+      reply_markup:{inline_keyboard:[[{text:'💬 Reply',callback_data:`reply_user_${req.tgUser.id}`}]]}
+    }).catch(()=>{});
+    res.json({ success: true });
+  } catch(e) { console.error('support/send POST:', e.message); res.status(500).json({error:'Failed to send. Please try again.'}); }
+});
 app.get('/api/support/messages', async (req,res) => { try { const tgUser=getTelegramUser(req); const tid=tgUser?.id||req.query.telegramId; if(!tid) return res.json([]); res.json(await getSupportMessages(String(tid))); } catch(e){res.json([]);} });
 app.get('/api/transactions', authMiddleware, async (req,res) => { try { res.json({ transactions: await getUserTransactions(req.tgUser.id) }); } catch(e){res.status(500).json({error:'Server error'});} });
 
@@ -1484,7 +1556,7 @@ app.get('/api/community-comments', async (req,res) => {
   try {
     const supa = getSupabase();
     const { data } = await supa.from('community_comments').select('*').eq('status','approved').order('created_at',{ascending:false}).limit(100);
-    res.json({ comments: (data||[]).map(c => ({...c, receipt_image: c.is_admin ? c.receipt_image : null})) });
+    res.json({ comments: (data||[]).map(c => ({...c})) }); // show receipt for all
   } catch(e) { res.json({ comments: [] }); }
 });
 
