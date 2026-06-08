@@ -1481,6 +1481,56 @@ function showTestimonialSubmit(type) {
   document.body.appendChild(modal);
 }
 
+
+// ── TESTIMONIALS PAGE ──────────────────────────────────────────────────────────
+async function loadTestimonialsPage() {
+  const list = document.getElementById('testimonialsList');
+  if (!list) return;
+  list.innerHTML = '<div style="text-align:center;padding:30px;color:#7a90b0">Loading testimonials...</div>';
+  try {
+    const data = await get('/testimonials');
+    const testimonials = data?.testimonials || [];
+    if (!testimonials.length) {
+      list.innerHTML = '<div style="text-align:center;padding:30px;color:#7a90b0">No testimonials yet. Be the first to share your experience!</div>';
+      return;
+    }
+    list.innerHTML = testimonials.map(t => {
+      const isAdmin = t.is_admin_post || t.telegram_id === 'ADMIN';
+      const ytUrl   = t.youtube_url || t.video_url || '';
+      const ytId    = ytUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/)?)([\w-]{11})/)?.[1];
+      const caption = t.caption || t.message || '';
+      const name    = t.name || 'Anonymous';
+      const date    = t.created_at ? new Date(t.created_at > 1e12 ? t.created_at : t.created_at * 1000).toLocaleDateString('en-GB', {day:'numeric',month:'short',year:'numeric'}) : '';
+
+      const verifiedBadge = isAdmin
+        ? `<span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:#fff;margin-left:5px;vertical-align:middle;box-shadow:0 1px 4px rgba(0,0,0,.3)"><svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="#1d4ed8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : '';
+
+      const videoSection = ytId
+        ? `<div style="position:relative;width:100%;padding-bottom:56.25%;border-radius:10px;overflow:hidden;margin-top:10px">
+            <iframe src="https://www.youtube.com/embed/${ytId}?rel=0&playsinline=1" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0" allowfullscreen loading="lazy"></iframe>
+           </div>`
+        : `<div style="display:flex;align-items:center;justify-content:center;width:100%;height:120px;background:#0e1629;border-radius:10px;margin-top:10px;color:#7a90b0;font-size:13px">No video available</div>`;
+
+      return `
+        <div style="background:#0d1b2e;border:1px solid #1e2d45;border-radius:14px;padding:16px;margin-bottom:14px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+            <div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#1e40af,#7c3aed);display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:15px;flex-shrink:0">${name.charAt(0).toUpperCase()}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:700;color:#f0f4ff;font-size:14px">${name}${verifiedBadge}</div>
+              <div style="font-size:11px;color:#7a90b0;margin-top:2px">${date}</div>
+            </div>
+            ${isAdmin ? `<div style="background:linear-gradient(135deg,#1e40af,#7c3aed);color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px">VERIFIED</div>` : ''}
+          </div>
+          ${videoSection}
+          ${caption ? `<p style="margin:10px 0 0;font-size:13px;color:#c8d6ec;line-height:1.5">${caption}</p>` : ''}
+        </div>`;
+    }).join('');
+  } catch(e) {
+    console.error('loadTestimonialsPage error:', e);
+    list.innerHTML = '<div style="text-align:center;padding:30px;color:#ef4444">Failed to load. Please try again.</div>';
+  }
+}
+
 async function doSubmitTestimonial(type) {
   const btn     = g('tesSubmitBtn');
   const caption = (g('tesCaption')?.value || '').trim();
