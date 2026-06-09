@@ -2348,33 +2348,38 @@ async function loadSupportMessages() {
   if (!container) return;
   try {
     const msgs = await get('/support/messages');
+    // NEVER wipe existing content if server returns empty — could be a fetch hiccup
     if (!msgs || !msgs.length) {
-      container.innerHTML = `
-        <div style="text-align:center;padding:40px 20px">
-          <div style="font-size:36px;margin-bottom:12px">💬</div>
-          <div style="font-weight:700;color:#f0f4ff;margin-bottom:6px">Support Chat</div>
-          <div style="font-size:13px;color:#5a7090">Send us a message and our team will reply shortly.</div>
-        </div>`;
+      // Only show empty state if container is genuinely empty (no real messages)
+      const hasRealMsgs = container.querySelectorAll('[data-msg]').length > 0;
+      if (!hasRealMsgs) {
+        container.innerHTML = `
+          <div style="text-align:center;padding:40px 20px">
+            <div style="font-size:36px;margin-bottom:12px">💬</div>
+            <div style="font-weight:700;color:#f0f4ff;margin-bottom:6px">Support Chat</div>
+            <div style="font-size:13px;color:#5a7090">Send us a message and our team will reply shortly.</div>
+          </div>`;
+      }
       return;
     }
+    // White verified badge SVG for Support Team
+    const verifiedBadge = `<svg width="14" height="14" viewBox="0 0 24 24" style="display:inline-block;vertical-align:middle;margin-left:3px;flex-shrink:0" fill="none"><circle cx="12" cy="12" r="11" fill="white"/><path d="M7 12.5l3.5 3.5 6.5-7" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     container.innerHTML = msgs.map(m => {
       const isAdmin = m.from_admin;
       const time = m.created_at ? new Date(m.created_at > 1e12 ? m.created_at : m.created_at * 1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
-      const screenshot = m.screenshot_url
-        ? `<div style="margin-top:6px"><img src="${m.screenshot_url}" style="max-width:200px;border-radius:8px;cursor:pointer" onclick="window.open('${m.screenshot_url}','_blank')" /></div>` : '';
       return `
-        <div style="display:flex;justify-content:${isAdmin ? 'flex-start' : 'flex-end'};margin-bottom:10px;padding:0 4px">
+        <div data-msg="${m.id||''}" style="display:flex;justify-content:${isAdmin ? 'flex-start' : 'flex-end'};margin-bottom:10px;padding:0 4px">
           <div style="max-width:78%;background:${isAdmin ? '#1a2d4a' : 'linear-gradient(135deg,#2563eb,#7c3aed)'};border-radius:${isAdmin ? '4px 14px 14px 14px' : '14px 4px 14px 14px'};padding:10px 14px">
-            ${isAdmin ? '<div style="font-size:10px;font-weight:700;color:#60a5fa;margin-bottom:4px">SUPPORT TEAM</div>' : ''}
-            <div style="font-size:13px;color:#f0f4ff;line-height:1.5">${m.message||''}</div>
-            ${screenshot}
+            ${isAdmin ? `<div style="display:flex;align-items:center;gap:2px;margin-bottom:5px"><span style="font-size:10px;font-weight:700;color:#60a5fa;letter-spacing:.5px">SUPPORT TEAM</span>${verifiedBadge}</div>` : ''}
+            <div style="font-size:13px;color:#f0f4ff;line-height:1.5">${(m.message||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
             <div style="font-size:10px;color:${isAdmin ? '#5a7090' : 'rgba(255,255,255,0.6)'};margin-top:4px;text-align:right">${time}</div>
           </div>
         </div>`;
     }).join('');
     scrollSupportToBottom();
   } catch(e) {
-    console.error('loadSupportMessages:', e);
+    console.error('loadSupportMessages error:', e);
+    // On error, never wipe — keep whatever is currently shown
   }
 }
 
@@ -2411,25 +2416,26 @@ async function sendSupport() {
     if (r && r.success) {
       const sentMsg = msg;
       if (input) input.value = '';
-      // Optimistically add user's message to chat immediately
+      // Add message to chat immediately with a stable data-msg id
       const container = g('supportMsgs');
       if (container) {
-        // Remove empty state if present
+        // Remove empty state placeholder if present
         const emptyDiv = container.querySelector('div[style*="text-align:center"]');
         if (emptyDiv) emptyDiv.remove();
-        const now = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+        const nowTime = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+        const tempId = 'opt_' + Date.now();
         const msgDiv = document.createElement('div');
-        msgDiv.setAttribute('data-optimistic','1');
+        msgDiv.setAttribute('data-msg', tempId);
         msgDiv.style.cssText = 'display:flex;justify-content:flex-end;margin-bottom:10px;padding:0 4px';
         msgDiv.innerHTML = `<div style="max-width:78%;background:linear-gradient(135deg,#2563eb,#7c3aed);border-radius:14px 4px 14px 14px;padding:10px 14px">
           <div style="font-size:13px;color:#f0f4ff;line-height:1.5">${sentMsg.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
-          <div style="font-size:10px;color:rgba(255,255,255,0.6);margin-top:4px;text-align:right">${now} ✓</div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.6);margin-top:4px;text-align:right">${nowTime} ✓</div>
         </div>`;
         container.appendChild(msgDiv);
         scrollSupportToBottom();
       }
-      // Then reload from server after short delay to confirm
-      setTimeout(() => loadSupportMessages(), 1200);
+      // Reload from server after 3s to sync real IDs (safe — won't wipe if server returns empty)
+      setTimeout(() => loadSupportMessages(), 3000);
     } else {
       toast(r?.error || 'Could not send message. Please try again.');
     }
