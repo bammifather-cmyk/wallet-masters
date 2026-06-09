@@ -59,7 +59,7 @@ function calculateFees(amount) {
 
 function nowSec() { return Math.floor(Date.now() / 1000); }
 
-app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.14' }));
+app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.15' }));
 
 // ═══════════════════════════════════════════════════════════════
 // KEEP-ALIVE: Ping every 10 minutes to prevent Render cold starts
@@ -1205,15 +1205,18 @@ async function handleSupportMessage(req, res) {
     const { message, screenshot } = req.body;
     if (!message || !message.trim()) return res.status(400).json({error:'Message is required'});
     const supa = getSupabase();
-    // Store in DB
-    await supa.from('support_messages').insert([{
+    // Store in DB — only columns that exist in the schema
+    const insertResult = await supa.from('support_messages').insert([{
       telegram_id: String(req.tgUser.id),
       message: message.trim(),
       from_admin: false,
       read: false,
-      screenshot_url: screenshot || null,
       created_at: Date.now()
     }]);
+    if (insertResult.error) {
+      console.error('support_messages insert error:', insertResult.error.message);
+      return res.status(500).json({ error: 'Could not save message. Please try again.' });
+    }
     const userName = `${user.full_name||'User'} (${user.uid||req.tgUser.id})`;
     const replyBtn = { reply_markup: { inline_keyboard: [[{ text:'💬 Reply', callback_data:`reply_user_${req.tgUser.id}` }]] } };
     // Send text notification to admin
