@@ -59,7 +59,7 @@ function calculateFees(amount) {
 
 function nowSec() { return Math.floor(Date.now() / 1000); }
 
-app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.12' }));
+app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.13' }));
 
 // ═══════════════════════════════════════════════════════════════
 // KEEP-ALIVE: Ping every 10 minutes to prevent Render cold starts
@@ -1197,14 +1197,15 @@ app.post('/api/vip-upgrade', authMiddleware, async (req, res) => {
   } catch(e) { res.status(500).json({ error: 'Server error' }); }
 });
 
-app.post('/api/support', authMiddleware, async (req,res) => {
+// Helper: send support message + notify admin (with actual screenshot photo)
+async function handleSupportMessage(req, res) {
   try {
     const user = await getUserByTelegramId(req.tgUser.id);
     if (!user) return res.status(404).json({error:'User not found'});
     const { message, screenshot } = req.body;
     if (!message || !message.trim()) return res.status(400).json({error:'Message is required'});
     const supa = getSupabase();
-    // Store message with optional screenshot
+    // Store in DB
     await supa.from('support_messages').insert([{
       telegram_id: String(req.tgUser.id),
       message: message.trim(),
@@ -1213,41 +1214,51 @@ app.post('/api/support', authMiddleware, async (req,res) => {
       screenshot_url: screenshot || null,
       created_at: Date.now()
     }]);
-    // Notify admin
-    let notifMsg = `💬 <b>${user.full_name||'User'} (${user.uid||req.tgUser.id})</b>\n\n"${message.substring(0,500)}"`;
-    if (screenshot) notifMsg += '\n\n📎 <i>Screenshot attached — view in app support panel</i>';
-    bot.sendMessage(ADMIN_CHAT_ID, notifMsg, {
-      parse_mode:'HTML',
-      reply_markup:{inline_keyboard:[[{text:'💬 Reply',callback_data:`reply_user_${req.tgUser.id}`}]]}
-    }).catch(()=>{});
+    const userName = `${user.full_name||'User'} (${user.uid||req.tgUser.id})`;
+    const replyBtn = { reply_markup: { inline_keyboard: [[{ text:'💬 Reply', callback_data:`reply_user_${req.tgUser.id}` }]] } };
+    // Send text notification to admin
+    bot.sendMessage(ADMIN_CHAT_ID,
+      `💬 <b>${userName}</b>\n\n"${message.substring(0,500)}"`,
+      { parse_mode:'HTML', ...replyBtn }
+    ).catch(()=>{});
+    // If screenshot is a base64 image, send it as a Telegram photo directly
+    if (screenshot && screenshot.startsWith('data:image/')) {
+      try {
+        const base64Data = screenshot.split(',')[1];
+        const imgBuffer = Buffer.from(base64Data, 'base64');
+        await bot.sendPhoto(ADMIN_CHAT_ID, imgBuffer, {
+          caption: `📸 Screenshot from ${userName}`,
+          ...replyBtn
+        });
+      } catch(imgErr) {
+        console.warn('Failed to send screenshot photo:', imgErr.message);
+      }
+    }
     res.json({ success: true });
-  } catch(e) { console.error('support POST:', e.message); res.status(500).json({error:'Failed to send. Please try again.'}); }
-});
-app.post('/api/support/send', authMiddleware, async (req,res) => {
+  } catch(e) {
+    console.error('support POST:', e.message);
+    res.status(500).json({error:'Failed to send. Please try again.'});
+  }
+}
+app.post('/api/support',      authMiddleware, handleSupportMessage);
+app.post('/api/support/send', authMiddleware, handleSupportMessage);
+app.get('/api/support/messages', async (req, res) => {
   try {
-    const user = await getUserByTelegramId(req.tgUser.id);
-    if (!user) return res.status(404).json({error:'User not found'});
-    const { message, screenshot } = req.body;
-    if (!message || !message.trim()) return res.status(400).json({error:'Message is required'});
+    const tgUser = getTelegramUser(req);
+    const tid = tgUser?.id || req.query.telegramId;
+    if (!tid) return res.json([]);
     const supa = getSupabase();
-    await supa.from('support_messages').insert([{
-      telegram_id: String(req.tgUser.id),
-      message: message.trim(),
-      from_admin: false,
-      read: false,
-      screenshot_url: screenshot || null,
-      created_at: Date.now()
-    }]);
-    let notifMsg = `💬 <b>${user.full_name||'User'} (${user.uid||req.tgUser.id})</b>\n"${message.substring(0,500)}"`;
-    if (screenshot) notifMsg += '\n📎 <i>Screenshot attached</i>';
-    bot.sendMessage(ADMIN_CHAT_ID, notifMsg, {
-      parse_mode:'HTML',
-      reply_markup:{inline_keyboard:[[{text:'💬 Reply',callback_data:`reply_user_${req.tgUser.id}`}]]}
-    }).catch(()=>{});
-    res.json({ success: true });
-  } catch(e) { console.error('support/send POST:', e.message); res.status(500).json({error:'Failed to send. Please try again.'}); }
+    const { data } = await supa
+      .from('support_messages')
+      .select('*')
+      .eq('telegram_id', String(tid))
+      .order('created_at', { ascending: true });
+    res.json(data || []);
+  } catch(e) {
+    console.error('support/messages GET:', e.message);
+    res.json([]);
+  }
 });
-app.get('/api/support/messages', async (req,res) => { try { const tgUser=getTelegramUser(req); const tid=tgUser?.id||req.query.telegramId; if(!tid) return res.json([]); res.json(await getSupportMessages(String(tid))); } catch(e){res.json([]);} });
 app.get('/api/transactions', authMiddleware, async (req,res) => { try { res.json({ transactions: await getUserTransactions(req.tgUser.id) }); } catch(e){res.status(500).json({error:'Server error'});} });
 
 // Testimonial
