@@ -2236,6 +2236,108 @@ async function loadCommunityComments() {
 }
 
 
+
+
+// ═══════════════════════════════════════════════════════════════
+// REFERRAL PAGE — render refer & earn content
+// ═══════════════════════════════════════════════════════════════
+function renderReferralPage() {
+  const el = document.getElementById('referralPageContent');
+  if (!el) return;
+  const code = state.referralCode || state.uid || '';
+  const count = state.referralCount || 0;
+  const link = `https://t.me/WalletMastersBot?start=${code}`;
+  el.innerHTML = `
+    <div style="padding:16px 0 80px">
+      <!-- Hero card -->
+      <div style="background:linear-gradient(135deg,#1a2d4a,#0e1629);border:1px solid rgba(37,99,235,.3);border-radius:16px;padding:20px;margin-bottom:14px;text-align:center">
+        <div style="font-size:36px;margin-bottom:8px">🎁</div>
+        <div style="font-size:20px;font-weight:800;color:#f0f4ff;margin-bottom:6px">Refer & Earn</div>
+        <div style="font-size:13px;color:#7a90b0;line-height:1.6">Invite friends and earn <strong style="color:#22c55e">200 USDT</strong> for every person who joins through your link!</div>
+      </div>
+      <!-- Stats -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+        <div style="background:#0e1629;border:1px solid #1e2d45;border-radius:12px;padding:14px;text-align:center">
+          <div style="font-size:24px;font-weight:800;color:#22c55e">${count}</div>
+          <div style="font-size:11px;color:#5a7090;margin-top:4px">Total Referrals</div>
+        </div>
+        <div style="background:#0e1629;border:1px solid #1e2d45;border-radius:12px;padding:14px;text-align:center">
+          <div style="font-size:24px;font-weight:800;color:#f0f4ff">${formatUSD(count * 200)}</div>
+          <div style="font-size:11px;color:#5a7090;margin-top:4px">USDT Earned</div>
+        </div>
+      </div>
+      <!-- Your code -->
+      <div style="background:#0e1629;border:1px solid #1e2d45;border-radius:12px;padding:14px;margin-bottom:14px">
+        <div style="font-size:11px;color:#5a7090;margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:.5px">Your Referral Code</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="flex:1;background:#131f35;border-radius:8px;padding:10px 12px;font-size:16px;font-weight:700;color:#60a5fa;letter-spacing:1px">${code}</div>
+          <button onclick="copyToClipboard('${code}');toast('Code copied! ✓')" style="background:#2563eb;border:none;border-radius:8px;padding:10px 14px;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Copy</button>
+        </div>
+      </div>
+      <!-- Share link -->
+      <div style="background:#0e1629;border:1px solid #1e2d45;border-radius:12px;padding:14px;margin-bottom:14px">
+        <div style="font-size:11px;color:#5a7090;margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:.5px">Your Referral Link</div>
+        <div style="background:#131f35;border-radius:8px;padding:10px 12px;font-size:11px;color:#7a90b0;word-break:break-all;margin-bottom:8px">${link}</div>
+        <button onclick="copyToClipboard('${link}');toast('Link copied! ✓')" class="btn-primary w100">📋 Copy Referral Link</button>
+      </div>
+      <!-- How it works -->
+      <div style="background:#0e1629;border:1px solid #1e2d45;border-radius:12px;padding:14px">
+        <div style="font-size:13px;font-weight:700;color:#f0f4ff;margin-bottom:12px">How It Works</div>
+        ${['Share your link with friends','They sign up using your link','You both earn 200 USDT instantly!'].map((s,i)=>`
+          <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px">
+            <div style="width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,#2563eb,#7c3aed);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;font-weight:700;color:#fff">${i+1}</div>
+            <div style="font-size:13px;color:#7a90b0;padding-top:3px">${s}</div>
+          </div>`).join('')}
+      </div>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// QR CODE GENERATOR — for Receive USDT page
+// ═══════════════════════════════════════════════════════════════
+function generateQR(address) {
+  const el = document.getElementById('qrCanvas');
+  if (!el) return;
+  el.innerHTML = '';
+  // Set receive address display
+  const addrEl = document.getElementById('receiveAddress');
+  const uidEl  = document.getElementById('receiveUID');
+  if (addrEl) addrEl.textContent = address || state.trc20Address || '';
+  if (uidEl)  uidEl.textContent  = state.uid || state.referralCode || '';
+  if (!address && !state.trc20Address) {
+    el.innerHTML = '<div style="color:#5a7090;font-size:12px;padding:20px">Address not available</div>';
+    return;
+  }
+  const addr = address || state.trc20Address;
+  // Try using QRCode.js library first
+  if (typeof QRCode !== 'undefined') {
+    try {
+      new QRCode(el, {
+        text: addr,
+        width: 180,
+        height: 180,
+        colorDark: '#0d1b2e',
+        colorLight: '#f0f4ff',
+        correctLevel: QRCode.CorrectLevel.M
+      });
+      el.style.background = '#f0f4ff';
+      el.style.padding = '10px';
+      el.style.borderRadius = '12px';
+      el.style.display = 'inline-block';
+      return;
+    } catch(e) { console.warn('QRCode lib failed:', e); }
+  }
+  // Fallback: use Google Charts QR API
+  const img = document.createElement('img');
+  img.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(addr)}&bgcolor=f0f4ff&color=0d1b2e&margin=10`;
+  img.alt = 'QR Code';
+  img.style.cssText = 'width:180px;height:180px;border-radius:12px;display:block';
+  img.onerror = () => {
+    el.innerHTML = `<div style="background:#f0f4ff;padding:16px;border-radius:12px;word-break:break-all;font-size:11px;color:#0d1b2e;max-width:200px">${addr}</div>`;
+  };
+  el.appendChild(img);
+}
+
 // ═══════════════════════════════════════════════════════════════
 // SUPPORT PAGE — Load messages, send with optional screenshot
 // ═══════════════════════════════════════════════════════════════
@@ -2346,6 +2448,31 @@ function clearSupportScreenshot() {
   updateSupportScreenshotPreview();
 }
 
+function updateCommunityReceiptPreview() {
+  const file = g('communityReceiptFile')?.files?.[0];
+  const preview = g('communityReceiptPreview');
+  if (!preview) return;
+  if (file) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      preview.innerHTML = `<div style="position:relative;display:inline-block;margin:6px 0">
+        <img src="${e.target.result}" style="max-height:70px;border-radius:8px;border:1px solid #1e2d45"/>
+        <button onclick="clearCommunityReceipt()" style="position:absolute;top:-6px;right:-6px;background:#ef4444;border:none;border-radius:50%;width:18px;height:18px;color:#fff;font-size:10px;cursor:pointer;line-height:18px;text-align:center">✕</button>
+        <div style="font-size:10px;color:#22c55e;margin-top:3px">📎 ${file.name.substring(0,25)}</div>
+      </div>`;
+    };
+    reader.readAsDataURL(file);
+  } else {
+    if (preview) preview.innerHTML = '';
+  }
+}
+
+function clearCommunityReceipt() {
+  const fi = g('communityReceiptFile');
+  if (fi) fi.value = '';
+  updateCommunityReceiptPreview();
+}
+
 async function submitCommunityComment() {
   const text = (g('communityCommentText')?.value || '').trim();
   if (text.length < 10) return toast('Please write at least 10 characters');
@@ -2354,16 +2481,43 @@ async function submitCommunityComment() {
   const body = { text };
   const receiptFile = g('communityReceiptFile')?.files?.[0];
   if (receiptFile) {
-    body.receipt_image = await new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target.result); r.readAsDataURL(receiptFile); });
+    try {
+      body.receipt_image = await new Promise((res, rej) => {
+        const canvas = document.createElement('canvas');
+        const img2 = new Image();
+        const reader = new FileReader();
+        reader.onload = e => {
+          img2.src = e.target.result;
+          img2.onload = () => {
+            const MAX = 800;
+            let w = img2.width, h = img2.height;
+            if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
+            if (h > MAX) { w = Math.round(w * MAX / h); h = MAX; }
+            canvas.width = w; canvas.height = h;
+            canvas.getContext('2d').drawImage(img2, 0, 0, w, h);
+            res(canvas.toDataURL('image/jpeg', 0.8));
+          };
+          img2.onerror = () => res(e.target.result);
+        };
+        reader.onerror = rej;
+        reader.readAsDataURL(receiptFile);
+      });
+    } catch(e) { console.warn('receipt compress failed:', e); }
   }
-  const r = await post('/community-comments', body);
-  if (r.success) {
-    g('communityCommentText').value = '';
-    btn.textContent = '✓ Submitted for Review!';
-    toast('Comment submitted! Admin will review shortly. ✅');
-    setTimeout(() => { btn.textContent = 'Share My Story'; btn.disabled = false; }, 2000);
-  } else {
-    toast(r.error || 'Could not submit. Make sure you have a completed withdrawal first.');
+  try {
+    const r = await post('/community-comments', body);
+    if (r && r.success) {
+      g('communityCommentText').value = '';
+      clearCommunityReceipt();
+      btn.textContent = '✓ Submitted for Review!';
+      toast('Comment submitted! Admin will review shortly. ✅');
+      setTimeout(() => { btn.textContent = 'Share My Story'; btn.disabled = false; }, 2500);
+    } else {
+      toast(r?.error || 'Could not submit. Make sure you have a completed withdrawal first.');
+      btn.textContent = 'Share My Story'; btn.disabled = false;
+    }
+  } catch(e) {
+    toast('Network error. Please try again.');
     btn.textContent = 'Share My Story'; btn.disabled = false;
   }
 }
