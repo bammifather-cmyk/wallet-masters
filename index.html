@@ -451,9 +451,10 @@
                 <label class="upload-drop" for="communityReceiptFile" style="padding:8px 12px;flex-direction:row;gap:8px;min-height:auto">
                   <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                   <span style="font-size:12px">Attach payment receipt (optional)</span>
-                  <input type="file" id="communityReceiptFile" accept="image/*" style="display:none"/>
+                  <input type="file" id="communityReceiptFile" accept="image/*" style="display:none" onchange="updateCommunityReceiptPreview()"/>
                 </label>
               </div>
+              <div id="communityReceiptPreview"></div>
               <button id="submitCommunityCommentBtn" class="btn-primary w100" style="margin-top:10px" onclick="submitCommunityComment()">Share My Story</button>
             </div>
             <!-- Comments list -->
