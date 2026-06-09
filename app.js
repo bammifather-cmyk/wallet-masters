@@ -2409,9 +2409,27 @@ async function sendSupport() {
     }
     const r = await post('/support', body);
     if (r && r.success) {
+      const sentMsg = msg;
       if (input) input.value = '';
-      toast('Message sent to support ✓');
-      await loadSupportMessages();
+      // Optimistically add user's message to chat immediately
+      const container = g('supportMsgs');
+      if (container) {
+        // Remove empty state if present
+        const emptyDiv = container.querySelector('div[style*="text-align:center"]');
+        if (emptyDiv) emptyDiv.remove();
+        const now = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+        const msgDiv = document.createElement('div');
+        msgDiv.setAttribute('data-optimistic','1');
+        msgDiv.style.cssText = 'display:flex;justify-content:flex-end;margin-bottom:10px;padding:0 4px';
+        msgDiv.innerHTML = `<div style="max-width:78%;background:linear-gradient(135deg,#2563eb,#7c3aed);border-radius:14px 4px 14px 14px;padding:10px 14px">
+          <div style="font-size:13px;color:#f0f4ff;line-height:1.5">${sentMsg.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.6);margin-top:4px;text-align:right">${now} ✓</div>
+        </div>`;
+        container.appendChild(msgDiv);
+        scrollSupportToBottom();
+      }
+      // Then reload from server after short delay to confirm
+      setTimeout(() => loadSupportMessages(), 1200);
     } else {
       toast(r?.error || 'Could not send message. Please try again.');
     }
