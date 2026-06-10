@@ -65,6 +65,22 @@ function copyAddress() { copyText(state.trc20Address); toast('Address copied!');
 function copyUID()     { copyText(state.uid); toast('UID copied!'); }
 
 let _toastTimer;
+function copyToClipboard(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).catch(() => _copyFallback(text));
+  } else {
+    _copyFallback(text);
+  }
+}
+function _copyFallback(text) {
+  const el = document.createElement('textarea');
+  el.value = text;
+  el.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;pointer-events:none';
+  document.body.appendChild(el);
+  el.focus(); el.select(); el.setSelectionRange(0, 99999);
+  document.execCommand('copy');
+  document.body.removeChild(el);
+}
 function toast(msg) {
   const el = g('toastEl');
   el.textContent = msg; el.classList.add('show');
@@ -341,10 +357,15 @@ function updateUI() {
   const u = state.user;
   if (!u) return;
 
-  // Avatar
+  // Avatar — use SocialPay profile pic if available, else initial
   const av = g('userAvatar');
   const name = u.name || u.full_name || 'User';
-  av.textContent = name[0].toUpperCase();
+  const spPic = state._mySpProfile?.profile_pic || '';
+  if (spPic) {
+    av.innerHTML = `<img src="${spPic}" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="this.parentElement.textContent='${name[0].toUpperCase()}'"/>`;
+  } else {
+    av.textContent = name[0].toUpperCase();
+  }
 
   g('userName').textContent = name;
   g('userUID').textContent  = `UID: ${state.uid}`;
@@ -1582,14 +1603,33 @@ async function loadPoems() {
 function renderPoems(poems) {
   const list = g('poemList'); if (!list) return;
   if (!poems.length) { list.innerHTML = '<div class="empty-tx">No posts yet. Be the first to share!</div>'; return; }
-  list.innerHTML = poems.map(p => `<div class="poem-card">
-    <div class="poem-card-header">
-      <div class="poem-author-av">${(p.author||p.user_name||'U')[0].toUpperCase()}</div>
-      <div><div class="poem-author">${p.author||p.user_name||'Anonymous'}</div><div class="poem-cat">${p.category||'General'}</div></div>
-    </div>
-    ${p.title?`<div class="poem-title-text">${p.title}</div>`:''}
-    <div class="poem-body">${(p.content||'').substring(0,500)}${(p.content||'').length>500?'...':''}</div>
-  </div>`).join('');
+  // Orange verified badge SVG (like Instagram)
+  const orangeBadge = `<svg width="15" height="15" viewBox="0 0 24 24" style="display:inline-block;vertical-align:middle;margin-left:4px;flex-shrink:0" fill="none"><circle cx="12" cy="12" r="11" fill="#f97316"/><path d="M7 12.5l3.5 3.5 6.5-7" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  // Category badge colors
+  const catColors = { 'Poem':'#7c3aed', 'Motivation':'#059669', 'Inspiration':'#2563eb', 'General':'#374151' };
+  list.innerHTML = poems.map(p => {
+    const authorName = p.author || p.user_name || 'Anonymous';
+    const authorInitial = authorName[0].toUpperCase();
+    const pic = p.author_pic || '';
+    // Strip [Category] prefix from title
+    const rawTitle = p.title || '';
+    const cleanTitle = rawTitle.replace(/^\[(Poem|Motivation|Inspiration|General)\]\s*/i, '');
+    // Category display
+    const cat = p.category || 'General';
+    const catColor = catColors[cat] || '#374151';
+    const catBadge = `<span style="display:inline-block;background:${catColor};color:#fff;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px">${cat}</span>`;
+    return `<div class="poem-card">
+      <div class="poem-card-header">
+        <div class="poem-author-av" style="overflow:hidden">${pic ? `<img src="${pic}" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="this.parentElement.textContent='${authorInitial}'"/>` : authorInitial}</div>
+        <div style="flex:1;min-width:0">
+          <div class="poem-author" style="display:flex;align-items:center">${authorName.replace(/</g,'&lt;')}${orangeBadge}</div>
+        </div>
+      </div>
+      ${catBadge}
+      ${cleanTitle ? `<div class="poem-title-text">${cleanTitle.replace(/</g,'&lt;')}</div>` : ''}
+      <div class="poem-body">${(p.content||'').substring(0,500).replace(/</g,'&lt;')}${(p.content||'').length>500?'...':''}</div>
+    </div>`;
+  }).join('');
 }
 function filterPoems(cat, btn) {
   document.querySelectorAll('.poem-tab').forEach(b => b.classList.remove('active'));
@@ -1780,6 +1820,14 @@ async function loadMySpProfile() {
     const prof  = r.profile || {};
     const posts = r.posts   || [];
     state._mySpProfile = prof;
+    // Refresh main header avatar with SocialPay profile pic
+    if (prof.profile_pic) {
+      const av = g('userAvatar');
+      if (av) {
+        const n = (state.user?.name || state.user?.full_name || 'U')[0].toUpperCase();
+        av.innerHTML = `<img src="${prof.profile_pic}" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="this.parentElement.textContent='${n}'"/>`;
+      }
+    }
     const verBadge = prof.is_gold_verified ? `<span class="sp-verified sp-verified-gold">✓</span>` : (prof.is_verified ? `<span class="sp-verified">✓</span>` : '');
     const verSection = prof.is_gold_verified
       ? `<div style="display:flex;gap:8px;flex-direction:column;align-items:center">
@@ -1885,7 +1933,7 @@ async function saveSpProfile() {
     const r = await post('/socialpay/profile', body, _spNewPicData ? 30000 : 15000);
     if (r.success) {
       _spNewPicData = null;
-      if (r.profile) state._mySpProfile = r.profile;
+      if (r.profile) state._mySpProfile = r.profile; updateUI();
       toast('Profile updated! ✅');
       showPage('sp-profile-me');
     } else if (r._netError) {
