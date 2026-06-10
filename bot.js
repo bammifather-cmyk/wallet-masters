@@ -59,7 +59,7 @@ function calculateFees(amount) {
 
 function nowSec() { return Math.floor(Date.now() / 1000); }
 
-app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.15' }));
+app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.16' }));
 
 // ═══════════════════════════════════════════════════════════════
 // KEEP-ALIVE: Ping every 10 minutes to prevent Render cold starts
@@ -1334,7 +1334,19 @@ app.post('/api/poem/submit', authMiddleware, async (req,res) => {
     bot.sendMessage(ADMIN_CHAT_ID,`📝 <b>New Poem/Inspiration #${poem.id}</b>\n👤 ${user.full_name||'User'} (${user.uid||'?'})\n📂 Category: ${category||'General'}\n\n"${content.substring(0,400)}"\n\n💰 Reward: 1,000 USDT`,{parse_mode:'HTML',reply_markup:{inline_keyboard:[[{text:'✅ Approve (+1,000)',callback_data:'poem_approve_'+poem.id},{text:'❌ Reject',callback_data:'poem_reject_'+poem.id}],[{text:'🗑️ Delete Post',callback_data:'poem_delete_'+poem.id}]]}}).catch(e=>console.error('Admin notify poem error:',e.message));
   } catch(e) { res.status(500).json({error:'Server error'}); }
 });
-app.get('/api/poems', async (req,res) => { try { res.json({ poems: await getApprovedPoems() }); } catch(e){res.json({poems:[]});} });
+app.get('/api/poems', async (req, res) => {
+  try {
+    const poems = await getApprovedPoems();
+    const supa = getSupabase();
+    // Enrich each poem with author's profile_pic from socialpay_profiles
+    const enriched = await Promise.all(poems.map(async p => {
+      if (!p.telegram_id) return p;
+      const { data: sp } = await supa.from('socialpay_profiles').select('profile_pic,display_name').eq('telegram_id', String(p.telegram_id)).single();
+      return { ...p, author_pic: sp?.profile_pic || '', author: p.author || sp?.display_name || 'Anonymous' };
+    }));
+    res.json({ poems: enriched });
+  } catch(e) { res.json({ poems: [] }); }
+});
 
 // ─── SOCIALPAY ────────────────────────────────────────────────────────────────
 app.get('/api/socialpay/posts', async (req,res) => {
