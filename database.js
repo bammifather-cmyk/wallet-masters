@@ -31,6 +31,39 @@ async function initDB() {
   const { error } = await supabase.from('users').select('id').limit(1);
   if (error) console.error('[DB] Connection test failed:', error.message);
   else console.log('[DB] Supabase connection OK');
+
+  // ── Column migrations: add missing columns safely ────────────────────────
+  // Check & add is_pinned to socialpay_posts
+  const { error: pinErr } = await supabase.from('socialpay_posts').select('is_pinned').limit(1);
+  if (pinErr && pinErr.message && pinErr.message.includes('is_pinned')) {
+    console.log('[DB MIGRATION] Adding is_pinned column to socialpay_posts...');
+    // Use Supabase REST + service role to run raw SQL via PostgREST RPC
+    // Fallback: patch via direct HTTP to management API
+    try {
+      const SUPABASE_URL = process.env.SUPABASE_URL || '';
+      const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || '';
+      const PROJECT_REF = SUPABASE_URL.replace('https://','').replace('.supabase.co','').split('.')[0];
+      // Try via pg REST proxy
+      const resp = await fetch(`${SUPABASE_URL}/rest/v1/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_SERVICE_KEY, 'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}` },
+        body: JSON.stringify({ query: 'ALTER TABLE socialpay_posts ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN DEFAULT false' })
+      });
+      console.log('[DB MIGRATION] is_pinned migration attempt status:', resp.status);
+    } catch(e) { console.warn('[DB MIGRATION] is_pinned migration failed:', e.message); }
+  }
+
+  // Check & add caption to socialpay_posts
+  const { error: capErr } = await supabase.from('socialpay_posts').select('caption').limit(1);
+  if (capErr && capErr.message && capErr.message.includes('caption')) {
+    console.log('[DB MIGRATION] socialpay_posts.caption missing — will use content field as fallback');
+  }
+
+  // Check & add screenshot_url to support_messages
+  const { error: ssErr } = await supabase.from('support_messages').select('screenshot_url').limit(1);
+  if (ssErr && ssErr.message && ssErr.message.includes('screenshot_url')) {
+    console.log('[DB MIGRATION] support_messages.screenshot_url missing — image attachments will be skipped');
+  }
 }
 
 // ─── User CRUD ────────────────────────────────────────────────────────────────
@@ -436,23 +469,45 @@ async function getPendingSocialPosts() {
 }
 
 async function getApprovedSocialPosts() {
-  const { data } = await supabase.from('socialpay_posts').select('id,telegram_id,content,image_url,status,likes,user_likes,total_earned,created_at,updated_at,is_pinned').eq('status', 'approved').order('created_at', { ascending: false });
-  if (!data) return [];
-  const mapped = data.map(p => ({ ...p, caption: p.content || '' }));
-  // Pinned posts always first
+  // Try with is_pinned; graceful fallback if column doesn't exist yet
+  let posts = null, hasPinned = false;
+  const { data: d1, error: e1 } = await supabase.from('socialpay_posts')
+    .select('id,telegram_id,content,image_url,status,likes,user_likes,total_earned,created_at,updated_at,is_pinned')
+    .eq('status', 'approved').order('created_at', { ascending: false });
+  if (e1 && (e1.message||'').includes('is_pinned')) {
+    const { data: d2 } = await supabase.from('socialpay_posts')
+      .select('id,telegram_id,content,image_url,status,likes,user_likes,total_earned,created_at,updated_at')
+      .eq('status', 'approved').order('created_at', { ascending: false });
+    posts = d2 || []; hasPinned = false;
+  } else { posts = d1 || []; hasPinned = true; }
+  const mapped = posts.map(p => ({ ...p, caption: p.content||'', is_pinned: hasPinned ? (p.is_pinned||false) : false }));
   const pinned = mapped.filter(p => p.is_pinned);
   const normal = mapped.filter(p => !p.is_pinned);
   return [...pinned, ...normal];
 }
 
 async function setPinnedPost(postId, isPinned) {
+  // Try with is_pinned column; if missing, return error message to trigger SQL reminder
   const { error } = await supabase.from('socialpay_posts').update({ is_pinned: isPinned, updated_at: Date.now() }).eq('id', postId);
+  if (error && (error.message||'').includes('is_pinned')) {
+    console.warn('[DB] is_pinned column missing — run: ALTER TABLE socialpay_posts ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN DEFAULT false;');
+    return false;
+  }
   return !error;
 }
 
 async function getSocialPostsByUser(telegramId) {
-  const { data } = await supabase.from('socialpay_posts').select('id,telegram_id,content,image_url,status,likes,user_likes,total_earned,created_at,updated_at,is_pinned').eq('telegram_id', String(telegramId)).order('created_at', { ascending: false });
-  return (data || []).map(p => ({ ...p, caption: p.content || '' }));
+  let data = null;
+  const { data: d1, error: e1 } = await supabase.from('socialpay_posts')
+    .select('id,telegram_id,content,image_url,status,likes,user_likes,total_earned,created_at,updated_at,is_pinned')
+    .eq('telegram_id', String(telegramId)).order('created_at', { ascending: false });
+  if (e1 && (e1.message||'').includes('is_pinned')) {
+    const { data: d2 } = await supabase.from('socialpay_posts')
+      .select('id,telegram_id,content,image_url,status,likes,user_likes,total_earned,created_at,updated_at')
+      .eq('telegram_id', String(telegramId)).order('created_at', { ascending: false });
+    data = d2 || [];
+  } else { data = d1 || []; }
+  return data.map(p => ({ ...p, caption: p.content||'', is_pinned: p.is_pinned||false }));
 }
 
 async function updateSocialPost(id, updates) {

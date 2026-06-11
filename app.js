@@ -184,18 +184,22 @@ async function init(retryCount) {
     if (u.profile_picture || u.profilePicture) {
       state._myProfilePic = u.profile_picture || u.profilePicture;
     }
-    // Also eagerly fetch SocialPay profile for pic (background)
-    setTimeout(async () => {
+    // Eagerly fetch SocialPay profile for pic (background) — runs immediately and again after 3s
+    const _refreshProfilePic = async () => {
       try {
         const spR = await fetch(`${API}/socialpay/my-profile`, { headers: { 'x-telegram-init-data': getInitData() } }).then(r=>r.json()).catch(()=>({}));
         if (spR.profile?.profile_pic) {
           state._mySpProfile = spR.profile;
+          state._myProfilePic = spR.profile.profile_pic;
           applyProfilePicEverywhere(spR.profile.profile_pic, u.name || u.full_name || 'U');
         } else if (state._myProfilePic) {
           applyProfilePicEverywhere(state._myProfilePic, u.name || u.full_name || 'U');
         }
       } catch(e) {}
-    }, 500);
+    };
+    window._refreshProfilePic = _refreshProfilePic;
+    setTimeout(_refreshProfilePic, 300);   // fast first load
+    setTimeout(_refreshProfilePic, 3000);  // retry after page settles
     state.transactions = data.transactions || [];
     state.connections  = data.connections  || [];
     state.withdrawals  = data.withdrawals  || [];
@@ -495,6 +499,8 @@ function showPage(name) {
     if (name === 'connect')      renderConnect();
     if (name === 'activity')     renderTx(state.transactions, true);
     if (name === 'support')      { loadSupportMessages(); setTimeout(scrollSupportToBottom, 200); }
+  // Refresh profile pic on every tab switch
+  if (window._refreshProfilePic) setTimeout(window._refreshProfilePic, 100);
     if (name === 'vip')          renderVIPPage();
     if (name === 'referral')     renderReferralPage();
     if (name === 'poems')        loadPoems();
@@ -1644,16 +1650,21 @@ function renderPoems(poems) {
     const rawTitle = p.title || '';
     const cleanTitle = rawTitle.replace(/^\[(Poem|Motivation|Inspiration|General)\]\s*/i, '');
     // Category display
-    // Extract category from title prefix if API didn't parse it
-    let cat = p.category || 'General';
-    if (cat === 'General' || !cat) {
-      const titleMatch = (p.title || '').match(/^\[(Poem|Motivation|Inspiration)\]/i);
-      if (titleMatch) cat = titleMatch[1].charAt(0).toUpperCase() + titleMatch[1].slice(1).toLowerCase();
+    // Extract category — try p.category first, then rawTitle prefix, then cleaned title
+    let cat = '';
+    if (p.category && p.category.toLowerCase() !== 'general') {
+      cat = p.category;
+    } else {
+      // Try parsing from raw title (in case API returned pre-cleaned title)
+      const prefixMatch = (rawTitle || '').match(/^\[(Poem|Motivation|Inspiration)\]/i);
+      if (prefixMatch) cat = prefixMatch[1];
     }
-    // Capitalize properly
-    if (cat === 'poem') cat = 'Poem';
-    if (cat === 'motivation') cat = 'Motivation';
-    if (cat === 'inspiration') cat = 'Inspiration';
+    // Normalize capitalization
+    if (!cat || cat.toLowerCase() === 'general') cat = 'General';
+    else cat = cat.charAt(0).toUpperCase() + cat.slice(1).toLowerCase();
+    if (cat === 'Poem') cat = 'Poem';
+    if (cat === 'Motivation') cat = 'Motivation';
+    if (cat === 'Inspiration') cat = 'Inspiration';
     const catColor = catColors[cat] || '#374151';
     const catBadge = `<span style="display:inline-block;background:${catColor};color:#fff;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px">${cat}</span>`;
     return `<div class="poem-card">
@@ -1783,7 +1794,13 @@ async function loadPostImage(postId) {
 function renderSpFeed(posts) {
   const feed = g('spFeed'); if (!feed) return;
   if (!posts.length) { feed.innerHTML = '<div class="empty-tx" style="padding:40px 16px">No posts yet. Be the first to post! 🌟</div>'; return; }
-  feed.innerHTML = posts.map(p => spPostHTML(p)).join('');
+  // Always sort: pinned posts first, then by date
+  const sorted = [...posts].sort((a, b) => {
+    if (a.is_pinned && !b.is_pinned) return -1;
+    if (!a.is_pinned && b.is_pinned) return 1;
+    return (b.created_at || 0) - (a.created_at || 0);
+  });
+  feed.innerHTML = sorted.map(p => spPostHTML(p)).join('');
 }
 function spPostHTML(p) {
   // Store caption for safe editing
@@ -2211,9 +2228,10 @@ async function openDMChat(toTid, toName, toPic) {
       <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#f59e0b,#d97706);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;overflow:hidden;border:2px solid #f59e0b">
         ${(toPic||window._dmContactPic)?`<img src="${toPic||window._dmContactPic}" style="width:100%;height:100%;object-fit:cover;border-radius:50%"/>`:(toName||window._dmContactName||'U')[0].toUpperCase()}
       </div>
-      <div style="display:flex;align-items:center;gap:6px">
-        <span style="font-size:15px;font-weight:600;color:#f0f4ff">${toName||_dmContactName||'User'}</span>
-        <span style="width:16px;height:16px;background:linear-gradient(135deg,#f59e0b,#d97706);border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:9px;color:#fff;font-weight:700;flex-shrink:0">✓</span>
+      <div style="display:flex;align-items:center;gap:5px;flex:1;min-width:0">
+        <span style="font-size:15px;font-weight:700;color:#f0f4ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${toName||window._dmContactName||'User'}</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><circle cx="12" cy="12" r="11" fill="#f59e0b"/><path d="M7 12.5l3.5 3.5 6.5-7" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span style="font-size:10px;color:#f59e0b;font-weight:700">Gold</span>
       </div>
     </div>
     <div id="dmMessages" style="flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:8px">
@@ -2222,7 +2240,7 @@ async function openDMChat(toTid, toName, toPic) {
         if ((dm.dm_type==='image'||dm.media_type==='image')&&(dm.image_data||dm.media_url)) {
           const imgSrc = dm.image_data || dm.media_url;
           return `<div style="align-self:${isMe?'flex-end':'flex-start'};max-width:70%">
-            ${!isMe?`<div style="font-size:11px;font-weight:600;color:#f59e0b;margin-bottom:2px;padding-left:4px">${window._dmContactName||'User'} <span style="width:12px;height:12px;background:linear-gradient(135deg,#f59e0b,#d97706);border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:7px;color:#fff;margin-left:3px">✓</span></div>`:''}
+            ${!isMe?`<div style="font-size:11px;font-weight:700;color:#f59e0b;margin-bottom:3px;padding-left:6px;display:flex;align-items:center;gap:2px">${window._dmContactName||toName||'User'}<svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="margin-left:3px"><circle cx="12" cy="12" r="11" fill="#f59e0b"/><path d="M7 12.5l3.5 3.5 6.5-7" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>`:''}
             <img src="${imgSrc}" style="border-radius:14px;max-width:100%;display:block;border:2px solid #1e2d45"/>
             <div style="font-size:10px;color:#7a90b0;text-align:right;margin-top:3px;display:flex;align-items:center;justify-content:flex-end;gap:3px">${fmtDate(dm.created_at)}${isMe?'<span style="color:#60a5fa">✓✓</span>':''}</div>
           </div>`;
@@ -2230,20 +2248,20 @@ async function openDMChat(toTid, toName, toPic) {
         if ((dm.dm_type==='voice'||dm.media_type==='voice')&&(dm.voice_data||dm.media_url)) {
           const voiceSrc = dm.voice_data || dm.media_url;
           return `<div style="align-self:${isMe?'flex-end':'flex-start'};max-width:75%">
-            ${!isMe?`<div style="font-size:11px;font-weight:600;color:#f59e0b;margin-bottom:2px;padding-left:4px">${window._dmContactName||'User'}</div>`:''}
+            ${!isMe?`<div style="font-size:11px;font-weight:700;color:#f59e0b;margin-bottom:3px;padding-left:6px;display:flex;align-items:center;gap:2px">${window._dmContactName||toName||'User'}<svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="margin-left:3px"><circle cx="12" cy="12" r="11" fill="#f59e0b"/><path d="M7 12.5l3.5 3.5 6.5-7" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>`:''}
             <div style="background:${isMe?'#1d4ed8':'#1e2d45'};border-radius:${isMe?'16px 16px 4px 16px':'16px 16px 16px 4px'};padding:10px 14px;box-shadow:0 1px 2px rgba(0,0,0,.3)">
               <audio controls style="height:36px;min-width:180px;max-width:220px;border-radius:8px;outline:none" src="${voiceSrc}"></audio>
               <div style="font-size:10px;color:#7a90b0;margin-top:4px;text-align:right;display:flex;align-items:center;justify-content:flex-end;gap:3px">${fmtDate(dm.created_at)}${isMe?'<span style="color:#60a5fa">✓✓</span>':''}</div>
             </div>
           </div>`;
         }
-        const senderName = isMe ? 'You' : (window._dmContactName || 'User');
-        const senderBadge = !isMe ? '<span style="width:12px;height:12px;background:linear-gradient(135deg,#f59e0b,#d97706);border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:7px;color:#fff;font-weight:700;margin-left:4px">✓</span>' : '';
-        return `<div style="align-self:${isMe?'flex-end':'flex-start'};max-width:75%">
-          ${!isMe?`<div style="font-size:11px;font-weight:600;color:#f59e0b;margin-bottom:2px;padding-left:4px;display:flex;align-items:center">${senderName}${senderBadge}</div>`:''}
-          <div style="background:${isMe?'#1d4ed8':'#1e2d45'};border-radius:${isMe?'16px 16px 4px 16px':'16px 16px 16px 4px'};padding:10px 14px;font-size:13px;color:#f0f4ff;box-shadow:0 1px 2px rgba(0,0,0,.3)">
-            ${dm.text}
-            <div style="font-size:10px;opacity:.5;margin-top:4px;text-align:right;display:flex;align-items:center;justify-content:flex-end;gap:4px">${fmtDate(dm.created_at)}${isMe?'<span style="color:#60a5fa;font-size:11px">✓✓</span>':''}</div>
+        const senderName = isMe ? '' : (window._dmContactName || toName || 'User');
+        const goldBadgeSvg = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="display:inline-block;vertical-align:middle;margin-left:3px"><circle cx="12" cy="12" r="11" fill="#f59e0b"/><path d=\"M7 12.5l3.5 3.5 6.5-7\" stroke=\"white\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>';
+        return `<div style="align-self:${isMe?'flex-end':'flex-start'};max-width:75%;margin-bottom:2px">
+          ${!isMe?`<div style="font-size:11px;font-weight:700;color:#f59e0b;margin-bottom:3px;padding-left:6px;display:flex;align-items:center;gap:2px">${senderName}${goldBadgeSvg}</div>`:''}
+          <div style="background:${isMe?'#128c7e':'#1e2d45'};border-radius:${isMe?'18px 18px 4px 18px':'18px 18px 18px 4px'};padding:9px 13px;font-size:13px;color:#f0f4ff;box-shadow:0 1px 3px rgba(0,0,0,.25);word-break:break-word">
+            ${(dm.text||'').replace(/</g,'&lt;')}
+            <div style="font-size:10px;color:rgba(255,255,255,.45);margin-top:5px;text-align:right;display:flex;align-items:center;justify-content:flex-end;gap:4px">${fmtDate(dm.created_at)}${isMe?'<span style="color:#60a5fa;font-size:12px;font-weight:700">✓✓</span>':''}</div>
           </div>
         </div>`;
       }).join('')}
@@ -2260,24 +2278,44 @@ async function openDMChat(toTid, toName, toPic) {
   const msgs = document.getElementById('dmMessages'); if(msgs) msgs.scrollTop = msgs.scrollHeight;
 }
 async function sendDMText() {
-  const inp = document.getElementById('dmTextInput'); const text = (inp?.value||'').trim(); if (!text||!_dmToTid) return;
-  if(inp) inp.value='';
-  // Optimistic: show message immediately
-  const myTid = String(state.user?.telegramId||tgU?.id||'');
-  const now = Math.floor(Date.now()/1000);
-  const msgEl = document.createElement('div');
-  msgEl.style.cssText = 'display:flex;justify-content:flex-end;margin-bottom:8px;padding:0 4px';
-  msgEl.innerHTML = `<div style="max-width:75%"><div style="background:#1d4ed8;border-radius:16px 16px 4px 16px;padding:10px 14px;font-size:13px;color:#f0f4ff">${text}<div style="font-size:10px;opacity:.5;margin-top:4px;text-align:right;display:flex;align-items:center;justify-content:flex-end;gap:4px">now <span style="color:#60a5fa;font-size:11px">✓</span></div></div></div>`;
+  const inp = document.getElementById('dmTextInput');
+  const text = (inp?.value||'').trim();
+  if (!text || !_dmToTid) return;
+  if (inp) { inp.value = ''; inp.style.height = 'auto'; }
+  // Optimistic: show my message immediately (WhatsApp style)
   const msgs = document.getElementById('dmMessages');
-  if (msgs) { msgs.appendChild(msgEl); msgs.scrollTop = msgs.scrollHeight; }
-  await post('/socialpay/dm', { to_tid: _dmToTid, text });
-  openDMChat(_dmToTid, window._dmContactName||'', window._dmContactPic||'');
+  if (msgs) {
+    const msgEl = document.createElement('div');
+    msgEl.style.cssText = 'align-self:flex-end;max-width:75%;margin-bottom:2px';
+    const safeText = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    msgEl.innerHTML = `<div style="background:#128c7e;border-radius:18px 18px 4px 18px;padding:9px 13px;font-size:13px;color:#f0f4ff;box-shadow:0 1px 3px rgba(0,0,0,.25);word-break:break-word">${safeText}<div style="font-size:10px;color:rgba(255,255,255,.45);margin-top:5px;text-align:right;display:flex;align-items:center;justify-content:flex-end;gap:4px">now <span style="color:#60a5fa;font-size:12px;font-weight:700">✓</span></div></div>`;
+    msgs.appendChild(msgEl);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+  try {
+    const r = await post('/socialpay/dm', { to_tid: _dmToTid, text });
+    if (r && r.error) { toast('❌ ' + r.error); return; }
+  } catch(e) { toast('❌ Could not send message'); return; }
+  // Reload messages to sync (keep optimistic bubble visible until reload)
+  setTimeout(() => openDMChat(_dmToTid, window._dmContactName||'', window._dmContactPic||''), 600);
 }
 async function sendDMImage(input) {
-  const file = input.files[0]; if (!file||!_dmToTid) return;
-  const b64 = await new Promise(res=>{ const r=new FileReader(); r.onload=e=>res(e.target.result); r.readAsDataURL(file); });
-  await post('/socialpay/dm', { to_tid: _dmToTid, image_data: b64 });
-  openDMChat(_dmToTid, window._dmContactName||'', window._dmContactPic||'');
+  const file = input.files[0]; if (!file || !_dmToTid) return;
+  const b64 = await new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target.result); r.readAsDataURL(file); });
+  // Optimistic image preview
+  const msgs = document.getElementById('dmMessages');
+  if (msgs) {
+    const el = document.createElement('div');
+    el.style.cssText = 'align-self:flex-end;max-width:70%;margin-bottom:2px';
+    el.innerHTML = `<img src="${b64}" style="border-radius:14px;max-width:100%;display:block;border:2px solid #128c7e"/><div style="font-size:10px;color:#7a90b0;text-align:right;margin-top:3px;display:flex;align-items:center;justify-content:flex-end;gap:3px">now <span style="color:#60a5fa">✓</span></div>`;
+    msgs.appendChild(el);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+  try {
+    const r = await post('/socialpay/dm', { to_tid: _dmToTid, image_data: b64 });
+    if (r && r.error) { toast('❌ ' + r.error); return; }
+  } catch(e) { toast('❌ Could not send image'); return; }
+  setTimeout(() => openDMChat(_dmToTid, window._dmContactName||'', window._dmContactPic||''), 800);
 }
 async function sendDMVoice(input) {
   const file = input.files[0]; if (!file||!_dmToTid) return;

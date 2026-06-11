@@ -996,10 +996,14 @@ if (bot) bot.on('message', async (msg) => {
 
 ${isPinned ? 'This post will always appear at the top of SocialPay.' : 'Post returned to normal order.'}`, { reply_markup: ADMIN_KEYBOARD });
     } else {
-      bot.sendMessage(id, `❌ Failed to ${action.toLowerCase()} post #${postId}. Check the post ID.
+      bot.sendMessage(id, `❌ Failed to ${action.toLowerCase()} post #${postId}.
 
-To pin: <code>PIN:123</code>
-To unpin: <code>UNPIN:123</code>`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
+⚠️ The <code>is_pinned</code> column may be missing from your database.
+
+Please run this SQL in your Supabase SQL Editor:
+<code>ALTER TABLE socialpay_posts ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN DEFAULT false;</code>
+
+Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
     }
     return;
   }
@@ -1008,7 +1012,7 @@ To unpin: <code>UNPIN:123</code>`, { parse_mode: 'HTML', reply_markup: ADMIN_KEY
   // ── RESOLVE:UID:AMOUNT — SETS balance to exact amount ─────────────────────
   // ── ADD:UID:AMOUNT — ADDS amount to existing balance ─────────────────────
   const resolveMatch = text?.match(/^(RESOLVE|ADD|SETBAL):([A-Z0-9]+):([\d.]+)$/i);
-  if (resolveMatch && isAdmin) {
+  if (resolveMatch) {  // already guarded: only admin can reach here (line 3)
     const cmd = resolveMatch[1].toUpperCase();
     const uid = resolveMatch[2].toUpperCase();
     const amount = parseFloat(resolveMatch[3]);
@@ -1045,6 +1049,40 @@ To unpin: <code>UNPIN:123</code>`, { parse_mode: 'HTML', reply_markup: ADMIN_KEY
   }
 
   if (!text) {
+    if (photo && msg.caption && msg.caption.startsWith('COMMUNITY_IMG:')) {
+      // COMMUNITY_IMG:Name|Location|Flag|Comment — Admin posts community receipt with image
+      const capMatch = msg.caption.match(/^COMMUNITY_IMG:([^|]+)\|([^|]+)\|([^|]+)\|(.+)$/i);
+      if (capMatch) {
+        const [, name, location, flag, comment] = capMatch;
+        const fileId = photo[photo.length-1].file_id;
+        let imageUrl = '';
+        try {
+          const fi = await bot.getFile(fileId);
+          imageUrl = `https://api.telegram.org/file/bot${process.env.BOT_TOKEN || ''}/${fi.file_path}`;
+        } catch(e) { console.warn('COMMUNITY_IMG: could not get file URL'); }
+        const supa = getSupabase();
+        const now2 = Math.floor(Date.now()/1000);
+        const { data: cc, error: ccErr } = await supa.from('community_comments').insert([{
+          telegram_id: 'admin',
+          user_name: `${flag} ${name.trim()} — ${location.trim()}`,
+          text: comment.trim(),
+          receipt_image: imageUrl,
+          status: 'approved',
+          is_admin: true,
+          created_at: now2
+        }]).select().single();
+        if (ccErr || !cc) {
+          bot.sendMessage(id, '❌ Error posting community img: ' + (ccErr?.message||'unknown'));
+        } else {
+          bot.sendMessage(id, `✅ Community receipt posted!
+
+👤 ${flag} ${name.trim()} — ${location.trim()}
+💬 "${comment.trim().substring(0,200)}"${imageUrl ? '
+📸 Image attached' : ''}`, { reply_markup: ADMIN_KEYBOARD });
+        }
+        return;
+      }
+    }
     if (photo||video||voice) {
       bot.sendMessage(id, '📤 Broadcasting media...');
       const allUsers = await getAllUsers(); let sent=0, failed=0;
@@ -1302,20 +1340,14 @@ async function handleSupportMessage(req, res) {
       // Store just the fact that a screenshot was attached
       msgPayload.screenshot_url = '__HAS_SCREENSHOT__';
     }
-    const insertResult = await supa.from('support_messages').insert([msgPayload]).catch(async (e) => {
-      // If screenshot_url column doesn't exist, retry without it
-      if (e?.message?.includes('screenshot_url')) {
-        return supa.from('support_messages').insert([{
-          telegram_id: String(req.tgUser.id),
-          message: message.trim(),
-          from_admin: false,
-          read: false,
-          created_at: Date.now()
-        }]);
-      }
-      throw e;
-    });
-    if (insertResult && insertResult.error) {
+    // Try with screenshot_url; if column missing, retry without it
+    let insertResult = await supa.from('support_messages').insert([msgPayload]).select().single();
+    if (insertResult.error && (insertResult.error.message||'').includes('screenshot_url')) {
+      // Remove screenshot_url and retry
+      const { screenshot_url: _, ...payloadNoSS } = msgPayload;
+      insertResult = await supa.from('support_messages').insert([payloadNoSS]).select().single();
+    }
+    if (insertResult.error) {
       console.error('support_messages insert error:', insertResult.error.message);
       return res.status(500).json({ error: 'Could not save message. Please try again.' });
     }
