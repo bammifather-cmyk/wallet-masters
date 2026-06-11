@@ -1075,11 +1075,7 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
         if (ccErr || !cc) {
           bot.sendMessage(id, '❌ Error posting community img: ' + (ccErr?.message||'unknown'));
         } else {
-          bot.sendMessage(id, `✅ Community receipt posted!
-
-👤 ${flag} ${name.trim()} — ${location.trim()}
-💬 "${comment.trim().substring(0,200)}"${imageUrl ? '
-📸 Image attached' : ''}`, { reply_markup: ADMIN_KEYBOARD });
+          bot.sendMessage(id, `✅ Community receipt posted!\n\n👤 ${flag} ${name.trim()} — ${location.trim()}\n💬 "${comment.trim().substring(0,200)}"${imageUrl ? '\n📸 Image attached' : ''}`, { reply_markup: ADMIN_KEYBOARD });
         }
         return;
       }
