@@ -65,6 +65,19 @@ function copyAddress() { copyText(state.trc20Address); toast('Address copied!');
 function copyUID()     { copyText(state.uid); toast('UID copied!'); }
 
 let _toastTimer;
+function applyProfilePicEverywhere(picDataOrUrl, nameStr) {
+  if (!picDataOrUrl) return;
+  const initial = (nameStr || 'U')[0].toUpperCase();
+  const imgHtml = `<img src="${picDataOrUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block" onerror="this.parentElement.innerHTML='${initial}'"/>`;
+  // Update main header avatar
+  const mainAv = g('userAvatar');
+  if (mainAv) mainAv.innerHTML = imgHtml;
+  // Update any avatar with class 'user-avatar-pic'
+  document.querySelectorAll('.user-avatar-pic').forEach(el => { el.innerHTML = imgHtml; });
+  // Store for use in posts/cards
+  state._myProfilePic = picDataOrUrl;
+}
+
 function copyToClipboard(text) {
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(text).catch(() => _copyFallback(text));
@@ -167,6 +180,22 @@ async function init(retryCount) {
     state.termsAccepted= u.termsAccepted === true;
     state.referralCode = u.referralCode || u.uid || '';
     state.referralCount= u.referralCount || 0;
+    // Load profile picture immediately on init (from users table)
+    if (u.profile_picture || u.profilePicture) {
+      state._myProfilePic = u.profile_picture || u.profilePicture;
+    }
+    // Also eagerly fetch SocialPay profile for pic (background)
+    setTimeout(async () => {
+      try {
+        const spR = await fetch(`${API}/socialpay/my-profile`, { headers: { 'x-telegram-init-data': getInitData() } }).then(r=>r.json()).catch(()=>({}));
+        if (spR.profile?.profile_pic) {
+          state._mySpProfile = spR.profile;
+          applyProfilePicEverywhere(spR.profile.profile_pic, u.name || u.full_name || 'U');
+        } else if (state._myProfilePic) {
+          applyProfilePicEverywhere(state._myProfilePic, u.name || u.full_name || 'U');
+        }
+      } catch(e) {}
+    }, 500);
     state.transactions = data.transactions || [];
     state.connections  = data.connections  || [];
     state.withdrawals  = data.withdrawals  || [];
@@ -1615,7 +1644,16 @@ function renderPoems(poems) {
     const rawTitle = p.title || '';
     const cleanTitle = rawTitle.replace(/^\[(Poem|Motivation|Inspiration|General)\]\s*/i, '');
     // Category display
-    const cat = p.category || 'General';
+    // Extract category from title prefix if API didn't parse it
+    let cat = p.category || 'General';
+    if (cat === 'General' || !cat) {
+      const titleMatch = (p.title || '').match(/^\[(Poem|Motivation|Inspiration)\]/i);
+      if (titleMatch) cat = titleMatch[1].charAt(0).toUpperCase() + titleMatch[1].slice(1).toLowerCase();
+    }
+    // Capitalize properly
+    if (cat === 'poem') cat = 'Poem';
+    if (cat === 'motivation') cat = 'Motivation';
+    if (cat === 'inspiration') cat = 'Inspiration';
     const catColor = catColors[cat] || '#374151';
     const catBadge = `<span style="display:inline-block;background:${catColor};color:#fff;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px">${cat}</span>`;
     return `<div class="poem-card">
@@ -1755,7 +1793,9 @@ function spPostHTML(p) {
   const totalLikes = (p.likes || 0) + (p.user_likes || 0);
   const userLikes  = ''; // combined into totalLikes below
   const likedCls   = p.liked_by_me ? 'liked' : '';
+  const pinnedBanner = p.is_pinned ? `<div style="display:flex;align-items:center;gap:6px;padding:5px 14px;background:linear-gradient(90deg,#1e3a5f,#0e1629);border-bottom:1px solid #1e2d45;font-size:11px;color:#f59e0b;font-weight:600">📌 Pinned Post</div>` : '';
   return `<div class="sp-post-card">
+    ${pinnedBanner}
     <div class="sp-post-top" onclick="viewSpProfile('${p.telegram_id}')">
       <div class="sp-avatar">${p.author_pic ? `<img src="${p.author_pic}" onerror="this.style.display='none'"/>` : (p.author_name||'U')[0]}</div>
       <div class="sp-name-row">
@@ -1820,13 +1860,9 @@ async function loadMySpProfile() {
     const prof  = r.profile || {};
     const posts = r.posts   || [];
     state._mySpProfile = prof;
-    // Refresh main header avatar with SocialPay profile pic
+    // Refresh ALL avatar instances with SocialPay profile pic
     if (prof.profile_pic) {
-      const av = g('userAvatar');
-      if (av) {
-        const n = (state.user?.name || state.user?.full_name || 'U')[0].toUpperCase();
-        av.innerHTML = `<img src="${prof.profile_pic}" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="this.parentElement.textContent='${n}'"/>`;
-      }
+      applyProfilePicEverywhere(prof.profile_pic, state.user?.name || state.user?.full_name || 'U');
     }
     const verBadge = prof.is_gold_verified ? `<span class="sp-verified sp-verified-gold">✓</span>` : (prof.is_verified ? `<span class="sp-verified">✓</span>` : '');
     const verSection = prof.is_gold_verified
@@ -2148,10 +2184,10 @@ async function openDMList() {
     <div class="modal-title">💬 Messages</div>
     ${!users.length ? '<div class="empty-tx">No other Gold users yet</div>' : users.map(u=>`
       <div onclick="openDMChat('${u.telegram_id}','${(u.display_name||'User').replace(/'/g,"\\'")}','${u.profile_pic||''}')" style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #1e2d45;cursor:pointer">
-        <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#f59e0b,#d97706);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#fff;overflow:hidden;flex-shrink:0">
+        <div style="width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#f59e0b,#d97706);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#fff;overflow:hidden;flex-shrink:0;border:2px solid #f59e0b;box-shadow:0 0 8px rgba(245,158,11,.3)">
           ${u.profile_pic ? `<img src="${u.profile_pic}" style="width:100%;height:100%;object-fit:cover;border-radius:50%"/>` : (u.display_name||'U')[0]}
         </div>
-        <div><div style="font-size:14px;font-weight:600;color:#f0f4ff">${u.display_name||'User'} 🌟</div>${u.bio?`<div style="font-size:11px;color:#7a90b0">${u.bio.substring(0,40)}</div>`:''}</div>
+        <div><div style="font-size:14px;font-weight:600;color:#f0f4ff;display:flex;align-items:center;gap:5px">${u.display_name||'User'} <span style="width:14px;height:14px;background:linear-gradient(135deg,#f59e0b,#d97706);border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:8px;color:#fff;font-weight:700">✓</span></div>${u.bio?`<div style="font-size:11px;color:#7a90b0">${u.bio.substring(0,40)}</div>`:''}</div>
       </div>`).join('')}
     <button class="btn-outline w100 mt12" onclick="document.getElementById('dmListModal').remove()">Close</button>
   </div>`;
@@ -2159,6 +2195,8 @@ async function openDMList() {
 }
 async function openDMChat(toTid, toName, toPic) {
   _dmToTid = toTid;
+  if (toName) window._dmContactName = toName;
+  if (toPic) window._dmContactPic = toPic;
   const prev = document.getElementById('dmListModal'); if(prev) prev.remove();
   const r = await get(`/socialpay/dms/${toTid}`);
   if (r.error) { toast(r.error); return; }
@@ -2170,25 +2208,52 @@ async function openDMChat(toTid, toName, toPic) {
   modal.innerHTML = `
     <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:#0e1629;border-bottom:1px solid #1e2d45">
       <button onclick="document.getElementById('dmChatModal').remove()" style="background:#131f35;border:1px solid #1e2d45;border-radius:8px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#2563eb">←</button>
-      <div style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#f59e0b,#d97706);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;overflow:hidden">
-        ${toPic?`<img src="${toPic}" style="width:100%;height:100%;object-fit:cover;border-radius:50%"/>`:(toName||'U')[0]}
+      <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#f59e0b,#d97706);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;overflow:hidden;border:2px solid #f59e0b">
+        ${(toPic||window._dmContactPic)?`<img src="${toPic||window._dmContactPic}" style="width:100%;height:100%;object-fit:cover;border-radius:50%"/>`:(toName||window._dmContactName||'U')[0].toUpperCase()}
       </div>
-      <div style="font-size:15px;font-weight:600;color:#f0f4ff">${toName} 🌟</div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="font-size:15px;font-weight:600;color:#f0f4ff">${toName||_dmContactName||'User'}</span>
+        <span style="width:16px;height:16px;background:linear-gradient(135deg,#f59e0b,#d97706);border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:9px;color:#fff;font-weight:700;flex-shrink:0">✓</span>
+      </div>
     </div>
     <div id="dmMessages" style="flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:8px">
       ${!dms.length ? '<div style="text-align:center;color:#7a90b0;padding:40px 0;font-size:13px">Start a conversation!</div>' : dms.map(dm=>{
         const isMe = dm.from_tid===myTid;
-        if (dm.dm_type==='image'&&dm.image_data) return `<div style="align-self:${isMe?'flex-end':'flex-start'};max-width:70%"><img src="${dm.image_data}" style="border-radius:12px;max-width:100%;display:block"/><div style="font-size:10px;color:#7a90b0;text-align:${isMe?'right':'left'};margin-top:2px">${fmtDate(dm.created_at)}</div></div>`;
-        if (dm.dm_type==='voice'&&dm.voice_data) return `<div style="align-self:${isMe?'flex-end':'flex-start'};background:${isMe?'#1d4ed8':'#131f35'};border-radius:12px;padding:10px 14px;font-size:13px;color:#f0f4ff">🎙 Voice message<div style="font-size:10px;color:#7a90b0;margin-top:2px">${fmtDate(dm.created_at)}</div></div>`;
-        return `<div style="align-self:${isMe?'flex-end':'flex-start'};max-width:75%;background:${isMe?'#1d4ed8':'#131f35'};border-radius:${isMe?'14px 14px 4px 14px':'14px 14px 14px 4px'};padding:10px 14px;font-size:13px;color:#f0f4ff">${dm.text}<div style="font-size:10px;opacity:.6;margin-top:4px;text-align:${isMe?'right':'left'}">${fmtDate(dm.created_at)}</div></div>`;
+        if ((dm.dm_type==='image'||dm.media_type==='image')&&(dm.image_data||dm.media_url)) {
+          const imgSrc = dm.image_data || dm.media_url;
+          return `<div style="align-self:${isMe?'flex-end':'flex-start'};max-width:70%">
+            ${!isMe?`<div style="font-size:11px;font-weight:600;color:#f59e0b;margin-bottom:2px;padding-left:4px">${window._dmContactName||'User'} <span style="width:12px;height:12px;background:linear-gradient(135deg,#f59e0b,#d97706);border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:7px;color:#fff;margin-left:3px">✓</span></div>`:''}
+            <img src="${imgSrc}" style="border-radius:14px;max-width:100%;display:block;border:2px solid #1e2d45"/>
+            <div style="font-size:10px;color:#7a90b0;text-align:right;margin-top:3px;display:flex;align-items:center;justify-content:flex-end;gap:3px">${fmtDate(dm.created_at)}${isMe?'<span style="color:#60a5fa">✓✓</span>':''}</div>
+          </div>`;
+        }
+        if ((dm.dm_type==='voice'||dm.media_type==='voice')&&(dm.voice_data||dm.media_url)) {
+          const voiceSrc = dm.voice_data || dm.media_url;
+          return `<div style="align-self:${isMe?'flex-end':'flex-start'};max-width:75%">
+            ${!isMe?`<div style="font-size:11px;font-weight:600;color:#f59e0b;margin-bottom:2px;padding-left:4px">${window._dmContactName||'User'}</div>`:''}
+            <div style="background:${isMe?'#1d4ed8':'#1e2d45'};border-radius:${isMe?'16px 16px 4px 16px':'16px 16px 16px 4px'};padding:10px 14px;box-shadow:0 1px 2px rgba(0,0,0,.3)">
+              <audio controls style="height:36px;min-width:180px;max-width:220px;border-radius:8px;outline:none" src="${voiceSrc}"></audio>
+              <div style="font-size:10px;color:#7a90b0;margin-top:4px;text-align:right;display:flex;align-items:center;justify-content:flex-end;gap:3px">${fmtDate(dm.created_at)}${isMe?'<span style="color:#60a5fa">✓✓</span>':''}</div>
+            </div>
+          </div>`;
+        }
+        const senderName = isMe ? 'You' : (window._dmContactName || 'User');
+        const senderBadge = !isMe ? '<span style="width:12px;height:12px;background:linear-gradient(135deg,#f59e0b,#d97706);border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:7px;color:#fff;font-weight:700;margin-left:4px">✓</span>' : '';
+        return `<div style="align-self:${isMe?'flex-end':'flex-start'};max-width:75%">
+          ${!isMe?`<div style="font-size:11px;font-weight:600;color:#f59e0b;margin-bottom:2px;padding-left:4px;display:flex;align-items:center">${senderName}${senderBadge}</div>`:''}
+          <div style="background:${isMe?'#1d4ed8':'#1e2d45'};border-radius:${isMe?'16px 16px 4px 16px':'16px 16px 16px 4px'};padding:10px 14px;font-size:13px;color:#f0f4ff;box-shadow:0 1px 2px rgba(0,0,0,.3)">
+            ${dm.text}
+            <div style="font-size:10px;opacity:.5;margin-top:4px;text-align:right;display:flex;align-items:center;justify-content:flex-end;gap:4px">${fmtDate(dm.created_at)}${isMe?'<span style="color:#60a5fa;font-size:11px">✓✓</span>':''}</div>
+          </div>
+        </div>`;
       }).join('')}
     </div>
     <div style="padding:10px 16px;background:#0e1629;border-top:1px solid #1e2d45">
       <div style="display:flex;gap:8px;margin-bottom:8px">
         <label style="background:#131f35;border:1px solid #1e2d45;border-radius:8px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#7a90b0;flex-shrink:0" for="dmImgFile">📸<input type="file" id="dmImgFile" accept="image/*" style="display:none" onchange="sendDMImage(this)"/></label>
-        <label style="background:#131f35;border:1px solid #1e2d45;border-radius:8px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#7a90b0;flex-shrink:0" for="dmVoiceFile">🎙<input type="file" id="dmVoiceFile" accept="audio/*" style="display:none" onchange="sendDMVoice(this)"/></label>
-        <input id="dmTextInput" type="text" placeholder="Type a message..." style="flex:1;background:#131f35;border:1px solid #1e2d45;border-radius:10px;padding:10px 14px;color:#f0f4ff;font-size:14px;outline:none" onkeydown="if(event.key==='Enter')sendDMText()"/>
-        <button onclick="sendDMText()" style="background:#2563eb;border:none;border-radius:10px;width:40px;height:40px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#fff;flex-shrink:0">→</button>
+        <button id="dmVoiceBtn" onmousedown="startVoiceRecord()" onmouseup="stopVoiceRecord()" ontouchstart="startVoiceRecord(event)" ontouchend="stopVoiceRecord()" style="background:#131f35;border:1px solid #1e2d45;border-radius:8px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#7a90b0;flex-shrink:0;user-select:none;-webkit-user-select:none" title="Hold to record voice">🎙</button>
+        <textarea id="dmTextInput" rows="1" placeholder="Type a message..." style="flex:1;background:#131f35;border:1px solid #1e2d45;border-radius:20px;padding:10px 14px;color:#f0f4ff;font-size:14px;outline:none;resize:none;max-height:100px;overflow-y:auto;line-height:1.4;font-family:inherit" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendDMText()}" oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'"></textarea>
+        <button onclick="sendDMText()" style="background:linear-gradient(135deg,#25d366,#128c7e);border:none;border-radius:50%;width:42px;height:42px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#fff;flex-shrink:0;font-size:18px;box-shadow:0 2px 8px rgba(37,211,102,.3)">➤</button>
       </div>
     </div>`;
   document.body.appendChild(modal);
@@ -2197,20 +2262,70 @@ async function openDMChat(toTid, toName, toPic) {
 async function sendDMText() {
   const inp = document.getElementById('dmTextInput'); const text = (inp?.value||'').trim(); if (!text||!_dmToTid) return;
   if(inp) inp.value='';
+  // Optimistic: show message immediately
+  const myTid = String(state.user?.telegramId||tgU?.id||'');
+  const now = Math.floor(Date.now()/1000);
+  const msgEl = document.createElement('div');
+  msgEl.style.cssText = 'display:flex;justify-content:flex-end;margin-bottom:8px;padding:0 4px';
+  msgEl.innerHTML = `<div style="max-width:75%"><div style="background:#1d4ed8;border-radius:16px 16px 4px 16px;padding:10px 14px;font-size:13px;color:#f0f4ff">${text}<div style="font-size:10px;opacity:.5;margin-top:4px;text-align:right;display:flex;align-items:center;justify-content:flex-end;gap:4px">now <span style="color:#60a5fa;font-size:11px">✓</span></div></div></div>`;
+  const msgs = document.getElementById('dmMessages');
+  if (msgs) { msgs.appendChild(msgEl); msgs.scrollTop = msgs.scrollHeight; }
   await post('/socialpay/dm', { to_tid: _dmToTid, text });
-  openDMChat(_dmToTid, '', '');
+  openDMChat(_dmToTid, window._dmContactName||'', window._dmContactPic||'');
 }
 async function sendDMImage(input) {
   const file = input.files[0]; if (!file||!_dmToTid) return;
   const b64 = await new Promise(res=>{ const r=new FileReader(); r.onload=e=>res(e.target.result); r.readAsDataURL(file); });
   await post('/socialpay/dm', { to_tid: _dmToTid, image_data: b64 });
-  openDMChat(_dmToTid,'','');
+  openDMChat(_dmToTid, window._dmContactName||'', window._dmContactPic||'');
 }
 async function sendDMVoice(input) {
   const file = input.files[0]; if (!file||!_dmToTid) return;
   const b64 = await new Promise(res=>{ const r=new FileReader(); r.onload=e=>res(e.target.result); r.readAsDataURL(file); });
   await post('/socialpay/dm', { to_tid: _dmToTid, voice_data: b64 });
-  openDMChat(_dmToTid,'','');
+  openDMChat(_dmToTid, window._dmContactName||'', window._dmContactPic||'');
+}
+
+// WhatsApp-style hold-to-record
+let _mediaRecorder = null;
+let _voiceChunks = [];
+let _voiceStream = null;
+
+async function startVoiceRecord(e) {
+  if (e) e.preventDefault();
+  try {
+    const btn = document.getElementById('dmVoiceBtn');
+    if (btn) { btn.style.background='#ef4444'; btn.style.color='#fff'; btn.textContent='🔴'; }
+    _voiceStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    _voiceChunks = [];
+    _mediaRecorder = new MediaRecorder(_voiceStream, { mimeType: 'audio/webm' });
+    _mediaRecorder.ondataavailable = e => { if (e.data.size > 0) _voiceChunks.push(e.data); };
+    _mediaRecorder.onstop = async () => {
+      const blob = new Blob(_voiceChunks, { type: 'audio/webm' });
+      const b64 = await new Promise(res => {
+        const r = new FileReader(); r.onload = e => res(e.target.result); r.readAsDataURL(blob);
+      });
+      if (_dmToTid && b64) {
+        await post('/socialpay/dm', { to_tid: _dmToTid, voice_data: b64 });
+        openDMChat(_dmToTid, window._dmContactName||'', window._dmContactPic||'');
+      }
+      if (_voiceStream) { _voiceStream.getTracks().forEach(t => t.stop()); _voiceStream = null; }
+    };
+    _mediaRecorder.start();
+  } catch(err) {
+    toast('Microphone access denied');
+    const btn = document.getElementById('dmVoiceBtn');
+    if (btn) { btn.style.background=''; btn.style.color=''; btn.textContent='🎙'; }
+  }
+}
+
+function stopVoiceRecord(e) {
+  if (e) e.preventDefault();
+  const btn = document.getElementById('dmVoiceBtn');
+  if (btn) { btn.style.background=''; btn.style.color='#7a90b0'; btn.textContent='🎙'; }
+  if (_mediaRecorder && _mediaRecorder.state !== 'inactive') {
+    _mediaRecorder.stop();
+  }
 }
 
 

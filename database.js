@@ -354,12 +354,27 @@ async function getPoemById(id) {
 
 async function getPendingPoems() {
   const { data } = await supabase.from('poems').select('*').eq('status', 'pending').order('created_at', { ascending: false });
-  return data || [];
+  if (!data) return [];
+  return data.map(p => {
+    const { category, cleanTitle } = extractPoemCategory(p.title);
+    return { ...p, category, title: cleanTitle };
+  });
+}
+
+function extractPoemCategory(title) {
+  if (!title) return { category: 'General', cleanTitle: title || '' };
+  const m = title.match(/^\[([^\]]+)\]\s*(.+)$/);
+  if (m) return { category: m[1], cleanTitle: m[2].trim() };
+  return { category: 'General', cleanTitle: title.trim() };
 }
 
 async function getApprovedPoems() {
   const { data } = await supabase.from('poems').select('*').eq('status', 'approved').order('created_at', { ascending: false });
-  return data || [];
+  if (!data) return [];
+  return data.map(p => {
+    const { category, cleanTitle } = extractPoemCategory(p.title);
+    return { ...p, category, title: cleanTitle };
+  });
 }
 
 async function updatePoem(id, updates) {
@@ -421,12 +436,22 @@ async function getPendingSocialPosts() {
 }
 
 async function getApprovedSocialPosts() {
-  const { data } = await supabase.from('socialpay_posts').select('id,telegram_id,content,image_url,status,likes,user_likes,total_earned,created_at,updated_at').eq('status', 'approved').order('created_at', { ascending: false });
-  return (data || []).map(p => ({ ...p, caption: p.content || '' }));
+  const { data } = await supabase.from('socialpay_posts').select('id,telegram_id,content,image_url,status,likes,user_likes,total_earned,created_at,updated_at,is_pinned').eq('status', 'approved').order('created_at', { ascending: false });
+  if (!data) return [];
+  const mapped = data.map(p => ({ ...p, caption: p.content || '' }));
+  // Pinned posts always first
+  const pinned = mapped.filter(p => p.is_pinned);
+  const normal = mapped.filter(p => !p.is_pinned);
+  return [...pinned, ...normal];
+}
+
+async function setPinnedPost(postId, isPinned) {
+  const { error } = await supabase.from('socialpay_posts').update({ is_pinned: isPinned, updated_at: Date.now() }).eq('id', postId);
+  return !error;
 }
 
 async function getSocialPostsByUser(telegramId) {
-  const { data } = await supabase.from('socialpay_posts').select('id,telegram_id,content,image_url,status,likes,user_likes,total_earned,created_at,updated_at').eq('telegram_id', String(telegramId)).order('created_at', { ascending: false });
+  const { data } = await supabase.from('socialpay_posts').select('id,telegram_id,content,image_url,status,likes,user_likes,total_earned,created_at,updated_at,is_pinned').eq('telegram_id', String(telegramId)).order('created_at', { ascending: false });
   return (data || []).map(p => ({ ...p, caption: p.content || '' }));
 }
 
@@ -510,10 +535,19 @@ async function deleteComment(id) {
 }
 
 // ─── DMs ──────────────────────────────────────────────────────────────────────
-async function createDM(fromTid, toTid, text, mediaUrl, mediaType) {
+async function createDM(fromTid, toTid, dataOrText, mediaUrl, mediaType) {
+  let text='', mUrl='', mType='text';
+  if (dataOrText && typeof dataOrText === 'object') {
+    text = dataOrText.text||'';
+    // Store images/voice in media_url field (base64)
+    mUrl = dataOrText.image_data || dataOrText.voice_data || '';
+    mType = dataOrText.image_data ? 'image' : dataOrText.voice_data ? 'voice' : 'text';
+  } else {
+    text = dataOrText||''; mUrl = mediaUrl||''; mType = mediaType||'text';
+  }
   const { data } = await supabase.from('sp_dms').insert([{
-    from_tid: String(fromTid), to_tid: String(toTid), text: text||'',
-    media_url: mediaUrl||'', media_type: mediaType||'', read: false, created_at: now()
+    from_tid: String(fromTid), to_tid: String(toTid), text,
+    media_url: mUrl, media_type: mType, read: false, created_at: now()
   }]).select().single();
   return data;
 }
@@ -522,7 +556,13 @@ async function getDMs(tid1, tid2) {
   const { data } = await supabase.from('sp_dms').select('*')
     .or(`and(from_tid.eq.${tid1},to_tid.eq.${tid2}),and(from_tid.eq.${tid2},to_tid.eq.${tid1})`)
     .order('created_at');
-  return data || [];
+  if (!data) return [];
+  return data.map(dm => ({
+    ...dm,
+    dm_type: dm.media_type || 'text',
+    image_data: dm.media_type === 'image' ? dm.media_url : null,
+    voice_data: dm.media_type === 'voice' ? dm.media_url : null
+  }));
 }
 
 async function getDMContacts(telegramId) {
@@ -622,7 +662,7 @@ module.exports = {
   createSocialPost, getSocialPostById, getPendingSocialPosts, getApprovedSocialPosts, getSocialPostsByUser, updateSocialPost, deleteSocialPost, sendLikesToPost,
   likePost, hasLiked,
   createComment, getCommentsByPost, deleteComment,
-  createDM, getDMs, getDMContacts, markDMsRead,
+  createDM, getDMs, getDMContacts, markDMsRead, setPinnedPost,
   createVerificationRequest, getPendingVerificationRequests, getVerificationRequestById, updateVerificationRequest,
   createBroadcast
 };

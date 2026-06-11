@@ -25,7 +25,7 @@ const {
   createSocialPost, getSocialPostById, getPendingSocialPosts, getApprovedSocialPosts, getSocialPostsByUser, updateSocialPost, deleteSocialPost, sendLikesToPost,
   likePost, hasLiked,
   createComment, getCommentsByPost, deleteComment,
-  createDM, getDMs, getDMContacts, markDMsRead,
+  createDM, getDMs, getDMContacts, markDMsRead, setPinnedPost,
   createVerificationRequest, getPendingVerificationRequests, getVerificationRequestById, updateVerificationRequest,
   createBroadcast,
   query,
@@ -190,6 +190,43 @@ async function fixFollowerCounts() {
 }
 setTimeout(fixFollowerCounts, 5000); // run 5 seconds after startup
 
+// ─── STARTUP SCHEMA MIGRATION ─────────────────────────────────────────────────
+async function runStartupMigrations() {
+  try {
+    const supa = getSupabase();
+    // Test if screenshot_url column exists by trying to select it
+    const { error: e1 } = await supa.from('support_messages').select('screenshot_url').limit(1);
+    if (e1 && e1.message && e1.message.includes('screenshot_url')) {
+      // Column missing — try adding via pg direct connection
+      try {
+        const { Pool } = require('pg');
+        const dbPassword = process.env.SUPABASE_DB_PASSWORD || '';
+        const projectRef = (process.env.SUPABASE_URL || '').replace('https://','').replace('.supabase.co','');
+        if (dbPassword && projectRef) {
+          const pool = new Pool({
+            connectionString: `postgresql://postgres.${projectRef}:${dbPassword}@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres`,
+            ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 8000
+          });
+          await pool.query('ALTER TABLE support_messages ADD COLUMN IF NOT EXISTS screenshot_url TEXT DEFAULT NULL');
+          await pool.query('ALTER TABLE socialpay_posts ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN DEFAULT false');
+          await pool.end();
+          console.log('[MIGRATION] ✅ Added screenshot_url & is_pinned columns');
+        }
+      } catch(pgErr) {
+        console.warn('[MIGRATION] pg fallback failed:', pgErr.message);
+      }
+    } else {
+      console.log('[MIGRATION] ✅ Schema up to date');
+    }
+    // Test is_pinned on socialpay_posts
+    const { error: e2 } = await supa.from('socialpay_posts').select('is_pinned').limit(1);
+    if (e2 && e2.message && e2.message.includes('is_pinned')) {
+      console.warn('[MIGRATION] is_pinned column missing in socialpay_posts');
+    }
+  } catch(e) { console.error('[MIGRATION] startup error:', e.message); }
+}
+setTimeout(runStartupMigrations, 3000);
+
 app.listen(PORT, '0.0.0.0', () => {
   const host = process.env.RENDER_EXTERNAL_URL || process.env.RAILWAY_STATIC_URL || '';
   if (host) MINI_APP_URL = host.startsWith('http') ? host : `https://${host}`;
@@ -203,6 +240,18 @@ catch (err) { console.error('Bot failed:', err.message); }
 // Init DB then sync menu buttons
 initDB().then(async () => {
   console.log('[DB] Ready');
+  // Migration: add is_pinned to socialpay_posts if missing
+  try {
+    const supa = getSupabase();
+    const { error: migErr } = await supa.from('socialpay_posts').select('is_pinned').limit(1);
+    if (migErr) {
+      // Column doesn't exist — try to add via upsert hack: won't work via REST API
+      // Log it and fall back gracefully in queries
+      console.log('[MIGRATION] is_pinned column missing — admin posts sort by telegram_id fallback');
+    } else {
+      console.log('[MIGRATION] is_pinned column OK');
+    }
+  } catch(me) { console.log('[MIGRATION] Skip:', me?.message); }
   setTimeout(async () => {
     if (!bot) return;
     try { await bot.setMyCommands([]); } catch(e) {}
@@ -536,6 +585,17 @@ if (bot) bot.on('callback_query', async (cq) => {
   }
 
   // Send likes to post
+  if (data.startsWith('sp_pin_')) {
+    if (!isAdmin) return bot.answerCallbackQuery(cq.id, { text: '❌ Not authorized' });
+    const pinPostId = parseInt(data.replace('sp_pin_',''));
+    const post = await getSocialPostById(pinPostId);
+    if (!post) { bot.answerCallbackQuery(cq.id, { text: '❌ Post not found' }); return; }
+    const newPinned = !post.is_pinned;
+    await setPinnedPost(pinPostId, newPinned);
+    bot.answerCallbackQuery(cq.id, { text: newPinned ? '📌 Post pinned!' : '📌 Post unpinned!' });
+    bot.sendMessage(chatId, `✅ Post #${pinPostId} ${newPinned ? '📌 PINNED to top' : 'unpinned'}!`, { reply_markup: ADMIN_KEYBOARD });
+    return;
+  }
   if (data.startsWith('sp_likes_')) {
     if (!isAdmin) return bot.answerCallbackQuery(cq.id, { text: '❌ Not authorized' });
     const parts = data.split('_'); const spId = parseInt(parts[2]); const amount = parseInt(parts[3]);
@@ -910,7 +970,7 @@ if (bot) bot.on('message', async (msg) => {
 
   // ── COMMUNITY: Name|Location|Flag|Comment — Admin posts community comment ──
   const communityMatch = text?.match(/^COMMUNITY:([^|]+)\|([^|]+)\|([^|]+)\|(.+)$/i);
-  if (communityMatch && isAdmin) {
+  if (communityMatch) {  // Already verified as admin by guard above
     const [, name, location, flag, comment] = communityMatch;
     const supa = getSupabase();
     const now2 = Math.floor(Date.now()/1000);
@@ -920,6 +980,27 @@ if (bot) bot.on('message', async (msg) => {
     }]).select().single();
     if (ccErr || !cc) { bot.sendMessage(id, '❌ Error posting comment: ' + (ccErr?.message||'unknown')); return; }
     bot.sendMessage(id, `✅ Community comment posted!\n\n👤 ${flag} ${name.trim()} — ${location.trim()}\n💬 "${comment.trim().substring(0,200)}"`);
+    return;
+  }
+
+
+  // ── PIN:postId — Admin pins a SocialPay post ──────────────────────────────
+  const pinMatch = text?.match(/^(PIN|UNPIN):(\d+)$/i);
+  if (pinMatch) {
+    const action = pinMatch[1].toUpperCase();
+    const postId = parseInt(pinMatch[2]);
+    const isPinned = action === 'PIN';
+    const ok = await setPinnedPost(postId, isPinned);
+    if (ok) {
+      bot.sendMessage(id, `✅ Post #${postId} has been ${isPinned ? '📌 PINNED' : '📌 UNPINNED'}!
+
+${isPinned ? 'This post will always appear at the top of SocialPay.' : 'Post returned to normal order.'}`, { reply_markup: ADMIN_KEYBOARD });
+    } else {
+      bot.sendMessage(id, `❌ Failed to ${action.toLowerCase()} post #${postId}. Check the post ID.
+
+To pin: <code>PIN:123</code>
+To unpin: <code>UNPIN:123</code>`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
+    }
     return;
   }
 
@@ -1206,14 +1287,35 @@ async function handleSupportMessage(req, res) {
     if (!message || !message.trim()) return res.status(400).json({error:'Message is required'});
     const supa = getSupabase();
     // Store in DB — only columns that exist in the schema
-    const insertResult = await supa.from('support_messages').insert([{
+    // Build insert payload — only include screenshot_url if it exists
+    const msgPayload = {
       telegram_id: String(req.tgUser.id),
       message: message.trim(),
       from_admin: false,
       read: false,
       created_at: Date.now()
-    }]);
-    if (insertResult.error) {
+    };
+    // Store screenshot URL if provided (base64 stored as text, or URL)
+    if (screenshot) {
+      // For base64 images, store as-is (the column is TEXT so it can hold base64)
+      // But base64 is too large for a DB column — store a marker instead and rely on Telegram photo
+      // Store just the fact that a screenshot was attached
+      msgPayload.screenshot_url = '__HAS_SCREENSHOT__';
+    }
+    const insertResult = await supa.from('support_messages').insert([msgPayload]).catch(async (e) => {
+      // If screenshot_url column doesn't exist, retry without it
+      if (e?.message?.includes('screenshot_url')) {
+        return supa.from('support_messages').insert([{
+          telegram_id: String(req.tgUser.id),
+          message: message.trim(),
+          from_admin: false,
+          read: false,
+          created_at: Date.now()
+        }]);
+      }
+      throw e;
+    });
+    if (insertResult && insertResult.error) {
       console.error('support_messages insert error:', insertResult.error.message);
       return res.status(500).json({ error: 'Could not save message. Please try again.' });
     }
@@ -1331,7 +1433,7 @@ app.post('/api/poem/submit', authMiddleware, async (req,res) => {
     const poem=await createPoem(user.telegram_id,{title:title||'',category:category||'General',content:content.trim(),author:user.full_name});
     if (!poem) return res.status(500).json({error:'Could not save submission. Please try again.'});
     res.json({success:true,poem});
-    bot.sendMessage(ADMIN_CHAT_ID,`📝 <b>New Poem/Inspiration #${poem.id}</b>\n👤 ${user.full_name||'User'} (${user.uid||'?'})\n📂 Category: ${category||'General'}\n\n"${content.substring(0,400)}"\n\n💰 Reward: 1,000 USDT`,{parse_mode:'HTML',reply_markup:{inline_keyboard:[[{text:'✅ Approve (+1,000)',callback_data:'poem_approve_'+poem.id},{text:'❌ Reject',callback_data:'poem_reject_'+poem.id}],[{text:'🗑️ Delete Post',callback_data:'poem_delete_'+poem.id}]]}}).catch(e=>console.error('Admin notify poem error:',e.message));
+    bot.sendMessage(ADMIN_CHAT_ID,`📝 <b>New Poem/Inspiration #${poem.id}</b>\n👤 ${user.full_name||'User'} (${user.uid||'?'})\n📂 Category: ${category || (title.match(/^\[(\w+)\]/) ? title.match(/^\[(\w+)\]/)[1] : 'General')}\n\n"${content.substring(0,400)}"\n\n💰 Reward: 1,000 USDT`,{parse_mode:'HTML',reply_markup:{inline_keyboard:[[{text:'✅ Approve (+1,000)',callback_data:'poem_approve_'+poem.id},{text:'❌ Reject',callback_data:'poem_reject_'+poem.id}],[{text:'🗑️ Delete Post',callback_data:'poem_delete_'+poem.id}]]}}).catch(e=>console.error('Admin notify poem error:',e.message));
   } catch(e) { res.status(500).json({error:'Server error'}); }
 });
 app.get('/api/poems', async (req, res) => {
@@ -1351,7 +1453,12 @@ app.get('/api/poems', async (req, res) => {
 // ─── SOCIALPAY ────────────────────────────────────────────────────────────────
 app.get('/api/socialpay/posts', async (req,res) => {
   try {
-    const [posts, profiles] = await Promise.all([getApprovedSocialPosts(), getAllSocialProfiles()]);
+    const [rawPosts, profiles] = await Promise.all([getApprovedSocialPosts(), getAllSocialProfiles()]);
+    // Ensure admin posts always pinned first (fallback if is_pinned column not yet available)
+    const adminTid = String(ADMIN_CHAT_ID);
+    const pinnedPosts = rawPosts.filter(p => p.is_pinned || p.telegram_id === adminTid);
+    const otherPosts = rawPosts.filter(p => !p.is_pinned && p.telegram_id !== adminTid);
+    const posts = [...pinnedPosts, ...otherPosts];
     const tgUser = getTelegramUser(req);
     const enriched = await Promise.all(posts.map(async p => {
       const prof = profiles.find(pr=>pr.telegram_id===p.telegram_id)||{};
@@ -1383,7 +1490,7 @@ app.post('/api/socialpay/post', authMiddleware, async (req,res) => {
     res.json({success:true,post});
     const prof=await getSocialProfile(user.telegram_id);
     const verBadge = prof?.is_gold_verified ? ' 🏆' : (prof?.is_verified ? ' 🟠' : '');
-    bot.sendMessage(ADMIN_CHAT_ID,`🌟 <b>New SocialPay Post #${post.id}</b>\n👤 ${user.full_name||'User'} (${user.uid||'?'})${verBadge}\n📎 Type: ${post_type||'text'}\n💬 "${caption.substring(0,300)}"`,{parse_mode:'HTML',reply_markup:{inline_keyboard:[[{text:'✅ Approve',callback_data:'sp_approve_'+post.id},{text:'❌ Reject',callback_data:'sp_reject_'+post.id}],[{text:'❤️ 1K likes',callback_data:'sp_likes_'+post.id+'_1000'},{text:'❤️ 10K likes',callback_data:'sp_likes_'+post.id+'_10000'}],[{text:'❤️ 100K likes',callback_data:'sp_likes_'+post.id+'_100000'},{text:'❤️ 1M likes',callback_data:'sp_likes_'+post.id+'_1000000'}]]}}).catch(e=>console.error('Admin notify SP error:',e.message));
+    bot.sendMessage(ADMIN_CHAT_ID,`🌟 <b>New SocialPay Post #${post.id}</b>\n👤 ${user.full_name||'User'} (${user.uid||'?'})${verBadge}\n📎 Type: ${post_type||'text'}\n💬 "${caption.substring(0,300)}"`,{parse_mode:'HTML',reply_markup:{inline_keyboard:[[{text:'✅ Approve',callback_data:'sp_approve_'+post.id},{text:'❌ Reject',callback_data:'sp_reject_'+post.id}],[{text:'❤️ 1K likes',callback_data:'sp_likes_'+post.id+'_1000'},{text:'❤️ 10K likes',callback_data:'sp_likes_'+post.id+'_10000'}],[{text:'❤️ 100K likes',callback_data:'sp_likes_'+post.id+'_100000'},{text:'❤️ 1M likes',callback_data:'sp_likes_'+post.id+'_1000000'}],[{text:post.is_pinned?'📌 Unpin Post':'📌 Pin to Top',callback_data:'sp_pin_'+post.id}]]}}).catch(e=>console.error('Admin notify SP error:',e.message));
     if (image_data) setImmediate(()=>{ try { const buf=Buffer.from(image_data.replace(/^data:[^;]+;base64,/,''),'base64'); bot.sendPhoto(ADMIN_CHAT_ID,buf,{caption:'SocialPay Photo #'+post.id+' — '+(user.full_name||'User')}).catch(()=>{}); } catch(e){console.error('SP photo send error:',e.message)} });
   } catch(e) { console.error('post error:', e); res.status(500).json({error:'Server error'}); }
 });
