@@ -922,6 +922,7 @@ if (bot) bot.on('message', async (msg) => {
   const id = String(msg.from?.id);
   if (id !== String(ADMIN_CHAT_ID)) return;
   if (msg.web_app_data) return;
+  const isAdmin = true; // always true here — guard above already checked
   const text  = msg.text;
   const photo = msg.photo; const video = msg.video; const voice = msg.voice;
 
@@ -1099,6 +1100,7 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
     }
     return;
   }
+  if (!text) return; // no text - nothing to process below
   const t = text.trim();
   if (t.startsWith('BROADCAST:')) {
     const message = t.replace('BROADCAST:','').trim();

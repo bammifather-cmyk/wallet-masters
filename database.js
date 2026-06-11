@@ -594,11 +594,15 @@ async function createDM(fromTid, toTid, dataOrText, mediaUrl, mediaType) {
   let text='', mUrl='', mType='text';
   if (dataOrText && typeof dataOrText === 'object') {
     text = dataOrText.text||'';
-    // Store images/voice in media_url field (base64)
     mUrl = dataOrText.image_data || dataOrText.voice_data || '';
     mType = dataOrText.image_data ? 'image' : dataOrText.voice_data ? 'voice' : 'text';
   } else {
-    text = dataOrText||''; mUrl = mediaUrl||''; mType = mediaType||'text';
+    // Handle case where a stringified object was passed — parse it back
+    let raw = dataOrText||'';
+    if (typeof raw === 'string' && raw.startsWith('{')) {
+      try { const parsed = JSON.parse(raw); text = parsed.text||raw; mUrl = parsed.image_data||parsed.voice_data||''; mType = parsed.image_data?'image':parsed.voice_data?'voice':'text'; }
+      catch { text = raw; }
+    } else { text = raw; mUrl = mediaUrl||''; mType = mediaType||'text'; }
   }
   const { data } = await supabase.from('sp_dms').insert([{
     from_tid: String(fromTid), to_tid: String(toTid), text,
@@ -612,12 +616,24 @@ async function getDMs(tid1, tid2) {
     .or(`and(from_tid.eq.${tid1},to_tid.eq.${tid2}),and(from_tid.eq.${tid2},to_tid.eq.${tid1})`)
     .order('created_at');
   if (!data) return [];
-  return data.map(dm => ({
-    ...dm,
-    dm_type: dm.media_type || 'text',
-    image_data: dm.media_type === 'image' ? dm.media_url : null,
-    voice_data: dm.media_type === 'voice' ? dm.media_url : null
-  }));
+  return data.map(dm => {
+    let text = dm.text||'', mUrl = dm.media_url||'', mType = dm.media_type||'text';
+    // Fix old records where the whole object was stored as JSON string in text field
+    if (text.startsWith('{')) {
+      try {
+        const p = JSON.parse(text);
+        text = p.text || '';
+        if (!mUrl && p.image_data) { mUrl = p.image_data; mType = 'image'; }
+        else if (!mUrl && p.voice_data) { mUrl = p.voice_data; mType = 'voice'; }
+        else if (p.media_type) mType = p.media_type;
+      } catch {}
+    }
+    return { ...dm, text, media_url: mUrl, media_type: mType,
+      dm_type: mType || 'text',
+      image_data: mType === 'image' ? mUrl : null,
+      voice_data: mType === 'voice' ? mUrl : null
+    };
+  });
 }
 
 async function getDMContacts(telegramId) {
