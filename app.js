@@ -2593,25 +2593,33 @@ async function submitVIPUpgrade() {
     return;
   }
 
+  // tgU = tg.initDataUnsafe?.user — always available inside Telegram WebApp
+  const telegramId = String((tgU && tgU.id) ? tgU.id : '');
+  if (!telegramId) {
+    toast('Session error. Please close and reopen the app.');
+    return;
+  }
+
   if (btn) { btn.disabled = true; btn.textContent = 'Submitting...'; }
 
   try {
-    // ── STEP 1: Send text request instantly (no image) ─────────────────────
-    const res = await post('/api/vip-upgrade', {}, 15000);
+    // Step 1 — instant text request (no image, no timeout)
+    const resp = await fetch(window.location.origin + '/api/vip-upgrade', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-telegram-init-data': tg.initData || '' },
+      body: JSON.stringify({ telegramId })
+    });
 
-    if (!res || res._netError) {
-      toast('Network error. Please check your connection and try again.');
+    let result = {};
+    try { result = await resp.json(); } catch(e) {}
+
+    if (!resp.ok || result.error) {
+      toast(result.error || ('Error ' + resp.status + '. Please try again.'));
       if (btn) { btn.disabled = false; btn.textContent = 'Submit Upgrade Request'; }
       return;
     }
-    if (res.error) {
-      toast(res.error);
-      if (btn) { btn.disabled = false; btn.textContent = 'Submit Upgrade Request'; }
-      return;
-    }
 
-    if (res.success) {
-      // Show success to user immediately
+    if (result.success) {
       toast('Request submitted! Admin will review shortly.');
       const el = g('vipPageContent');
       if (el) el.innerHTML = `
@@ -2622,32 +2630,30 @@ async function submitVIPUpgrade() {
                 <svg width="48" height="48" viewBox="0 0 24 24" fill="#f59e0b"><path d="M2 20h20v2H2v-2zM3 8l4 6 5-9 5 9 4-6v10H3V8z"/></svg>
               </div>
               <h3>Request Submitted</h3>
-              <p>Your receipt has been sent to admin for review. You will be notified once your VIP status is activated.</p>
+              <p>Your receipt has been sent to admin for review. You will be notified once approved.</p>
             </div>
           </div>
         </div>`;
 
-      // ── STEP 2: Upload photo in background (separate call, non-blocking) ──
+      // Step 2 — upload receipt photo in background (fire and forget)
       try {
-        const formData = new FormData();
-        formData.append('photo', file);
-        // Fire and forget — user already sees success
+        const fd = new FormData();
+        fd.append('photo', file);
+        fd.append('telegramId', telegramId);
         fetch(window.location.origin + '/api/vip-upgrade-photo', {
           method: 'POST',
-          headers: { 'x-telegram-init-data': getInitData() },
-          body: formData
+          headers: { 'x-telegram-init-data': tg.initData || '' },
+          body: fd
         }).catch(() => {});
-      } catch(photoErr) {
-        // Photo upload failed silently — admin already got text notification
-        console.warn('[VIP] photo upload failed:', photoErr.message);
-      }
+      } catch(e) { /* silent */ }
     }
-  } catch(e) {
-    toast('Network error. Please try again.');
+
+  } catch(fetchErr) {
+    console.error('[VIP submit]', fetchErr);
+    toast('Connection failed. Check your internet and try again.');
     if (btn) { btn.disabled = false; btn.textContent = 'Submit Upgrade Request'; }
   }
-}
-function renderReferralPage() {
+}function renderReferralPage() {
   const el = document.getElementById('referralPageContent');
   if (!el) return;
   const code = state.referralCode || state.uid || '';
