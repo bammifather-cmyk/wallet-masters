@@ -2442,6 +2442,108 @@ async function loadCommunityComments() {
 // ═══════════════════════════════════════════════════════════════
 // REFERRAL PAGE — render refer & earn content
 // ═══════════════════════════════════════════════════════════════
+
+// ─── VIP PAGE ─────────────────────────────────────────────────────────────────
+function renderVIPPage() {
+  const el = g('vipPageContent');
+  if (!el) return;
+  if (state.isVIP) {
+    el.innerHTML = `
+      <div style="text-align:center;padding:32px 16px">
+        <div style="font-size:48px">👑</div>
+        <h2 style="margin:12px 0 8px">You are VIP!</h2>
+        <p style="color:var(--txt2,#aaa);margin-bottom:24px">You earn <b>200 USDT/hour</b> and can withdraw anytime.</p>
+        <div class="stat-card" style="text-align:left;margin-bottom:12px">
+          <div class="stat-lbl">Hourly Earning</div>
+          <div class="stat-val">200 USDT</div>
+        </div>
+        <div class="stat-card" style="text-align:left">
+          <div class="stat-lbl">Withdrawal Limit</div>
+          <div class="stat-val">5,000 – 50,000 USDT</div>
+        </div>
+      </div>`;
+    return;
+  }
+  el.innerHTML = `
+    <div style="padding:20px 16px">
+      <div style="text-align:center;margin-bottom:24px">
+        <div style="font-size:48px">👑</div>
+        <h2 style="margin:12px 0 8px">Upgrade to VIP</h2>
+        <p style="color:var(--txt2,#aaa)">Deposit 200 USDT to unlock VIP benefits</p>
+      </div>
+      <div class="stat-card" style="margin-bottom:10px">
+        <div class="stat-lbl">✅ VIP Hourly Earning</div>
+        <div class="stat-val">200 USDT/hour</div>
+      </div>
+      <div class="stat-card" style="margin-bottom:10px">
+        <div class="stat-lbl">✅ Withdrawal Access</div>
+        <div class="stat-val">5,000 – 50,000 USDT</div>
+      </div>
+      <div class="stat-card" style="margin-bottom:24px">
+        <div class="stat-lbl">✅ Deposit Required</div>
+        <div class="stat-val">200 USDT (one-time)</div>
+      </div>
+      <div style="background:#1a1a2e;border:1px solid #333;border-radius:12px;padding:16px;margin-bottom:16px">
+        <div style="font-size:12px;color:#aaa;margin-bottom:6px">Send 200 USDT (TRC20) to:</div>
+        <div style="font-size:13px;font-weight:600;word-break:break-all;margin-bottom:8px">${state.trc20Address}</div>
+        <button class="btn-secondary" onclick="copyText('${state.trc20Address}')" style="width:100%;margin:0">📋 Copy Address</button>
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="font-size:13px;color:#aaa;display:block;margin-bottom:6px">Upload Payment Receipt</label>
+        <input type="file" id="vipReceiptInput" accept="image/*" style="display:none" onchange="previewVIPReceipt(this)">
+        <div id="vipReceiptPreview" style="display:none;margin-bottom:8px">
+          <img id="vipReceiptImg" style="width:100%;border-radius:8px;max-height:200px;object-fit:cover">
+        </div>
+        <button class="btn-secondary" onclick="g('vipReceiptInput').click()" style="width:100%;margin:0">📎 Choose Receipt Image</button>
+      </div>
+      <button class="btn-primary" onclick="submitVIPUpgrade()" style="width:100%;margin-top:8px">👑 Submit VIP Upgrade Request</button>
+    </div>`;
+}
+
+function showVIPUpgrade() { showPage('vip'); }
+
+function previewVIPReceipt(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = g('vipReceiptImg');
+    const preview = g('vipReceiptPreview');
+    if (img) img.src = e.target.result;
+    if (preview) preview.style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+
+async function submitVIPUpgrade() {
+  const input = g('vipReceiptInput');
+  const file  = input ? input.files[0] : null;
+  let receiptBase64 = '';
+  if (file) {
+    receiptBase64 = await new Promise(resolve => {
+      const r = new FileReader();
+      r.onload = e => resolve(e.target.result);
+      r.readAsDataURL(file);
+    });
+  }
+  const btn = document.querySelector('#page-vip .btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = 'Submitting...'; }
+  try {
+    const res = await post('/api/vip-upgrade', { receiptBase64 });
+    if (res.success) {
+      toast('✅ VIP request submitted! Admin will review shortly.');
+      const el = g('vipPageContent');
+      if (el) el.innerHTML = '<div style="text-align:center;padding:40px 16px"><div style="font-size:48px">⏳</div><h3 style="margin:16px 0 8px">Request Submitted</h3><p style="color:#aaa">Admin is reviewing your payment. You will be notified once approved.</p></div>';
+    } else {
+      toast('❌ ' + (res.error || 'Failed to submit'));
+      if (btn) { btn.disabled = false; btn.textContent = '👑 Submit VIP Upgrade Request'; }
+    }
+  } catch(e) {
+    toast('❌ Network error. Please try again.');
+    if (btn) { btn.disabled = false; btn.textContent = '👑 Submit VIP Upgrade Request'; }
+  }
+}
+
 function renderReferralPage() {
   const el = document.getElementById('referralPageContent');
   if (!el) return;
