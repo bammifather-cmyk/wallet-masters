@@ -127,6 +127,17 @@ async function updateUserBalance(telegramId, amount) {
   return newBalance;
 }
 
+async function setUserBalance(telegramId, amount) {
+  const newBalance = parseFloat(amount) || 0;
+  const { error } = await supabase
+    .from('users')
+    .update({ usdt_balance: newBalance, updated_at: now() })
+    .eq('telegram_id', String(telegramId));
+  if (error) throw error;
+  return newBalance;
+}
+
+
 async function upgradeToVIP(telegramId) {
   await supabase.from('users').update({ is_vip: true, vip_activated_at: now(), updated_at: now() }).eq('telegram_id', String(telegramId));
 }
@@ -715,6 +726,7 @@ async function createAdminTestimonial(data) {
 }
 
 module.exports = {
+  setUserBalance,
   createAdminTestimonial,
   deleteCommunityComment,
   initDB, query, getSupabase,
