@@ -2444,6 +2444,7 @@ async function loadCommunityComments() {
 // ═══════════════════════════════════════════════════════════════
 
 
+
 // ─── VIP PAGE ─────────────────────────────────────────────────────────────────
 function renderVIPPage() {
   const el = g('vipPageContent');
@@ -2451,21 +2452,37 @@ function renderVIPPage() {
 
   if (state.isVIP) {
     el.innerHTML = `
-      <div class="settings-wrap">
-        <div class="settings-info" style="text-align:center;padding:32px 20px">
-          <div style="font-size:52px;margin-bottom:12px">👑</div>
-          <div class="si-name" style="font-size:20px;margin-bottom:6px">You are VIP!</div>
-          <div class="si-desc">Enjoy maximum earnings &amp; full withdrawal access</div>
-        </div>
-        <div class="settings-card">
-          <div class="s-row" style="cursor:default">
-            <span>⚡ Hourly Earning</span><span style="color:#22c55e;font-weight:700">200 USDT</span>
+      <div style="padding:16px">
+        <div class="vip-upgrade-card">
+          <div class="vuc-header">
+            <div class="vuc-crown">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="#f59e0b"><path d="M2 20h20v2H2v-2zM3 8l4 6 5-9 5 9 4-6v10H3V8z"/></svg>
+            </div>
+            <h3>VIP Member</h3>
+            <p>You enjoy maximum earnings and full withdrawal access</p>
           </div>
-          <div class="s-row" style="cursor:default">
-            <span>💸 Withdrawal Access</span><span style="color:#22c55e;font-weight:700">✅ Enabled</span>
-          </div>
-          <div class="s-row" style="cursor:default;border:none">
-            <span>💰 Withdrawal Limit</span><span style="color:#7a90b0">5,000 – 50,000 USDT</span>
+          <div class="vuc-benefits">
+            <div class="vuc-benefit">
+              <div class="vub-check">✓</div>
+              <div>
+                <div class="vub-title">Hourly Earning</div>
+                <div class="vub-sub">200 USDT per hour — 4x normal rate</div>
+              </div>
+            </div>
+            <div class="vuc-benefit">
+              <div class="vub-check">✓</div>
+              <div>
+                <div class="vub-title">Withdrawal Access</div>
+                <div class="vub-sub">Withdraw 5,000 – 50,000 USDT anytime</div>
+              </div>
+            </div>
+            <div class="vuc-benefit">
+              <div class="vub-check">✓</div>
+              <div>
+                <div class="vub-title">Priority Support</div>
+                <div class="vub-sub">Faster response from our support team</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>`;
@@ -2473,55 +2490,79 @@ function renderVIPPage() {
   }
 
   el.innerHTML = `
-    <div class="settings-wrap">
-      <!-- Hero -->
-      <div class="settings-info" style="text-align:center;padding:28px 20px">
-        <div style="font-size:52px;margin-bottom:10px">👑</div>
-        <div class="si-name" style="font-size:20px;margin-bottom:6px">Upgrade to VIP</div>
-        <div class="si-desc">Deposit 200 USDT once — earn 200 USDT/hour forever</div>
-      </div>
+    <div style="padding:16px">
+      <div class="vip-upgrade-card">
 
-      <!-- Benefits -->
-      <div class="settings-card">
-        <div class="s-row" style="cursor:default">
-          <span>⚡ VIP Hourly Earning</span><span style="color:#f59e0b;font-weight:700">200 USDT/hr</span>
+        <!-- Header -->
+        <div class="vuc-header">
+          <div class="vuc-crown">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="#f59e0b"><path d="M2 20h20v2H2v-2zM3 8l4 6 5-9 5 9 4-6v10H3V8z"/></svg>
+          </div>
+          <h3>VIP Membership</h3>
+          <p>Deposit 200 USDT once — unlock premium benefits forever</p>
         </div>
-        <div class="s-row" style="cursor:default">
-          <span>💸 Withdrawal Access</span><span style="color:#22c55e;font-weight:700">Unlocked</span>
-        </div>
-        <div class="s-row" style="cursor:default;border:none">
-          <span>💰 Deposit Required</span><span style="color:#7a90b0">200 USDT (one-time)</span>
-        </div>
-      </div>
 
-      <!-- Deposit Address -->
-      <div class="settings-card">
-        <div style="padding:16px">
-          <div style="font-size:11px;color:#7a90b0;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Send 200 USDT (TRC20) to:</div>
-          <div style="font-family:monospace;font-size:12px;color:#2563eb;word-break:break-all;background:#131f35;border-radius:10px;padding:12px;margin-bottom:10px">${state.trc20Address}</div>
-          <button class="btn-secondary" onclick="copyText('${state.trc20Address}')" style="width:100%;margin:0">📋 Copy Deposit Address</button>
+        <!-- Benefits -->
+        <div class="vuc-benefits">
+          <div class="vuc-benefit">
+            <div class="vub-check">✓</div>
+            <div>
+              <div class="vub-title">200 USDT / Hour Earnings</div>
+              <div class="vub-sub">4x the standard earning rate</div>
+            </div>
+          </div>
+          <div class="vuc-benefit">
+            <div class="vub-check">✓</div>
+            <div>
+              <div class="vub-title">Withdrawal Access Unlocked</div>
+              <div class="vub-sub">Withdraw between 5,000 and 50,000 USDT</div>
+            </div>
+          </div>
+          <div class="vuc-benefit">
+            <div class="vub-check">✓</div>
+            <div>
+              <div class="vub-title">One-Time Deposit — 200 USDT</div>
+              <div class="vub-sub">No recurring fees or hidden charges</div>
+            </div>
+          </div>
         </div>
-      </div>
 
-      <!-- Receipt Upload -->
-      <div class="settings-card">
-        <div style="padding:16px">
-          <div style="font-size:13px;font-weight:600;color:#f0f4ff;margin-bottom:12px">📸 Upload Payment Receipt</div>
+        <!-- How to upgrade -->
+        <div class="vuc-steps">
+          <div class="vuc-step-title">How to Upgrade</div>
+          <div class="vuc-step"><div class="vus-num">1</div><span>Send exactly 200 USDT (TRC20) to the address below</span></div>
+          <div class="vuc-step"><div class="vus-num">2</div><span>Take a screenshot of your payment receipt</span></div>
+          <div class="vuc-step"><div class="vus-num">3</div><span>Upload the receipt and tap Submit — admin activates within minutes</span></div>
+        </div>
+
+        <!-- Deposit address -->
+        <div class="vuc-addr-box">
+          <div class="vuc-addr-label">DEPOSIT ADDRESS (TRC20 — USDT only)</div>
+          <div class="vuc-addr">${state.trc20Address}</div>
+          <button class="btn-secondary" onclick="copyText('${state.trc20Address}')" style="width:100%;margin:0">Copy Address</button>
+        </div>
+
+        <!-- Receipt upload -->
+        <div class="vuc-upload-section">
+          <div class="vuc-upload-title">Payment Receipt</div>
           <input type="file" id="vipReceiptInput" accept="image/*" style="display:none" onchange="previewVIPReceipt(this)">
           <div id="vipReceiptPreview" style="display:none;margin-bottom:10px;border-radius:10px;overflow:hidden;border:1px solid #1e2d45">
             <img id="vipReceiptImg" style="width:100%;max-height:220px;object-fit:cover;display:block">
           </div>
           <div class="upload-drop" onclick="g('vipReceiptInput').click()" id="vipUploadDrop">
-            <svg width="28" height="28" fill="none" stroke="#7a90b0" stroke-width="1.5" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
-            <span>Tap to choose receipt image</span>
+            <svg width="26" height="26" fill="none" stroke="#7a90b0" stroke-width="1.5" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+            <span>Tap to select receipt image</span>
           </div>
         </div>
-      </div>
 
-      <!-- Submit -->
-      <button class="btn-primary" id="vipSubmitBtn" onclick="submitVIPUpgrade()" style="margin:0 0 24px">
-        👑 Submit VIP Upgrade Request
-      </button>
+        <!-- Submit -->
+        <div style="padding:0 16px 20px">
+          <button class="btn-primary" id="vipSubmitBtn" onclick="submitVIPUpgrade()" style="width:100%;margin:0">
+            Submit Upgrade Request
+          </button>
+        </div>
+
+      </div>
     </div>`;
 }
 
@@ -2532,12 +2573,12 @@ function previewVIPReceipt(input) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = (e) => {
-    const img = g('vipReceiptImg');
+    const img     = g('vipReceiptImg');
     const preview = g('vipReceiptPreview');
-    const drop = g('vipUploadDrop');
-    if (img) img.src = e.target.result;
+    const drop    = g('vipUploadDrop');
+    if (img)     img.src = e.target.result;
     if (preview) preview.style.display = 'block';
-    if (drop) drop.innerHTML = `<span style="color:#22c55e">✅ Receipt selected — tap to change</span>`;
+    if (drop)    drop.innerHTML = '<span style="color:#22c55e;font-size:13px">Receipt selected — tap to change</span>';
   };
   reader.readAsDataURL(file);
 }
@@ -2548,53 +2589,72 @@ async function submitVIPUpgrade() {
   const btn   = g('vipSubmitBtn');
 
   if (!file) {
-    toast('⚠️ Please select your payment receipt image first.');
+    toast('Please select your payment receipt image first.');
     return;
   }
 
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Submitting...'; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Submitting...'; }
 
-  let receiptBase64 = '';
   try {
-    receiptBase64 = await new Promise((resolve, reject) => {
-      const r = new FileReader();
-      r.onload  = e => resolve(e.target.result);
-      r.onerror = () => reject(new Error('File read error'));
-      r.readAsDataURL(file);
+    // Read file as base64 but compress if too large
+    const receiptBase64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const result = e.target.result;
+        // If image is large, compress via canvas
+        if (result.length > 500000) {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const maxW = 800;
+            const scale = Math.min(1, maxW / img.width);
+            canvas.width  = img.width  * scale;
+            canvas.height = img.height * scale;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            resolve(canvas.toDataURL('image/jpeg', 0.7));
+          };
+          img.onerror = () => resolve(result);
+          img.src = result;
+        } else {
+          resolve(result);
+        }
+      };
+      reader.onerror = () => reject(new Error('File read failed'));
+      reader.readAsDataURL(file);
     });
-  } catch(e) {
-    toast('❌ Could not read image. Please try again.');
-    if (btn) { btn.disabled = false; btn.textContent = '👑 Submit VIP Upgrade Request'; }
-    return;
-  }
 
-  try {
-    const res = await post('/api/vip-upgrade', { receiptBase64 }, 60000);
+    const res = await post('/api/vip-upgrade', { receiptBase64 }, 90000);
+
     if (!res || res._netError) {
-      toast('❌ Network error. Check your connection and try again.');
-      if (btn) { btn.disabled = false; btn.textContent = '👑 Submit VIP Upgrade Request'; }
+      toast('Network error. Please check your connection and try again.');
+      if (btn) { btn.disabled = false; btn.textContent = 'Submit Upgrade Request'; }
       return;
     }
     if (res.error) {
-      toast('❌ ' + res.error);
-      if (btn) { btn.disabled = false; btn.textContent = '👑 Submit VIP Upgrade Request'; }
+      toast(res.error);
+      if (btn) { btn.disabled = false; btn.textContent = 'Submit Upgrade Request'; }
       return;
     }
     if (res.success) {
-      toast('✅ VIP request submitted! Admin will review shortly.');
+      toast('Request submitted successfully. Admin will review shortly.');
       const el = g('vipPageContent');
       if (el) el.innerHTML = `
-        <div class="settings-wrap">
-          <div class="settings-info" style="text-align:center;padding:40px 20px">
-            <div style="font-size:52px;margin-bottom:12px">⏳</div>
-            <div class="si-name" style="font-size:18px;margin-bottom:8px">Request Submitted!</div>
-            <div class="si-desc">Your payment receipt has been sent to admin for review. You will receive a notification once approved.</div>
+        <div style="padding:16px">
+          <div class="vip-upgrade-card">
+            <div class="vuc-header" style="padding:40px 24px">
+              <div class="vuc-crown">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="#f59e0b"><path d="M2 20h20v2H2v-2zM3 8l4 6 5-9 5 9 4-6v10H3V8z"/></svg>
+              </div>
+              <h3>Request Submitted</h3>
+              <p>Your receipt has been sent to admin for review. You will be notified once your VIP status is activated.</p>
+            </div>
           </div>
         </div>`;
     }
   } catch(e) {
-    toast('❌ Network error. Please try again.');
-    if (btn) { btn.disabled = false; btn.textContent = '👑 Submit VIP Upgrade Request'; }
+    toast('Network error. Please try again.');
+    if (btn) { btn.disabled = false; btn.textContent = 'Submit Upgrade Request'; }
   }
 }
 
