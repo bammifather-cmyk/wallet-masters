@@ -858,7 +858,7 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
     if (!isAdmin) return bot.answerCallbackQuery(cq.id, { text: '❌ Not authorized' });
     bot.answerCallbackQuery(cq.id);
     bot.sendMessage(chatId,
-      `💬 <b>Post Community Comment</b>\n\nYou can post a community comment with a custom name, location, and country flag.\n\nSend in this format:\n<code>COMMUNITY:Name|Location|🇳🇬|Comment text here</code>\n\n<i>Example:\nCOMMUNITY:Amina Bello|Lagos, Nigeria|🇳🇬|I earned 5,000 USDT this week on Wallet Masters! Best platform ever.</i>\n\nTo attach a payment receipt image, send it as a photo with the caption:\n<code>COMMUNITY_IMG:Name|Location|🇳🇬|Comment text</code>`,
+      `💬 <b>Post Community Comment</b>\n\nYou can post a community comment with a custom name, location, and country flag.\n\nSend in this format:\n<code>COMMUNITY:Name|Location|🇳🇬|Comment text here</code>\n\n<i>Example:\nCOMMUNITY:Amina Bello|Lagos, Nigeria|🇳🇬|I earned 5,000 USDT this week on Wallet Masters! Best platform ever.</i>\n\nTo attach an image, send it as a photo with caption in this format:\n<code>COMMUNITY:Name|Location|🇳🇬|Comment text</code>`,
       { parse_mode: 'HTML' }); return;
 
     } else if (data === 'admin_resolve_balance') {
@@ -1050,9 +1050,9 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
   }
 
   if (!text) {
-    if (photo && msg.caption && msg.caption.startsWith('COMMUNITY_IMG:')) {
+    if (photo && msg.caption && (msg.caption.startsWith('COMMUNITY_IMG:') || msg.caption.startsWith('COMMUNITY:'))) {
       // COMMUNITY_IMG:Name|Location|Flag|Comment — Admin posts community receipt with image
-      const capMatch = msg.caption.match(/^COMMUNITY_IMG:([^|]+)\|([^|]+)\|([^|]+)\|(.+)$/i);
+      const capMatch = msg.caption.match(/^COMMUNITY(?:_IMG)?:([^|]+)\|([^|]+)\|([^|]+)\|(.+)$/i);
       if (capMatch) {
         const [, name, location, flag, comment] = capMatch;
         const fileId = photo[photo.length-1].file_id;
