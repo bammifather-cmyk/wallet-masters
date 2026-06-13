@@ -1296,60 +1296,79 @@ app.post('/api/receipt', authMiddleware, async (req, res) => {
   } catch(e) { res.status(500).json({ error: 'Server error' }); }
 });
 
-app.post('/api/vip-upgrade', authMiddleware, async (req, res) => {
-  // Step 1: Instant text-only request — no image, no Telegram photo call, no timeout risk
+app.post('/api/vip-upgrade', async (req, res) => {
   try {
-    const user = await getUserByTelegramId(req.tgUser.id);
-    if (!user) return res.status(404).json({ error: 'User not found' });
-    if (user.is_vip) return res.status(400).json({ error: 'You are already a VIP member' });
+    // Accept user from initData header OR telegramId in body
+    let telegramId = null;
+    try { const u = getTelegramUser(req); if (u && u.id) telegramId = String(u.id); } catch(e) {}
+    if (!telegramId && req.body && req.body.telegramId) telegramId = String(req.body.telegramId);
+    if (!telegramId) return res.status(401).json({ error: 'Session expired. Please close and reopen the app.' });
 
-    // Record the request in DB
+    const user = await getUserByTelegramId(telegramId);
+    if (!user) return res.status(404).json({ error: 'Account not found. Please restart the app.' });
+    if (user.is_vip) return res.status(400).json({ error: 'Your account is already VIP.' });
+
+    // Record the upgrade request
     try {
       await createWithdrawalRequest({
         telegram_id: user.telegram_id, amount: 200,
         method: 'vip_upgrade', account_number: 'VIP Deposit', bank_name: 'VIP Upgrade'
       });
-    } catch(e) { console.error('[VIP] DB error:', e.message); }
+    } catch(e) { console.error('[VIP] DB:', e.message); }
 
-    // Send text notification to admin immediately (no photo = no timeout)
-    const markup = { reply_markup: { inline_keyboard: [[
+    // Notify admin instantly (text only — no timeout risk)
+    const vipMarkup = { reply_markup: { inline_keyboard: [[
       { text: 'Activate VIP', callback_data: `vip_approve_${user.telegram_id}` },
       { text: 'Reject',       callback_data: `vip_reject_${user.telegram_id}` }
     ]]}};
     bot.sendMessage(ADMIN_CHAT_ID,
-      `VIP Upgrade Request\n\nName: ${user.full_name}\nUID: ${user.uid}\nTelegram ID: ${user.telegram_id}\nAmount: 200 USDT\n\n(Receipt photo uploading separately...)`,
-      markup).catch(e => console.error('[VIP] notify error:', e.message));
+      `VIP Upgrade Request
 
-    res.json({ success: true });
+Name: ${user.full_name}
+UID: ${user.uid}
+Telegram ID: ${user.telegram_id}
+Amount: 200 USDT
+
+Receipt photo uploading separately...`,
+      vipMarkup).catch(e => console.error('[VIP notify]:', e.message));
+
+    return res.json({ success: true });
   } catch(e) {
     console.error('[VIP] error:', e.message);
-    res.status(500).json({ error: 'Server error. Please try again.' });
+    return res.status(500).json({ error: 'Server error. Please try again.' });
   }
 });
 
-// Step 2: Separate photo upload — called after step 1 succeeds
+// VIP receipt photo upload (multipart, background call)
 const multer = require('multer');
-const vipUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
+const vipUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 
-app.post('/api/vip-upgrade-photo', authMiddleware, vipUpload.single('photo'), async (req, res) => {
+app.post('/api/vip-upgrade-photo', vipUpload.single('photo'), async (req, res) => {
   try {
-    const user = await getUserByTelegramId(req.tgUser.id);
+    let telegramId = null;
+    try { const u = getTelegramUser(req); if (u && u.id) telegramId = String(u.id); } catch(e) {}
+    if (!telegramId && req.body && req.body.telegramId) telegramId = String(req.body.telegramId);
+    if (!telegramId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const user = await getUserByTelegramId(telegramId);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    if (req.file) {
-      const markup = { reply_markup: { inline_keyboard: [[
+    if (req.file && req.file.buffer) {
+      const vipPhotoMarkup = { reply_markup: { inline_keyboard: [[
         { text: 'Activate VIP', callback_data: `vip_approve_${user.telegram_id}` },
         { text: 'Reject',       callback_data: `vip_reject_${user.telegram_id}` }
       ]]}};
       await bot.sendPhoto(ADMIN_CHAT_ID, req.file.buffer, {
-        caption: `VIP Receipt — ${user.full_name} (${user.uid})\nID: ${user.telegram_id}`,
-        ...markup
-      }).catch(e => console.error('[VIP photo] send error:', e.message));
+        caption: `VIP Receipt
+User: ${user.full_name} (${user.uid})
+ID: ${user.telegram_id}`,
+        ...vipPhotoMarkup
+      }).catch(e => console.error('[VIP photo]:', e.message));
     }
-    res.json({ success: true });
+    return res.json({ success: true });
   } catch(e) {
     console.error('[VIP photo] error:', e.message);
-    res.status(500).json({ error: 'Photo upload failed' });
+    return res.status(500).json({ error: 'Photo upload failed' });
   }
 });
 
