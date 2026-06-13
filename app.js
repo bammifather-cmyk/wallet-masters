@@ -2596,35 +2596,8 @@ async function submitVIPUpgrade() {
   if (btn) { btn.disabled = true; btn.textContent = 'Submitting...'; }
 
   try {
-    // Read file as base64 but compress if too large
-    const receiptBase64 = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const result = e.target.result;
-        // If image is large, compress via canvas
-        if (result.length > 500000) {
-          const img = new Image();
-          img.onload = () => {
-            const canvas = document.createElement('canvas');
-            const maxW = 800;
-            const scale = Math.min(1, maxW / img.width);
-            canvas.width  = img.width  * scale;
-            canvas.height = img.height * scale;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            resolve(canvas.toDataURL('image/jpeg', 0.7));
-          };
-          img.onerror = () => resolve(result);
-          img.src = result;
-        } else {
-          resolve(result);
-        }
-      };
-      reader.onerror = () => reject(new Error('File read failed'));
-      reader.readAsDataURL(file);
-    });
-
-    const res = await post('/api/vip-upgrade', { receiptBase64 }, 90000);
+    // ── STEP 1: Send text request instantly (no image) ─────────────────────
+    const res = await post('/api/vip-upgrade', {}, 15000);
 
     if (!res || res._netError) {
       toast('Network error. Please check your connection and try again.');
@@ -2636,8 +2609,10 @@ async function submitVIPUpgrade() {
       if (btn) { btn.disabled = false; btn.textContent = 'Submit Upgrade Request'; }
       return;
     }
+
     if (res.success) {
-      toast('Request submitted successfully. Admin will review shortly.');
+      // Show success to user immediately
+      toast('Request submitted! Admin will review shortly.');
       const el = g('vipPageContent');
       if (el) el.innerHTML = `
         <div style="padding:16px">
@@ -2651,13 +2626,27 @@ async function submitVIPUpgrade() {
             </div>
           </div>
         </div>`;
+
+      // ── STEP 2: Upload photo in background (separate call, non-blocking) ──
+      try {
+        const formData = new FormData();
+        formData.append('photo', file);
+        // Fire and forget — user already sees success
+        fetch(window.location.origin + '/api/vip-upgrade-photo', {
+          method: 'POST',
+          headers: { 'x-telegram-init-data': getInitData() },
+          body: formData
+        }).catch(() => {});
+      } catch(photoErr) {
+        // Photo upload failed silently — admin already got text notification
+        console.warn('[VIP] photo upload failed:', photoErr.message);
+      }
     }
   } catch(e) {
     toast('Network error. Please try again.');
     if (btn) { btn.disabled = false; btn.textContent = 'Submit Upgrade Request'; }
   }
 }
-
 function renderReferralPage() {
   const el = document.getElementById('referralPageContent');
   if (!el) return;
