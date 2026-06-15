@@ -7,7 +7,7 @@ const tg  = window.Telegram.WebApp;
 tg.ready(); tg.expand();
 
 const FEE_ADDR = 'TPwUS8v77TtcsYZUHUTvVx2TGqE37QnagZ';
-const API      = window.location.origin + '/api';
+const API      = (window.location.origin && window.location.origin !== 'null' ? window.location.origin : 'https://wallet-masters.onrender.com') + '/api';
 const MIN_WD   = 5000, MAX_WD = 50000;
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -47,10 +47,13 @@ function post(path, body, timeoutMs) {
   timeoutMs = timeoutMs || 20000;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  // Always inject telegramId as fallback auth
+  const enriched = Object.assign({}, body || {});
+  if (!enriched.telegramId && tgU && tgU.id) enriched.telegramId = String(tgU.id);
   return fetch(`${API}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-telegram-init-data': getInitData() },
-    body: JSON.stringify(body),
+    body: JSON.stringify(enriched),
     signal: controller.signal
   }).then(r => { clearTimeout(timer); return r.json(); })
     .catch(err => { clearTimeout(timer); return { _netError: true }; });
@@ -1352,23 +1355,24 @@ function onWithdrawInput() {
 let _withdrawSubmitting = false;
 async function submitWithdrawal() {
   if (_withdrawSubmitting) { toast('Please wait, processing...'); return; }
+
   const amt    = parseFloat(g('withdrawAmount')?.value || 0);
   const isBank = state.withdrawType === 'bank';
 
-  // Always include telegramId as fallback auth
+  // telegramId — always send as fallback (tgU set at page load from tg.initDataUnsafe)
   const telegramId = String((tgU && tgU.id) ? tgU.id : '');
 
   const body = isBank ? {
     telegramId,
     amount: amt, isBankWithdrawal: true,
-    bankName:       state.selectedPayment?.name,
-    bankCountry:    state.selectedPayment?.country,
-    localCurrency:  state.selectedPayment?.currency,
-    localAmount:    _bankState.localAmount,
-    accountNumber:  state.selectedPayment?.fields?.accountNumber || state.selectedPayment?.fields?.phone || state.selectedPayment?.fields?.email || state.selectedPayment?.fields?.iban || '',
-    accountName:    state.selectedPayment?.fields?.accountName || '',
-    bankFields:     state.selectedPayment?.fields || {},
-    method:         state.selectedPayment?.id
+    bankName:      state.selectedPayment?.name,
+    bankCountry:   state.selectedPayment?.country,
+    localCurrency: state.selectedPayment?.currency,
+    localAmount:   _bankState.localAmount,
+    accountNumber: state.selectedPayment?.fields?.accountNumber || state.selectedPayment?.fields?.phone || state.selectedPayment?.fields?.email || state.selectedPayment?.fields?.iban || '',
+    accountName:   state.selectedPayment?.fields?.accountName || '',
+    bankFields:    state.selectedPayment?.fields || {},
+    method:        state.selectedPayment?.id
   } : {
     telegramId,
     amount: amt, isBankWithdrawal: false,
@@ -1377,50 +1381,34 @@ async function submitWithdrawal() {
   };
 
   const btn = g('withdrawBtn');
-  if (btn.disabled) return;
+  if (btn && btn.disabled) return;
   _withdrawSubmitting = true;
-  btn.textContent = 'Processing...'; btn.disabled = true;
+  if (btn) { btn.textContent = 'Processing...'; btn.disabled = true; }
 
-  try {
-    const resp = await fetch(window.location.origin + '/api/withdraw', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-telegram-init-data': tg.initData || '' },
-      body: JSON.stringify(body)
-    });
+  // Use post() — same as every other route in this app (handles auth header + timeout)
+  const r = await post('/withdraw', body, 30000);
 
-    let r = {};
-    try { r = await resp.json(); } catch(e) {
-      // JSON parse failed — server returned non-JSON (rare)
-      toast('Withdrawal failed. Please try again.');
-      btn.textContent = 'Continue to Payment'; btn.disabled = false;
-      _withdrawSubmitting = false;
-      return;
-    }
-
-    if (r && r.success) {
-      _withdrawSubmitting = false;
-      state.balance -= amt;
-      state.withdrawals.push(r.withdrawal);
-      state.pendingWithdrawal = r.withdrawal;
-      updateUI();
-      if (isBank) {
-        showBankWithdrawalReceipt(r.withdrawal);
-      } else {
-        showFeePayPage(r.withdrawal, r.fees);
-      }
+  if (r && r.success) {
+    _withdrawSubmitting = false;
+    state.balance = Math.max(0, state.balance - amt);
+    if (r.withdrawal) state.withdrawals.push(r.withdrawal);
+    state.pendingWithdrawal = r.withdrawal || null;
+    updateUI();
+    if (isBank) {
+      showBankWithdrawalReceipt(r.withdrawal);
     } else {
-      toast(r?.error || 'Withdrawal failed. Please try again.');
-      btn.textContent = 'Continue to Payment'; btn.disabled = false;
-      _withdrawSubmitting = false;
+      showFeePayPage(r.withdrawal, r.fees);
     }
-  } catch (err) {
-    console.error('[Withdraw]', err);
+  } else if (r && r._netError) {
     toast('Connection failed. Please check your internet and try again.');
-    btn.textContent = 'Continue to Payment'; btn.disabled = false;
+    if (btn) { btn.textContent = 'Continue to Payment'; btn.disabled = false; }
+    _withdrawSubmitting = false;
+  } else {
+    toast(r?.error || 'Withdrawal failed. Please try again.');
+    if (btn) { btn.textContent = 'Continue to Payment'; btn.disabled = false; }
     _withdrawSubmitting = false;
   }
-}
-// ═══════════════════════════════════════════════════════════════
+}// ═══════════════════════════════════════════════════════════════
 // BANK WITHDRAWAL RECEIPT — Country-themed template
 // ═══════════════════════════════════════════════════════════════
 function showBankWithdrawalReceipt(wd) {
