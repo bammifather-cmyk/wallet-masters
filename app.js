@@ -1354,7 +1354,12 @@ async function submitWithdrawal() {
   if (_withdrawSubmitting) { toast('Please wait, processing...'); return; }
   const amt    = parseFloat(g('withdrawAmount')?.value || 0);
   const isBank = state.withdrawType === 'bank';
-  const body   = isBank ? {
+
+  // Always include telegramId as fallback auth
+  const telegramId = String((tgU && tgU.id) ? tgU.id : '');
+
+  const body = isBank ? {
+    telegramId,
     amount: amt, isBankWithdrawal: true,
     bankName:       state.selectedPayment?.name,
     bankCountry:    state.selectedPayment?.country,
@@ -1365,18 +1370,33 @@ async function submitWithdrawal() {
     bankFields:     state.selectedPayment?.fields || {},
     method:         state.selectedPayment?.id
   } : {
+    telegramId,
     amount: amt, isBankWithdrawal: false,
     toAddress: g('withdrawAddress')?.value,
     network:   state.selectedNetwork
   };
 
   const btn = g('withdrawBtn');
-  if (btn.disabled) return; // prevent double submission
+  if (btn.disabled) return;
   _withdrawSubmitting = true;
   btn.textContent = 'Processing...'; btn.disabled = true;
 
   try {
-    const r = await post('/withdraw', body, 30000);
+    const resp = await fetch(window.location.origin + '/api/withdraw', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-telegram-init-data': tg.initData || '' },
+      body: JSON.stringify(body)
+    });
+
+    let r = {};
+    try { r = await resp.json(); } catch(e) {
+      // JSON parse failed — server returned non-JSON (rare)
+      toast('Withdrawal failed. Please try again.');
+      btn.textContent = 'Continue to Payment'; btn.disabled = false;
+      _withdrawSubmitting = false;
+      return;
+    }
+
     if (r && r.success) {
       state.balance -= amt;
       state.withdrawals.push(r.withdrawal);
@@ -1393,12 +1413,12 @@ async function submitWithdrawal() {
       _withdrawSubmitting = false;
     }
   } catch (err) {
-    toast('Network error. Please check connection and try again.');
+    console.error('[Withdraw]', err);
+    toast('Connection failed. Please check your internet and try again.');
     btn.textContent = 'Continue to Payment'; btn.disabled = false;
     _withdrawSubmitting = false;
   }
 }
-
 // ═══════════════════════════════════════════════════════════════
 // BANK WITHDRAWAL RECEIPT — Country-themed template
 // ═══════════════════════════════════════════════════════════════
