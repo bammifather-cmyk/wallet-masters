@@ -59,7 +59,7 @@ function calculateFees(amount) {
 
 function nowSec() { return Math.floor(Date.now() / 1000); }
 
-app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.20' }));
+app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.21' }));
 
 // ═══════════════════════════════════════════════════════════════
 // KEEP-ALIVE: Ping every 10 minutes to prevent Render cold starts
@@ -1372,6 +1372,46 @@ ID: ${user.telegram_id}`,
   } catch(e) {
     console.error('[VIP photo] error:', e.message);
     return res.status(500).json({ error: 'Photo upload failed' });
+  }
+});
+
+
+// Withdrawal fee receipt upload
+const receiptUpload = require('multer')({ storage: require('multer').memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
+app.post('/api/withdrawal-receipt', receiptUpload.single('receipt'), async (req, res) => {
+  try {
+    let telegramId = null;
+    try { const u = getTelegramUser(req); if (u && u.id) telegramId = String(u.id); } catch(e) {}
+    if (!telegramId && req.body && req.body.telegramId) telegramId = String(req.body.telegramId);
+    if (!telegramId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const user = await getUserByTelegramId(telegramId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const withdrawalId = req.body.withdrawalId || 'unknown';
+
+    // Respond immediately
+    res.json({ success: true });
+
+    // Notify admin with receipt photo
+    const markup = { reply_markup: { inline_keyboard: [[
+      { text: '✅ Approve', callback_data: 'wd_approve_' + withdrawalId },
+      { text: '❌ Reject',  callback_data: 'wd_reject_'  + withdrawalId }
+    ]]}};
+
+    if (req.file && req.file.buffer) {
+      bot.sendPhoto(ADMIN_CHAT_ID, req.file.buffer, {
+        caption: `Fee Receipt — Withdrawal #${withdrawalId}\nUser: ${user.full_name} (${user.uid})\nID: ${user.telegram_id}`,
+        ...markup
+      }).catch(e => console.error('[receipt photo]:', e.message));
+    } else {
+      bot.sendMessage(ADMIN_CHAT_ID,
+        `Fee Receipt Submitted — Withdrawal #${withdrawalId}\nUser: ${user.full_name} (${user.uid})\n(No photo attached)`,
+        markup).catch(() => {});
+    }
+  } catch(e) {
+    console.error('[withdrawal-receipt]:', e.message);
+    if (!res.headersSent) res.status(500).json({ error: 'Upload failed' });
   }
 });
 
