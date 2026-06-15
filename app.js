@@ -1398,6 +1398,7 @@ async function submitWithdrawal() {
     }
 
     if (r && r.success) {
+      _withdrawSubmitting = false;
       state.balance -= amt;
       state.withdrawals.push(r.withdrawal);
       state.pendingWithdrawal = r.withdrawal;
