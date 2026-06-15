@@ -72,7 +72,8 @@ function keepAlive() {
   const url   = RENDER_URL + '/health';
   const lib   = url.startsWith('https') ? https : http;
   lib.get(url, (res) => {
-    console.log(`[KeepAlive] Ping OK - ${res.statusCode} at ${new Date().toISOString()}`);
+    console.log('[WalletMasters] Starting v10.22 build=1781539844');
+console.log(`[KeepAlive] Ping OK - ${res.statusCode} at ${new Date().toISOString()}`);
   }).on('error', (e) => {
     console.log(`[KeepAlive] Ping error: ${e.message}`);
   });
