@@ -1848,9 +1848,17 @@ app.post('/api/admin/poem', authMiddleware, async (req,res) => {
 // ─── Community Comments (users who have withdrawn) ─────────────────────────
 app.get('/api/community-comments', async (req,res) => {
   try {
+    // Cache for 60 seconds to speed up repeat loads
+    res.set('Cache-Control', 'public, max-age=60');
+    const limit = Math.min(parseInt(req.query.limit)||25, 50);
+    const offset = parseInt(req.query.offset)||0;
     const supa = getSupabase();
-    const { data } = await supa.from('community_comments').select('*').eq('status','approved').order('created_at',{ascending:false}).limit(100);
-    res.json({ comments: (data||[]).map(c => ({...c})) }); // show receipt for all
+    const { data } = await supa.from('community_comments')
+      .select('id,telegram_id,user_name,text,receipt_image,status,is_admin,created_at')
+      .eq('status','approved')
+      .order('created_at',{ascending:false})
+      .range(offset, offset + limit - 1);
+    res.json({ comments: (data||[]) });
   } catch(e) { res.json({ comments: [] }); }
 });
 
