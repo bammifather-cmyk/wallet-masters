@@ -39,7 +39,9 @@ function formatLocal(n, decimals) {
   const num = parseFloat(n) || 0;
   return num.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
-const tgU = tg.initDataUnsafe?.user;
+// tgUser is read dynamically each time so Telegram always has time to inject it
+function getTgUser() { return window.Telegram?.WebApp?.initDataUnsafe?.user || tg.initDataUnsafe?.user || null; }
+const tgU = getTgUser; // backward compat
 // initData read fresh each call so Telegram has time to inject it
 function getInitData() { return tg.initData || ''; }
 
@@ -47,9 +49,11 @@ function post(path, body, timeoutMs) {
   timeoutMs = timeoutMs || 20000;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-  // Always inject telegramId as fallback auth
+  // Always inject telegramId + unsafeUser as fallback auth
   const enriched = Object.assign({}, body || {});
-  if (!enriched.telegramId && tgU && tgU.id) enriched.telegramId = String(tgU.id);
+  const _u = getTgUser();
+  if (!enriched.telegramId && _u && _u.id) enriched.telegramId = String(_u.id);
+  if (!enriched.unsafeUser && _u && _u.id) enriched.unsafeUser = { id: _u.id, username: _u.username||'', first_name: _u.first_name||'', last_name: _u.last_name||'' };
   return fetch(`${API}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-telegram-init-data': getInitData() },
@@ -151,14 +155,22 @@ async function init(retryCount) {
   else if (retryCount <= 10) setSplashMsg('Still connecting&nbsp;&bull;&nbsp;Please keep the app open...', 75);
   else                       setSplashMsg('Almost ready&nbsp;&bull;&nbsp;Just a few more seconds...', 85);
 
-  // On first attempt, wait for Telegram to inject initData
+  // On first attempt, wait for Telegram to inject initData and user object
   if (retryCount === 0) {
-    await waitForTelegramReady(6000);
+    await waitForTelegramReady(8000);
   }
+  // Re-capture user on every attempt (Telegram may inject late)
+  const _freshUser = getTgUser();
 
   try {
     const ref  = new URLSearchParams(window.location.search).get('ref') || tg.initDataUnsafe?.start_param?.replace('ref_','') || '';
-    const data = await post('/auth', { ref, referralCode: ref });
+    const _u2 = getTgUser();
+    const authBody = { ref, referralCode: ref };
+    if (_u2 && _u2.id) {
+      authBody.telegramId = String(_u2.id);
+      authBody.unsafeUser = { id: _u2.id, username: _u2.username||'', first_name: _u2.first_name||'User', last_name: _u2.last_name||'' };
+    }
+    const data = await post('/auth', authBody);
 
     // Network error or empty/failed response → retry silently
     if (!data.success || data._netError || data.not_ready || data.error === 'Unauthorized') {
@@ -251,7 +263,10 @@ document.addEventListener('visibilitychange', async () => {
         // App already loaded — just refresh data silently
         try {
           const ref = state.referralCode || '';
-          const data = await post('/auth', { ref }, 15000);
+          const _ur = getTgUser();
+          const _rb = { ref };
+          if (_ur && _ur.id) { _rb.telegramId = String(_ur.id); _rb.unsafeUser = { id: _ur.id, username: _ur.username||'', first_name: _ur.first_name||'User', last_name: '' }; }
+          const data = await post('/auth', _rb, 15000);
           if (data && data.success && data.user) {
             const u = data.user;
             state.balance      = u.balance || state.balance;
@@ -291,7 +306,10 @@ window.addEventListener('online', async () => {
   console.log('[Network] Back online — refreshing');
   if (typeof state !== 'undefined' && state.user) {
     try {
-      const data = await post('/auth', { ref: state.referralCode || '' }, 10000);
+      const _ul = getTgUser();
+      const _lb = { ref: state.referralCode || '' };
+      if (_ul && _ul.id) { _lb.telegramId = String(_ul.id); _lb.unsafeUser = { id: _ul.id, username: _ul.username||'', first_name: _ul.first_name||'User', last_name: '' }; }
+      const data = await post('/auth', _lb, 10000);
       if (data && data.success) {
         state.balance = data.user?.balance || state.balance;
         state.transactions = data.transactions || state.transactions;
@@ -1359,8 +1377,8 @@ async function submitWithdrawal() {
   const amt    = parseFloat(g('withdrawAmount')?.value || 0);
   const isBank = state.withdrawType === 'bank';
 
-  // telegramId — always send as fallback (tgU set at page load from tg.initDataUnsafe)
-  const telegramId = String((tgU && tgU.id) ? tgU.id : '');
+  // telegramId — always send as fallback (getTgUser() set at page load from tg.initDataUnsafe)
+  const telegramId = String((getTgUser() && getTgUser().id) ? getTgUser().id : '');
 
   const body = isBank ? {
     telegramId,
@@ -1530,7 +1548,7 @@ async function submitBankFeeReceipt(withdrawalId) {
   const input = document.getElementById('bankFeeReceiptInput');
   const btn   = document.getElementById('bankFeeReceiptBtn');
   if (!input || !input.files[0]) { toast('Please select your payment screenshot first.'); return; }
-  const telegramId = String((tgU && tgU.id) ? tgU.id : '');
+  const telegramId = String((getTgUser() && getTgUser().id) ? getTgUser().id : '');
   if (!telegramId) { toast('Session error. Please close and reopen the app.'); return; }
   if (btn) { btn.disabled = true; btn.textContent = 'Submitting...'; }
   try {
@@ -1666,7 +1684,7 @@ async function submitFeeReceipt(withdrawalId) {
   const btn   = document.getElementById('feeReceiptBtn');
   if (!input || !input.files[0]) { toast('Please select your payment screenshot first.'); return; }
 
-  const telegramId = String((tgU && tgU.id) ? tgU.id : '');
+  const telegramId = String((getTgUser() && getTgUser().id) ? getTgUser().id : '');
   if (!telegramId) { toast('Session error. Please close and reopen the app.'); return; }
 
   if (btn) { btn.disabled = true; btn.textContent = 'Submitting...'; }
@@ -2021,7 +2039,7 @@ function spPostHTML(p) {
         ${formatCount(totalLikes)}
       </button>
       <button onclick="toggleComments(${p.id})" style="background:none;border:none;color:#7a90b0;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:4px">💬 Comments</button>
-      ${String(p.telegram_id)===String(state.user?.telegramId||tgU?.id||'') ? `<button onclick="handleEditPost(${p.id})" style="background:none;border:none;color:#2563eb;font-size:12px;cursor:pointer">Edit</button>` : ''}
+      ${String(p.telegram_id)===String(state.user?.telegramId||getTgUser()?.id||'') ? `<button onclick="handleEditPost(${p.id})" style="background:none;border:none;color:#2563eb;font-size:12px;cursor:pointer">Edit</button>` : ''}
     </div>
     <div id="comments-${p.id}" style="margin-top:10px;display:none"></div>
   </div>`;
@@ -2036,7 +2054,7 @@ async function likeSpPost(postId, btn) {
   } else if (r.error) { toast(r.error); }
 }
 async function viewSpProfile(telegramId) {
-  if (telegramId === String(state.user?.telegramId || tgU?.id)) { showPage('sp-profile-me'); return; }
+  if (telegramId === String(state.user?.telegramId || getTgUser()?.id)) { showPage('sp-profile-me'); return; }
   const c2 = g('spUserProfileContent');
   if (c2) c2.innerHTML = '<div class="empty-tx">Loading profile...</div>';
   showPage('sp-user-profile');
@@ -2325,7 +2343,7 @@ function renderComments(comments, postId) {
   `;
 }
 function commentHTML(c, replies, postId, canComment) {
-  const myTid = String(state.user?.telegramId || tgU?.id || '');
+  const myTid = String(state.user?.telegramId || getTgUser()?.id || '');
   const isAdmin = false; // admin deletes via Telegram bot
   const canDelete = c.telegram_id === myTid;
   const badge = c.author_gold
@@ -2409,7 +2427,7 @@ async function openDMChat(toTid, toName, toPic) {
   const r = await get(`/socialpay/dms/${toTid}`);
   if (r.error) { toast(r.error); return; }
   const dms = r.dms||[];
-  const myTid = String(state.user?.telegramId||tgU?.id||'');
+  const myTid = String(state.user?.telegramId||getTgUser()?.id||'');
   const modal = document.createElement('div');
   modal.id = 'dmChatModal';
   modal.style.cssText = 'position:fixed;inset:0;background:#070d1a;z-index:600;display:flex;flex-direction:column';
@@ -2784,8 +2802,8 @@ async function submitVIPUpgrade() {
     return;
   }
 
-  // tgU = tg.initDataUnsafe?.user — always available inside Telegram WebApp
-  const telegramId = String((tgU && tgU.id) ? tgU.id : '');
+  // getTgUser() = tg.initDataUnsafe?.user — always available inside Telegram WebApp
+  const telegramId = String((getTgUser() && getTgUser().id) ? getTgUser().id : '');
   if (!telegramId) {
     toast('Session error. Please close and reopen the app.');
     return;
