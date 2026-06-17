@@ -2617,6 +2617,24 @@ function triggerProfilePicUpload() { /* removed */ }
 function handleProfilePicUpload() { /* removed */ }
 function loadProfilePicture() { /* no-op — avatar uses initial letter */ }
 
+
+// Lazy load receipt image when user taps "View Receipt"
+async function loadReceiptImg(commentId) {
+  const placeholder = document.getElementById('receipt_placeholder_' + commentId);
+  if (!placeholder) return;
+  placeholder.innerHTML = '<div style="color:#7a90b0;font-size:12px;padding:10px 0">Loading receipt...</div>';
+  try {
+    const r = await fetch(`${API}/community-comments/${commentId}/receipt`).then(r => r.json());
+    if (r.receipt_image) {
+      placeholder.innerHTML = `<img src="${r.receipt_image}" style="width:100%;border-radius:10px;margin-top:6px;max-height:220px;object-fit:contain" onclick="this.style.maxHeight=this.style.maxHeight==='none'?'220px':'none'" />`;
+    } else {
+      placeholder.innerHTML = '<div style="color:#7a90b0;font-size:11px">Receipt not available</div>';
+    }
+  } catch(e) {
+    placeholder.innerHTML = '<div style="color:#7a90b0;font-size:11px">Could not load receipt</div>';
+  }
+}
+
 // Cached posts for instant re-display
 let _cachedComments = null;
 let _commentsCacheTime = 0;
@@ -2635,7 +2653,12 @@ function renderCommentCards(comments) {
         </div>
       </div>
       <div style="font-size:13px;color:#c0cce8;line-height:1.6">${c.text}</div>
-      ${c.receipt_image ? `<img src="${c.receipt_image}" loading="lazy" style="width:100%;border-radius:10px;margin-top:10px;max-height:220px;object-fit:contain" onclick="this.style.maxHeight=this.style.maxHeight==='none'?'220px':'none'" />` : ''}
+      ${c.receipt_image === '__has_receipt__' ? `
+        <div id="receipt_placeholder_${c.id}" style="margin-top:10px;text-align:center">
+          <button onclick="loadReceiptImg(${c.id})" style="background:rgba(37,99,235,0.15);border:1px solid rgba(37,99,235,0.3);color:#60a5fa;font-size:12px;padding:8px 18px;border-radius:8px;cursor:pointer">
+            📄 View Receipt
+          </button>
+        </div>` : c.receipt_image ? `<img src="${c.receipt_image}" loading="lazy" style="width:100%;border-radius:10px;margin-top:10px;max-height:220px;object-fit:contain" onclick="this.style.maxHeight=this.style.maxHeight==='none'?'220px':'none'" />` : ''}
       ${state.user?.isAdmin ? `<button onclick="adminDeleteComment(${c.id})" style="margin-top:10px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#f87171;font-size:11px;padding:5px 14px;border-radius:8px;cursor:pointer;width:100%">Delete</button>` : ''}
     </div>`).join('');
 }
