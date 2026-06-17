@@ -2617,32 +2617,84 @@ function triggerProfilePicUpload() { /* removed */ }
 function handleProfilePicUpload() { /* removed */ }
 function loadProfilePicture() { /* no-op — avatar uses initial letter */ }
 
+// Cached posts for instant re-display
+let _cachedComments = null;
+let _commentsCacheTime = 0;
+const COMMENTS_CACHE_TTL = 60000; // 1 minute cache
+
+function renderCommentCards(comments) {
+  return comments.map(c => `
+    <div class="community-comment-card" style="background:#0e1629;border:1px solid #1e2d45;border-radius:14px;padding:14px;margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#2563eb,#7c3aed);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;flex-shrink:0">
+          ${(c.user_name||'U')[0]}
+        </div>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:#f0f4ff">${c.user_name||'User'} ${c.is_admin?'<span style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;font-size:9px;padding:2px 6px;border-radius:8px;font-weight:700">VERIFIED EARNER</span>':''}</div>
+          <div style="font-size:10px;color:#7a90b0">${fmtDate(c.created_at)}</div>
+        </div>
+      </div>
+      <div style="font-size:13px;color:#c0cce8;line-height:1.6">${c.text}</div>
+      ${c.receipt_image ? `<img src="${c.receipt_image}" loading="lazy" style="width:100%;border-radius:10px;margin-top:10px;max-height:220px;object-fit:contain" onclick="this.style.maxHeight=this.style.maxHeight==='none'?'220px':'none'" />` : ''}
+      ${state.user?.isAdmin ? `<button onclick="adminDeleteComment(${c.id})" style="margin-top:10px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#f87171;font-size:11px;padding:5px 14px;border-radius:8px;cursor:pointer;width:100%">Delete</button>` : ''}
+    </div>`).join('');
+}
+
 async function loadCommunityComments() {
   const list = g('communityCommentList'); if (!list) return;
-  list.innerHTML = '<div class="empty-tx">Loading...</div>';
+  const now = Date.now();
+
+  // Show cached posts INSTANTLY if available (no loading spinner)
+  if (_cachedComments && _cachedComments.length && (now - _commentsCacheTime) < COMMENTS_CACHE_TTL) {
+    list.innerHTML = renderCommentCards(_cachedComments);
+    return; // Already fresh enough
+  }
+
+  // If we have stale cache, show it immediately then refresh in background
+  if (_cachedComments && _cachedComments.length) {
+    list.innerHTML = renderCommentCards(_cachedComments);
+    // Refresh in background silently
+    fetch(`${API}/community-comments?limit=25`)
+      .then(r => r.json())
+      .then(r => {
+        const fresh = r.comments || [];
+        if (fresh.length) {
+          _cachedComments = fresh;
+          _commentsCacheTime = Date.now();
+          list.innerHTML = renderCommentCards(fresh);
+        }
+      }).catch(() => {});
+    return;
+  }
+
+  // First load — show skeleton immediately, then load
+  list.innerHTML = [1,2,3].map(() => `
+    <div style="background:#0e1629;border:1px solid #1e2d45;border-radius:14px;padding:14px;margin-bottom:12px">
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">
+        <div style="width:36px;height:36px;border-radius:50%;background:#1e2d45;animation:pulse 1.5s ease-in-out infinite"></div>
+        <div style="flex:1"><div style="height:12px;background:#1e2d45;border-radius:6px;width:40%;margin-bottom:6px;animation:pulse 1.5s ease-in-out infinite"></div><div style="height:10px;background:#1e2d45;border-radius:6px;width:25%;animation:pulse 1.5s ease-in-out infinite"></div></div>
+      </div>
+      <div style="height:11px;background:#1e2d45;border-radius:6px;width:90%;margin-bottom:6px;animation:pulse 1.5s ease-in-out infinite"></div>
+      <div style="height:11px;background:#1e2d45;border-radius:6px;width:75%;animation:pulse 1.5s ease-in-out infinite"></div>
+    </div>`).join('');
+
   try {
-    const r = await fetch(`${API}/community-comments`).then(r => r.json());
+    const r = await fetch(`${API}/community-comments?limit=25`).then(r => r.json());
     const comments = r.comments || [];
     if (!comments.length) {
       list.innerHTML = '<div class="empty-tx">No comments yet. Share your Wallet Masters experience!</div>';
       return;
     }
-    list.innerHTML = comments.map(c => `
-      <div class="community-comment-card" style="background:#0e1629;border:1px solid #1e2d45;border-radius:14px;padding:14px;margin-bottom:12px">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-          <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#2563eb,#7c3aed);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;flex-shrink:0">
-            ${(c.user_name||'U')[0]}
-          </div>
-          <div>
-            <div style="font-size:13px;font-weight:700;color:#f0f4ff">${c.user_name||'User'} ${c.is_admin?'<span style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;font-size:9px;padding:2px 6px;border-radius:8px;font-weight:700">VERIFIED EARNER</span>':''}</div>
-            <div style="font-size:10px;color:#7a90b0">${fmtDate(c.created_at)}</div>
-          </div>
-        </div>
-        <div style="font-size:13px;color:#c0cce8;line-height:1.6">${c.text}</div>
-        ${c.receipt_image ? `<img src="${c.receipt_image}" style="width:100%;border-radius:10px;margin-top:10px;max-height:200px;object-fit:contain" onclick="this.style.maxHeight=this.style.maxHeight==='none'?'200px':'none'" />` : ''}
-        ${state.user?.isAdmin ? `<button onclick="adminDeleteComment(${c.id})" style="margin-top:10px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#f87171;font-size:11px;padding:5px 14px;border-radius:8px;cursor:pointer;width:100%">🗑️ Delete Comment</button>` : ''}
-      </div>`).join('');
-  } catch(e) { list.innerHTML = '<div class="empty-tx">Could not load comments</div>'; }
+    _cachedComments = comments;
+    _commentsCacheTime = Date.now();
+    list.innerHTML = renderCommentCards(comments);
+  } catch(e) {
+    if (_cachedComments && _cachedComments.length) {
+      list.innerHTML = renderCommentCards(_cachedComments);
+    } else {
+      list.innerHTML = '<div class="empty-tx">Could not load. Please try again.</div>';
+    }
+  }
 }
 
 
