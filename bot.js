@@ -1848,18 +1848,38 @@ app.post('/api/admin/poem', authMiddleware, async (req,res) => {
 // ─── Community Comments (users who have withdrawn) ─────────────────────────
 app.get('/api/community-comments', async (req,res) => {
   try {
-    // Cache for 60 seconds to speed up repeat loads
     res.set('Cache-Control', 'public, max-age=60');
     const limit = Math.min(parseInt(req.query.limit)||25, 50);
     const offset = parseInt(req.query.offset)||0;
+    const includeImages = req.query.images === 'true';
     const supa = getSupabase();
     const { data } = await supa.from('community_comments')
       .select('id,telegram_id,user_name,text,receipt_image,status,is_admin,created_at')
       .eq('status','approved')
       .order('created_at',{ascending:false})
       .range(offset, offset + limit - 1);
-    res.json({ comments: (data||[]) });
+    // Strip base64 images from list for speed; send has_receipt flag instead
+    const comments = (data||[]).map(c => {
+      const hasImg = !!(c.receipt_image && c.receipt_image.length > 10);
+      if (includeImages) return {...c};
+      return {...c, receipt_image: hasImg ? '__has_receipt__' : null};
+    });
+    res.json({ comments });
   } catch(e) { res.json({ comments: [] }); }
+});
+
+// New endpoint: get single comment's receipt image
+app.get('/api/community-comments/:id/receipt', async (req,res) => {
+  try {
+    const supa = getSupabase();
+    const { data } = await supa.from('community_comments')
+      .select('id,receipt_image')
+      .eq('id', req.params.id)
+      .eq('status','approved')
+      .single();
+    if (!data) return res.status(404).json({error:'Not found'});
+    res.json({ receipt_image: data.receipt_image || null });
+  } catch(e) { res.status(500).json({error:'Failed'}); }
 });
 
 app.post('/api/community-comments', authMiddleware, async (req,res) => {
