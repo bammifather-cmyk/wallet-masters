@@ -228,6 +228,18 @@ async function runStartupMigrations() {
 }
 setTimeout(runStartupMigrations, 3000);
 
+
+// ── KEEP-ALIVE: Ping self every 14 minutes to prevent Render free-tier sleep ──
+const SELF_URL = process.env.RENDER_EXTERNAL_URL || 'https://wallet-masters.onrender.com';
+setInterval(() => {
+  const http = require('https');
+  http.get(SELF_URL + '/health', (res) => {
+    console.log('[KeepAlive] ping OK:', res.statusCode);
+  }).on('error', (e) => {
+    console.warn('[KeepAlive] ping failed:', e.message);
+  });
+}, 14 * 60 * 1000); // every 14 minutes
+
 app.listen(PORT, '0.0.0.0', () => {
   const host = process.env.RENDER_EXTERNAL_URL || process.env.RAILWAY_STATIC_URL || '';
   if (host) MINI_APP_URL = host.startsWith('http') ? host : `https://${host}`;
