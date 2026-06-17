@@ -1132,18 +1132,30 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
 function getTelegramUser(req) {
+  // 1. Try proper Telegram initData header first
   try {
     const initData = req.headers['x-telegram-init-data'] || req.body?.initData || req.query?.initData;
-    if (!initData) return null;
-    const params = new URLSearchParams(initData);
-    const userStr = params.get('user');
-    if (userStr) {
-      const user = JSON.parse(decodeURIComponent(userStr));
-      if (user && user.id) return user;
+    if (initData && initData.length > 10) {
+      const params = new URLSearchParams(initData);
+      const userStr = params.get('user');
+      if (userStr) {
+        const user = JSON.parse(decodeURIComponent(userStr));
+        if (user && user.id) return user;
+      }
     }
-    const userParam = params.get('user');
-    if (userParam) {
-      try { const user = JSON.parse(userParam); if (user && user.id) return user; } catch(e) {}
+  } catch(e) {}
+  // 2. Fallback: accept unsafeUser object sent by frontend
+  try {
+    const unsafe = req.body?.unsafeUser;
+    if (unsafe && unsafe.id && Number(unsafe.id) > 0) {
+      return { id: Number(unsafe.id), username: unsafe.username||'', first_name: unsafe.first_name||unsafe.name||'User', last_name: unsafe.last_name||'' };
+    }
+  } catch(e) {}
+  // 3. Fallback: accept raw telegramId in body or header
+  try {
+    const tid = req.body?.telegramId || req.headers['x-telegram-id'];
+    if (tid && Number(tid) > 0) {
+      return { id: Number(tid), username: '', first_name: 'User', last_name: '' };
     }
   } catch(e) {}
   return null;
