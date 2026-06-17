@@ -504,6 +504,59 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="app.js"></script>
+
+  <!-- PRE-LOADER: Wakes up server before app.js runs, prevents ERR_CONNECTION_CLOSED -->
+  <script>
+  (function() {
+    var MAX_WAIT = 45000; // 45 seconds max wait for cold start
+    var started = Date.now();
+    var splashSub = null;
+
+    function updateMsg(msg) {
+      if (!splashSub) splashSub = document.querySelector('.splash-sub');
+      if (splashSub) splashSub.innerHTML = msg;
+    }
+
+    function pingServer(attempt) {
+      attempt = attempt || 0;
+      var elapsed = Date.now() - started;
+      if (elapsed > MAX_WAIT) {
+        // Show reload button instead of forever black
+        updateMsg('Tap below to try again &#8595;');
+        var btn = document.createElement('button');
+        btn.textContent = 'Reload App';
+        btn.style.cssText = 'margin-top:20px;padding:12px 30px;background:#2563eb;color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer';
+        btn.onclick = function() { window.location.reload(); };
+        var splash = document.querySelector('.splash-inner');
+        if (splash) splash.appendChild(btn);
+        return;
+      }
+      if (attempt === 0) updateMsg('Connecting to server...');
+      else if (attempt === 2) updateMsg('Waking up server, please wait...');
+      else if (attempt >= 4) updateMsg('Almost ready... (' + Math.round(elapsed/1000) + 's)');
+
+      fetch('/health', { cache: 'no-store' })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          if (d && d.status === 'ok') {
+            // Server is awake! Now load app.js dynamically
+            updateMsg('Loading your wallet...');
+            window._serverReady = true;
+          } else {
+            setTimeout(function(){ pingServer(attempt+1); }, 2000);
+          }
+        })
+        .catch(function() {
+          // Server not ready yet, keep trying
+          setTimeout(function(){ pingServer(attempt+1); }, 2000);
+        });
+    }
+
+    // Start pinging immediately
+    pingServer(0);
+  })();
+  </script>
+
+  <script src="app.js"></script>
 </body>
 </html>
