@@ -2618,20 +2618,25 @@ function handleProfilePicUpload() { /* removed */ }
 function loadProfilePicture() { /* no-op — avatar uses initial letter */ }
 
 
-// Lazy load receipt image when user taps "View Receipt"
-async function loadReceiptImg(commentId) {
-  const placeholder = document.getElementById('receipt_placeholder_' + commentId);
-  if (!placeholder) return;
-  placeholder.innerHTML = '<div style="color:#7a90b0;font-size:12px;padding:10px 0">Loading receipt...</div>';
+// Auto-load receipt image inline (no user action needed)
+const _receiptCache = {};
+async function autoLoadReceipt(commentId) {
+  const wrap = document.getElementById('receipt_wrap_' + commentId);
+  if (!wrap) return;
+  if (_receiptCache[commentId]) {
+    wrap.innerHTML = `<img src="${_receiptCache[commentId]}" loading="lazy" style="width:100%;border-radius:12px;object-fit:contain" />`;
+    return;
+  }
   try {
     const r = await fetch(`${API}/community-comments/${commentId}/receipt`).then(r => r.json());
     if (r.receipt_image) {
-      placeholder.innerHTML = `<img src="${r.receipt_image}" style="width:100%;border-radius:10px;margin-top:6px;max-height:220px;object-fit:contain" onclick="this.style.maxHeight=this.style.maxHeight==='none'?'220px':'none'" />`;
+      _receiptCache[commentId] = r.receipt_image;
+      wrap.innerHTML = `<img src="${r.receipt_image}" loading="lazy" style="width:100%;border-radius:12px;object-fit:contain" />`;
     } else {
-      placeholder.innerHTML = '<div style="color:#7a90b0;font-size:11px">Receipt not available</div>';
+      wrap.innerHTML = '';
     }
   } catch(e) {
-    placeholder.innerHTML = '<div style="color:#7a90b0;font-size:11px">Could not load receipt</div>';
+    wrap.innerHTML = '';
   }
 }
 
@@ -2641,8 +2646,23 @@ let _commentsCacheTime = 0;
 const COMMENTS_CACHE_TTL = 60000; // 1 minute cache
 
 function renderCommentCards(comments) {
-  return comments.map(c => `
-    <div class="community-comment-card" style="background:#0e1629;border:1px solid #1e2d45;border-radius:14px;padding:14px;margin-bottom:12px">
+  return comments.map(c => {
+    // Build receipt HTML — always show inline, auto-load if flagged
+    let receiptHtml = '';
+    if (c.receipt_image && c.receipt_image !== '__no_receipt__') {
+      if (c.receipt_image === '__has_receipt__') {
+        // Auto-load receipt image inline without user action
+        receiptHtml = `<div id="receipt_wrap_${c.id}" style="margin-top:12px;border-radius:12px;overflow:hidden;min-height:60px;background:#0a1020;display:flex;align-items:center;justify-content:center">
+          <span style="color:#7a90b0;font-size:11px">Loading receipt...</span>
+        </div>`;
+        // Queue auto-load
+        setTimeout(() => autoLoadReceipt(c.id), 100);
+      } else {
+        receiptHtml = `<img src="${c.receipt_image}" loading="lazy" style="width:100%;border-radius:12px;margin-top:12px;object-fit:contain" />`;
+      }
+    }
+
+    return `<div class="community-comment-card" style="background:#0e1629;border:1px solid #1e2d45;border-radius:14px;padding:14px;margin-bottom:12px">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
         <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#2563eb,#7c3aed);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;flex-shrink:0">
           ${(c.user_name||'U')[0]}
@@ -2652,15 +2672,11 @@ function renderCommentCards(comments) {
           <div style="font-size:10px;color:#7a90b0">${fmtDate(c.created_at)}</div>
         </div>
       </div>
-      <div style="font-size:13px;color:#c0cce8;line-height:1.6">${c.text}</div>
-      ${c.receipt_image === '__has_receipt__' ? `
-        <div id="receipt_placeholder_${c.id}" style="margin-top:10px;text-align:center">
-          <button onclick="loadReceiptImg(${c.id})" style="background:rgba(37,99,235,0.15);border:1px solid rgba(37,99,235,0.3);color:#60a5fa;font-size:12px;padding:8px 18px;border-radius:8px;cursor:pointer">
-            📄 View Receipt
-          </button>
-        </div>` : c.receipt_image ? `<img src="${c.receipt_image}" loading="lazy" style="width:100%;border-radius:10px;margin-top:10px;max-height:220px;object-fit:contain" onclick="this.style.maxHeight=this.style.maxHeight==='none'?'220px':'none'" />` : ''}
+      <div style="font-size:13px;color:#c0cce8;line-height:1.6;margin-bottom:4px">${c.text}</div>
+      ${receiptHtml}
       ${state.user?.isAdmin ? `<button onclick="adminDeleteComment(${c.id})" style="margin-top:10px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#f87171;font-size:11px;padding:5px 14px;border-radius:8px;cursor:pointer;width:100%">Delete</button>` : ''}
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 async function loadCommunityComments() {
