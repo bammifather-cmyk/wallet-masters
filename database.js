@@ -166,11 +166,12 @@ async function claimHourlyEarning(telegramId) {
   const last = parseInt(user.last_hourly_claim) || 0;
   const elapsed = now() - last;
   if (elapsed < HOUR_MS) return { success: false, error: 'Not ready', remainingMs: HOUR_MS - elapsed };
-  const amount = 200;
+  // VIP users earn 200 USDT/hr, non-VIP earn 50 USDT/hr
+    const amount = user.is_vip === true ? 200 : 50;
   const newBalance = (parseFloat(user.usdt_balance) || 0) + amount;
   await supabase.from('users').update({ usdt_balance: newBalance, last_hourly_claim: now(), updated_at: now() }).eq('telegram_id', String(telegramId));
   await createTransaction(telegramId, 'hourly_earning', amount, 'Hourly earning claim', 'completed');
-  return { success: true, amount, newBalance };
+  return { success: true, amount, reward: amount, newBalance, balance: newBalance };
 }
 
 async function getHourlyStatus(telegramId) {
