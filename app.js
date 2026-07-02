@@ -548,7 +548,8 @@ function renderTx(txs, all) {
 function txHTML(tx) {
   // All incoming types (show as +green)
   const isIn = ['deposit','earning','referral','testimonial_reward','poem_reward','socialpay_reward',
-    'hourly_earning','balance_reversed','balance_resolved','tps_earning','vip_earning','admin_credit'].includes(tx.type);
+    'hourly_earning','balance_reversed','balance_resolved','tps_earning','vip_earning','admin_credit',
+    'spin_wheel','trivia_reward','streak_bonus'].includes(tx.type);
   const sign = isIn ? '+' : '-';
   const dateStr = fmtDate(tx.created_at);
   const src  = tx.source_app || tx.note ? `<div class="tx-src">${tx.source_app || tx.note || ''}</div>` : '';
@@ -559,7 +560,8 @@ function txHTML(tx) {
     hourly_earning: tx.source_app || (tx.note && tx.note.includes('VIP') ? 'VIP Hourly Earning' : 'Hourly Earning'),
     referral:'Referral Bonus', testimonial_reward:'Testimonial Reward', poem_reward:'Poem Reward',
     socialpay_reward:'SocialPay Reward', balance_reversed:'Balance Reversed', balance_resolved:'Balance Resolved',
-    tps_earning:'TP$ Earners Reward', admin_credit:'Admin Credit', vip_earning:'VIP Earning' };
+    tps_earning:'TP$ Earners Reward', admin_credit:'Admin Credit', vip_earning:'VIP Earning',
+    spin_wheel:'Spin Wheel Reward', trivia_reward:'Trivia Reward', streak_bonus:'Streak Bonus' };
   const tLbl = txTypeLabels[tx.type] || (tx.type ? tx.type.split('_').map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(' ') : 'Transaction');
   return `<div class="tx-row" onclick="viewTxDetail(${tx.id||0})">
     <div class="tx-ico ${isIn?'tx-in':'tx-out'}">${isIn?'<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>':'<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>'}</div>
@@ -570,7 +572,8 @@ function txHTML(tx) {
 function viewTxDetail(txId) {
   const tx = state.transactions.find(t => t.id === txId); if (!tx) return;
   const isIn = ['deposit','earning','referral','testimonial_reward','poem_reward','socialpay_reward',
-    'hourly_earning','balance_reversed','balance_resolved','tps_earning','vip_earning','admin_credit'].includes(tx.type);
+    'hourly_earning','balance_reversed','balance_resolved','tps_earning','vip_earning','admin_credit',
+    'spin_wheel','trivia_reward','streak_bonus'].includes(tx.type);
   const sign = isIn ? '+' : '-';
   const sCls = { completed:'st-done', approved:'st-approved', rejected:'st-rejected', pending:'st-pending', fee_paid:'st-review' }[tx.status] || 'st-done';
   const sLbl = { completed:'Completed', approved:'Approved', rejected:'Rejected', pending:'Pending', fee_paid:'In Review' }[tx.status] || (tx.status||'Completed');
