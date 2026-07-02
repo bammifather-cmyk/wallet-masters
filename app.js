@@ -528,6 +528,7 @@ function showPage(name) {
     if (name === 'socialpay')    loadSocialFeed();
     if (name === 'sp-profile-me')loadMySpProfile();
     if (name === 'sp-my-posts')  loadMySpPosts();
+    if (name === 'games')        loadGamesPage();
     if (name === 'sp-edit-profile') renderSpEditProfile();
     if (name === 'testimonials') loadTestimonialsPage();
     if (name === 'community')    { loadCommunityComments(); }
@@ -3436,3 +3437,191 @@ window.addEventListener('load', () => {
     }, 200);
   }
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GAMES: Spin Wheel, Trivia Challenge, Login Streak
+// ═══════════════════════════════════════════════════════════════════════════
+let _gamesLoaded = { spin: false, trivia: false, streak: false };
+let _triviaState = { questions: [], rewards: [], answeredToday: 0, answering: false };
+
+function loadGamesPage() {
+  switchGameTab('spin');
+}
+
+function switchGameTab(tab) {
+  document.querySelectorAll('.game-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.game-panel').forEach(p => p.classList.remove('active'));
+  const panel = g(`gamePanel-${tab}`);
+  if (panel) panel.classList.add('active');
+  if (tab === 'spin')   loadSpinStatus();
+  if (tab === 'trivia') loadTriviaQuestions();
+  if (tab === 'streak') loadStreakStatus();
+}
+
+// ── Spin Wheel ──────────────────────────────────────────────────────────────
+async function loadSpinStatus() {
+  try {
+    const st = await post('/spin/status', {});
+    if (st.error) return;
+    g('spinTierBadge').textContent = `${st.tier} Wheel`;
+    g('spinTotal').textContent = `${st.totalSpins} total spins`;
+    const rewardsEl = g('spinRewards');
+    rewardsEl.innerHTML = st.rewards.map(r => `<div class="spin-chip">${formatUSD(r)}</div>`).join('');
+    const btn = g('spinBtn');
+    const hint = g('spinHint');
+    if (st.canSpin) {
+      btn.disabled = false; btn.textContent = 'Spin Now';
+      hint.textContent = 'One free spin every 24 hours';
+    } else {
+      btn.disabled = true;
+      const h = Math.floor(st.nextSpinIn/3600), m = Math.floor((st.nextSpinIn%3600)/60);
+      btn.textContent = 'Come back later';
+      hint.textContent = `Next spin available in ${h}h ${m}m`;
+    }
+  } catch(e) { toast('Could not load spin status'); }
+}
+
+async function playSpin() {
+  const btn = g('spinBtn');
+  if (btn.disabled) return;
+  btn.disabled = true; btn.textContent = 'Spinning...';
+  const chips = Array.from(document.querySelectorAll('#spinRewards .spin-chip'));
+  let cycles = 0;
+  const shuffle = setInterval(() => {
+    chips.forEach(c => c.classList.remove('spin-active'));
+    const pick = chips[Math.floor(Math.random()*chips.length)];
+    if (pick) pick.classList.add('spin-active');
+    cycles++;
+    if (cycles > 14) clearInterval(shuffle);
+  }, 90);
+
+  try {
+    const r = await post('/spin/play', {});
+    setTimeout(() => {
+      clearInterval(shuffle);
+      chips.forEach(c => c.classList.remove('spin-active'));
+      if (r.success) {
+        const won = chips.find(c => c.textContent.trim() === formatUSD(r.reward));
+        if (won) won.classList.add('spin-won');
+        state.balance = r.newBalance;
+        updateUI();
+        toast(`🎉 You won ${formatUSD(r.reward)} USDT!`);
+        const nowMs = Date.now();
+        state.transactions.unshift({ id: nowMs, type: 'spin_wheel', amount: r.reward, currency: 'USDT', status: 'completed', note: `Daily spin (${r.tier} wheel)`, created_at: nowMs });
+      } else {
+        toast(r.error || 'Spin failed');
+      }
+      loadSpinStatus();
+    }, 1400);
+  } catch(e) {
+    clearInterval(shuffle);
+    toast('Network error');
+    loadSpinStatus();
+  }
+}
+
+// ── Trivia Challenge ─────────────────────────────────────────────────────────
+async function loadTriviaQuestions() {
+  try {
+    const st = await post('/trivia/questions', {});
+    if (st.error) return;
+    _triviaState = { questions: st.questions, rewards: st.rewards, answeredToday: st.answeredToday, answering: false };
+    g('triviaTierBadge').textContent = `${st.tier === 'high' ? 'Veteran' : st.tier === 'mid' ? 'Regular' : 'Starter'} Tier`;
+    g('triviaProgress').textContent = `${st.answeredToday}/5 today · ${st.correctToday} correct`;
+    renderTriviaBody(st);
+  } catch(e) { toast('Could not load trivia'); }
+}
+
+function renderTriviaBody(st) {
+  const body = g('triviaBody');
+  if (st.completedToday || st.answeredToday >= 5) {
+    body.innerHTML = `<div class="empty-tx">✅ You've completed today's 5 questions!<br>Come back tomorrow for more — your streak keeps growing.</div>`;
+    return;
+  }
+  const idx = st.answeredToday;
+  const q = st.questions[idx];
+  const reward = st.rewards[idx];
+  body.innerHTML = `
+    <div class="trivia-q">Q${idx+1}. ${q.q}</div>
+    <div id="triviaOpts">
+      ${q.options.map((opt,i) => `<button class="trivia-opt" data-i="${i}" onclick="submitTriviaAnswer(${idx},${i})">${opt}</button>`).join('')}
+    </div>
+    <div class="game-hint">Correct answer pays ${formatUSD(reward)} USDT</div>
+    <div class="trivia-dots">${[0,1,2,3,4].map(i => `<div class="trivia-dot ${i<idx?'dot-done':i===idx?'dot-current':''}"></div>`).join('')}</div>
+  `;
+}
+
+async function submitTriviaAnswer(questionIndex, answerIndex) {
+  if (_triviaState.answering) return;
+  _triviaState.answering = true;
+  document.querySelectorAll('.trivia-opt').forEach(b => b.disabled = true);
+  try {
+    const r = await post('/trivia/answer', { questionIndex, answerIndex });
+    if (r.error) { toast(r.error); _triviaState.answering = false; document.querySelectorAll('.trivia-opt').forEach(b => b.disabled = false); return; }
+    const opts = document.querySelectorAll('.trivia-opt');
+    opts[answerIndex].classList.add(r.correct ? 'opt-correct' : 'opt-wrong');
+    if (!r.correct) opts[r.correctAnswerIndex].classList.add('opt-correct');
+    if (r.correct) {
+      state.balance = (state.balance || 0) + r.reward;
+      updateUI();
+      toast(`✅ Correct! +${formatUSD(r.reward)} USDT`);
+      const nowMs = Date.now();
+      state.transactions.unshift({ id: nowMs, type: 'trivia_reward', amount: r.reward, currency: 'USDT', status: 'completed', note: `Trivia Q${questionIndex+1} correct`, created_at: nowMs });
+    } else {
+      toast('❌ Not quite — try the next one!');
+    }
+    setTimeout(() => { loadTriviaQuestions(); }, 1300);
+  } catch(e) {
+    toast('Network error');
+    document.querySelectorAll('.trivia-opt').forEach(b => b.disabled = false);
+  }
+  _triviaState.answering = false;
+}
+
+// ── Login Streak ─────────────────────────────────────────────────────────────
+async function loadStreakStatus() {
+  try {
+    const st = await post('/streak/status', {});
+    if (st.error) return;
+    g('streakBadge').textContent = `Week ${st.streakWeek}`;
+    g('streakLongest').textContent = `Longest streak: ${st.longestStreak} days`;
+    const grid = g('streakGrid');
+    grid.innerHTML = st.fullSchedule.map((amt,i) => {
+      const dayNum = i+1;
+      const isDone = dayNum < st.currentStreakDay || (dayNum <= st.currentStreakDay && !st.canClaim);
+      const isCurrent = st.canClaim && dayNum === ((st.currentStreakDay % 7) + 1);
+      return `<div class="streak-day ${isDone?'day-done':''} ${isCurrent?'day-current':''}"><div class="streak-day-num">Day ${dayNum}</div><div class="streak-day-amt">${formatUSD(amt)}</div></div>`;
+    }).join('');
+    const btn = g('streakBtn');
+    const hint = g('streakHint');
+    if (st.canClaim) {
+      btn.disabled = false; btn.textContent = `Claim ${formatUSD(st.nextReward)} USDT`;
+      hint.textContent = 'Come back every day to keep your streak growing';
+    } else {
+      btn.disabled = true; btn.textContent = 'Already claimed today';
+      hint.textContent = "You've claimed today — come back tomorrow!";
+    }
+  } catch(e) { toast('Could not load streak status'); }
+}
+
+async function claimStreakBonus() {
+  const btn = g('streakBtn');
+  if (btn.disabled) return;
+  btn.disabled = true; btn.textContent = 'Processing...';
+  try {
+    const r = await post('/streak/claim', {});
+    if (r.success) {
+      state.balance = r.newBalance;
+      updateUI();
+      toast(`🔥 Day ${r.currentStreakDay} streak! +${formatUSD(r.reward)} USDT`);
+      const nowMs = Date.now();
+      state.transactions.unshift({ id: nowMs, type: 'streak_bonus', amount: r.reward, currency: 'USDT', status: 'completed', note: `Login streak day ${r.currentStreakDay}`, created_at: nowMs });
+    } else {
+      toast(r.error || 'Could not claim');
+    }
+    loadStreakStatus();
+  } catch(e) {
+    toast('Network error');
+    loadStreakStatus();
+  }
+}
