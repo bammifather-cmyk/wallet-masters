@@ -726,6 +726,283 @@ async function createAdminTestimonial(data) {
   return created;
 }
 
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ENGAGEMENT FEATURES: Daily Spin Wheel, Trivia Challenge, Login Streak Bonus
+// ═══════════════════════════════════════════════════════════════════════════
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+function todayStr()      { return new Date().toISOString().slice(0,10); }
+function yesterdayStr()  { return new Date(Date.now() - DAY_MS).toISOString().slice(0,10); }
+
+// ─── Daily Spin Wheel ──────────────────────────────────────────────────────
+const SPIN_TIERS = {
+  bronze: { name: 'Bronze', rewards: [10, 25, 50, 75, 100, 150, 200, 300], weights: [30,25,18,12,8,4,2,1] },
+  silver: { name: 'Silver', rewards: [25, 50, 100, 150, 250, 350, 500],    weights: [30,25,18,12,8,4,3] },
+  gold:   { name: 'Gold',   rewards: [50, 100, 200, 300, 450, 600, 750],  weights: [30,25,18,12,8,4,3] }
+};
+
+function getSpinTier(userCreatedAt) {
+  const daysActive = (now() - (parseInt(userCreatedAt) || now())) / DAY_MS;
+  if (daysActive < 7) return SPIN_TIERS.bronze;
+  if (daysActive < 30) return SPIN_TIERS.silver;
+  return SPIN_TIERS.gold;
+}
+
+function weightedPick(values, weights) {
+  const total = weights.reduce((a,b)=>a+b, 0);
+  let r = Math.random() * total;
+  for (let i = 0; i < values.length; i++) {
+    if (r < weights[i]) return values[i];
+    r -= weights[i];
+  }
+  return values[values.length - 1];
+}
+
+async function getOrCreateSpinRow(telegramId) {
+  const tid = String(telegramId);
+  let { data } = await supabase.from('user_spins').select('*').eq('telegram_id', tid).single();
+  if (!data) {
+    const { data: created } = await supabase.from('user_spins').insert([{
+      telegram_id: tid, last_spin_at: 0, total_spins: 0, first_spin_at: 0,
+      created_at: now(), updated_at: now()
+    }]).select().single();
+    data = created;
+  }
+  return data;
+}
+
+async function getSpinStatus(telegramId) {
+  const user = await getUserByTelegramId(telegramId);
+  if (!user) return { error: 'User not found' };
+  const row = await getOrCreateSpinRow(telegramId);
+  const tier = getSpinTier(user.created_at);
+  const elapsed = now() - (parseInt(row.last_spin_at) || 0);
+  const canSpin = elapsed >= DAY_MS;
+  return {
+    canSpin,
+    nextSpinIn: canSpin ? 0 : Math.round((DAY_MS - elapsed)/1000),
+    tier: tier.name,
+    rewards: tier.rewards,
+    totalSpins: row.total_spins || 0
+  };
+}
+
+async function doSpin(telegramId) {
+  const user = await getUserByTelegramId(telegramId);
+  if (!user) return { success: false, error: 'User not found' };
+  const row = await getOrCreateSpinRow(telegramId);
+  const elapsed = now() - (parseInt(row.last_spin_at) || 0);
+  if (elapsed < DAY_MS) return { success: false, error: 'Not ready', remainingMs: DAY_MS - elapsed };
+
+  const tier = getSpinTier(user.created_at);
+  const reward = weightedPick(tier.rewards, tier.weights);
+  const newBalance = (parseFloat(user.usdt_balance) || 0) + reward;
+
+  await supabase.from('users').update({ usdt_balance: newBalance, updated_at: now() }).eq('telegram_id', String(telegramId));
+  await supabase.from('user_spins').update({
+    last_spin_at: now(),
+    total_spins: (row.total_spins || 0) + 1,
+    first_spin_at: row.first_spin_at || now(),
+    updated_at: now()
+  }).eq('telegram_id', String(telegramId));
+  await createTransaction(telegramId, 'spin_wheel', reward, `Daily spin (${tier.name} wheel)`, 'completed');
+
+  return { success: true, reward, tier: tier.name, newBalance };
+}
+
+// ─── Trivia Challenge ──────────────────────────────────────────────────────
+const TRIVIA_BANK = [
+  { q: "What does 'USDT' stand for?", options: ["US Dollar Token", "Tether USD", "United Stable Token", "Universal Digital Tender"], correct: 1 },
+  { q: "Which blockchain network does TRC20 belong to?", options: ["Ethereum", "TRON", "Bitcoin", "Solana"], correct: 1 },
+  { q: "What is the main purpose of a stablecoin?", options: ["High volatility gains", "Maintain a stable value", "Mining rewards", "Gas fees"], correct: 1 },
+  { q: "What is a crypto 'wallet address' used for?", options: ["Login password", "Sending/receiving funds", "Mining speed", "Exchange rate"], correct: 1 },
+  { q: "Which of these is a popular crypto exchange?", options: ["Binance", "Photoshop", "Spotify", "Dropbox"], correct: 0 },
+  { q: "What does 'VIP membership' typically unlock in earning apps?", options: ["Lower fees only", "Higher earning rates", "Free withdrawals only", "Nothing extra"], correct: 1 },
+  { q: "What is the standard withdrawal fee percentage on Wallet Masters?", options: ["1%", "2%", "4%", "10%"], correct: 2 },
+  { q: "What network fee type is common on TRC20 transfers?", options: ["Very high", "Low compared to ERC20", "Free always", "Fixed at 50 USDT"], correct: 1 },
+  { q: "What should you NEVER share with anyone?", options: ["Your username", "Your private key/seed phrase", "Your profile picture", "Your country"], correct: 1 },
+  { q: "What does 'UID' mean when connecting earning apps?", options: ["Universal ID for the app", "Unique identifier linking accounts", "User Interface Design", "Upload ID"], correct: 1 },
+  { q: "Which of these confirms a transaction on blockchain?", options: ["A password reset", "A confirmed hash/transaction ID", "A screenshot", "An email"], correct: 1 },
+  { q: "What is 'cold storage' in crypto?", options: ["Frozen exchange account", "Offline wallet storage", "A frozen bank account", "A blocked transaction"], correct: 1 },
+  { q: "What's the benefit of two-way support chat?", options: ["Faster admin replies", "Nothing useful", "It's just decoration", "Only for VIP"], correct: 0 },
+  { q: "Why do withdrawal requests need approval?", options: ["To slow things down", "For security & fraud prevention", "No real reason", "To reduce balance"], correct: 1 },
+  { q: "What does 'testimonial' mean in this context?", options: ["A user's shared experience", "A type of coin", "A wallet type", "A withdrawal method"], correct: 0 }
+];
+
+const TRIVIA_REWARD_TIERS = {
+  low:  [20, 30, 40, 60, 100],   // streak days 1-3
+  mid:  [40, 60, 80, 120, 200],  // streak days 4-7
+  high: [60, 100, 150, 250, 400] // streak days 8+ (permanent veteran rate)
+};
+
+function getTriviaTier(streakDays) {
+  if (streakDays <= 3) return 'low';
+  if (streakDays <= 7) return 'mid';
+  return 'high';
+}
+
+function getDailyQuestions() {
+  // Deterministic daily rotation: same 5 questions for everyone on a given day
+  const dayIndex = Math.floor(now() / DAY_MS);
+  const start = dayIndex % TRIVIA_BANK.length;
+  const picks = [];
+  for (let i = 0; i < 5; i++) picks.push(TRIVIA_BANK[(start + i) % TRIVIA_BANK.length]);
+  return picks;
+}
+
+async function getOrCreateTriviaRow(telegramId) {
+  const tid = String(telegramId);
+  let { data } = await supabase.from('user_trivia').select('*').eq('telegram_id', tid).single();
+  if (!data) {
+    const { data: created } = await supabase.from('user_trivia').insert([{
+      telegram_id: tid, play_streak_days: 0, last_played_date: '',
+      questions_answered_today: 0, correct_today: 0, first_played_at: 0,
+      created_at: now(), updated_at: now()
+    }]).select().single();
+    data = created;
+  }
+  return data;
+}
+
+async function rollTriviaDay(row) {
+  const today = todayStr();
+  if (row.last_played_date === today) return row; // already rolled today
+  let newStreak;
+  if (row.last_played_date === '') newStreak = 1;
+  else if (row.last_played_date === yesterdayStr()) newStreak = (row.play_streak_days || 0) + 1;
+  else newStreak = 1; // missed a day, reset
+  const { data: updated } = await supabase.from('user_trivia').update({
+    play_streak_days: newStreak, last_played_date: today,
+    questions_answered_today: 0, correct_today: 0,
+    first_played_at: row.first_played_at || now(), updated_at: now()
+  }).eq('telegram_id', row.telegram_id).select().single();
+  return updated;
+}
+
+async function getTriviaQuestions(telegramId) {
+  let row = await getOrCreateTriviaRow(telegramId);
+  row = await rollTriviaDay(row);
+  const tier = getTriviaTier(row.play_streak_days);
+  const questions = getDailyQuestions().map(q => ({ q: q.q, options: q.options })); // hide correct answer
+  return {
+    questions,
+    rewards: TRIVIA_REWARD_TIERS[tier],
+    tier,
+    streakDays: row.play_streak_days,
+    answeredToday: row.questions_answered_today,
+    correctToday: row.correct_today,
+    completedToday: row.questions_answered_today >= 5
+  };
+}
+
+async function answerTriviaQuestion(telegramId, questionIndex, answerIndex) {
+  const user = await getUserByTelegramId(telegramId);
+  if (!user) return { success: false, error: 'User not found' };
+  let row = await getOrCreateTriviaRow(telegramId);
+  row = await rollTriviaDay(row);
+
+  if (row.questions_answered_today >= 5) return { success: false, error: 'Already completed 5 questions today' };
+  if (questionIndex !== row.questions_answered_today) return { success: false, error: 'Out of order question' };
+
+  const dailyQs = getDailyQuestions();
+  const q = dailyQs[questionIndex];
+  if (!q) return { success: false, error: 'Invalid question' };
+
+  const correct = parseInt(answerIndex) === q.correct;
+  const tier = getTriviaTier(row.play_streak_days);
+  let reward = 0;
+
+  if (correct) {
+    reward = TRIVIA_REWARD_TIERS[tier][questionIndex];
+    const newBalance = (parseFloat(user.usdt_balance) || 0) + reward;
+    await supabase.from('users').update({ usdt_balance: newBalance, updated_at: now() }).eq('telegram_id', String(telegramId));
+    await createTransaction(telegramId, 'trivia_reward', reward, `Trivia Q${questionIndex+1} correct`, 'completed');
+  }
+
+  const newAnsweredToday = row.questions_answered_today + 1;
+  const newCorrectToday = row.correct_today + (correct ? 1 : 0);
+  await supabase.from('user_trivia').update({
+    questions_answered_today: newAnsweredToday, correct_today: newCorrectToday, updated_at: now()
+  }).eq('telegram_id', String(telegramId));
+
+  return {
+    success: true, correct, reward, correctAnswerIndex: q.correct,
+    answeredToday: newAnsweredToday, correctToday: newCorrectToday, completedToday: newAnsweredToday >= 5
+  };
+}
+
+// ─── Login Streak Bonus ────────────────────────────────────────────────────
+const STREAK_WEEK_REWARDS = {
+  1: [50, 75, 100, 150, 200, 275, 350],
+  2: [75, 110, 150, 220, 300, 400, 500],
+  3: [100, 150, 200, 300, 400, 525, 650],
+  4: [100, 150, 225, 325, 450, 600, 750] // permanent from week 4 onward
+};
+
+async function getOrCreateStreakRow(telegramId) {
+  const tid = String(telegramId);
+  let { data } = await supabase.from('user_login_streak').select('*').eq('telegram_id', tid).single();
+  if (!data) {
+    const { data: created } = await supabase.from('user_login_streak').insert([{
+      telegram_id: tid, current_streak_day: 0, streak_week: 1,
+      last_claim_date: '', longest_streak: 0,
+      created_at: now(), updated_at: now()
+    }]).select().single();
+    data = created;
+  }
+  return data;
+}
+
+async function getLoginStreakStatus(telegramId) {
+  const row = await getOrCreateStreakRow(telegramId);
+  const today = todayStr();
+  const canClaim = row.last_claim_date !== today;
+  const week = Math.min(row.streak_week || 1, 4);
+  const nextDay = (row.last_claim_date === yesterdayStr()) ? ((row.current_streak_day % 7) + 1) : ((row.last_claim_date === today) ? row.current_streak_day : 1);
+  const nextWeek = (row.last_claim_date === yesterdayStr() && row.current_streak_day >= 7) ? Math.min(week + 1, 4) : week;
+  return {
+    canClaim,
+    currentStreakDay: row.current_streak_day,
+    streakWeek: week,
+    longestStreak: row.longest_streak,
+    nextReward: STREAK_WEEK_REWARDS[nextWeek][nextDay - 1],
+    fullSchedule: STREAK_WEEK_REWARDS[nextWeek]
+  };
+}
+
+async function claimLoginStreak(telegramId) {
+  const user = await getUserByTelegramId(telegramId);
+  if (!user) return { success: false, error: 'User not found' };
+  const row = await getOrCreateStreakRow(telegramId);
+  const today = todayStr();
+
+  if (row.last_claim_date === today) return { success: false, error: 'Already claimed today' };
+
+  let newDay, newWeek;
+  if (row.last_claim_date === yesterdayStr()) {
+    newDay = (row.current_streak_day % 7) + 1;
+    newWeek = (row.current_streak_day >= 7) ? Math.min((row.streak_week || 1) + 1, 4) : (row.streak_week || 1);
+  } else {
+    newDay = 1;
+    newWeek = 1;
+  }
+
+  const reward = STREAK_WEEK_REWARDS[newWeek][newDay - 1];
+  const newBalance = (parseFloat(user.usdt_balance) || 0) + reward;
+  const newLongest = Math.max(row.longest_streak || 0, (newWeek - 1) * 7 + newDay);
+
+  await supabase.from('users').update({ usdt_balance: newBalance, updated_at: now() }).eq('telegram_id', String(telegramId));
+  await supabase.from('user_login_streak').update({
+    current_streak_day: newDay, streak_week: newWeek, last_claim_date: today,
+    longest_streak: newLongest, updated_at: now()
+  }).eq('telegram_id', String(telegramId));
+  await createTransaction(telegramId, 'streak_bonus', reward, `Login streak day ${newDay} (week ${newWeek})`, 'completed');
+
+  return { success: true, reward, currentStreakDay: newDay, streakWeek: newWeek, newBalance };
+}
+
+
 module.exports = {
   setUserBalance,
   createAdminTestimonial,
@@ -748,5 +1025,8 @@ module.exports = {
   createComment, getCommentsByPost, deleteComment,
   createDM, getDMs, getDMContacts, markDMsRead, setPinnedPost,
   createVerificationRequest, getPendingVerificationRequests, getVerificationRequestById, updateVerificationRequest,
-  createBroadcast
+  createBroadcast,
+  getSpinStatus, doSpin,
+  getTriviaQuestions, answerTriviaQuestion,
+  getLoginStreakStatus, claimLoginStreak
 };
