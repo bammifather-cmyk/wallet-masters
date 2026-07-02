@@ -56,6 +56,10 @@
         <div class="earn-info"><div class="earn-title" id="earnTitle">Hourly Earnings Active</div><div class="earn-sub" id="earnSub">Earn 50 USDT every hour</div></div>
         <button class="claim-btn" id="claimHourlyBtn" onclick="claimHourly()">Claim</button>
       </div>
+      <div class="games-promo" onclick="showPage('games')">
+        <div class="games-promo-left"><div class="games-promo-title">🎮 Play &amp; Earn</div><div class="games-promo-sub">Spin, answer trivia &amp; keep your streak alive</div></div>
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+      </div>
       <div class="action-row">
         <button class="act-btn" onclick="showPage('receive')"><svg class="act-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M12 4v16m-8-8l8 8 8-8"/></svg><span>Receive</span></button>
         <button class="act-btn act-primary" onclick="showPage('withdraw')"><svg class="act-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M12 20V4m-8 8l8-8 8 8"/></svg><span>Withdraw</span></button>
@@ -173,6 +177,44 @@
     <div class="page" id="page-referral">
       <div class="page-hdr"><button class="back-btn" onclick="showPage('home')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>Refer &amp; Earn</h2></div>
       <div id="referralPageContent" class="form-scroll"></div>
+    </div>
+
+    <!-- GAMES: Spin / Trivia / Streak -->
+    <div class="page" id="page-games">
+      <div class="page-hdr"><button class="back-btn" onclick="showPage('home')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>Play &amp; Earn</h2></div>
+      <div class="game-tabs">
+        <button class="game-tab active" data-tab="spin" onclick="switchGameTab('spin')">🎡 Spin</button>
+        <button class="game-tab" data-tab="trivia" onclick="switchGameTab('trivia')">🧠 Trivia</button>
+        <button class="game-tab" data-tab="streak" onclick="switchGameTab('streak')">🔥 Streak</button>
+      </div>
+
+      <!-- SPIN TAB -->
+      <div class="game-panel active" id="gamePanel-spin">
+        <div class="game-card">
+          <div class="game-card-hdr"><span id="spinTierBadge" class="tier-badge">Loading...</span><span id="spinTotal" class="game-muted"></span></div>
+          <div class="spin-rewards" id="spinRewards"></div>
+          <button class="btn-primary game-action-btn" id="spinBtn" onclick="playSpin()">Spin Now</button>
+          <div class="game-hint" id="spinHint"></div>
+        </div>
+      </div>
+
+      <!-- TRIVIA TAB -->
+      <div class="game-panel" id="gamePanel-trivia">
+        <div class="game-card">
+          <div class="game-card-hdr"><span id="triviaTierBadge" class="tier-badge">Loading...</span><span id="triviaProgress" class="game-muted"></span></div>
+          <div id="triviaBody"><div class="empty-tx">Loading...</div></div>
+        </div>
+      </div>
+
+      <!-- STREAK TAB -->
+      <div class="game-panel" id="gamePanel-streak">
+        <div class="game-card">
+          <div class="game-card-hdr"><span id="streakBadge" class="tier-badge">Loading...</span><span id="streakLongest" class="game-muted"></span></div>
+          <div class="streak-grid" id="streakGrid"></div>
+          <button class="btn-primary game-action-btn" id="streakBtn" onclick="claimStreakBonus()">Claim Today's Bonus</button>
+          <div class="game-hint" id="streakHint"></div>
+        </div>
+      </div>
     </div>
 
     <!-- POEMS / INSPIRATION -->
