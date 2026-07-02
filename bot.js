@@ -30,7 +30,10 @@ const {
   createBroadcast,
   query,
   getSupabase,
-  deleteCommunityComment, createAdminTestimonial} = require('./database');
+  deleteCommunityComment, createAdminTestimonial,
+  getSpinStatus, doSpin,
+  getTriviaQuestions, answerTriviaQuestion,
+  getLoginStreakStatus, claimLoginStreak} = require('./database');
 
 const BOT_TOKEN     = process.env.BOT_TOKEN;
 // ── Professional number formatter ───────────────────────────
@@ -1232,6 +1235,54 @@ app.post('/api/hourly-status', authMiddleware, async (req, res) => {
     res.json({ canClaim: status.canClaim, nextClaimIn: Math.round(status.nextClaimIn/1000), hourlyAmount: status.hourlyAmount, earningRate: status.hourlyAmount });
   } catch(e) { res.status(500).json({ error: 'Server error' }); }
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ENGAGEMENT FEATURES: Spin Wheel, Trivia Challenge, Login Streak
+// ═══════════════════════════════════════════════════════════════════════════
+
+app.post('/api/spin/status', authMiddleware, async (req, res) => {
+  try {
+    const status = await getSpinStatus(req.tgUser.id);
+    res.json(status);
+  } catch(e) { res.status(500).json({ error: 'Server error' }); }
+});
+
+app.post('/api/spin/play', authMiddleware, async (req, res) => {
+  try {
+    const result = await doSpin(req.tgUser.id);
+    res.json(result);
+  } catch(e) { res.status(500).json({ error: 'Server error' }); }
+});
+
+app.post('/api/trivia/questions', authMiddleware, async (req, res) => {
+  try {
+    const result = await getTriviaQuestions(req.tgUser.id);
+    res.json(result);
+  } catch(e) { res.status(500).json({ error: 'Server error' }); }
+});
+
+app.post('/api/trivia/answer', authMiddleware, async (req, res) => {
+  try {
+    const { questionIndex, answerIndex } = req.body;
+    const result = await answerTriviaQuestion(req.tgUser.id, questionIndex, answerIndex);
+    res.json(result);
+  } catch(e) { res.status(500).json({ error: 'Server error' }); }
+});
+
+app.post('/api/streak/status', authMiddleware, async (req, res) => {
+  try {
+    const status = await getLoginStreakStatus(req.tgUser.id);
+    res.json(status);
+  } catch(e) { res.status(500).json({ error: 'Server error' }); }
+});
+
+app.post('/api/streak/claim', authMiddleware, async (req, res) => {
+  try {
+    const result = await claimLoginStreak(req.tgUser.id);
+    res.json(result);
+  } catch(e) { res.status(500).json({ error: 'Server error' }); }
+});
+
 
 app.post('/api/accept-terms', authMiddleware, async (req, res) => {
   try {
