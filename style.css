@@ -521,10 +521,10 @@ html,body{height:100%;background:#070d1a;color:#f0f4ff;font-family:-apple-system
 .trivia-dot.dot-current{background:#2563eb}
 
 /* Streak */
-.streak-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
-.streak-day{background:#131f35;border:1px solid #1e2d45;border-radius:10px;padding:8px 4px;text-align:center}
-.streak-day-num{font-size:10px;color:#7a90b0;margin-bottom:4px}
-.streak-day-amt{font-size:11px;font-weight:700;color:#e5edf7}
+.streak-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.streak-day{background:#131f35;border:1px solid #1e2d45;border-radius:8px;padding:6px 2px;text-align:center;min-width:0;overflow:hidden}
+.streak-day-num{font-size:9px;color:#7a90b0;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.streak-day-amt{font-size:9px;font-weight:700;color:#e5edf7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .streak-day.day-done{background:linear-gradient(135deg,#059669,#10b981);border-color:#10b981}
 .streak-day.day-done .streak-day-num,.streak-day.day-done .streak-day-amt{color:#fff}
 .streak-day.day-current{border-color:#f59e0b;box-shadow:0 0 0 2px rgba(245,158,11,.3)}
