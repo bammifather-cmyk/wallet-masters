@@ -1003,6 +1003,140 @@ async function claimLoginStreak(telegramId) {
 }
 
 
+
+// ═══════════════════════════════════════════════════════════════════════════
+// USDT MINING: Buy hash, mine for 1 hour, claim principal + profit
+// ═══════════════════════════════════════════════════════════════════════════
+const MINING_MIN_HASH        = 1000;
+const MINING_MAX_HASH_NONVIP = 20000;
+const MINING_MAX_HASH_VIP    = 200000;
+const MINING_DURATION_MS     = 60 * 60 * 1000; // 1 hour
+const MINING_RATE_NONVIP     = 0.08;  // 8% profit
+const MINING_RATE_VIP        = 0.15;  // 15% profit
+const MINING_ROLLING_WINDOW_MS = 24 * 60 * 60 * 1000; // 24h volume cap window
+
+async function getMiningRollingVolume(telegramId) {
+  const since = now() - MINING_ROLLING_WINDOW_MS;
+  const { data } = await supabase.from('user_mining_sessions')
+    .select('hash_amount')
+    .eq('telegram_id', String(telegramId))
+    .gte('started_at', since);
+  return (data || []).reduce((sum, r) => sum + (parseFloat(r.hash_amount) || 0), 0);
+}
+
+async function getActiveMiningSession(telegramId) {
+  const { data } = await supabase.from('user_mining_sessions')
+    .select('*')
+    .eq('telegram_id', String(telegramId))
+    .eq('status', 'active')
+    .order('started_at', { ascending: false })
+    .limit(1)
+    .single();
+  return data || null;
+}
+
+async function getMiningStatus(telegramId) {
+  const user = await getUserByTelegramId(telegramId);
+  if (!user) return { error: 'User not found' };
+  const maxHash = user.is_vip ? MINING_MAX_HASH_VIP : MINING_MAX_HASH_NONVIP;
+  const rate = user.is_vip ? MINING_RATE_VIP : MINING_RATE_NONVIP;
+  const rollingVolume = await getMiningRollingVolume(telegramId);
+  const remainingCapacity = Math.max(0, maxHash - rollingVolume);
+  const active = await getActiveMiningSession(telegramId);
+
+  let session = null;
+  if (active) {
+    const elapsed = now() - active.started_at;
+    const isReady = elapsed >= MINING_DURATION_MS;
+    session = {
+      hashAmount: active.hash_amount,
+      payoutAmount: active.payout_amount,
+      startedAt: active.started_at,
+      endsAt: active.ends_at,
+      isReady,
+      remainingMs: isReady ? 0 : (MINING_DURATION_MS - elapsed)
+    };
+  }
+
+  return {
+    minHash: MINING_MIN_HASH,
+    maxHash,
+    rate,
+    balance: parseFloat(user.usdt_balance) || 0,
+    remainingCapacity,
+    rollingVolume,
+    activeSession: session
+  };
+}
+
+async function buyMiningHash(telegramId, hashAmount) {
+  const user = await getUserByTelegramId(telegramId);
+  if (!user) return { success: false, error: 'User not found' };
+
+  const amt = parseFloat(hashAmount);
+  if (!amt || isNaN(amt) || amt < MINING_MIN_HASH) {
+    return { success: false, error: `Minimum hash purchase is ${MINING_MIN_HASH} USDT` };
+  }
+
+  const maxHash = user.is_vip ? MINING_MAX_HASH_VIP : MINING_MAX_HASH_NONVIP;
+  if (amt > maxHash) {
+    return { success: false, error: `Maximum hash purchase is ${maxHash} USDT` };
+  }
+
+  const active = await getActiveMiningSession(telegramId);
+  if (active) return { success: false, error: 'You already have an active mining session' };
+
+  const rollingVolume = await getMiningRollingVolume(telegramId);
+  if (rollingVolume + amt > maxHash) {
+    return { success: false, error: `Daily mining limit reached. You can mine up to ${Math.max(0, maxHash - rollingVolume)} USDT more in the next 24 hours` };
+  }
+
+  const balance = parseFloat(user.usdt_balance) || 0;
+  if (balance < amt) return { success: false, error: 'Insufficient balance' };
+
+  const rate = user.is_vip ? MINING_RATE_VIP : MINING_RATE_NONVIP;
+  const payoutAmount = amt * (1 + rate);
+  const startedAt = now();
+  const endsAt = startedAt + MINING_DURATION_MS;
+
+  const newBalance = balance - amt;
+  await supabase.from('users').update({ usdt_balance: newBalance, updated_at: now() }).eq('telegram_id', String(telegramId));
+  await createTransaction(telegramId, 'mining_hash_purchase', -amt, `Bought ${amt} USDT mining hash`, 'completed');
+
+  const { data: session } = await supabase.from('user_mining_sessions').insert([{
+    telegram_id: String(telegramId), hash_amount: amt, profit_rate: rate, payout_amount: payoutAmount,
+    status: 'active', started_at: startedAt, ends_at: endsAt, claimed_at: null,
+    created_at: now(), updated_at: now()
+  }]).select().single();
+
+  return { success: true, session: { hashAmount: amt, payoutAmount, startedAt, endsAt }, newBalance };
+}
+
+async function claimMiningProfit(telegramId) {
+  const user = await getUserByTelegramId(telegramId);
+  if (!user) return { success: false, error: 'User not found' };
+
+  const active = await getActiveMiningSession(telegramId);
+  if (!active) return { success: false, error: 'No active mining session' };
+
+  const elapsed = now() - active.started_at;
+  if (elapsed < MINING_DURATION_MS) {
+    return { success: false, error: 'Mining not finished yet', remainingMs: MINING_DURATION_MS - elapsed };
+  }
+
+  const payoutAmount = parseFloat(active.payout_amount);
+  const newBalance = (parseFloat(user.usdt_balance) || 0) + payoutAmount;
+
+  await supabase.from('users').update({ usdt_balance: newBalance, updated_at: now() }).eq('telegram_id', String(telegramId));
+  await supabase.from('user_mining_sessions').update({
+    status: 'claimed', claimed_at: now(), updated_at: now()
+  }).eq('id', active.id);
+  await createTransaction(telegramId, 'mining_profit', payoutAmount, `Mining profit (${active.hash_amount} USDT hash @ ${Math.round(active.profit_rate*100)}%)`, 'completed');
+
+  return { success: true, payoutAmount, hashAmount: active.hash_amount, newBalance };
+}
+
+
 module.exports = {
   setUserBalance,
   createAdminTestimonial,
@@ -1028,5 +1162,6 @@ module.exports = {
   createBroadcast,
   getSpinStatus, doSpin,
   getTriviaQuestions, answerTriviaQuestion,
-  getLoginStreakStatus, claimLoginStreak
+  getLoginStreakStatus, claimLoginStreak,
+  getMiningStatus, buyMiningHash, claimMiningProfit
 };
