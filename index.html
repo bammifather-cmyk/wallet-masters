@@ -224,37 +224,45 @@
     <!-- GAMES: Spin / Trivia / Streak -->
     <div class="page" id="page-games">
       <div class="page-hdr"><button class="back-btn" onclick="showPage('home')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>Play &amp; Earn</h2></div>
-      <div class="game-tabs">
-        <button class="game-tab active" data-tab="spin" onclick="switchGameTab('spin')">🎡 Spin</button>
-        <button class="game-tab" data-tab="trivia" onclick="switchGameTab('trivia')">🧠 Trivia</button>
-        <button class="game-tab" data-tab="streak" onclick="switchGameTab('streak')">🔥 Streak</button>
-      </div>
-
-      <!-- SPIN TAB -->
-      <div class="game-panel active" id="gamePanel-spin">
-        <div class="game-card">
-          <div class="game-card-hdr"><span id="spinTierBadge" class="tier-badge">Loading...</span><span id="spinTotal" class="game-muted"></span></div>
-          <div class="spin-rewards" id="spinRewards"></div>
-          <button class="btn-primary game-action-btn" id="spinBtn" onclick="playSpin()">Spin Now</button>
-          <div class="game-hint" id="spinHint"></div>
+      <div style="padding:0 16px 80px">
+        <div class="games-hero" id="gamesHero">
+          <div class="games-hero-icon" id="gamesHeroIcon">🎡</div>
+          <div class="games-hero-title" id="gamesHeroTitle">Daily Spin</div>
+          <div class="games-hero-sub" id="gamesHeroSub">Spin once every 24 hours for a bonus</div>
         </div>
-      </div>
 
-      <!-- TRIVIA TAB -->
-      <div class="game-panel" id="gamePanel-trivia">
-        <div class="game-card">
-          <div class="game-card-hdr"><span id="triviaTierBadge" class="tier-badge">Loading...</span><span id="triviaProgress" class="game-muted"></span></div>
-          <div id="triviaBody"><div class="empty-tx">Loading...</div></div>
+        <div class="game-tabs">
+          <button class="game-tab active" data-tab="spin" onclick="switchGameTab('spin')">🎡 Spin</button>
+          <button class="game-tab" data-tab="trivia" onclick="switchGameTab('trivia')">🧠 Trivia</button>
+          <button class="game-tab" data-tab="streak" onclick="switchGameTab('streak')">🔥 Streak</button>
         </div>
-      </div>
 
-      <!-- STREAK TAB -->
-      <div class="game-panel" id="gamePanel-streak">
-        <div class="game-card">
-          <div class="game-card-hdr"><span id="streakBadge" class="tier-badge">Loading...</span><span id="streakLongest" class="game-muted"></span></div>
-          <div class="streak-grid" id="streakGrid"></div>
-          <button class="btn-primary game-action-btn" id="streakBtn" onclick="claimStreakBonus()">Claim Today's Bonus</button>
-          <div class="game-hint" id="streakHint"></div>
+        <!-- SPIN TAB -->
+        <div class="game-panel active" id="gamePanel-spin">
+          <div class="game-card">
+            <div class="game-card-hdr"><span id="spinTierBadge" class="tier-badge">Loading...</span><span id="spinTotal" class="game-muted"></span></div>
+            <div class="spin-rewards" id="spinRewards"></div>
+            <button class="btn-primary game-action-btn" id="spinBtn" onclick="playSpin()">Spin Now</button>
+            <div class="game-hint" id="spinHint"></div>
+          </div>
+        </div>
+
+        <!-- TRIVIA TAB -->
+        <div class="game-panel" id="gamePanel-trivia">
+          <div class="game-card">
+            <div class="game-card-hdr"><span id="triviaTierBadge" class="tier-badge">Loading...</span><span id="triviaProgress" class="game-muted"></span></div>
+            <div id="triviaBody"><div class="empty-tx">Loading...</div></div>
+          </div>
+        </div>
+
+        <!-- STREAK TAB -->
+        <div class="game-panel" id="gamePanel-streak">
+          <div class="game-card">
+            <div class="game-card-hdr"><span id="streakBadge" class="tier-badge">Loading...</span><span id="streakLongest" class="game-muted"></span></div>
+            <div class="streak-grid" id="streakGrid"></div>
+            <button class="btn-primary game-action-btn" id="streakBtn" onclick="claimStreakBonus()">Claim Today's Bonus</button>
+            <div class="game-hint" id="streakHint"></div>
+          </div>
         </div>
       </div>
     </div>
