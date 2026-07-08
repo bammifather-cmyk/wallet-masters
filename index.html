@@ -186,27 +186,36 @@
     <!-- USDT MINING -->
     <div class="page" id="page-mining">
       <div class="page-hdr"><button class="back-btn" onclick="showPage('connect')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>USDT Mining</h2></div>
-      <div style="padding:12px 16px 0">
-        <div class="game-card">
-          <div class="game-card-hdr"><span id="miningRateBadge" class="tier-badge">Loading...</span><span id="miningCapacity" class="game-muted"></span></div>
+      <div style="padding:0 16px 80px">
+        <div class="mining-hero">
+          <div class="mining-hero-icon">⛏️</div>
+          <div class="mining-hero-title">USDT Mining</div>
+          <div class="mining-hero-sub" id="miningRateBadge">Loading...</div>
+        </div>
 
+        <div class="mining-stats-card">
           <div id="miningIdleView">
-            <div class="form-group">
-              <label>Hash Amount (USDT)</label>
-              <input id="miningHashInput" type="number" placeholder="Min 1,000 USDT" />
+            <div class="mining-stat-row">
+              <div><div class="mining-stat-label">Min Hash</div><div class="mining-stat-val" id="miningMinVal">—</div></div>
+              <div><div class="mining-stat-label">Max Hash</div><div class="mining-stat-val" id="miningMaxVal">—</div></div>
+              <div><div class="mining-stat-label">Left Today</div><div class="mining-stat-val mining-stat-gold" id="miningCapacity">—</div></div>
             </div>
-            <div class="game-hint" id="miningRangeHint"></div>
-            <button class="btn-primary game-action-btn" id="miningBuyBtn" onclick="buyMining()">Start Mining</button>
+            <input id="miningHashInput" class="mining-input" type="number" placeholder="Enter hash amount (USDT)" />
+            <button class="mining-buy-btn" id="miningBuyBtn" onclick="buyMining()">⛏️ Start Mining</button>
           </div>
 
           <div id="miningActiveView" class="hidden">
-            <div class="mining-active-box">
-              <div class="mining-active-row"><span>Hash Locked</span><span id="miningActiveHash">—</span></div>
-              <div class="mining-active-row"><span>Expected Payout</span><span id="miningActivePayout">—</span></div>
-              <div class="mining-timer" id="miningTimer">--:--:--</div>
+            <div class="mining-timer-ring">
+              <div class="mining-timer-big" id="miningTimer">--:--:--</div>
+              <div class="mining-timer-label">Time Remaining</div>
             </div>
-            <button class="btn-primary game-action-btn" id="miningClaimBtn" onclick="claimMining()">Claim Payout</button>
-            <div class="game-hint" id="miningClaimHint">Mining in progress...</div>
+            <div class="mining-progress-bar"><div id="miningProgressFill" class="mining-progress-fill"></div></div>
+            <div class="mining-stat-row">
+              <div><div class="mining-stat-label">Hash Locked</div><div class="mining-stat-val" id="miningActiveHash">—</div></div>
+              <div><div class="mining-stat-label">Expected Payout</div><div class="mining-stat-val mining-stat-gold" id="miningActivePayout">—</div></div>
+            </div>
+            <button class="mining-buy-btn" id="miningClaimBtn" onclick="claimMining()">Claim Payout</button>
+            <div class="mining-hint" id="miningClaimHint">Mining in progress...</div>
           </div>
         </div>
       </div>
