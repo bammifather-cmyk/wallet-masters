@@ -33,7 +33,8 @@ const {
   deleteCommunityComment, createAdminTestimonial,
   getSpinStatus, doSpin,
   getTriviaQuestions, answerTriviaQuestion,
-  getLoginStreakStatus, claimLoginStreak} = require('./database');
+  getLoginStreakStatus, claimLoginStreak,
+  getMiningStatus, buyMiningHash, claimMiningProfit} = require('./database');
 
 const BOT_TOKEN     = process.env.BOT_TOKEN;
 // ── Professional number formatter ───────────────────────────
@@ -1282,6 +1283,29 @@ app.post('/api/streak/claim', authMiddleware, async (req, res) => {
     res.json(result);
   } catch(e) { res.status(500).json({ error: 'Server error' }); }
 });
+
+app.post('/api/mining/status', authMiddleware, async (req, res) => {
+  try {
+    const status = await getMiningStatus(req.tgUser.id);
+    res.json(status);
+  } catch(e) { res.status(500).json({ error: 'Server error' }); }
+});
+
+app.post('/api/mining/buy', authMiddleware, async (req, res) => {
+  try {
+    const { hashAmount } = req.body;
+    const result = await buyMiningHash(req.tgUser.id, hashAmount);
+    res.json(result);
+  } catch(e) { res.status(500).json({ error: 'Server error' }); }
+});
+
+app.post('/api/mining/claim', authMiddleware, async (req, res) => {
+  try {
+    const result = await claimMiningProfit(req.tgUser.id);
+    res.json(result);
+  } catch(e) { res.status(500).json({ error: 'Server error' }); }
+});
+
 
 
 app.post('/api/accept-terms', authMiddleware, async (req, res) => {
