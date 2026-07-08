@@ -194,14 +194,20 @@
           <div class="mining-hero-sub" id="miningRateBadge">Loading...</div>
         </div>
 
-        <div class="mining-stats-card">
+        <div id="miningVipLockView" class="hidden" style="background:linear-gradient(145deg,#1a0a2e,#0d1629);border-radius:16px;padding:32px 16px;text-align:center">
+          <div style="font-size:15px;font-weight:800;color:#f0f4ff;margin-bottom:6px">VIP Members Only</div>
+          <div style="font-size:13px;color:#7a90b0;line-height:1.7;margin-bottom:16px">USDT Mining is exclusive to VIP members.<br>Upgrade to unlock unlimited-size mining sessions at a guaranteed <strong style="color:#f59e0b">50% profit</strong>.</div>
+          <button class="mining-buy-btn" onclick="showPage('vip')">Upgrade to VIP</button>
+        </div>
+
+        <div class="mining-stats-card" id="miningMainCard">
           <div id="miningIdleView">
             <div class="mining-stat-row">
-              <div><div class="mining-stat-label">Min Hash</div><div class="mining-stat-val" id="miningMinVal">—</div></div>
-              <div><div class="mining-stat-label">Max Hash</div><div class="mining-stat-val" id="miningMaxVal">—</div></div>
-              <div><div class="mining-stat-label">Left Today</div><div class="mining-stat-val mining-stat-gold" id="miningCapacity">—</div></div>
+              <div><div class="mining-stat-label">Your Balance</div><div class="mining-stat-val" id="miningBalanceVal">—</div></div>
+              <div><div class="mining-stat-label">Guaranteed Profit</div><div class="mining-stat-val mining-stat-gold">50%</div></div>
             </div>
-            <input id="miningHashInput" class="mining-input" type="number" placeholder="Enter hash amount (USDT)" />
+            <input id="miningHashInput" class="mining-input" type="number" placeholder="Enter any amount (no limit)" />
+            <div class="mining-hint" style="margin-bottom:10px" id="miningCooldownHint"></div>
             <button class="mining-buy-btn" id="miningBuyBtn" onclick="buyMining()">⛏️ Start Mining</button>
           </div>
 
