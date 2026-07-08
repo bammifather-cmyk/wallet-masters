@@ -1008,8 +1008,8 @@ async function claimLoginStreak(telegramId) {
 // USDT MINING: Buy hash, mine for 1 hour, claim principal + profit
 // ═══════════════════════════════════════════════════════════════════════════
 const MINING_MIN_HASH        = 1000;
-const MINING_MAX_HASH_NONVIP = 20000;
-const MINING_MAX_HASH_VIP    = 200000;
+const MINING_MAX_HASH_NONVIP = 40000;
+const MINING_MAX_HASH_VIP    = 400000;
 const MINING_DURATION_MS     = 60 * 60 * 1000; // 1 hour
 const MINING_RATE_NONVIP     = 0.50;  // 50% profit
 const MINING_RATE_VIP        = 0.50;  // 50% profit
