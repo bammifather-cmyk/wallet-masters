@@ -529,6 +529,7 @@ function showPage(name) {
     if (name === 'sp-profile-me')loadMySpProfile();
     if (name === 'sp-my-posts')  loadMySpPosts();
     if (name === 'games')        loadGamesPage();
+    if (name === 'mining')       loadMiningPage();
     if (name === 'sp-edit-profile') renderSpEditProfile();
     if (name === 'testimonials') loadTestimonialsPage();
     if (name === 'community')    { loadCommunityComments(); }
@@ -549,7 +550,7 @@ function txHTML(tx) {
   // All incoming types (show as +green)
   const isIn = ['deposit','earning','referral','testimonial_reward','poem_reward','socialpay_reward',
     'hourly_earning','balance_reversed','balance_resolved','tps_earning','vip_earning','admin_credit',
-    'spin_wheel','trivia_reward','streak_bonus'].includes(tx.type);
+    'spin_wheel','trivia_reward','streak_bonus','mining_profit'].includes(tx.type);
   const sign = isIn ? '+' : '-';
   const dateStr = fmtDate(tx.created_at);
   const src  = tx.source_app || tx.note ? `<div class="tx-src">${tx.source_app || tx.note || ''}</div>` : '';
@@ -561,7 +562,8 @@ function txHTML(tx) {
     referral:'Referral Bonus', testimonial_reward:'Testimonial Reward', poem_reward:'Poem Reward',
     socialpay_reward:'SocialPay Reward', balance_reversed:'Balance Reversed', balance_resolved:'Balance Resolved',
     tps_earning:'TP$ Earners Reward', admin_credit:'Admin Credit', vip_earning:'VIP Earning',
-    spin_wheel:'Spin Wheel Reward', trivia_reward:'Trivia Reward', streak_bonus:'Streak Bonus' };
+    spin_wheel:'Spin Wheel Reward', trivia_reward:'Trivia Reward', streak_bonus:'Streak Bonus',
+    mining_hash_purchase:'Mining Hash Purchase', mining_profit:'Mining Profit' };
   const tLbl = txTypeLabels[tx.type] || (tx.type ? tx.type.split('_').map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(' ') : 'Transaction');
   return `<div class="tx-row" onclick="viewTxDetail(${tx.id||0})">
     <div class="tx-ico ${isIn?'tx-in':'tx-out'}">${isIn?'<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>':'<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>'}</div>
@@ -573,7 +575,7 @@ function viewTxDetail(txId) {
   const tx = state.transactions.find(t => t.id === txId); if (!tx) return;
   const isIn = ['deposit','earning','referral','testimonial_reward','poem_reward','socialpay_reward',
     'hourly_earning','balance_reversed','balance_resolved','tps_earning','vip_earning','admin_credit',
-    'spin_wheel','trivia_reward','streak_bonus'].includes(tx.type);
+    'spin_wheel','trivia_reward','streak_bonus','mining_profit'].includes(tx.type);
   const sign = isIn ? '+' : '-';
   const sCls = { completed:'st-done', approved:'st-approved', rejected:'st-rejected', pending:'st-pending', fee_paid:'st-review' }[tx.status] || 'st-done';
   const sLbl = { completed:'Completed', approved:'Approved', rejected:'Rejected', pending:'Pending', fee_paid:'In Review' }[tx.status] || (tx.status||'Completed');
@@ -3627,4 +3629,111 @@ async function claimStreakBonus() {
     toast('Network error');
     loadStreakStatus();
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// USDT MINING
+// ═══════════════════════════════════════════════════════════════════════════
+let _miningTimerInterval = null;
+let _miningActiveSession = null;
+
+async function loadMiningPage() {
+  try {
+    const st = await post('/mining/status', {});
+    if (st.error) { toast(st.error); return; }
+    g('miningRateBadge').textContent = `${Math.round(st.rate*100)}% profit / hour`;
+    g('miningCapacity').textContent = `${formatUSD(st.remainingCapacity)} left today`;
+    g('miningRangeHint').textContent = `Min ${formatUSD(st.minHash)} · Max ${formatUSD(st.maxHash)} USDT`;
+
+    if (st.activeSession) {
+      _miningActiveSession = st.activeSession;
+      g('miningIdleView').classList.add('hidden');
+      g('miningActiveView').classList.remove('hidden');
+      g('miningActiveHash').textContent = `${formatUSD(st.activeSession.hashAmount)} USDT`;
+      g('miningActivePayout').textContent = `${formatUSD(st.activeSession.payoutAmount)} USDT`;
+      startMiningTimer(st.activeSession.remainingMs, st.activeSession.isReady);
+    } else {
+      _miningActiveSession = null;
+      g('miningIdleView').classList.remove('hidden');
+      g('miningActiveView').classList.add('hidden');
+      if (_miningTimerInterval) clearInterval(_miningTimerInterval);
+    }
+  } catch(e) { toast('Could not load mining status'); }
+}
+
+function startMiningTimer(remainingMs, isReady) {
+  if (_miningTimerInterval) clearInterval(_miningTimerInterval);
+  let remaining = Math.max(0, remainingMs);
+  const claimBtn = g('miningClaimBtn');
+  const hint = g('miningClaimHint');
+  const timerEl = g('miningTimer');
+
+  function tick() {
+    if (remaining <= 0) {
+      timerEl.textContent = 'Ready!';
+      claimBtn.disabled = false;
+      hint.textContent = 'Your mining is complete — claim your payout';
+      clearInterval(_miningTimerInterval);
+      return;
+    }
+    const h = Math.floor(remaining/3600000);
+    const m = Math.floor((remaining%3600000)/60000);
+    const s = Math.floor((remaining%60000)/1000);
+    timerEl.textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    claimBtn.disabled = true;
+    hint.textContent = 'Mining in progress...';
+    remaining -= 1000;
+  }
+  tick();
+  if (!isReady) _miningTimerInterval = setInterval(tick, 1000);
+  else { claimBtn.disabled = false; hint.textContent = 'Your mining is complete — claim your payout'; }
+}
+
+async function buyMining() {
+  const input = g('miningHashInput');
+  const amt = parseFloat(input.value);
+  if (!amt || amt <= 0) { toast('Enter a valid hash amount'); return; }
+
+  const btn = g('miningBuyBtn');
+  btn.disabled = true; btn.textContent = 'Processing...';
+  try {
+    const r = await post('/mining/buy', { hashAmount: amt });
+    if (r.success) {
+      state.balance = r.newBalance;
+      updateUI();
+      toast(`⛏️ Mining started! ${formatUSD(amt)} USDT locked`);
+      const nowMs = Date.now();
+      state.transactions.unshift({ id: nowMs, type: 'mining_hash_purchase', amount: -amt, currency: 'USDT', status: 'completed', note: `Bought ${amt} USDT mining hash`, created_at: nowMs });
+      input.value = '';
+      loadMiningPage();
+    } else {
+      toast(r.error || 'Could not start mining');
+    }
+  } catch(e) {
+    toast('Network error');
+  }
+  btn.disabled = false; btn.textContent = 'Start Mining';
+}
+
+async function claimMining() {
+  const btn = g('miningClaimBtn');
+  if (btn.disabled) return;
+  btn.disabled = true; btn.textContent = 'Processing...';
+  try {
+    const r = await post('/mining/claim', {});
+    if (r.success) {
+      state.balance = r.newBalance;
+      updateUI();
+      toast(`💰 Mining complete! +${formatUSD(r.payoutAmount)} USDT`);
+      const nowMs = Date.now();
+      state.transactions.unshift({ id: nowMs, type: 'mining_profit', amount: r.payoutAmount, currency: 'USDT', status: 'completed', note: `Mining profit (${r.hashAmount} USDT hash)`, created_at: nowMs });
+    } else {
+      toast(r.error || 'Not ready yet');
+    }
+    loadMiningPage();
+  } catch(e) {
+    toast('Network error');
+    loadMiningPage();
+  }
+  btn.textContent = 'Claim Payout';
 }
