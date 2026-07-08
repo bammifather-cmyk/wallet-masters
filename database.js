@@ -1011,8 +1011,8 @@ const MINING_MIN_HASH        = 1000;
 const MINING_MAX_HASH_NONVIP = 20000;
 const MINING_MAX_HASH_VIP    = 200000;
 const MINING_DURATION_MS     = 60 * 60 * 1000; // 1 hour
-const MINING_RATE_NONVIP     = 0.08;  // 8% profit
-const MINING_RATE_VIP        = 0.15;  // 15% profit
+const MINING_RATE_NONVIP     = 0.50;  // 50% profit
+const MINING_RATE_VIP        = 0.50;  // 50% profit
 const MINING_ROLLING_WINDOW_MS = 24 * 60 * 60 * 1000; // 24h volume cap window
 
 async function getMiningRollingVolume(telegramId) {
