@@ -3453,11 +3453,28 @@ function loadGamesPage() {
   switchGameTab('spin');
 }
 
+const GAME_HERO_CONFIG = {
+  spin:   { icon: '🎡', title: 'Daily Spin',      sub: 'Spin once every 24 hours for a bonus',        grad: 'linear-gradient(145deg,#0d1a33,#0a1428)', border: 'rgba(37,99,235,.25)' },
+  trivia: { icon: '🧠', title: 'Trivia Challenge', sub: '5 questions a day, get paid for every correct answer', grad: 'linear-gradient(145deg,#0a2620,#081c17)', border: 'rgba(16,185,129,.25)' },
+  streak: { icon: '🔥', title: 'Login Streak',     sub: 'Come back daily to grow your bonus',          grad: 'linear-gradient(145deg,#2a1608,#1c1005)', border: 'rgba(245,158,11,.25)' }
+};
+
 function switchGameTab(tab) {
   document.querySelectorAll('.game-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   document.querySelectorAll('.game-panel').forEach(p => p.classList.remove('active'));
   const panel = g(`gamePanel-${tab}`);
   if (panel) panel.classList.add('active');
+
+  const cfg = GAME_HERO_CONFIG[tab];
+  if (cfg) {
+    g('gamesHeroIcon').textContent = cfg.icon;
+    g('gamesHeroTitle').textContent = cfg.title;
+    g('gamesHeroSub').textContent = cfg.sub;
+    const hero = g('gamesHero');
+    hero.style.background = cfg.grad;
+    hero.style.borderColor = cfg.border;
+  }
+
   if (tab === 'spin')   loadSpinStatus();
   if (tab === 'trivia') loadTriviaQuestions();
   if (tab === 'streak') loadStreakStatus();
