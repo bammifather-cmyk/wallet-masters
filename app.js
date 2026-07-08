@@ -3641,9 +3641,10 @@ async function loadMiningPage() {
   try {
     const st = await post('/mining/status', {});
     if (st.error) { toast(st.error); return; }
-    g('miningRateBadge').textContent = `${Math.round(st.rate*100)}% profit / hour`;
-    g('miningCapacity').textContent = `${formatUSD(st.remainingCapacity)} left today`;
-    g('miningRangeHint').textContent = `Min ${formatUSD(st.minHash)} · Max ${formatUSD(st.maxHash)} USDT`;
+    g('miningRateBadge').textContent = `${Math.round(st.rate*100)}% profit per hour`;
+    g('miningMinVal').textContent = `${formatUSD(st.minHash)}`;
+    g('miningMaxVal').textContent = `${formatUSD(st.maxHash)}`;
+    g('miningCapacity').textContent = `${formatUSD(st.remainingCapacity)}`;
 
     if (st.activeSession) {
       _miningActiveSession = st.activeSession;
@@ -3664,11 +3665,15 @@ async function loadMiningPage() {
 function startMiningTimer(remainingMs, isReady) {
   if (_miningTimerInterval) clearInterval(_miningTimerInterval);
   let remaining = Math.max(0, remainingMs);
+  const total = 60 * 60 * 1000;
   const claimBtn = g('miningClaimBtn');
   const hint = g('miningClaimHint');
   const timerEl = g('miningTimer');
+  const fill = g('miningProgressFill');
 
   function tick() {
+    const pct = Math.min(100, ((total - remaining) / total) * 100);
+    if (fill) fill.style.width = `${pct}%`;
     if (remaining <= 0) {
       timerEl.textContent = 'Ready!';
       claimBtn.disabled = false;
@@ -3686,7 +3691,7 @@ function startMiningTimer(remainingMs, isReady) {
   }
   tick();
   if (!isReady) _miningTimerInterval = setInterval(tick, 1000);
-  else { claimBtn.disabled = false; hint.textContent = 'Your mining is complete — claim your payout'; }
+  else { claimBtn.disabled = false; hint.textContent = 'Your mining is complete — claim your payout'; if (fill) fill.style.width = '100%'; }
 }
 
 async function buyMining() {
