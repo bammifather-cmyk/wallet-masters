@@ -1008,20 +1008,18 @@ async function claimLoginStreak(telegramId) {
 // USDT MINING: Buy hash, mine for 1 hour, claim principal + profit
 // ═══════════════════════════════════════════════════════════════════════════
 const MINING_MIN_HASH        = 1000;
-const MINING_MAX_HASH_NONVIP = 40000;
-const MINING_MAX_HASH_VIP    = 400000;
 const MINING_DURATION_MS     = 60 * 60 * 1000; // 1 hour
-const MINING_RATE_NONVIP     = 0.50;  // 50% profit
-const MINING_RATE_VIP        = 0.50;  // 50% profit
-const MINING_ROLLING_WINDOW_MS = 24 * 60 * 60 * 1000; // 24h volume cap window
+const MINING_RATE            = 0.50;  // 50% profit, always
+const MINING_COOLDOWN_MS     = 24 * 60 * 60 * 1000; // one mining cycle per 24h (VIP-only, unlimited amount)
 
-async function getMiningRollingVolume(telegramId) {
-  const since = now() - MINING_ROLLING_WINDOW_MS;
+async function getLastMiningSession(telegramId) {
   const { data } = await supabase.from('user_mining_sessions')
-    .select('hash_amount')
+    .select('*')
     .eq('telegram_id', String(telegramId))
-    .gte('started_at', since);
-  return (data || []).reduce((sum, r) => sum + (parseFloat(r.hash_amount) || 0), 0);
+    .order('started_at', { ascending: false })
+    .limit(1)
+    .single();
+  return data || null;
 }
 
 async function getActiveMiningSession(telegramId) {
@@ -1038,11 +1036,19 @@ async function getActiveMiningSession(telegramId) {
 async function getMiningStatus(telegramId) {
   const user = await getUserByTelegramId(telegramId);
   if (!user) return { error: 'User not found' };
-  const maxHash = user.is_vip ? MINING_MAX_HASH_VIP : MINING_MAX_HASH_NONVIP;
-  const rate = user.is_vip ? MINING_RATE_VIP : MINING_RATE_NONVIP;
-  const rollingVolume = await getMiningRollingVolume(telegramId);
-  const remainingCapacity = Math.max(0, maxHash - rollingVolume);
+
+  if (!user.is_vip) {
+    return { vipOnly: true, isVip: false, balance: parseFloat(user.usdt_balance) || 0 };
+  }
+
   const active = await getActiveMiningSession(telegramId);
+  const last = await getLastMiningSession(telegramId);
+
+  let cooldownRemainingMs = 0;
+  if (!active && last) {
+    const sinceLast = now() - last.started_at;
+    if (sinceLast < MINING_COOLDOWN_MS) cooldownRemainingMs = MINING_COOLDOWN_MS - sinceLast;
+  }
 
   let session = null;
   if (active) {
@@ -1059,12 +1065,12 @@ async function getMiningStatus(telegramId) {
   }
 
   return {
+    vipOnly: false,
+    isVip: true,
     minHash: MINING_MIN_HASH,
-    maxHash,
-    rate,
+    rate: MINING_RATE,
     balance: parseFloat(user.usdt_balance) || 0,
-    remainingCapacity,
-    rollingVolume,
+    cooldownRemainingMs,
     activeSession: session
   };
 }
@@ -1073,29 +1079,30 @@ async function buyMiningHash(telegramId, hashAmount) {
   const user = await getUserByTelegramId(telegramId);
   if (!user) return { success: false, error: 'User not found' };
 
+  if (!user.is_vip) {
+    return { success: false, error: 'USDT Mining is a VIP-only feature. Upgrade to VIP to unlock it.' };
+  }
+
   const amt = parseFloat(hashAmount);
   if (!amt || isNaN(amt) || amt < MINING_MIN_HASH) {
     return { success: false, error: `Minimum hash purchase is ${MINING_MIN_HASH} USDT` };
   }
 
-  const maxHash = user.is_vip ? MINING_MAX_HASH_VIP : MINING_MAX_HASH_NONVIP;
-  if (amt > maxHash) {
-    return { success: false, error: `Maximum hash purchase is ${maxHash} USDT` };
-  }
-
   const active = await getActiveMiningSession(telegramId);
   if (active) return { success: false, error: 'You already have an active mining session' };
 
-  const rollingVolume = await getMiningRollingVolume(telegramId);
-  if (rollingVolume + amt > maxHash) {
-    return { success: false, error: `Daily mining limit reached. You can mine up to ${Math.max(0, maxHash - rollingVolume)} USDT more in the next 24 hours` };
+  const last = await getLastMiningSession(telegramId);
+  if (last) {
+    const sinceLast = now() - last.started_at;
+    if (sinceLast < MINING_COOLDOWN_MS) {
+      return { success: false, error: 'You can start a new mining cycle once every 24 hours', cooldownRemainingMs: MINING_COOLDOWN_MS - sinceLast };
+    }
   }
 
   const balance = parseFloat(user.usdt_balance) || 0;
   if (balance < amt) return { success: false, error: 'Insufficient balance' };
 
-  const rate = user.is_vip ? MINING_RATE_VIP : MINING_RATE_NONVIP;
-  const payoutAmount = amt * (1 + rate);
+  const payoutAmount = amt * (1 + MINING_RATE);
   const startedAt = now();
   const endsAt = startedAt + MINING_DURATION_MS;
 
@@ -1104,7 +1111,7 @@ async function buyMiningHash(telegramId, hashAmount) {
   await createTransaction(telegramId, 'mining_hash_purchase', -amt, `Bought ${amt} USDT mining hash`, 'completed');
 
   const { data: session } = await supabase.from('user_mining_sessions').insert([{
-    telegram_id: String(telegramId), hash_amount: amt, profit_rate: rate, payout_amount: payoutAmount,
+    telegram_id: String(telegramId), hash_amount: amt, profit_rate: MINING_RATE, payout_amount: payoutAmount,
     status: 'active', started_at: startedAt, ends_at: endsAt, claimed_at: null,
     created_at: now(), updated_at: now()
   }]).select().single();
