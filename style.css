@@ -528,3 +528,13 @@ html,body{height:100%;background:#070d1a;color:#f0f4ff;font-family:-apple-system
 .streak-day.day-done{background:linear-gradient(135deg,#059669,#10b981);border-color:#10b981}
 .streak-day.day-done .streak-day-num,.streak-day.day-done .streak-day-amt{color:#fff}
 .streak-day.day-current{border-color:#f59e0b;box-shadow:0 0 0 2px rgba(245,158,11,.3)}
+
+/* USDT MINING */
+.mining-promo{margin:0 16px 12px;padding:13px 16px;background:linear-gradient(145deg,#1c1408,#2a1c08);border:1px solid rgba(245,158,11,.3);border-radius:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer}
+.mining-promo-left{flex:1}
+.mining-promo-title{font-size:13px;font-weight:600;color:#f59e0b;margin-bottom:2px}
+.mining-promo-sub{font-size:11px;color:#7a90b0}
+.mining-active-box{background:#131f35;border:1px solid #1e2d45;border-radius:12px;padding:14px;margin-bottom:14px}
+.mining-active-row{display:flex;justify-content:space-between;font-size:13px;color:#7a90b0;margin-bottom:6px}
+.mining-active-row span:last-child{color:#e5edf7;font-weight:700}
+.mining-timer{text-align:center;font-size:24px;font-weight:800;color:#f59e0b;letter-spacing:1px;margin-top:8px}
