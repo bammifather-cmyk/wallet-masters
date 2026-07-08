@@ -491,12 +491,16 @@ html,body{height:100%;background:#070d1a;color:#f0f4ff;font-family:-apple-system
 .games-promo-left{flex:1}
 .games-promo-title{font-size:13px;font-weight:600;color:#10b981;margin-bottom:2px}
 .games-promo-sub{font-size:11px;color:#7a90b0}
-.game-tabs{display:flex;gap:8px;padding:12px 16px 4px}
-.game-tab{flex:1;background:#131f35;border:1px solid #1e2d45;border-radius:10px;padding:10px 6px;color:#7a90b0;font-size:12px;font-weight:600;cursor:pointer}
-.game-tab.active{background:#1d4ed8;border-color:#1d4ed8;color:#fff}
-.game-panel{display:none;padding:12px 16px}
+.games-hero{background:linear-gradient(145deg,#0d1a33,#0a1428);border:1px solid rgba(37,99,235,.25);border-radius:20px;padding:24px 16px;text-align:center;margin:12px 0 14px;transition:background .3s}
+.games-hero-icon{font-size:40px;margin-bottom:8px;filter:drop-shadow(0 0 12px rgba(37,99,235,.3))}
+.games-hero-title{font-size:18px;font-weight:800;color:#f0f4ff;margin-bottom:4px}
+.games-hero-sub{font-size:12px;color:#7a90b0}
+.game-tabs{display:flex;gap:8px;background:#0e1629;border:1px solid #1e2d45;border-radius:14px;padding:5px;margin-bottom:14px}
+.game-tab{flex:1;background:transparent;border:none;border-radius:10px;padding:11px 6px;color:#7a90b0;font-size:12px;font-weight:600;cursor:pointer}
+.game-tab.active{background:linear-gradient(135deg,#1d4ed8,#2563eb);color:#fff;box-shadow:0 3px 10px rgba(37,99,235,.3)}
+.game-panel{display:none}
 .game-panel.active{display:block}
-.game-card{background:#0e1629;border:1px solid #1e2d45;border-radius:16px;padding:16px}
+.game-card{background:#0e1629;border:1px solid #1e2d45;border-radius:18px;padding:18px}
 .game-card-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
 .tier-badge{background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;font-size:11px;font-weight:700;padding:5px 12px;border-radius:20px}
 .game-muted{font-size:11px;color:#7a90b0}
@@ -504,10 +508,10 @@ html,body{height:100%;background:#070d1a;color:#f0f4ff;font-family:-apple-system
 .game-hint{text-align:center;font-size:11px;color:#7a90b0;margin-top:10px}
 
 /* Spin */
-.spin-rewards{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
-.spin-chip{background:#131f35;border:1px solid #1e2d45;border-radius:10px;padding:10px 14px;font-size:12px;font-weight:600;color:#e5edf7;min-width:64px;text-align:center;transition:all .15s}
-.spin-chip.spin-active{background:linear-gradient(135deg,#1d4ed8,#2563eb);border-color:#2563eb;color:#fff;transform:scale(1.08)}
-.spin-chip.spin-won{background:linear-gradient(135deg,#059669,#10b981);border-color:#10b981;color:#fff;transform:scale(1.15)}
+.spin-rewards{display:flex;flex-wrap:wrap;gap:9px;justify-content:center;margin-bottom:4px}
+.spin-chip{background:#131f35;border:1px solid #1e2d45;border-radius:12px;padding:12px 16px;font-size:13px;font-weight:700;color:#e5edf7;min-width:68px;text-align:center;transition:all .15s}
+.spin-chip.spin-active{background:linear-gradient(135deg,#1d4ed8,#2563eb);border-color:#2563eb;color:#fff;transform:scale(1.1);box-shadow:0 4px 14px rgba(37,99,235,.35)}
+.spin-chip.spin-won{background:linear-gradient(135deg,#059669,#10b981);border-color:#10b981;color:#fff;transform:scale(1.18);box-shadow:0 4px 18px rgba(16,185,129,.4)}
 
 /* Trivia */
 .trivia-q{font-size:14px;font-weight:600;color:#e5edf7;margin-bottom:14px;line-height:1.4}
@@ -521,13 +525,13 @@ html,body{height:100%;background:#070d1a;color:#f0f4ff;font-family:-apple-system
 .trivia-dot.dot-current{background:#2563eb}
 
 /* Streak */
-.streak-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
-.streak-day{background:#131f35;border:1px solid #1e2d45;border-radius:8px;padding:6px 2px;text-align:center;min-width:0;overflow:hidden}
-.streak-day-num{font-size:9px;color:#7a90b0;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.streak-day-amt{font-size:9px;font-weight:700;color:#e5edf7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.streak-day.day-done{background:linear-gradient(135deg,#059669,#10b981);border-color:#10b981}
+.streak-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px;margin-bottom:4px}
+.streak-day{background:#131f35;border:1px solid #1e2d45;border-radius:10px;padding:8px 2px;text-align:center;min-width:0;overflow:hidden}
+.streak-day-num{font-size:9px;color:#7a90b0;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-transform:uppercase;letter-spacing:.3px}
+.streak-day-amt{font-size:10px;font-weight:800;color:#e5edf7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.streak-day.day-done{background:linear-gradient(135deg,#059669,#10b981);border-color:#10b981;box-shadow:0 3px 10px rgba(16,185,129,.25)}
 .streak-day.day-done .streak-day-num,.streak-day.day-done .streak-day-amt{color:#fff}
-.streak-day.day-current{border-color:#f59e0b;box-shadow:0 0 0 2px rgba(245,158,11,.3)}
+.streak-day.day-current{border-color:#f59e0b;box-shadow:0 0 0 2px rgba(245,158,11,.35),0 3px 10px rgba(245,158,11,.25)}
 
 /* USDT MINING */
 .mining-promo{margin:0 16px 12px;padding:13px 16px;background:linear-gradient(145deg,#1c1408,#2a1c08);border:1px solid rgba(245,158,11,.3);border-radius:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer}
