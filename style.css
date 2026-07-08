@@ -566,3 +566,14 @@ html,body{height:100%;background:#070d1a;color:#f0f4ff;font-family:-apple-system
 .mining-progress-fill{height:100%;background:linear-gradient(90deg,#d97706,#f59e0b);border-radius:6px;transition:width 1s linear;width:0%}
 
 .mining-hint{text-align:center;font-size:11px;color:#7a90b0;margin-top:10px}
+
+.mining-coin-flow{position:relative;height:34px;display:flex;justify-content:center;align-items:flex-start;gap:14px;margin-bottom:-6px;overflow:hidden}
+.mining-coin{display:inline-flex;opacity:0;animation:mineCoinFall 2s ease-in infinite}
+.mining-coin svg{filter:drop-shadow(0 2px 4px rgba(245,158,11,.3))}
+@keyframes mineCoinFall{
+  0%{transform:translateY(-6px) scale(.7);opacity:0}
+  15%{opacity:1;transform:translateY(0) scale(1)}
+  75%{opacity:1;transform:translateY(26px) scale(.9)}
+  100%{transform:translateY(34px) scale(.6);opacity:0}
+}
+.mining-hero-icon svg{display:block;margin:0 auto}
