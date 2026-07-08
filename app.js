@@ -3654,14 +3654,29 @@ async function claimStreakBonus() {
 let _miningTimerInterval = null;
 let _miningActiveSession = null;
 
+function formatCooldown(ms) {
+  const h = Math.floor(ms/3600000);
+  const m = Math.floor((ms%3600000)/60000);
+  return `${h}h ${m}m`;
+}
+
 async function loadMiningPage() {
   try {
     const st = await post('/mining/status', {});
     if (st.error) { toast(st.error); return; }
-    g('miningRateBadge').textContent = `${Math.round(st.rate*100)}% profit per hour`;
-    g('miningMinVal').textContent = `${formatUSD(st.minHash)}`;
-    g('miningMaxVal').textContent = `${formatUSD(st.maxHash)}`;
-    g('miningCapacity').textContent = `${formatUSD(st.remainingCapacity)}`;
+
+    if (st.vipOnly) {
+      g('miningVipLockView').classList.remove('hidden');
+      g('miningMainCard').classList.add('hidden');
+      g('miningRateBadge').textContent = 'VIP Exclusive · 50% profit';
+      if (_miningTimerInterval) clearInterval(_miningTimerInterval);
+      return;
+    }
+
+    g('miningVipLockView').classList.add('hidden');
+    g('miningMainCard').classList.remove('hidden');
+    g('miningRateBadge').textContent = `50% profit · unlimited amount`;
+    g('miningBalanceVal').textContent = `${formatUSD(st.balance)} USDT`;
 
     if (st.activeSession) {
       _miningActiveSession = st.activeSession;
@@ -3675,6 +3690,16 @@ async function loadMiningPage() {
       g('miningIdleView').classList.remove('hidden');
       g('miningActiveView').classList.add('hidden');
       if (_miningTimerInterval) clearInterval(_miningTimerInterval);
+
+      const buyBtn = g('miningBuyBtn');
+      const cooldownHint = g('miningCooldownHint');
+      if (st.cooldownRemainingMs > 0) {
+        buyBtn.disabled = true;
+        cooldownHint.textContent = `Next mining cycle unlocks in ${formatCooldown(st.cooldownRemainingMs)}`;
+      } else {
+        buyBtn.disabled = false;
+        cooldownHint.textContent = '';
+      }
     }
   } catch(e) { toast('Could not load mining status'); }
 }
