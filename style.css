@@ -534,7 +534,31 @@ html,body{height:100%;background:#070d1a;color:#f0f4ff;font-family:-apple-system
 .mining-promo-left{flex:1}
 .mining-promo-title{font-size:13px;font-weight:600;color:#f59e0b;margin-bottom:2px}
 .mining-promo-sub{font-size:11px;color:#7a90b0}
-.mining-active-box{background:#131f35;border:1px solid #1e2d45;border-radius:12px;padding:14px;margin-bottom:14px}
-.mining-active-row{display:flex;justify-content:space-between;font-size:13px;color:#7a90b0;margin-bottom:6px}
-.mining-active-row span:last-child{color:#e5edf7;font-weight:700}
-.mining-timer{text-align:center;font-size:24px;font-weight:800;color:#f59e0b;letter-spacing:1px;margin-top:8px}
+
+.mining-hero{background:linear-gradient(145deg,#2a1608,#1c1005);border:1px solid rgba(245,158,11,.25);border-radius:20px;padding:26px 16px;text-align:center;margin:12px 0 14px}
+.mining-hero-icon{font-size:42px;margin-bottom:8px;filter:drop-shadow(0 0 12px rgba(245,158,11,.35))}
+.mining-hero-title{font-size:19px;font-weight:800;color:#f0f4ff;margin-bottom:8px}
+.mining-hero-sub{font-size:12px;font-weight:700;color:#f59e0b;background:rgba(245,158,11,.12);display:inline-block;padding:5px 14px;border-radius:20px}
+
+.mining-stats-card{background:#0e1629;border:1px solid #1e2d45;border-radius:18px;padding:20px 16px}
+.mining-stat-row{display:flex;justify-content:space-between;margin-bottom:18px}
+.mining-stat-row>div{text-align:center;flex:1}
+.mining-stat-label{font-size:10px;color:#7a90b0;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px}
+.mining-stat-val{font-size:15px;font-weight:800;color:#f0f4ff}
+.mining-stat-gold{color:#f59e0b}
+
+.mining-input{width:100%;background:#131f35;border:1px solid #1e2d45;border-radius:12px;padding:15px;color:#f0f4ff;font-size:15px;font-weight:600;margin-bottom:14px;text-align:center;font-family:inherit}
+.mining-input::placeholder{color:#5a7090;font-weight:400}
+.mining-input:focus{outline:none;border-color:#f59e0b}
+
+.mining-buy-btn{width:100%;background:linear-gradient(135deg,#d97706,#f59e0b);border:none;border-radius:12px;padding:16px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(245,158,11,.25)}
+.mining-buy-btn:disabled{opacity:.4;cursor:default;background:#1a2740;box-shadow:none}
+
+.mining-timer-ring{text-align:center;margin-bottom:14px}
+.mining-timer-big{font-size:38px;font-weight:900;color:#f59e0b;letter-spacing:1px;font-variant-numeric:tabular-nums;text-shadow:0 0 20px rgba(245,158,11,.25)}
+.mining-timer-label{font-size:10px;color:#7a90b0;text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
+
+.mining-progress-bar{background:#131f35;border-radius:6px;height:6px;overflow:hidden;margin-bottom:20px}
+.mining-progress-fill{height:100%;background:linear-gradient(90deg,#d97706,#f59e0b);border-radius:6px;transition:width 1s linear;width:0%}
+
+.mining-hint{text-align:center;font-size:11px;color:#7a90b0;margin-top:10px}
