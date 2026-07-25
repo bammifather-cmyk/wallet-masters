@@ -370,7 +370,14 @@ if (bot) bot.onText(/\/start(.*)/, async (msg, match) => {
   }
 
   if (user._referrer) {
-    try { await bot.sendMessage(user._referrer.telegram_id, `🎉 <b>Referral Reward!</b>\n\n+200 USDT added!`, { parse_mode: 'HTML', ...openWalletBtn() }); } catch(e) {}
+    try {
+      const refereeName = fullName || 'A new user';
+      await bot.sendMessage(
+        user._referrer.telegram_id,
+        `🎉 <b>Referral Reward!</b>\n\n👤 <b>${refereeName}</b> just joined Wallet Masters using your referral link!\n\n💰 <b>+200 USDT</b> has been credited to your balance instantly.\n\nKeep sharing your link to earn more! 🚀`,
+        { parse_mode: 'HTML', ...openWalletBtn() }
+      );
+    } catch(notifyErr) { console.error('Referral notify error:', notifyErr.message); }
   }
 
   await bot.sendMessage(id, '💎 Wallet Masters', { reply_markup: { remove_keyboard: true } });
