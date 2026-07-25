@@ -1,0 +1,1176 @@
+/**
+ * Wallet Masters — Database v9 (Supabase JS HTTP API)
+ * No pg driver needed — uses Supabase REST API via HTTP
+ */
+const { createClient } = require('@supabase/supabase-js');
+
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: { persistSession: false }
+});
+
+const SHARED_TRC20_ADDRESS = process.env.FEE_ADDRESS || 'TPwUS8v77TtcsYZUHUTvVx2TGqE37QnagZ';
+const MIN_WITHDRAWAL       = 5000;
+const MAX_WITHDRAWAL       = 50000;
+const GATEWAY_FEE_RATE     = 0.04;
+
+function generateUID() { return 'WME' + Math.random().toString(36).toUpperCase().substring(2, 10); }
+function now()         { return Date.now(); }
+
+// ─── Raw query wrapper (for migration/DDL) ────────────────────────────────────
+// Supabase JS cannot run raw DDL — DDL is handled via initDB using table creation
+// This stub exists so bot.js imports don't break
+async function query() { return { rows: [] }; }
+
+// ─── Init DB (tables already created in Supabase) ────────────────────────────
+async function initDB() {
+  console.log('[DB] Using Supabase JS HTTP API — no pg needed');
+  // Test connection
+  const { error } = await supabase.from('users').select('id').limit(1);
+  if (error) console.error('[DB] Connection test failed:', error.message);
+  else console.log('[DB] Supabase connection OK');
+
+  // ── Column migrations: add missing columns safely ────────────────────────
+  // Check & add is_pinned to socialpay_posts
+  const { error: pinErr } = await supabase.from('socialpay_posts').select('is_pinned').limit(1);
+  if (pinErr && pinErr.message && pinErr.message.includes('is_pinned')) {
+    console.log('[DB MIGRATION] Adding is_pinned column to socialpay_posts...');
+    // Use Supabase REST + service role to run raw SQL via PostgREST RPC
+    // Fallback: patch via direct HTTP to management API
+    try {
+      const SUPABASE_URL = process.env.SUPABASE_URL || '';
+      const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || '';
+      const PROJECT_REF = SUPABASE_URL.replace('https://','').replace('.supabase.co','').split('.')[0];
+      // Try via pg REST proxy
+      const resp = await fetch(`${SUPABASE_URL}/rest/v1/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_SERVICE_KEY, 'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}` },
+        body: JSON.stringify({ query: 'ALTER TABLE socialpay_posts ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN DEFAULT false' })
+      });
+      console.log('[DB MIGRATION] is_pinned migration attempt status:', resp.status);
+    } catch(e) { console.warn('[DB MIGRATION] is_pinned migration failed:', e.message); }
+  }
+
+  // Check & add caption to socialpay_posts
+  const { error: capErr } = await supabase.from('socialpay_posts').select('caption').limit(1);
+  if (capErr && capErr.message && capErr.message.includes('caption')) {
+    console.log('[DB MIGRATION] socialpay_posts.caption missing — will use content field as fallback');
+  }
+
+  // Check & add screenshot_url to support_messages
+  const { error: ssErr } = await supabase.from('support_messages').select('screenshot_url').limit(1);
+  if (ssErr && ssErr.message && ssErr.message.includes('screenshot_url')) {
+    console.log('[DB MIGRATION] support_messages.screenshot_url missing — image attachments will be skipped');
+  }
+}
+
+// ─── User CRUD ────────────────────────────────────────────────────────────────
+async function getOrCreateUser(telegramId, username, fullName, referredBy) {
+  const tid = String(telegramId);
+  const { data: existing } = await supabase.from('users').select('*').eq('telegram_id', tid).single();
+  if (existing) {
+    await supabase.from('users').update({ telegram_username: username||'', full_name: fullName||'', updated_at: now() }).eq('telegram_id', tid);
+    // Refresh user after update
+    const { data: refreshed } = await supabase.from('users').select('*').eq('telegram_id', tid).single();
+    return refreshed || existing;
+  }
+  const uid = generateUID();
+  const refCode = generateUID();
+  let referredByCode = referredBy || '';
+  let referrer = null;
+  if (referredByCode) {
+    const { data: ref } = await supabase.from('users').select('*').or(`referral_code.eq.${referredByCode},uid.eq.${referredByCode}`).single();
+    referrer = ref;
+  }
+  const newUser = {
+    telegram_id: tid, telegram_username: username||'', full_name: fullName||'',
+    registered_name: fullName||'', trc20_address: SHARED_TRC20_ADDRESS,
+    usdt_balance: 0, uid, is_vip: false, vip_activated_at: 0,
+    last_hourly_claim: 0, last_vip_claim: 0, connected_apps: [],
+    terms_accepted: false, referral_code: refCode, referred_by: referredByCode,
+    referral_count: 0, is_active: true, earnings_suspended: false,
+    created_at: now(), updated_at: now()
+  };
+  const { data: created, error } = await supabase.from('users').insert([newUser]).select().single();
+  if (error) { console.error('createUser error:', error); return null; }
+  if (referrer) {
+    await supabase.from('users').update({ referral_count: (referrer.referral_count||0)+1, usdt_balance: (parseFloat(referrer.usdt_balance)||0)+200, updated_at: now() }).eq('telegram_id', String(referrer.telegram_id));
+    await createTransaction(referrer.telegram_id, 'referral_bonus', 200, `Referral bonus: ${fullName} joined via your link`, 'completed');
+    // Attach referrer to new user so bot.js can send notification
+    if (created) created._referrer = referrer;
+  }
+  // Mark as new user for bot.js
+  if (created) created._isNew = true;
+  return created;
+}
+
+async function getUserByTelegramId(tid) {
+  const { data } = await supabase.from('users').select('*').eq('telegram_id', String(tid)).single();
+  return data || null;
+}
+
+async function getUserById(id) {
+  const { data } = await supabase.from('users').select('*').eq('id', id).single();
+  return data || null;
+}
+
+async function getAllUsers() {
+  const { data } = await supabase.from('users').select('*').order('created_at', { ascending: false });
+  return data || [];
+}
+
+async function updateUserBalance(telegramId, amount) {
+  const user = await getUserByTelegramId(telegramId);
+  if (!user) return;
+  const newBalance = (parseFloat(user.usdt_balance) || 0) + parseFloat(amount);
+  await supabase.from('users').update({ usdt_balance: newBalance, updated_at: now() }).eq('telegram_id', String(telegramId));
+  return newBalance;
+}
+
+async function setUserBalance(telegramId, amount) {
+  const newBalance = parseFloat(amount) || 0;
+  const { error } = await supabase
+    .from('users')
+    .update({ usdt_balance: newBalance, updated_at: now() })
+    .eq('telegram_id', String(telegramId));
+  if (error) throw error;
+  return newBalance;
+}
+
+
+async function upgradeToVIP(telegramId) {
+  await supabase.from('users').update({ is_vip: true, vip_activated_at: now(), updated_at: now() }).eq('telegram_id', String(telegramId));
+}
+
+async function updateUserName(telegramId, newName) {
+  await supabase.from('users').update({ registered_name: newName, updated_at: now() }).eq('telegram_id', String(telegramId));
+}
+
+async function setUserActive(telegramId, isActive) {
+  await supabase.from('users').update({ is_active: isActive, updated_at: now() }).eq('telegram_id', String(telegramId));
+}
+
+async function setEarningsSuspended(telegramId, suspended) {
+  await supabase.from('users').update({ earnings_suspended: suspended, updated_at: now() }).eq('telegram_id', String(telegramId));
+}
+
+async function acceptTerms(telegramId) {
+  await supabase.from('users').update({ terms_accepted: true, updated_at: now() }).eq('telegram_id', String(telegramId));
+}
+
+async function claimHourlyEarning(telegramId) {
+  const user = await getUserByTelegramId(telegramId);
+  if (!user) return { success: false, error: 'User not found' };
+  if (user.earnings_suspended) return { success: false, error: 'Earnings suspended' };
+  const HOUR_MS = 60 * 60 * 1000;
+  const last = parseInt(user.last_hourly_claim) || 0;
+  const elapsed = now() - last;
+  if (elapsed < HOUR_MS) return { success: false, error: 'Not ready', remainingMs: HOUR_MS - elapsed };
+  // VIP users earn 200 USDT/hr, non-VIP earn 50 USDT/hr
+    const amount = user.is_vip === true ? 200 : 50;
+  const newBalance = (parseFloat(user.usdt_balance) || 0) + amount;
+  await supabase.from('users').update({ usdt_balance: newBalance, last_hourly_claim: now(), updated_at: now() }).eq('telegram_id', String(telegramId));
+  await createTransaction(telegramId, 'hourly_earning', amount, 'Hourly earning claim', 'completed');
+  return { success: true, amount, reward: amount, newBalance, balance: newBalance };
+}
+
+async function getHourlyStatus(telegramId) {
+  const user = await getUserByTelegramId(telegramId);
+  if (!user) return { canClaim: false, nextClaimIn: 3600000, ready: false, remainingMs: 3600000 };
+  const HOUR_MS = 60 * 60 * 1000;
+  const last = parseInt(user.last_hourly_claim) || 0;
+  const elapsed = now() - last;
+  const isVIP = user.is_vip === true;
+  const hourlyAmount = isVIP ? 200 : 50;
+  if (elapsed >= HOUR_MS) return { canClaim: true, nextClaimIn: 0, ready: true, remainingMs: 0, hourlyAmount };
+  const remaining = HOUR_MS - elapsed;
+  return { canClaim: false, nextClaimIn: remaining, ready: false, remainingMs: remaining, hourlyAmount };
+}
+
+// ─── Earning Apps ─────────────────────────────────────────────────────────────
+async function getEarningApps() {
+  const { data } = await supabase.from('earning_apps').select('*').eq('deleted', false).order('created_at');
+  return data || [];
+}
+
+async function getEarningAppById(id) {
+  const { data } = await supabase.from('earning_apps').select('*').eq('id', id).single();
+  return data || null;
+}
+
+async function getEarningAppByToken(tok) {
+  const { data } = await supabase.from('earning_apps').select('*').eq('bot_token', tok).single();
+  return data || null;
+}
+
+async function addEarningApp(d) {
+  const { data } = await supabase.from('earning_apps').insert([{ ...d, deleted: false, created_at: now() }]).select().single();
+  return data;
+}
+
+async function removeEarningApp(id) {
+  await supabase.from('earning_apps').update({ deleted: true, deleted_at: now() }).eq('id', id);
+}
+
+// ─── Connected Apps ───────────────────────────────────────────────────────────
+async function connectUID(telegramId, appId, externalUID) {
+  const user = await getUserByTelegramId(telegramId);
+  if (!user) return;
+  const apps = Array.isArray(user.connected_apps) ? user.connected_apps : [];
+  const idx = apps.findIndex(a => a.appId == appId);
+  if (idx >= 0) apps[idx] = { appId, uid: externalUID };
+  else apps.push({ appId, uid: externalUID });
+  await supabase.from('users').update({ connected_apps: apps, updated_at: now() }).eq('telegram_id', String(telegramId));
+}
+
+async function getConnectedUID(telegramId, appId) {
+  const user = await getUserByTelegramId(telegramId);
+  if (!user) return null;
+  const apps = Array.isArray(user.connected_apps) ? user.connected_apps : [];
+  return apps.find(a => a.appId == appId)?.uid || null;
+}
+
+async function getUserConnections(telegramId) {
+  const user = await getUserByTelegramId(telegramId);
+  if (!user) return [];
+  return Array.isArray(user.connected_apps) ? user.connected_apps : [];
+}
+
+async function findUserByExternalUID(externalUID) {
+  const { data } = await supabase.from('users').select('*');
+  if (!data) return null;
+  return data.find(u => {
+    const apps = Array.isArray(u.connected_apps) ? u.connected_apps : [];
+    return apps.some(a => a.uid === externalUID);
+  }) || null;
+}
+
+// ─── Transactions ─────────────────────────────────────────────────────────────
+async function createTransaction(telegramId, type, amount, note, status) {
+  const { data } = await supabase.from('transactions').insert([{
+    telegram_id: String(telegramId), type, amount, note: note||'', status: status||'completed', created_at: now()
+  }]).select().single();
+  return data;
+}
+
+async function getUserTransactions(tid) {
+  const { data } = await supabase.from('transactions').select('*').eq('telegram_id', String(tid)).order('created_at', { ascending: false });
+  return data || [];
+}
+
+// ─── Withdrawals ──────────────────────────────────────────────────────────────
+async function createWithdrawalRequest(d) {
+  // Map all fields to the existing schema columns
+  const { method, account_number, bank_name, country, currency, ...rest } = d;
+  // Store bank/crypto details in address field as readable string
+  let addressStr = account_number || rest.address || '';
+  if (bank_name) addressStr = `${bank_name} | ${addressStr}`;
+  if (country) addressStr = `${addressStr} | ${country}`;
+  if (currency && currency !== 'USDT') addressStr = `${addressStr} | ${currency}`;
+  if (method) addressStr = `[${method.toUpperCase()}] ${addressStr}`;
+  const insertData = {
+    telegram_id: String(d.telegram_id),
+    amount: d.amount,
+    fee: d.fee || 0,
+    net_amount: d.net_amount || d.amount,
+    address: addressStr,
+    status: 'pending',
+    created_at: now(),
+    updated_at: now()
+  };
+  const { data, error } = await supabase.from('withdrawals').insert([insertData]).select().single();
+  if (error) { console.error('createWithdrawalRequest error:', error.message, error.details); return null; }
+  return data;
+}
+
+async function getPendingWithdrawals() {
+  const { data } = await supabase.from('withdrawals').select('*').eq('status', 'pending').order('created_at', { ascending: false });
+  return data || [];
+}
+
+async function getWithdrawalById(id) {
+  const { data } = await supabase.from('withdrawals').select('*').eq('id', id).single();
+  return data || null;
+}
+
+async function updateWithdrawal(id, updates) {
+  await supabase.from('withdrawals').update({ ...updates, updated_at: now() }).eq('id', id);
+}
+
+async function getUserWithdrawals(tid) {
+  const { data, error } = await supabase.from('withdrawals').select('*').eq('telegram_id', String(tid)).order('created_at', { ascending: false });
+  if (error) { console.error('getUserWithdrawals error:', error.message); return []; }
+  return data || [];
+}
+
+// ─── Support ──────────────────────────────────────────────────────────────────
+async function createSupportMessage(telegramId, message, fromAdmin) {
+  const { data } = await supabase.from('support_messages').insert([{
+    telegram_id: String(telegramId), message, from_admin: fromAdmin||false, read: false, created_at: now()
+  }]).select().single();
+  return data;
+}
+
+async function getSupportMessages(telegramId) {
+  const { data } = await supabase.from('support_messages').select('*').eq('telegram_id', String(telegramId)).order('created_at');
+  return data || [];
+}
+
+async function getAllSupportThreads() {
+  const { data } = await supabase.from('support_messages').select('*').eq('from_admin', false).order('created_at', { ascending: false });
+  if (!data) return [];
+  const threads = {};
+  for (const m of data) {
+    if (!threads[m.telegram_id]) threads[m.telegram_id] = m;
+  }
+  return Object.values(threads);
+}
+
+async function markSupportRead(telegramId) {
+  await supabase.from('support_messages').update({ read: true }).eq('telegram_id', String(telegramId)).eq('from_admin', true);
+}
+
+// ─── Testimonials ─────────────────────────────────────────────────────────────
+async function createTestimonial(telegramId, data) {
+  // Map 'type' into 'amount' field (stores type info) since schema has no 'type' column
+  const { type, category, ...rest } = data;
+  const insertData = { ...rest, telegram_id: String(telegramId), status: 'pending', created_at: now(), updated_at: now() };
+  if (type) insertData.amount = insertData.amount || type; // store type in amount if no amount
+  if (type && !insertData.message) insertData.message = '';
+  // Store type in message prefix for admin to see
+  if (type) insertData.message = `[${type.toUpperCase()}] ${insertData.message||''}`.trim();
+  const { data: d, error } = await supabase.from('testimonials').insert([insertData]).select().single();
+  if (error) { console.error('createTestimonial error:', error); return null; }
+  if (d && type) d.type = type; // reattach for bot.js use
+  return d;
+}
+
+async function getTestimonialById(id) {
+  const { data } = await supabase.from('testimonials').select('*').eq('id', id).single();
+  if (!data) return null;
+  // Detect type from video_url or message prefix so reward is always correct
+  if (!data.type || data.type === 'video') {
+    if (data.video_url && (data.video_url.includes('youtube') || data.video_url.includes('youtu.be'))) {
+      data.type = 'youtube';
+    } else if (data.message && data.message.startsWith('[YOUTUBE]')) {
+      data.type = 'youtube';
+    } else {
+      data.type = data.message && data.message.startsWith('[') ? data.message.split(']')[0].replace('[','').toLowerCase() : 'video';
+    }
+  }
+  return data;
+}
+
+async function getPendingTestimonials() {
+  const { data } = await supabase.from('testimonials').select('*').eq('status', 'pending').order('created_at', { ascending: false });
+  return data || [];
+}
+
+async function getApprovedTestimonials() {
+  const { data } = await supabase.from('testimonials').select('*').eq('status', 'approved').order('created_at', { ascending: false });
+  return data || [];
+}
+
+async function updateTestimonial(id, updates) {
+  await supabase.from('testimonials').update({ ...updates, updated_at: now() }).eq('id', id);
+}
+
+async function deleteTestimonial(id) {
+  const { error } = await supabase.from('testimonials').delete().eq('id', id);
+  return !error;
+}
+
+// ─── Poems ────────────────────────────────────────────────────────────────────
+async function createPoem(telegramId, data) {
+  const { category, ...rest } = data;
+  // Store category in title prefix
+  const title = category && rest.title ? `[${category}] ${rest.title}` : (category || rest.title || '');
+  const insertData = { ...rest, title, telegram_id: String(telegramId), status: 'pending', created_at: now(), updated_at: now() };
+  const { data: d, error } = await supabase.from('poems').insert([insertData]).select().single();
+  if (error) { console.error('createPoem error:', error); return null; }
+  if (d && category) d.category = category;
+  return d;
+}
+
+async function getPoemById(id) {
+  const { data } = await supabase.from('poems').select('*').eq('id', id).single();
+  return data || null;
+}
+
+async function getPendingPoems() {
+  const { data } = await supabase.from('poems').select('*').eq('status', 'pending').order('created_at', { ascending: false });
+  if (!data) return [];
+  return data.map(p => {
+    const { category, cleanTitle } = extractPoemCategory(p.title);
+    return { ...p, category, title: cleanTitle };
+  });
+}
+
+function extractPoemCategory(title) {
+  if (!title) return { category: 'General', cleanTitle: title || '' };
+  const m = title.match(/^\[([^\]]+)\]\s*(.+)$/);
+  if (m) return { category: m[1], cleanTitle: m[2].trim() };
+  return { category: 'General', cleanTitle: title.trim() };
+}
+
+async function getApprovedPoems() {
+  const { data } = await supabase.from('poems').select('*').eq('status', 'approved').order('created_at', { ascending: false });
+  if (!data) return [];
+  return data.map(p => {
+    const { category, cleanTitle } = extractPoemCategory(p.title);
+    return { ...p, category, title: cleanTitle };
+  });
+}
+
+async function updatePoem(id, updates) {
+  await supabase.from('poems').update({ ...updates, updated_at: now() }).eq('id', id);
+}
+
+async function deletePoem(id) {
+  const { error } = await supabase.from('poems').delete().eq('id', id);
+  return !error;
+}
+
+// ─── SocialPay Profiles ───────────────────────────────────────────────────────
+async function getSocialProfile(telegramId) {
+  const { data } = await supabase.from('socialpay_profiles').select('*').eq('telegram_id', String(telegramId)).single();
+  return data || null;
+}
+
+async function updateSocialProfile(telegramId, updates) {
+  const existing = await getSocialProfile(telegramId);
+  if (existing) {
+    await supabase.from('socialpay_profiles').update({ ...updates, updated_at: now() }).eq('telegram_id', String(telegramId));
+  } else {
+    await supabase.from('socialpay_profiles').insert([{ telegram_id: String(telegramId), ...updates, created_at: now(), updated_at: now() }]);
+  }
+}
+
+async function getAllSocialProfiles() {
+  const { data } = await supabase.from('socialpay_profiles').select('*').order('total_likes', { ascending: false });
+  return data || [];
+}
+
+// ─── SocialPay Posts ──────────────────────────────────────────────────────────
+async function createSocialPost(telegramId, data) {
+  // Map fields to actual DB schema: content, image_url (no caption/post_type/has_image/voice_data)
+  const { caption, post_type, image_data, voice_data, has_image, has_voice, content, image_url, ...rest } = data;
+  const insertData = {
+    telegram_id: String(telegramId),
+    content: caption || content || '',
+    image_url: image_data || image_url || null,  // store base64 or URL
+    status: 'pending', likes: 0, user_likes: 0, total_earned: 0,
+    created_at: now(), updated_at: now()
+  };
+  const { data: d, error } = await supabase.from('socialpay_posts').insert([insertData]).select().single();
+  if (error) { console.error('createSocialPost error:', error); return null; }
+  // Attach post_type for admin notification (not in DB)
+  if (d) { d.post_type = post_type || 'text'; d.caption = d.content; }
+  return d;
+}
+
+async function getSocialPostById(id) {
+  const { data } = await supabase.from('socialpay_posts').select('*').eq('id', id).single();
+  if (!data) return null;
+  return { ...data, caption: data.content || '' };
+}
+
+async function getPendingSocialPosts() {
+  const { data } = await supabase.from('socialpay_posts').select('*').eq('status', 'pending').order('created_at', { ascending: false });
+  return (data || []).map(p => ({ ...p, caption: p.content || '' }));
+}
+
+async function getApprovedSocialPosts() {
+  // Try with is_pinned; graceful fallback if column doesn't exist yet
+  let posts = null, hasPinned = false;
+  const { data: d1, error: e1 } = await supabase.from('socialpay_posts')
+    .select('id,telegram_id,content,image_url,status,likes,user_likes,total_earned,created_at,updated_at,is_pinned')
+    .eq('status', 'approved').order('created_at', { ascending: false });
+  if (e1 && (e1.message||'').includes('is_pinned')) {
+    const { data: d2 } = await supabase.from('socialpay_posts')
+      .select('id,telegram_id,content,image_url,status,likes,user_likes,total_earned,created_at,updated_at')
+      .eq('status', 'approved').order('created_at', { ascending: false });
+    posts = d2 || []; hasPinned = false;
+  } else { posts = d1 || []; hasPinned = true; }
+  const mapped = posts.map(p => ({ ...p, caption: p.content||'', is_pinned: hasPinned ? (p.is_pinned||false) : false }));
+  const pinned = mapped.filter(p => p.is_pinned);
+  const normal = mapped.filter(p => !p.is_pinned);
+  return [...pinned, ...normal];
+}
+
+async function setPinnedPost(postId, isPinned) {
+  // Try with is_pinned column; if missing, return error message to trigger SQL reminder
+  const { error } = await supabase.from('socialpay_posts').update({ is_pinned: isPinned, updated_at: Date.now() }).eq('id', postId);
+  if (error && (error.message||'').includes('is_pinned')) {
+    console.warn('[DB] is_pinned column missing — run: ALTER TABLE socialpay_posts ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN DEFAULT false;');
+    return false;
+  }
+  return !error;
+}
+
+async function getSocialPostsByUser(telegramId) {
+  let data = null;
+  const { data: d1, error: e1 } = await supabase.from('socialpay_posts')
+    .select('id,telegram_id,content,image_url,status,likes,user_likes,total_earned,created_at,updated_at,is_pinned')
+    .eq('telegram_id', String(telegramId)).order('created_at', { ascending: false });
+  if (e1 && (e1.message||'').includes('is_pinned')) {
+    const { data: d2 } = await supabase.from('socialpay_posts')
+      .select('id,telegram_id,content,image_url,status,likes,user_likes,total_earned,created_at,updated_at')
+      .eq('telegram_id', String(telegramId)).order('created_at', { ascending: false });
+    data = d2 || [];
+  } else { data = d1 || []; }
+  return data.map(p => ({ ...p, caption: p.content||'', is_pinned: p.is_pinned||false }));
+}
+
+async function updateSocialPost(id, updates) {
+  await supabase.from('socialpay_posts').update({ ...updates, updated_at: now() }).eq('id', id);
+}
+
+async function deleteSocialPost(id) {
+  await supabase.from('socialpay_posts').delete().eq('id', id);
+}
+
+async function sendLikesToPost(postId, adminLikes) {
+  try {
+    const { data: post } = await supabase.from('socialpay_posts').select('id,telegram_id,likes,total_earned').eq('id', postId).single();
+    if (!post) return { success: false, error: 'Post not found' };
+    const newLikes = (post.likes || 0) + adminLikes;
+    await supabase.from('socialpay_posts').update({ likes: newLikes, updated_at: now() }).eq('id', postId);
+    const profile = await getSocialProfile(post.telegram_id);
+    let earned = 0;
+    if (profile) {
+      const newTotal = (profile.total_likes || 0) + adminLikes;
+      const newFollowers = Math.floor(newTotal / 2); // followers = 50% of total likes
+      const isVerified = newTotal >= 1000 || profile.is_verified;
+      const isGold = newTotal >= 500000 || profile.is_gold_verified;
+      // Calculate earning: every 1000 likes = 100 USDT
+      const prevMilestone = Math.floor((profile.total_likes || 0) / 1000);
+      const newMilestone = Math.floor(newTotal / 1000);
+      earned = (newMilestone - prevMilestone) * 100;
+      await supabase.from('socialpay_profiles').update({ total_likes: newTotal, followers: newFollowers, is_verified: isVerified, is_gold_verified: isGold, updated_at: now() }).eq('telegram_id', post.telegram_id);
+      // Credit user balance if earned
+      if (earned > 0) {
+        await updateUserBalance(post.telegram_id, earned);
+        await createTransaction(post.telegram_id, 'socialpay_reward', earned, `SocialPay: ${adminLikes.toLocaleString()} likes added`, 'completed');
+      }
+    }
+    return { success: true, earned, newLikes };
+  } catch(e) { console.error('sendLikesToPost error:', e.message); return { success: false, error: e.message }; }
+}
+
+// ─── Likes ────────────────────────────────────────────────────────────────────
+async function likePost(telegramId, postId) {
+  const { error } = await supabase.from('socialpay_likes').insert([{ telegram_id: String(telegramId), post_id: postId, created_at: now() }]);
+  if (error) return false; // already liked
+  const post = await getSocialPostById(postId);
+  if (!post) return false;
+  const newUserLikes = (post.user_likes || 0) + 1;
+  const newLikes = (post.likes || 0) + 1;
+  await supabase.from('socialpay_posts').update({ likes: newLikes, user_likes: newUserLikes, updated_at: now() }).eq('id', postId);
+  const profile = await getSocialProfile(post.telegram_id);
+  if (profile) {
+    const newTotal = (profile.total_likes || 0) + 1;
+    const newFollowers = Math.floor(newTotal / 2); // followers = 50% of total likes
+    const isVerified = newTotal >= 1000 || profile.is_verified;
+    const isGold = newTotal >= 500000 || profile.is_gold_verified;
+    await supabase.from('socialpay_profiles').update({ total_likes: newTotal, followers: newFollowers, is_verified: isVerified, is_gold_verified: isGold, updated_at: now() }).eq('telegram_id', post.telegram_id);
+  }
+  return true;
+}
+
+async function hasLiked(telegramId, postId) {
+  const { data } = await supabase.from('socialpay_likes').select('id').eq('telegram_id', String(telegramId)).eq('post_id', postId).single();
+  return !!data;
+}
+
+// ─── Comments ─────────────────────────────────────────────────────────────────
+async function createComment(telegramId, postId, text, parentId) {
+  const { data } = await supabase.from('sp_comments').insert([{
+    telegram_id: String(telegramId), post_id: postId, text, parent_id: parentId||null,
+    is_deleted: false, created_at: now(), updated_at: now()
+  }]).select().single();
+  return data;
+}
+
+async function getCommentsByPost(postId) {
+  const { data } = await supabase.from('sp_comments').select('*').eq('post_id', postId).eq('is_deleted', false).order('created_at');
+  return data || [];
+}
+
+async function deleteComment(id) {
+  await supabase.from('sp_comments').update({ is_deleted: true, updated_at: now() }).eq('id', id);
+}
+
+// ─── DMs ──────────────────────────────────────────────────────────────────────
+async function createDM(fromTid, toTid, dataOrText, mediaUrl, mediaType) {
+  let text='', mUrl='', mType='text';
+  if (dataOrText && typeof dataOrText === 'object') {
+    text = dataOrText.text||'';
+    mUrl = dataOrText.image_data || dataOrText.voice_data || '';
+    mType = dataOrText.image_data ? 'image' : dataOrText.voice_data ? 'voice' : 'text';
+  } else {
+    // Handle case where a stringified object was passed — parse it back
+    let raw = dataOrText||'';
+    if (typeof raw === 'string' && raw.startsWith('{')) {
+      try { const parsed = JSON.parse(raw); text = parsed.text||raw; mUrl = parsed.image_data||parsed.voice_data||''; mType = parsed.image_data?'image':parsed.voice_data?'voice':'text'; }
+      catch { text = raw; }
+    } else { text = raw; mUrl = mediaUrl||''; mType = mediaType||'text'; }
+  }
+  const { data } = await supabase.from('sp_dms').insert([{
+    from_tid: String(fromTid), to_tid: String(toTid), text,
+    media_url: mUrl, media_type: mType, read: false, created_at: now()
+  }]).select().single();
+  return data;
+}
+
+async function getDMs(tid1, tid2) {
+  const { data } = await supabase.from('sp_dms').select('*')
+    .or(`and(from_tid.eq.${tid1},to_tid.eq.${tid2}),and(from_tid.eq.${tid2},to_tid.eq.${tid1})`)
+    .order('created_at');
+  if (!data) return [];
+  return data.map(dm => {
+    let text = dm.text||'', mUrl = dm.media_url||'', mType = dm.media_type||'text';
+    // Fix old records where the whole object was stored as JSON string in text field
+    if (text.startsWith('{')) {
+      try {
+        const p = JSON.parse(text);
+        text = p.text || '';
+        if (!mUrl && p.image_data) { mUrl = p.image_data; mType = 'image'; }
+        else if (!mUrl && p.voice_data) { mUrl = p.voice_data; mType = 'voice'; }
+        else if (p.media_type) mType = p.media_type;
+      } catch {}
+    }
+    return { ...dm, text, media_url: mUrl, media_type: mType,
+      dm_type: mType || 'text',
+      image_data: mType === 'image' ? mUrl : null,
+      voice_data: mType === 'voice' ? mUrl : null
+    };
+  });
+}
+
+async function getDMContacts(telegramId) {
+  const tid = String(telegramId);
+  const { data } = await supabase.from('sp_dms').select('*').or(`from_tid.eq.${tid},to_tid.eq.${tid}`).order('created_at', { ascending: false });
+  if (!data) return [];
+  const seen = new Set();
+  const contacts = [];
+  for (const dm of data) {
+    const other = dm.from_tid === tid ? dm.to_tid : dm.from_tid;
+    if (!seen.has(other)) { seen.add(other); contacts.push(other); }
+  }
+  return contacts;
+}
+
+async function markDMsRead(fromTid, toTid) {
+  await supabase.from('sp_dms').update({ read: true }).eq('from_tid', String(fromTid)).eq('to_tid', String(toTid));
+}
+
+// ─── Verification ─────────────────────────────────────────────────────────────
+async function createVerificationRequest(telegramId, type) {
+  const { data } = await supabase.from('verification_requests').insert([{
+    telegram_id: String(telegramId), type: type||'orange', status: 'pending', created_at: now(), updated_at: now()
+  }]).select().single();
+  return data;
+}
+
+async function getPendingVerificationRequests() {
+  const { data } = await supabase.from('verification_requests').select('*').eq('status', 'pending').order('created_at', { ascending: false });
+  return data || [];
+}
+
+async function getVerificationRequestById(id) {
+  const { data } = await supabase.from('verification_requests').select('*').eq('id', id).single();
+  return data || null;
+}
+
+async function updateVerificationRequest(id, updates) {
+  await supabase.from('verification_requests').update({ ...updates, updated_at: now() }).eq('id', id);
+}
+
+// ─── Broadcasts ───────────────────────────────────────────────────────────────
+async function createBroadcast(message, sentCount) {
+  const { data } = await supabase.from('broadcasts').insert([{ message, sent_count: sentCount||0, created_at: now() }]).select().single();
+  return data;
+}
+
+// ─── Supabase direct client (for bot.js new endpoints) ────────────────────────
+function getSupabase() { return supabase; }
+
+
+// ─── Delete Community Comment ────────────────────────────────────────────────
+async function deleteCommunityComment(commentId) {
+  try {
+    const { error } = await supabase.from('community_comments').delete().eq('id', commentId);
+    return !error;
+  } catch(e) { console.error('deleteCommunityComment error:', e.message); return false; }
+}
+
+
+// ─── Admin post YouTube Testimonial ──────────────────────────────────────────
+async function createAdminTestimonial(data) {
+  const { caption, youtube_url } = data;
+  const row = {
+    telegram_id: 'ADMIN',
+    name: 'Wallet Masters',
+    type: 'youtube',
+    video_url: youtube_url,
+    message: '',        // users cannot set caption; only admin can
+    caption: caption || '',
+    status: 'approved', // admin posts go live instantly
+    created_at: now(),
+    updated_at: now(),
+    is_admin_post: true
+  };
+  const { data: created, error } = await supabase.from('testimonials').insert([row]).select().single();
+  if (error) throw error;
+  return created;
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ENGAGEMENT FEATURES: Daily Spin Wheel, Trivia Challenge, Login Streak Bonus
+// ═══════════════════════════════════════════════════════════════════════════
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+function todayStr()      { return new Date().toISOString().slice(0,10); }
+function yesterdayStr()  { return new Date(Date.now() - DAY_MS).toISOString().slice(0,10); }
+
+// ─── Daily Spin Wheel ──────────────────────────────────────────────────────
+const SPIN_TIERS = {
+  bronze: { name: 'Bronze', rewards: [10, 25, 50, 75, 100, 150, 200, 300], weights: [30,25,18,12,8,4,2,1] },
+  silver: { name: 'Silver', rewards: [25, 50, 100, 150, 250, 350, 500],    weights: [30,25,18,12,8,4,3] },
+  gold:   { name: 'Gold',   rewards: [50, 100, 200, 300, 450, 600, 750],  weights: [30,25,18,12,8,4,3] }
+};
+
+function getSpinTier(userCreatedAt) {
+  const daysActive = (now() - (parseInt(userCreatedAt) || now())) / DAY_MS;
+  if (daysActive < 7) return SPIN_TIERS.bronze;
+  if (daysActive < 30) return SPIN_TIERS.silver;
+  return SPIN_TIERS.gold;
+}
+
+function weightedPick(values, weights) {
+  const total = weights.reduce((a,b)=>a+b, 0);
+  let r = Math.random() * total;
+  for (let i = 0; i < values.length; i++) {
+    if (r < weights[i]) return values[i];
+    r -= weights[i];
+  }
+  return values[values.length - 1];
+}
+
+async function getOrCreateSpinRow(telegramId) {
+  const tid = String(telegramId);
+  let { data } = await supabase.from('user_spins').select('*').eq('telegram_id', tid).single();
+  if (!data) {
+    const { data: created } = await supabase.from('user_spins').insert([{
+      telegram_id: tid, last_spin_at: 0, total_spins: 0, first_spin_at: 0,
+      created_at: now(), updated_at: now()
+    }]).select().single();
+    data = created;
+  }
+  return data;
+}
+
+async function getSpinStatus(telegramId) {
+  const user = await getUserByTelegramId(telegramId);
+  if (!user) return { error: 'User not found' };
+  const row = await getOrCreateSpinRow(telegramId);
+  const tier = getSpinTier(user.created_at);
+  const elapsed = now() - (parseInt(row.last_spin_at) || 0);
+  const canSpin = elapsed >= DAY_MS;
+  return {
+    canSpin,
+    nextSpinIn: canSpin ? 0 : Math.round((DAY_MS - elapsed)/1000),
+    tier: tier.name,
+    rewards: tier.rewards,
+    totalSpins: row.total_spins || 0
+  };
+}
+
+async function doSpin(telegramId) {
+  const user = await getUserByTelegramId(telegramId);
+  if (!user) return { success: false, error: 'User not found' };
+  const row = await getOrCreateSpinRow(telegramId);
+  const elapsed = now() - (parseInt(row.last_spin_at) || 0);
+  if (elapsed < DAY_MS) return { success: false, error: 'Not ready', remainingMs: DAY_MS - elapsed };
+
+  const tier = getSpinTier(user.created_at);
+  const reward = weightedPick(tier.rewards, tier.weights);
+  const newBalance = (parseFloat(user.usdt_balance) || 0) + reward;
+
+  await supabase.from('users').update({ usdt_balance: newBalance, updated_at: now() }).eq('telegram_id', String(telegramId));
+  await supabase.from('user_spins').update({
+    last_spin_at: now(),
+    total_spins: (row.total_spins || 0) + 1,
+    first_spin_at: row.first_spin_at || now(),
+    updated_at: now()
+  }).eq('telegram_id', String(telegramId));
+  await createTransaction(telegramId, 'spin_wheel', reward, `Daily spin (${tier.name} wheel)`, 'completed');
+
+  return { success: true, reward, tier: tier.name, newBalance };
+}
+
+// ─── Trivia Challenge ──────────────────────────────────────────────────────
+const TRIVIA_BANK = [
+  { q: "What does 'USDT' stand for?", options: ["US Dollar Token", "Tether USD", "United Stable Token", "Universal Digital Tender"], correct: 1 },
+  { q: "Which blockchain network does TRC20 belong to?", options: ["Ethereum", "TRON", "Bitcoin", "Solana"], correct: 1 },
+  { q: "What is the main purpose of a stablecoin?", options: ["High volatility gains", "Maintain a stable value", "Mining rewards", "Gas fees"], correct: 1 },
+  { q: "What is a crypto 'wallet address' used for?", options: ["Login password", "Sending/receiving funds", "Mining speed", "Exchange rate"], correct: 1 },
+  { q: "Which of these is a popular crypto exchange?", options: ["Binance", "Photoshop", "Spotify", "Dropbox"], correct: 0 },
+  { q: "What does 'VIP membership' typically unlock in earning apps?", options: ["Lower fees only", "Higher earning rates", "Free withdrawals only", "Nothing extra"], correct: 1 },
+  { q: "What is the standard withdrawal fee percentage on Wallet Masters?", options: ["1%", "2%", "4%", "10%"], correct: 2 },
+  { q: "What network fee type is common on TRC20 transfers?", options: ["Very high", "Low compared to ERC20", "Free always", "Fixed at 50 USDT"], correct: 1 },
+  { q: "What should you NEVER share with anyone?", options: ["Your username", "Your private key/seed phrase", "Your profile picture", "Your country"], correct: 1 },
+  { q: "What does 'UID' mean when connecting earning apps?", options: ["Universal ID for the app", "Unique identifier linking accounts", "User Interface Design", "Upload ID"], correct: 1 },
+  { q: "Which of these confirms a transaction on blockchain?", options: ["A password reset", "A confirmed hash/transaction ID", "A screenshot", "An email"], correct: 1 },
+  { q: "What is 'cold storage' in crypto?", options: ["Frozen exchange account", "Offline wallet storage", "A frozen bank account", "A blocked transaction"], correct: 1 },
+  { q: "What's the benefit of two-way support chat?", options: ["Faster admin replies", "Nothing useful", "It's just decoration", "Only for VIP"], correct: 0 },
+  { q: "Why do withdrawal requests need approval?", options: ["To slow things down", "For security & fraud prevention", "No real reason", "To reduce balance"], correct: 1 },
+  { q: "What does 'testimonial' mean in this context?", options: ["A user's shared experience", "A type of coin", "A wallet type", "A withdrawal method"], correct: 0 }
+];
+
+const TRIVIA_REWARD_TIERS = {
+  low:  [20, 30, 40, 60, 100],   // streak days 1-3
+  mid:  [40, 60, 80, 120, 200],  // streak days 4-7
+  high: [60, 100, 150, 250, 400] // streak days 8+ (permanent veteran rate)
+};
+
+function getTriviaTier(streakDays) {
+  if (streakDays <= 3) return 'low';
+  if (streakDays <= 7) return 'mid';
+  return 'high';
+}
+
+function getDailyQuestions() {
+  // Deterministic daily rotation: same 5 questions for everyone on a given day
+  const dayIndex = Math.floor(now() / DAY_MS);
+  const start = dayIndex % TRIVIA_BANK.length;
+  const picks = [];
+  for (let i = 0; i < 5; i++) picks.push(TRIVIA_BANK[(start + i) % TRIVIA_BANK.length]);
+  return picks;
+}
+
+async function getOrCreateTriviaRow(telegramId) {
+  const tid = String(telegramId);
+  let { data } = await supabase.from('user_trivia').select('*').eq('telegram_id', tid).single();
+  if (!data) {
+    const { data: created } = await supabase.from('user_trivia').insert([{
+      telegram_id: tid, play_streak_days: 0, last_played_date: '',
+      questions_answered_today: 0, correct_today: 0, first_played_at: 0,
+      created_at: now(), updated_at: now()
+    }]).select().single();
+    data = created;
+  }
+  return data;
+}
+
+async function rollTriviaDay(row) {
+  const today = todayStr();
+  if (row.last_played_date === today) return row; // already rolled today
+  let newStreak;
+  if (row.last_played_date === '') newStreak = 1;
+  else if (row.last_played_date === yesterdayStr()) newStreak = (row.play_streak_days || 0) + 1;
+  else newStreak = 1; // missed a day, reset
+  const { data: updated } = await supabase.from('user_trivia').update({
+    play_streak_days: newStreak, last_played_date: today,
+    questions_answered_today: 0, correct_today: 0,
+    first_played_at: row.first_played_at || now(), updated_at: now()
+  }).eq('telegram_id', row.telegram_id).select().single();
+  return updated;
+}
+
+async function getTriviaQuestions(telegramId) {
+  let row = await getOrCreateTriviaRow(telegramId);
+  row = await rollTriviaDay(row);
+  const tier = getTriviaTier(row.play_streak_days);
+  const questions = getDailyQuestions().map(q => ({ q: q.q, options: q.options })); // hide correct answer
+  return {
+    questions,
+    rewards: TRIVIA_REWARD_TIERS[tier],
+    tier,
+    streakDays: row.play_streak_days,
+    answeredToday: row.questions_answered_today,
+    correctToday: row.correct_today,
+    completedToday: row.questions_answered_today >= 5
+  };
+}
+
+async function answerTriviaQuestion(telegramId, questionIndex, answerIndex) {
+  const user = await getUserByTelegramId(telegramId);
+  if (!user) return { success: false, error: 'User not found' };
+  let row = await getOrCreateTriviaRow(telegramId);
+  row = await rollTriviaDay(row);
+
+  if (row.questions_answered_today >= 5) return { success: false, error: 'Already completed 5 questions today' };
+  if (questionIndex !== row.questions_answered_today) return { success: false, error: 'Out of order question' };
+
+  const dailyQs = getDailyQuestions();
+  const q = dailyQs[questionIndex];
+  if (!q) return { success: false, error: 'Invalid question' };
+
+  const correct = parseInt(answerIndex) === q.correct;
+  const tier = getTriviaTier(row.play_streak_days);
+  let reward = 0;
+
+  if (correct) {
+    reward = TRIVIA_REWARD_TIERS[tier][questionIndex];
+    const newBalance = (parseFloat(user.usdt_balance) || 0) + reward;
+    await supabase.from('users').update({ usdt_balance: newBalance, updated_at: now() }).eq('telegram_id', String(telegramId));
+    await createTransaction(telegramId, 'trivia_reward', reward, `Trivia Q${questionIndex+1} correct`, 'completed');
+  }
+
+  const newAnsweredToday = row.questions_answered_today + 1;
+  const newCorrectToday = row.correct_today + (correct ? 1 : 0);
+  await supabase.from('user_trivia').update({
+    questions_answered_today: newAnsweredToday, correct_today: newCorrectToday, updated_at: now()
+  }).eq('telegram_id', String(telegramId));
+
+  return {
+    success: true, correct, reward, correctAnswerIndex: q.correct,
+    answeredToday: newAnsweredToday, correctToday: newCorrectToday, completedToday: newAnsweredToday >= 5
+  };
+}
+
+// ─── Login Streak Bonus ────────────────────────────────────────────────────
+const STREAK_WEEK_REWARDS = {
+  1: [50, 75, 100, 150, 200, 275, 350],
+  2: [75, 110, 150, 220, 300, 400, 500],
+  3: [100, 150, 200, 300, 400, 525, 650],
+  4: [100, 150, 225, 325, 450, 600, 750] // permanent from week 4 onward
+};
+
+async function getOrCreateStreakRow(telegramId) {
+  const tid = String(telegramId);
+  let { data } = await supabase.from('user_login_streak').select('*').eq('telegram_id', tid).single();
+  if (!data) {
+    const { data: created } = await supabase.from('user_login_streak').insert([{
+      telegram_id: tid, current_streak_day: 0, streak_week: 1,
+      last_claim_date: '', longest_streak: 0,
+      created_at: now(), updated_at: now()
+    }]).select().single();
+    data = created;
+  }
+  return data;
+}
+
+async function getLoginStreakStatus(telegramId) {
+  const row = await getOrCreateStreakRow(telegramId);
+  const today = todayStr();
+  const canClaim = row.last_claim_date !== today;
+  const week = Math.min(row.streak_week || 1, 4);
+  const nextDay = (row.last_claim_date === yesterdayStr()) ? ((row.current_streak_day % 7) + 1) : ((row.last_claim_date === today) ? row.current_streak_day : 1);
+  const nextWeek = (row.last_claim_date === yesterdayStr() && row.current_streak_day >= 7) ? Math.min(week + 1, 4) : week;
+  return {
+    canClaim,
+    currentStreakDay: row.current_streak_day,
+    streakWeek: week,
+    longestStreak: row.longest_streak,
+    nextReward: STREAK_WEEK_REWARDS[nextWeek][nextDay - 1],
+    fullSchedule: STREAK_WEEK_REWARDS[nextWeek]
+  };
+}
+
+async function claimLoginStreak(telegramId) {
+  const user = await getUserByTelegramId(telegramId);
+  if (!user) return { success: false, error: 'User not found' };
+  const row = await getOrCreateStreakRow(telegramId);
+  const today = todayStr();
+
+  if (row.last_claim_date === today) return { success: false, error: 'Already claimed today' };
+
+  let newDay, newWeek;
+  if (row.last_claim_date === yesterdayStr()) {
+    newDay = (row.current_streak_day % 7) + 1;
+    newWeek = (row.current_streak_day >= 7) ? Math.min((row.streak_week || 1) + 1, 4) : (row.streak_week || 1);
+  } else {
+    newDay = 1;
+    newWeek = 1;
+  }
+
+  const reward = STREAK_WEEK_REWARDS[newWeek][newDay - 1];
+  const newBalance = (parseFloat(user.usdt_balance) || 0) + reward;
+  const newLongest = Math.max(row.longest_streak || 0, (newWeek - 1) * 7 + newDay);
+
+  await supabase.from('users').update({ usdt_balance: newBalance, updated_at: now() }).eq('telegram_id', String(telegramId));
+  await supabase.from('user_login_streak').update({
+    current_streak_day: newDay, streak_week: newWeek, last_claim_date: today,
+    longest_streak: newLongest, updated_at: now()
+  }).eq('telegram_id', String(telegramId));
+  await createTransaction(telegramId, 'streak_bonus', reward, `Login streak day ${newDay} (week ${newWeek})`, 'completed');
+
+  return { success: true, reward, currentStreakDay: newDay, streakWeek: newWeek, newBalance };
+}
+
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// USDT MINING: Buy hash, mine for 1 hour, claim principal + profit
+// ═══════════════════════════════════════════════════════════════════════════
+const MINING_MIN_HASH        = 1000;
+const MINING_DURATION_MS     = 60 * 60 * 1000; // 1 hour
+const MINING_RATE            = 0.50;  // 50% profit, always
+const MINING_COOLDOWN_MS     = 24 * 60 * 60 * 1000; // one mining cycle per 24h (VIP-only, unlimited amount)
+
+async function getLastMiningSession(telegramId) {
+  const { data } = await supabase.from('user_mining_sessions')
+    .select('*')
+    .eq('telegram_id', String(telegramId))
+    .order('started_at', { ascending: false })
+    .limit(1)
+    .single();
+  return data || null;
+}
+
+async function getActiveMiningSession(telegramId) {
+  const { data } = await supabase.from('user_mining_sessions')
+    .select('*')
+    .eq('telegram_id', String(telegramId))
+    .eq('status', 'active')
+    .order('started_at', { ascending: false })
+    .limit(1)
+    .single();
+  return data || null;
+}
+
+async function getMiningStatus(telegramId) {
+  const user = await getUserByTelegramId(telegramId);
+  if (!user) return { error: 'User not found' };
+
+  if (!user.is_vip) {
+    return { vipOnly: true, isVip: false, balance: parseFloat(user.usdt_balance) || 0 };
+  }
+
+  const active = await getActiveMiningSession(telegramId);
+  const last = await getLastMiningSession(telegramId);
+
+  let cooldownRemainingMs = 0;
+  if (!active && last) {
+    const sinceLast = now() - last.started_at;
+    if (sinceLast < MINING_COOLDOWN_MS) cooldownRemainingMs = MINING_COOLDOWN_MS - sinceLast;
+  }
+
+  let session = null;
+  if (active) {
+    const elapsed = now() - active.started_at;
+    const isReady = elapsed >= MINING_DURATION_MS;
+    session = {
+      hashAmount: active.hash_amount,
+      payoutAmount: active.payout_amount,
+      startedAt: active.started_at,
+      endsAt: active.ends_at,
+      isReady,
+      remainingMs: isReady ? 0 : (MINING_DURATION_MS - elapsed)
+    };
+  }
+
+  return {
+    vipOnly: false,
+    isVip: true,
+    minHash: MINING_MIN_HASH,
+    rate: MINING_RATE,
+    balance: parseFloat(user.usdt_balance) || 0,
+    cooldownRemainingMs,
+    activeSession: session
+  };
+}
+
+async function buyMiningHash(telegramId, hashAmount) {
+  const user = await getUserByTelegramId(telegramId);
+  if (!user) return { success: false, error: 'User not found' };
+
+  if (!user.is_vip) {
+    return { success: false, error: 'USDT Mining is a VIP-only feature. Upgrade to VIP to unlock it.' };
+  }
+
+  const amt = parseFloat(hashAmount);
+  if (!amt || isNaN(amt) || amt < MINING_MIN_HASH) {
+    return { success: false, error: `Minimum hash purchase is ${MINING_MIN_HASH} USDT` };
+  }
+
+  const active = await getActiveMiningSession(telegramId);
+  if (active) return { success: false, error: 'You already have an active mining session' };
+
+  const last = await getLastMiningSession(telegramId);
+  if (last) {
+    const sinceLast = now() - last.started_at;
+    if (sinceLast < MINING_COOLDOWN_MS) {
+      return { success: false, error: 'You can start a new mining cycle once every 24 hours', cooldownRemainingMs: MINING_COOLDOWN_MS - sinceLast };
+    }
+  }
+
+  const balance = parseFloat(user.usdt_balance) || 0;
+  if (balance < amt) return { success: false, error: 'Insufficient balance' };
+
+  const payoutAmount = amt * (1 + MINING_RATE);
+  const startedAt = now();
+  const endsAt = startedAt + MINING_DURATION_MS;
+
+  const newBalance = balance - amt;
+  await supabase.from('users').update({ usdt_balance: newBalance, updated_at: now() }).eq('telegram_id', String(telegramId));
+  await createTransaction(telegramId, 'mining_hash_purchase', -amt, `Bought ${amt} USDT mining hash`, 'completed');
+
+  const { data: session } = await supabase.from('user_mining_sessions').insert([{
+    telegram_id: String(telegramId), hash_amount: amt, profit_rate: MINING_RATE, payout_amount: payoutAmount,
+    status: 'active', started_at: startedAt, ends_at: endsAt, claimed_at: null,
+    created_at: now(), updated_at: now()
+  }]).select().single();
+
+  return { success: true, session: { hashAmount: amt, payoutAmount, startedAt, endsAt }, newBalance };
+}
+
+async function claimMiningProfit(telegramId) {
+  const user = await getUserByTelegramId(telegramId);
+  if (!user) return { success: false, error: 'User not found' };
+
+  const active = await getActiveMiningSession(telegramId);
+  if (!active) return { success: false, error: 'No active mining session' };
+
+  const elapsed = now() - active.started_at;
+  if (elapsed < MINING_DURATION_MS) {
+    return { success: false, error: 'Mining not finished yet', remainingMs: MINING_DURATION_MS - elapsed };
+  }
+
+  const payoutAmount = parseFloat(active.payout_amount);
+  const newBalance = (parseFloat(user.usdt_balance) || 0) + payoutAmount;
+
+  await supabase.from('users').update({ usdt_balance: newBalance, updated_at: now() }).eq('telegram_id', String(telegramId));
+  await supabase.from('user_mining_sessions').update({
+    status: 'claimed', claimed_at: now(), updated_at: now()
+  }).eq('id', active.id);
+  await createTransaction(telegramId, 'mining_profit', payoutAmount, `Mining profit (${active.hash_amount} USDT hash @ ${Math.round(active.profit_rate*100)}%)`, 'completed');
+
+  return { success: true, payoutAmount, hashAmount: active.hash_amount, newBalance };
+}
+
+
+module.exports = {
+  setUserBalance,
+  createAdminTestimonial,
+  deleteCommunityComment,
+  initDB, query, getSupabase,
+  SHARED_TRC20_ADDRESS, MIN_WITHDRAWAL, MAX_WITHDRAWAL, GATEWAY_FEE_RATE,
+  getOrCreateUser, getUserByTelegramId, getUserById, updateUserBalance, upgradeToVIP,
+  updateUserName, getAllUsers, setUserActive, setEarningsSuspended, acceptTerms,
+  claimHourlyEarning, getHourlyStatus,
+  getEarningApps, getEarningAppByToken, getEarningAppById, addEarningApp, removeEarningApp,
+  connectUID, getConnectedUID, getUserConnections, findUserByExternalUID,
+  createTransaction, getUserTransactions,
+  createWithdrawalRequest, getPendingWithdrawals, getWithdrawalById, updateWithdrawal, getUserWithdrawals,
+  createSupportMessage, getSupportMessages, getAllSupportThreads, markSupportRead,
+  createTestimonial, getTestimonialById, getPendingTestimonials, getApprovedTestimonials, updateTestimonial, deleteTestimonial,
+  createPoem, getPoemById, getPendingPoems, getApprovedPoems, updatePoem, deletePoem,
+  getSocialProfile, updateSocialProfile, getAllSocialProfiles,
+  createSocialPost, getSocialPostById, getPendingSocialPosts, getApprovedSocialPosts, getSocialPostsByUser, updateSocialPost, deleteSocialPost, sendLikesToPost,
+  likePost, hasLiked,
+  createComment, getCommentsByPost, deleteComment,
+  createDM, getDMs, getDMContacts, markDMsRead, setPinnedPost,
+  createVerificationRequest, getPendingVerificationRequests, getVerificationRequestById, updateVerificationRequest,
+  createBroadcast,
+  getSpinStatus, doSpin,
+  getTriviaQuestions, answerTriviaQuestion,
+  getLoginStreakStatus, claimLoginStreak,
+  getMiningStatus, buyMiningHash, claimMiningProfit
+};
