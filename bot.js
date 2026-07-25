@@ -345,7 +345,7 @@ if (bot) bot.onText(/\/start(.*)/, async (msg, match) => {
   const { id, username, first_name, last_name } = msg.from;
   const fullName = [first_name, last_name].filter(Boolean).join(' ');
   const param    = (match[1] || '').trim();
-  const refCode  = param.startsWith('ref_') ? param.replace('ref_', '') : null;
+  const refCode  = param ? (param.startsWith('ref_') ? param.replace('ref_', '') : param) : null;
   const isAdmin  = String(id) === String(ADMIN_CHAT_ID);
   let user;
   try {
