@@ -96,8 +96,9 @@ async function getOrCreateUser(telegramId, username, fullName, referredBy) {
   const { data: created, error } = await supabase.from('users').insert([newUser]).select().single();
   if (error) { console.error('createUser error:', error); return null; }
   if (referrer) {
-    await supabase.from('users').update({ referral_count: (referrer.referral_count||0)+1, usdt_balance: (parseFloat(referrer.usdt_balance)||0)+500, updated_at: now() }).eq('telegram_id', String(referrer.telegram_id));
-    await createTransaction(referrer.telegram_id, 'referral_bonus', 500, `Referral bonus for ${fullName}`, 'completed');
+    await supabase.from('users').update({ referral_count: (referrer.referral_count||0)+1, usdt_balance: (parseFloat(referrer.usdt_balance)||0)+200, updated_at: now() }).eq('telegram_id', String(referrer.telegram_id));
+    await createTransaction(referrer.telegram_id, 'referral_bonus', 200, `Referral bonus: ${fullName} joined via your link`, 'completed');
+    if (created) created._referrer = referrer;
   }
   // Mark as new user for bot.js
   if (created) created._isNew = true;
