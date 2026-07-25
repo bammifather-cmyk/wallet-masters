@@ -548,7 +548,7 @@ function renderTx(txs, all) {
 }
 function txHTML(tx) {
   // All incoming types (show as +green)
-  const isIn = ['deposit','earning','referral','testimonial_reward','poem_reward','socialpay_reward',
+  const isIn = ['deposit','earning','referral','referral_bonus','testimonial_reward','poem_reward','socialpay_reward',
     'hourly_earning','balance_reversed','balance_resolved','tps_earning','vip_earning','admin_credit',
     'spin_wheel','trivia_reward','streak_bonus','mining_profit'].includes(tx.type);
   const sign = isIn ? '+' : '-';
@@ -559,7 +559,7 @@ function txHTML(tx) {
   // Professional readable labels
   const txTypeLabels = { deposit:'Deposit', withdrawal:'Withdrawal', earning:tx.source_app||'Earnings',
     hourly_earning: tx.source_app || (tx.note && tx.note.includes('VIP') ? 'VIP Hourly Earning' : 'Hourly Earning'),
-    referral:'Referral Bonus', testimonial_reward:'Testimonial Reward', poem_reward:'Poem Reward',
+    referral:'Referral Bonus', referral_bonus:'Referral Bonus', testimonial_reward:'Testimonial Reward', poem_reward:'Poem Reward',
     socialpay_reward:'SocialPay Reward', balance_reversed:'Balance Reversed', balance_resolved:'Balance Resolved',
     tps_earning:'TP$ Earners Reward', admin_credit:'Admin Credit', vip_earning:'VIP Earning',
     spin_wheel:'Spin Wheel Reward', trivia_reward:'Trivia Reward', streak_bonus:'Streak Bonus',
@@ -573,7 +573,7 @@ function txHTML(tx) {
 }
 function viewTxDetail(txId) {
   const tx = state.transactions.find(t => t.id === txId); if (!tx) return;
-  const isIn = ['deposit','earning','referral','testimonial_reward','poem_reward','socialpay_reward',
+  const isIn = ['deposit','earning','referral','referral_bonus','testimonial_reward','poem_reward','socialpay_reward',
     'hourly_earning','balance_reversed','balance_resolved','tps_earning','vip_earning','admin_credit',
     'spin_wheel','trivia_reward','streak_bonus','mining_profit'].includes(tx.type);
   const sign = isIn ? '+' : '-';
@@ -586,7 +586,7 @@ function viewTxDetail(txId) {
       <div class="tdc-status ${sCls}">${sLbl}</div>
     </div>
     <div class="tdc-rows">
-      <div class="tdc-row"><span class="tdc-lbl">Type</span><span class="tdc-val">${{'deposit':'Deposit','withdrawal':'Withdrawal','earning':'Earnings','hourly_earning':'Hourly Earning','referral':'Referral Bonus','testimonial_reward':'Testimonial Reward','poem_reward':'Poem Reward','socialpay_reward':'SocialPay Reward','balance_reversed':'Balance Reversed','balance_resolved':'Balance Resolved','tps_earning':'TP$ Earners Reward','admin_credit':'Admin Credit','vip_earning':'VIP Earning'}[tx.type] || (tx.type && !tx.type.startsWith('{') ? tx.type.split('_').map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(' ') : 'SocialPay Reward')}</span></div>
+      <div class="tdc-row"><span class="tdc-lbl">Type</span><span class="tdc-val">${{'deposit':'Deposit','withdrawal':'Withdrawal','earning':'Earnings','hourly_earning':'Hourly Earning','referral':'Referral Bonus','referral_bonus':'Referral Bonus','testimonial_reward':'Testimonial Reward','poem_reward':'Poem Reward','socialpay_reward':'SocialPay Reward','balance_reversed':'Balance Reversed','balance_resolved':'Balance Resolved','tps_earning':'TP$ Earners Reward','admin_credit':'Admin Credit','vip_earning':'VIP Earning'}[tx.type] || (tx.type && !tx.type.startsWith('{') ? tx.type.split('_').map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(' ') : 'SocialPay Reward')}</span></div>
       <div class="tdc-row"><span class="tdc-lbl">Date &amp; Time</span><span class="tdc-val">${fmtDate(tx.created_at)}</span></div>
       ${tx.note ? `<div class="tdc-row"><span class="tdc-lbl">Note</span><span class="tdc-val">${tx.note}</span></div>` : ''}
       <div class="tdc-row"><span class="tdc-lbl">Network</span><span class="tdc-val">TRC20</span></div>
