@@ -250,7 +250,18 @@ setInterval(() => {
 app.get('/api/admin/setup-db', async (req, res) => {
   try {
     const { Pool } = require('pg');
-    const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+    // Parse the DATABASE_URL and use explicit connection params for Supabase pooler
+    const dbUrl = process.env.DATABASE_URL || '';
+    // Try direct connection format (not pooler)
+    const SUPABASE_URL = process.env.SUPABASE_URL || 'https://cuuekllbcrxvlxlydyta.supabase.co';
+    const SUPA_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+    
+    // Use the pooler with SSL
+    const pool = new Pool({ 
+      connectionString: dbUrl,
+      ssl: { rejectUnauthorized: false },
+      connectionTimeoutMillis: 10000
+    });
     const client = await pool.connect();
     
     await client.query(`CREATE TABLE IF NOT EXISTS app_settings (
@@ -276,7 +287,25 @@ app.get('/api/admin/setup-db', async (req, res) => {
     
     res.json({ success: true, message: 'app_settings table created, user columns added' });
   } catch(e) {
-    res.status(500).json({ error: e.message });
+    // Fallback: try using Supabase REST API to at least verify/insert settings
+    try {
+      const supa = getSupabase();
+      // Try upserting settings — if table doesn't exist, this will fail gracefully
+      const { error: err1 } = await supa.from('app_settings').upsert([
+        { key: 'min_withdrawal', value: '5000' },
+        { key: 'max_withdrawal', value: '50000' },
+        { key: 'gateway_fee_rate', value: '0.04' }
+      ], { onConflict: 'key' });
+      
+      if (err1) {
+        res.status(500).json({ error: 'Table not created yet. Please run this SQL in Supabase SQL Editor: CREATE TABLE app_settings (id SERIAL PRIMARY KEY, key TEXT UNIQUE NOT NULL, value TEXT NOT NULL); ALTER TABLE users ADD COLUMN IF NOT EXISTS min_withdrawal_override NUMERIC DEFAULT NULL; ALTER TABLE users ADD COLUMN IF NOT EXISTS max_withdrawal_override NUMERIC DEFAULT NULL;' });
+      } else {
+        // Try adding user columns via update (will work if columns exist)
+        res.json({ success: true, message: 'Settings inserted via Supabase REST. User columns may need manual addition in Supabase SQL Editor.' });
+      }
+    } catch(e2) {
+      res.status(500).json({ error: e.message + ' | Fallback also failed: ' + e2.message });
+    }
   }
 });
 
