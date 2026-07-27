@@ -194,8 +194,23 @@ async function init(retryCount) {
     state.isVIP        = u.isVIP === true;
     state.termsAccepted= u.termsAccepted === true;
     state.referralCode = u.referralCode || u.uid || '';
-      // Fetch dynamic withdrawal limits
-      try { const ws = await get('/api/withdrawal-settings'); MIN_WD = ws.minWithdrawal || 5000; MAX_WD = ws.maxWithdrawal || 50000; } catch(e) {}
+      // Fetch dynamic withdrawal limits and update all UI elements
+      try {
+        const ws = await get('/withdrawal-settings'); // get() already prepends /api
+        if (ws && ws.minWithdrawal) {
+          MIN_WD = ws.minWithdrawal;
+          MAX_WD = ws.maxWithdrawal;
+          // Update limit row hint text in withdrawal page
+          const lr = document.getElementById('limitRow');
+          if (lr) lr.innerHTML = `Min: ${MIN_WD.toLocaleString()} USDT &nbsp;|&nbsp; Max: ${MAX_WD.toLocaleString()} USDT`;
+          // Update summary fees row
+          const sfr = document.getElementById('siFeesRow');
+          if (sfr) sfr.textContent = `Gateway Fee: 4% · Min: ${MIN_WD.toLocaleString()} USDT · Max: ${MAX_WD.toLocaleString()} USDT`;
+          // Update input min attribute
+          const wdInput = document.getElementById('withdrawAmount');
+          if (wdInput) wdInput.min = MIN_WD;
+        }
+      } catch(e) { /* keep defaults if fetch fails */ }
     state.referralCount= u.referralCount || 0;
     // Load profile picture immediately on init (from users table)
     if (u.profile_picture || u.profilePicture) {
