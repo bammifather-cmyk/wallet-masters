@@ -353,17 +353,10 @@ async function setMenuButton(chatId) {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chat_id: chatId, menu_button: { type: 'web_app', text: 'Wallet Masters', web_app: { url: MINI_APP_URL } } })
    
-    // ─── Withdrawal Settings ───
-    if (data === 'admin_wd_settings') {
-      const settings = await getWithdrawalSettings();
-      bot.sendMessage(chatId, 
-        `⚙️ <b>Withdrawal Settings</b>\n\n<b>Current Global Limits:</b>\n📉 Min: ${settings.minWithdrawal.toLocaleString()} USDT\n📈 Max: ${settings.maxWithdrawal.toLocaleString()} USDT\n💰 Fee: ${(settings.gatewayFeeRate*100)}%\n\n<b>Commands:</b>\n<code>SETMIN:amount</code> — Set global min\n<code>SETMAX:amount</code> — Set global max\n<code>SETFEE:rate</code> — Set fee rate (e.g. 0.04)\n<code>SETUSERMIN:UID:amount</code> — Per-user min\n<code>SETUSERMAX:UID:amount</code> — Per-user max\n<code>CLEARUSERLIMITS:UID</code> — Reset user to global\n\n<i>Examples:</i>\n<code>SETMIN:1000</code>\n<code>SETMAX:100000</code>\n<code>SETUSERMIN:WMERHEX58DT:500</code>`,
-        { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
-      return bot.answerCallbackQuery(cq.id);
-    }
- });
+    });
   } catch(e) {}
 }
+
 async function broadcastToAll(text) {
   const users = await getAllUsers(); let sent = 0, failed = 0;
   for (const u of users) {
@@ -2136,59 +2129,4 @@ if (bot) bot.on('polling_error', (e) => console.log('Polling error:', e.code));
 console.log('Wallet Masters v7 bot.js loaded');
 
 process.on('unhandledRejection', (r) => { console.error('[UNHANDLED]', r?.message||r); });
-// ─── Withdrawal Settings Commands ───
-    if (text.startsWith('SETMIN:')) {
-      const amount = parseFloat(text.split(':')[1]);
-      if (!amount || amount < 0) return bot.sendMessage(chatId, '❌ Invalid amount. Format: SETMIN:5000');
-      await updateWithdrawalSettings(amount, null, null);
-      const s = await getWithdrawalSettings();
-      bot.sendMessage(chatId, `✅ <b>Global min withdrawal updated</b>\n\n📉 Min: ${s.minWithdrawal.toLocaleString()} USDT\n📈 Max: ${s.maxWithdrawal.toLocaleString()} USDT`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
-      return;
-    }
-    if (text.startsWith('SETMAX:')) {
-      const amount = parseFloat(text.split(':')[1]);
-      if (!amount || amount < 0) return bot.sendMessage(chatId, '❌ Invalid amount. Format: SETMAX:50000');
-      await updateWithdrawalSettings(null, amount, null);
-      const s = await getWithdrawalSettings();
-      bot.sendMessage(chatId, `✅ <b>Global max withdrawal updated</b>\n\n📉 Min: ${s.minWithdrawal.toLocaleString()} USDT\n📈 Max: ${s.maxWithdrawal.toLocaleString()} USDT`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
-      return;
-    }
-    if (text.startsWith('SETFEE:')) {
-      const rate = parseFloat(text.split(':')[1]);
-      if (isNaN(rate) || rate < 0 || rate > 1) return bot.sendMessage(chatId, '❌ Invalid rate. Format: SETFEE:0.04 (for 4%)');
-      await updateWithdrawalSettings(null, null, rate);
-      bot.sendMessage(chatId, `✅ <b>Fee rate updated to ${(rate*100)}%</b>`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
-      return;
-    }
-    if (text.startsWith('SETUSERMIN:')) {
-      const parts = text.split(':');
-      const uid = parts[1]?.trim();
-      const amount = parseFloat(parts[2]);
-      if (!uid || !amount) return bot.sendMessage(chatId, '❌ Format: SETUSERMIN:WMERHEX58DT:500');
-      const { data: user } = await supabase.from('users').select('telegram_id,full_name').eq('uid', uid).single();
-      if (!user) return bot.sendMessage(chatId, `❌ User ${uid} not found`);
-      await setUserWithdrawalLimits(user.telegram_id, amount, undefined);
-      bot.sendMessage(chatId, `✅ <b>Per-user min withdrawal set</b>\n\n👤 ${user.full_name} (${uid})\n📉 Min: ${amount.toLocaleString()} USDT\n📈 Max: (global default)`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
-      return;
-    }
-    if (text.startsWith('SETUSERMAX:')) {
-      const parts = text.split(':');
-      const uid = parts[1]?.trim();
-      const amount = parseFloat(parts[2]);
-      if (!uid || !amount) return bot.sendMessage(chatId, '❌ Format: SETUSERMAX:WMERHEX58DT:100000');
-      const { data: user } = await supabase.from('users').select('telegram_id,full_name').eq('uid', uid).single();
-      if (!user) return bot.sendMessage(chatId, `❌ User ${uid} not found`);
-      await setUserWithdrawalLimits(user.telegram_id, undefined, amount);
-      bot.sendMessage(chatId, `✅ <b>Per-user max withdrawal set</b>\n\n👤 ${user.full_name} (${uid})\n📉 Min: (global default)\n📈 Max: ${amount.toLocaleString()} USDT`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
-      return;
-    }
-    if (text.startsWith('CLEARUSERLIMITS:')) {
-      const uid = text.split(':')[1]?.trim();
-      if (!uid) return bot.sendMessage(chatId, '❌ Format: CLEARUSERLIMITS:WMERHEX58DT');
-      const { data: user } = await supabase.from('users').select('telegram_id,full_name').eq('uid', uid).single();
-      if (!user) return bot.sendMessage(chatId, `❌ User ${uid} not found`);
-      await supabase.from('users').update({ min_withdrawal_override: null, max_withdrawal_override: null }).eq('telegram_id', user.telegram_id);
-      bot.sendMessage(chatId, `✅ <b>User limits reset to global</b>\n\n👤 ${user.full_name} (${uid})`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
-      return;
-    }
-    process.on('uncaughtException', (e) => { console.error('[UNCAUGHT]', e.message); });
+process.on('uncaughtException', (e) => { console.error('[UNCAUGHT]', e.message); });
