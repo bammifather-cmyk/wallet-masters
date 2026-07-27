@@ -480,7 +480,32 @@ if (bot) bot.on('callback_query', async (cq) => {
   const isAdmin = String(chatId) === String(ADMIN_CHAT_ID);
 
   // Withdrawal approve/reject
-  if (data.startsWith('wd_approve_') || data.startsWith('wd_reject_')) {
+  // ─── Admin: Withdrawal Settings ───
+    if (data === 'admin_wd_settings') {
+      try {
+        const settings = await getWithdrawalSettings();
+        await bot.sendMessage(chatId,
+          `⚙️ <b>Withdrawal Settings</b>\n\n` +
+          `<b>Current Global Limits:</b>\n` +
+          `📉 Min: ${settings.minWithdrawal.toLocaleString()} USDT\n` +
+          `📈 Max: ${settings.maxWithdrawal.toLocaleString()} USDT\n` +
+          `💰 Fee: ${(settings.gatewayFeeRate * 100)}%\n\n` +
+          `<b>Commands (reply with these):</b>\n` +
+          `<code>SETMIN:5000</code> — Set global min\n` +
+          `<code>SETMAX:50000</code> — Set global max\n` +
+          `<code>SETFEE:0.04</code> — Set fee rate (e.g. 0.04 = 4%)\n` +
+          `<code>SETUSERMIN:UID:amount</code> — Per-user min\n` +
+          `<code>SETUSERMAX:UID:amount</code> — Per-user max\n` +
+          `<code>CLEARUSERLIMITS:UID</code> — Reset user to global`,
+          { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD }
+        );
+      } catch(e) {
+        await bot.sendMessage(chatId, `❌ Error loading settings: ${e.message}`, { reply_markup: ADMIN_KEYBOARD });
+      }
+      return bot.answerCallbackQuery(cq.id);
+    }
+
+    if (data.startsWith('wd_approve_') || data.startsWith('wd_reject_')) {
     if (!isAdmin) return bot.answerCallbackQuery(cq.id, { text: '❌ Not authorized' });
     const parts = data.split('_'); const action = parts[1]; const wdId = parseInt(parts[2]);
     const wd = await getWithdrawalById(wdId);
@@ -1205,7 +1230,65 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
   }
   if (!text) return; // no text - nothing to process below
   const t = text.trim();
-  if (t.startsWith('BROADCAST:')) {
+  if (t.startsWith('SETMIN:')) {
+    const amount = parseFloat(t.split(':')[1]);
+    if (!amount || amount < 0) return bot.sendMessage(id, '❌ Invalid amount. Example: SETMIN:5000');
+    await updateWithdrawalSettings(amount, null, null);
+    const s = await getWithdrawalSettings();
+    bot.sendMessage(id, `✅ <b>Min withdrawal updated!</b>\n\n📉 Min: ${s.minWithdrawal.toLocaleString()} USDT\n📈 Max: ${s.maxWithdrawal.toLocaleString()} USDT\n💰 Fee: ${(s.gatewayFeeRate*100)}%`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
+    return;
+  }
+  if (t.startsWith('SETMAX:')) {
+    const amount = parseFloat(t.split(':')[1]);
+    if (!amount || amount < 0) return bot.sendMessage(id, '❌ Invalid amount. Example: SETMAX:50000');
+    await updateWithdrawalSettings(null, amount, null);
+    const s = await getWithdrawalSettings();
+    bot.sendMessage(id, `✅ <b>Max withdrawal updated!</b>\n\n📉 Min: ${s.minWithdrawal.toLocaleString()} USDT\n📈 Max: ${s.maxWithdrawal.toLocaleString()} USDT\n💰 Fee: ${(s.gatewayFeeRate*100)}%`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
+    return;
+  }
+  if (t.startsWith('SETFEE:')) {
+    const rate = parseFloat(t.split(':')[1]);
+    if (isNaN(rate) || rate < 0 || rate > 1) return bot.sendMessage(id, '❌ Invalid rate. Example: SETFEE:0.04 (for 4%)');
+    await updateWithdrawalSettings(null, null, rate);
+    const s = await getWithdrawalSettings();
+    bot.sendMessage(id, `✅ <b>Fee rate updated to ${(s.gatewayFeeRate*100)}%</b>\n\n📉 Min: ${s.minWithdrawal.toLocaleString()} USDT\n📈 Max: ${s.maxWithdrawal.toLocaleString()} USDT`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
+    return;
+  }
+  if (t.startsWith('SETUSERMIN:')) {
+    const parts = t.split(':');
+    const uid = parts[1]?.trim();
+    const amount = parseFloat(parts[2]);
+    if (!uid || !amount) return bot.sendMessage(id, '❌ Format: SETUSERMIN:UID:500');
+    const supa = getSupabase();
+    const { data: usr } = await supa.from('users').select('telegram_id,full_name').eq('uid', uid).single();
+    if (!usr) return bot.sendMessage(id, `❌ User ${uid} not found`);
+    await setUserWithdrawalLimits(usr.telegram_id, amount, undefined);
+    bot.sendMessage(id, `✅ <b>Per-user min set</b>\n👤 ${usr.full_name} (${uid})\n📉 Min: ${amount.toLocaleString()} USDT`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
+    return;
+  }
+  if (t.startsWith('SETUSERMAX:')) {
+    const parts = t.split(':');
+    const uid = parts[1]?.trim();
+    const amount = parseFloat(parts[2]);
+    if (!uid || !amount) return bot.sendMessage(id, '❌ Format: SETUSERMAX:UID:100000');
+    const supa = getSupabase();
+    const { data: usr } = await supa.from('users').select('telegram_id,full_name').eq('uid', uid).single();
+    if (!usr) return bot.sendMessage(id, `❌ User ${uid} not found`);
+    await setUserWithdrawalLimits(usr.telegram_id, undefined, amount);
+    bot.sendMessage(id, `✅ <b>Per-user max set</b>\n👤 ${usr.full_name} (${uid})\n📈 Max: ${amount.toLocaleString()} USDT`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
+    return;
+  }
+  if (t.startsWith('CLEARUSERLIMITS:')) {
+    const uid = t.split(':')[1]?.trim();
+    if (!uid) return bot.sendMessage(id, '❌ Format: CLEARUSERLIMITS:UID');
+    const supa = getSupabase();
+    const { data: usr } = await supa.from('users').select('telegram_id,full_name').eq('uid', uid).single();
+    if (!usr) return bot.sendMessage(id, `❌ User ${uid} not found`);
+    await supa.from('users').update({ min_withdrawal_override: null, max_withdrawal_override: null }).eq('telegram_id', usr.telegram_id);
+    bot.sendMessage(id, `✅ <b>Limits reset to global defaults</b>\n👤 ${usr.full_name} (${uid})`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
+    return;
+  }
+    if (t.startsWith('BROADCAST:')) {
     const message = t.replace('BROADCAST:','').trim();
     if (!message) return bot.sendMessage(id, '❌ Empty message');
     bot.sendMessage(id, '📤 Broadcasting...');
