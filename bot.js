@@ -1,3 +1,4 @@
+// Deploy trigger
 /**
  * Wallet Masters — Bot v7
  * Database: PostgreSQL/Supabase (persistent)
