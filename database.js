@@ -1145,7 +1145,62 @@ async function claimMiningProfit(telegramId) {
 }
 
 
+
+// ─── Withdrawal Settings (admin-configurable) ────────────────────────────────
+async function getWithdrawalSettings() {
+  try {
+    const { data, error } = await supabase.from('app_settings').select('key,value').in('key', ['min_withdrawal','max_withdrawal','gateway_fee_rate']);
+    if (error || !data || data.length === 0) {
+      return { minWithdrawal: MIN_WITHDRAWAL, maxWithdrawal: MAX_WITHDRAWAL, gatewayFeeRate: GATEWAY_FEE_RATE };
+    }
+    const settings = {};
+    data.forEach(r => { settings[r.key] = r.value; });
+    return {
+      minWithdrawal: parseFloat(settings.min_withdrawal) || MIN_WITHDRAWAL,
+      maxWithdrawal: parseFloat(settings.max_withdrawal) || MAX_WITHDRAWAL,
+      gatewayFeeRate: parseFloat(settings.gateway_fee_rate) || GATEWAY_FEE_RATE
+    };
+  } catch(e) {
+    return { minWithdrawal: MIN_WITHDRAWAL, maxWithdrawal: MAX_WITHDRAWAL, gatewayFeeRate: GATEWAY_FEE_RATE };
+  }
+}
+
+async function updateWithdrawalSettings(minW, maxW, feeRate) {
+  const updates = [];
+  if (minW != null) updates.push({ key: 'min_withdrawal', value: String(minW) });
+  if (maxW != null) updates.push({ key: 'max_withdrawal', value: String(maxW) });
+  if (feeRate != null) updates.push({ key: 'gateway_fee_rate', value: String(feeRate) });
+  for (const u of updates) {
+    await supabase.from('app_settings').upsert(u, { onConflict: 'key' }).eq('key', u.key);
+  }
+  return await getWithdrawalSettings();
+}
+
+async function getUserWithdrawalLimits(telegramId) {
+  const global = await getWithdrawalSettings();
+  try {
+    const { data: user } = await supabase.from('users').select('min_withdrawal_override,max_withdrawal_override').eq('telegram_id', String(telegramId)).single();
+    if (user) {
+      return {
+        minWithdrawal: user.min_withdrawal_override != null ? parseFloat(user.min_withdrawal_override) : global.minWithdrawal,
+        maxWithdrawal: user.max_withdrawal_override != null ? parseFloat(user.max_withdrawal_override) : global.maxWithdrawal,
+        gatewayFeeRate: global.gatewayFeeRate
+      };
+    }
+  } catch(e) {}
+  return global;
+}
+
+async function setUserWithdrawalLimits(telegramId, minOverride, maxOverride) {
+  const update = {};
+  if (minOverride !== undefined) update.min_withdrawal_override = minOverride;
+  if (maxOverride !== undefined) update.max_withdrawal_override = maxOverride;
+  await supabase.from('users').update(update).eq('telegram_id', String(telegramId));
+  return await getUserWithdrawalLimits(telegramId);
+}
+
 module.exports = {
+  getWithdrawalSettings, updateWithdrawalSettings, getUserWithdrawalLimits, setUserWithdrawalLimits,
   setUserBalance,
   createAdminTestimonial,
   deleteCommunityComment,
