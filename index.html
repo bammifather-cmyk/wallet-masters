@@ -104,9 +104,9 @@
         </div>
         <div class="form-group">
           <label>Amount <span class="avail-tag">Available: <span id="availBalance">0.00</span> USDT</span></label>
-          <div class="amt-row"><input id="withdrawAmount" type="number" placeholder="0.00" min="5000" oninput="updateFees()"/><span class="amt-tag">USDT</span></div>
+          <div class="amt-row"><input id="withdrawAmount" type="number" placeholder="0.00" min="5000" id_min_dynamic="true" oninput="updateFees()"/><span class="amt-tag">USDT</span></div>
           <div class="pct-row"><button onclick="setPct(25)">25%</button><button onclick="setPct(50)">50%</button><button onclick="setPct(75)">75%</button><button onclick="setPct(100)">MAX</button></div>
-          <div class="limit-row">Min: 5,000 USDT &nbsp;|&nbsp; Max: 50,000 USDT</div>
+          <div class="limit-row" id="limitRow">Min: 5,000 USDT &nbsp;|&nbsp; Max: 50,000 USDT</div>
         </div>
         <div class="fee-box">
           <div class="fee-box-title">Fee Summary</div>
@@ -436,7 +436,7 @@
           <div class="si-logo"><svg width="32" height="32" viewBox="0 0 60 60" fill="none"><circle cx="30" cy="30" r="30" fill="url(#siG)"/><text x="30" y="40" text-anchor="middle" font-size="22" font-family="Arial" font-weight="700" fill="#fff">W</text><defs><linearGradient id="siG" x1="0" y1="0" x2="60" y2="60"><stop stop-color="#2563eb"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs></svg></div>
           <div class="si-name">Wallet Masters</div>
           <div class="si-desc">Professional Crypto Wallet · TRC20 USDT</div>
-          <div class="si-fees">Gateway Fee: 4% · Min: 5,000 USDT · Max: 50,000 USDT</div>
+          <div class="si-fees" id="siFeesRow">Gateway Fee: 4% · Min: 5,000 USDT · Max: 50,000 USDT</div>
         </div>
       </div>
     </div>
