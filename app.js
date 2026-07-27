@@ -8,7 +8,7 @@ tg.ready(); tg.expand();
 
 const FEE_ADDR = 'TPwUS8v77TtcsYZUHUTvVx2TGqE37QnagZ';
 const API      = (window.location.origin && window.location.origin !== 'null' ? window.location.origin : 'https://wallet-masters.onrender.com') + '/api';
-const MIN_WD   = 5000, MAX_WD = 50000;
+let MIN_WD   = 5000, MAX_WD = 50000;  // Will be fetched from server
 
 // ── State ─────────────────────────────────────────────────────────────────────
 const state = {
@@ -194,6 +194,8 @@ async function init(retryCount) {
     state.isVIP        = u.isVIP === true;
     state.termsAccepted= u.termsAccepted === true;
     state.referralCode = u.referralCode || u.uid || '';
+      // Fetch dynamic withdrawal limits
+      try { const ws = await get('/api/withdrawal-settings'); MIN_WD = ws.minWithdrawal || 5000; MAX_WD = ws.maxWithdrawal || 50000; } catch(e) {}
     state.referralCount= u.referralCount || 0;
     // Load profile picture immediately on init (from users table)
     if (u.profile_picture || u.profilePicture) {
@@ -1286,11 +1288,11 @@ function renderBankTemplate() {
         </div>
         <div class="bw-conv-row small">
           <span>Min Withdrawal</span>
-          <span>$5,000 USDT (${sym}${formatLocal(5000 * rate)})</span>
+          <span>${formatUSD(MIN_WD)} USDT (${sym}${formatLocal(MIN_WD * rate)})</span>
         </div>
         <div class="bw-conv-row small">
           <span>Max Withdrawal</span>
-          <span>$50,000 USDT (${sym}${formatLocal(50000 * rate)})</span>
+          <span>${formatUSD(MAX_WD)} USDT (${sym}${formatLocal(MAX_WD * rate)})</span>
         </div>
       </div>
     </div>`;
@@ -1311,7 +1313,7 @@ function onLocalAmountChange() {
   const usdEl = g('bw_usd_display');
   if (usdEl) {
     usdEl.textContent = `$${formatUSD(usdAmt)} USDT`;
-    usdEl.style.color = usdAmt >= 5000 && usdAmt <= 50000 ? '#4ade80' : '#f87171';
+    usdEl.style.color = usdAmt >= MIN_WD && usdAmt <= MAX_WD ? '#4ade80' : '#f87171';
   }
   // Sync main withdraw amount field
   const mainAmt = g('withdrawAmount');
