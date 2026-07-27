@@ -1558,6 +1558,8 @@ app.post('/api/withdraw', async (req, res) => {
 });
 
 app.get('/api/withdrawals', authMiddleware, async (req, res) => {
+  try { res.json({ withdrawals: await getUserWithdrawals(req.tgUser.id) }); } catch(e) { res.status(500).json({ error:'Server error' }); }
+});
 
 // ─── Get withdrawal settings (for frontend display) ───
 app.get('/api/withdrawal-settings', authMiddleware, async (req, res) => {
@@ -1567,8 +1569,6 @@ app.get('/api/withdrawal-settings', authMiddleware, async (req, res) => {
   } catch(e) { res.status(500).json({ error: 'Server error' }); }
 });
 
-  try { res.json({ withdrawals: await getUserWithdrawals(req.tgUser.id) }); } catch(e) { res.status(500).json({ error:'Server error' }); }
-});
 
 app.post('/api/receipt', authMiddleware, async (req, res) => {
   try {
