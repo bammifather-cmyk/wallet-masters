@@ -24,6 +24,8 @@ services:
         value: production
       - key: DATABASE_URL
         value: postgresql://postgres.cuuekllbcrxvlxlydyta:ZiEPZYqgmCZaIgf2@aws-0-us-west-1.pooler.supabase.com:6543/postgres
+      - key: SUPABASE_SERVICE_KEY
+        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN1dWVrbGxiY3J4dmx4bHlkeXRhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDc2Njc2NiwiZXhwIjoyMDk2MzQyNzY2fQ.hVrvMPR8zQ3GTpr2ckEMUfMs9M1XhInJu-TlzWnv558
       - key: SUPABASE_URL
         value: https://cuuekllbcrxvlxlydyta.supabase.co
 
