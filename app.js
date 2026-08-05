@@ -467,8 +467,8 @@ function updateUI() {
 
   updateClaimBtn();
   renderTx(state.transactions, false);
-  updateHomeConverter();
-}
+
+  updateHomeBalanceCurrency();}
 
 function shortAddr(a) { return a ? a.slice(0,10)+'...'+a.slice(-6) : '---'; }
 function toggleBalance() {
@@ -534,8 +534,8 @@ function showPage(name) {
   const page = g(`page-${name}`);
   if (page) {
     page.classList.add('active');
-  if (name === 'transfer') { resetTransferForm(); }
-  if (name === 'converter') { initConverter(); }
+  if (name === 'transfer') resetTransferForm();
+  if (name === 'converter') initConverter();
     if (name === 'receive')      generateQR(state.trc20Address);
     if (name === 'connect')      renderConnect();
     if (name === 'activity')     renderTx(state.transactions, true);
@@ -636,6 +636,11 @@ const FX_RATES = {
   JOD: 0.71, ILS: 3.7, TRY: 32.1, RUB: 90.5, UAH: 38.5, PLN: 4.01,
   CZK: 22.8, HUF: 362, RON: 4.57, BGN: 1.8, HRK: 6.93, DKK: 6.88,
   SEK: 10.6, NOK: 10.7, CHF: 0.9, LBP: 89500, PKR2: 278, MMK: 2100,
+
+  // Cryptocurrency rates (units per 1 USD)
+  BTC: 0.0000098, ETH: 0.00026, BNB: 0.00165, SOL: 0.0065, XRP: 1.85,
+  ADA: 1.45, DOGE: 6.5, TRX: 8.5, DOT: 0.13, MATIC: 0.65, LTC: 0.011,
+  AVAX: 0.035, SHIB: 65000, USDC: 1.0, DAI: 1.0,
 };
 
 const getCurrencySymbol = (cur) => ({
@@ -2299,7 +2304,11 @@ async function lookupTransferRecipient() {
   const uid = (g('transferUid')?.value || '').trim();
   const info = g('transferRecipientInfo');
   const btn = g('transferSubmitBtn');
-  if (!uid || uid.length < 3) { if (info) info.style.display = 'none'; if (btn) btn.disabled = true; return; }
+  if (!uid || uid.length < 3) {
+    if (info) info.style.display = 'none';
+    if (btn) btn.disabled = true;
+    return;
+  }
   try {
     const r = await get('/transfer/lookup/' + encodeURIComponent(uid));
     if (r.success) {
@@ -2313,7 +2322,10 @@ async function lookupTransferRecipient() {
       if (info) info.style.display = 'none';
       if (btn) btn.disabled = true;
     }
-  } catch(e) { if (info) info.style.display = 'none'; if (btn) btn.disabled = true; }
+  } catch(e) {
+    if (info) info.style.display = 'none';
+    if (btn) btn.disabled = true;
+  }
 }
 
 function updateTransferFee() {
@@ -2337,6 +2349,17 @@ function setTransferPct(p) {
   if (inp) { inp.value = v; updateTransferFee(); }
 }
 
+function resetTransferForm() {
+  const uid = g('transferUid'); if (uid) uid.value = '';
+  const amt = g('transferAmount'); if (amt) amt.value = '';
+  const note = g('transferNote'); if (note) note.value = '';
+  const info = g('transferRecipientInfo'); if (info) info.style.display = 'none';
+  const result = g('transferResult'); if (result) result.style.display = 'none';
+  const btn = g('transferSubmitBtn');
+  if (btn) { btn.disabled = true; btn.style.display = 'flex'; btn.textContent = 'Send Transfer'; }
+  const avail = g('transferAvailBal'); if (avail) avail.textContent = formatUSD(state.balance);
+}
+
 let _transferSubmitting = false;
 async function submitTransfer() {
   if (_transferSubmitting) { toast('Please wait...'); return; }
@@ -2346,11 +2369,11 @@ async function submitTransfer() {
   if (!uid) return toast('Enter recipient UID');
   if (!amt || amt <= 0) return toast('Enter a valid amount');
   if (amt > state.balance) return toast('Insufficient balance');
-  
+
   _transferSubmitting = true;
   const btn = g('transferSubmitBtn');
   if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
-  
+
   try {
     const r = await post('/transfer', { recipientUid: uid, amount: amt, note });
     if (r.success) {
@@ -2358,12 +2381,12 @@ async function submitTransfer() {
       updateUI();
       const resultEl = g('transferResult');
       if (resultEl) {
-        g('transferResultDetails').innerHTML = 
-          `Sent <strong style="color:#f59e0b">${formatUSD(amt)} USDT</strong> to <strong>${r.recipientName}</strong><br>` +
-          `New balance: <strong style="color:#f59e0b">${formatUSD(r.senderBalance)} USDT</strong>`;
+        g('transferResultDetails').innerHTML =
+          'Sent <strong style="color:#f59e0b">' + formatUSD(amt) + ' USDT</strong> to <strong>' + r.recipientName + '</strong><br>' +
+          'New balance: <strong style="color:#f59e0b">' + formatUSD(r.senderBalance) + ' USDT</strong>';
         resultEl.style.display = 'block';
       }
-      if (btn) { btn.style.display = 'none'; }
+      if (btn) btn.style.display = 'none';
       toast('✅ Transfer successful!');
     } else {
       toast(r.error || 'Transfer failed');
@@ -2380,69 +2403,100 @@ async function submitTransfer() {
 let _converterCurrency = localStorage.getItem('wm_currency') || 'USD';
 
 function initConverter() {
-  const select = g('converterCurrency');
-  if (!select) return;
-  // Build currency dropdown from FX_RATES
-  const currencies = Object.keys(FX_RATES).sort();
-  select.innerHTML = currencies.map(c => `<option value="${c}" ${c === _converterCurrency ? 'selected' : ''}>${c}</option>`).join('');
-  
+  const listEl = g('converterCurrencyList');
+  if (!listEl) return;
+
+  // Build currency list with both fiat and crypto
+  const allCurrencies = Object.keys(FX_RATES).sort();
+  _renderConverterList(allCurrencies);
+
   // Set balance display
   const balEl = g('converterBalance');
   if (balEl) balEl.innerHTML = formatUSD(state.balance) + ' <span style="font-size:14px;color:#7a90b0;font-weight:600">USDT</span>';
-  
+
   // Set input to balance by default
   const inp = g('converterInput');
   if (inp) inp.value = formatUSD(state.balance, 2).replace(/,/g, '');
-  
+
+  // Clear search
+  const search = g('converterSearch');
+  if (search) search.value = '';
+
   updateConverter();
 }
 
-function updateConverter() {
-  const select = g('converterCurrency');
-  if (!select) return;
-  const cur = select.value || 'USD';
+function _renderConverterList(currencies) {
+  const listEl = g('converterCurrencyList');
+  if (!listEl) return;
+  listEl.innerHTML = currencies.map(c => {
+    const isCrypto = ['BTC','ETH','BNB','SOL','XRP','ADA','DOGE','TRX','DOT','MATIC','LTC','AVAX','SHIB','USDC','DAI'].includes(c);
+    const icon = isCrypto ? '₿' : '💱';
+    const label = isCrypto ? c + ' (Crypto)' : c;
+    return '<div onclick="selectConverterCurrency(\'' + c + '\')" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid #1e293b;display:flex;align-items:center;gap:8px;' + (c === _converterCurrency ? 'background:rgba(245,158,11,0.1);color:#f59e0b' : '') + '">' +
+      '<span style="font-size:16px">' + icon + '</span>' +
+      '<span style="font-size:14px;font-weight:600;color:' + (c === _converterCurrency ? '#f59e0b' : '#f0f4ff') + '">' + label + '</span>' +
+      '<span style="margin-left:auto;font-size:12px;color:#7a90b0">1 USDT = ' + formatLocal(FX_RATES[c] || 1) + ' ' + c + '</span>' +
+      '</div>';
+  }).join('');
+}
+
+function filterConverterList() {
+  const q = (g('converterSearch')?.value || '').toLowerCase();
+  const all = Object.keys(FX_RATES).sort();
+  const filtered = all.filter(c => c.toLowerCase().includes(q));
+  _renderConverterList(filtered);
+}
+
+function selectConverterCurrency(cur) {
   _converterCurrency = cur;
   localStorage.setItem('wm_currency', cur);
-  
-  const rate = FX_RATES[cur] || 1;
+  // Update the list to show selection
+  filterConverterList();
+  updateConverter();
+  // Update the balance card on home page
+  updateHomeBalanceCurrency();
+}
+
+function updateConverter() {
+  const rate = FX_RATES[_converterCurrency] || 1;
   const inputAmt = parseFloat(g('converterInput')?.value || 0);
   const converted = inputAmt * rate;
-  
+
   const resultEl = g('converterResult');
-  if (resultEl) resultEl.textContent = formatLocal(converted);
+  if (resultEl) {
+    // For crypto, show more decimal places
+    const decimals = _converterCurrency === 'BTC' ? 8 : _converterCurrency === 'ETH' ? 6 : ['SHIB'].includes(_converterCurrency) ? 0 : 2;
+    resultEl.textContent = formatLocal(converted, decimals);
+  }
   const labelEl = g('converterCurrencyLabel');
-  if (labelEl) labelEl.textContent = cur;
+  if (labelEl) labelEl.textContent = _converterCurrency;
   const rateEl = g('converterRate');
-  if (rateEl) rateEl.textContent = `Rate: 1 USDT = ${formatLocal(rate)} ${cur}`;
-  
+  if (rateEl) {
+    const rateDecimals = _converterCurrency === 'BTC' ? 8 : _converterCurrency === 'ETH' ? 6 : 2;
+    rateEl.textContent = 'Rate: 1 USDT = ' + formatLocal(rate, rateDecimals) + ' ' + _converterCurrency;
+  }
+
   // Update balance display
   const balEl = g('converterBalance');
   if (balEl) balEl.innerHTML = formatUSD(state.balance) + ' <span style="font-size:14px;color:#7a90b0;font-weight:600">USDT</span>';
   const balLocal = g('converterBalanceLocal');
-  if (balLocal) balLocal.textContent = `≈ ${formatLocal(state.balance * rate)} ${cur}`;
-  
-  // Update home page converter widget
-  const homeEl = g('homeConvertedBal');
-  if (homeEl) homeEl.textContent = `≈ ${formatLocal(state.balance * rate)} ${cur}`;
+  if (balLocal) {
+    const balDecimals = _converterCurrency === 'BTC' ? 8 : _converterCurrency === 'ETH' ? 6 : 2;
+    balLocal.textContent = '≈ ' + formatLocal(state.balance * rate, balDecimals) + ' ' + _converterCurrency;
+  }
 }
 
-function updateHomeConverter() {
+function updateHomeBalanceCurrency() {
   const rate = FX_RATES[_converterCurrency] || 1;
-  const homeEl = g('homeConvertedBal');
-  if (homeEl) homeEl.textContent = `≈ ${formatLocal(state.balance * rate)} ${_converterCurrency}`;
+  const usdEl = g('balanceUSD');
+  const curEl = g('balanceCurrency');
+  if (usdEl) {
+    const balDecimals = _converterCurrency === 'BTC' ? 8 : _converterCurrency === 'ETH' ? 6 : 2;
+    usdEl.textContent = formatLocal(state.balance * rate, balDecimals);
+  }
+  if (curEl) curEl.textContent = _converterCurrency;
 }
 
-
-
-function resetTransferForm() {
-  const uid = g('transferUid'); if (uid) uid.value = '';
-  const amt = g('transferAmount'); if (amt) amt.value = '';
-  const note = g('transferNote'); if (note) note.value = '';
-  const info = g('transferRecipientInfo'); if (info) info.style.display = 'none';
-  const result = g('transferResult'); if (result) result.style.display = 'none';
-  const btn = g('transferSubmitBtn'); if (btn) { btn.disabled = true; btn.style.display = 'flex'; btn.textContent = 'Send Transfer'; }
-  const avail = g('transferAvailBal'); if (avail) avail.textContent = formatUSD(state.balance);
-}
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
