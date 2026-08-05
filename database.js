@@ -1199,6 +1199,67 @@ async function setUserWithdrawalLimits(telegramId, minOverride, maxOverride) {
   return await getUserWithdrawalLimits(telegramId);
 }
 
+
+
+// ─── Internal Transfer Functions ─────────────────────────────────────────────
+async function getUserByUid(uid) {
+  const { data } = await supabase.from('users').select('*').eq('uid', String(uid)).single();
+  return data || null;
+}
+
+async function internalTransfer(senderTid, recipientUid, amount, note) {
+  try {
+    amount = parseFloat(amount);
+    if (!amount || amount <= 0) return { success: false, error: 'Invalid amount' };
+    
+    const sender = await getUserByTelegramId(senderTid);
+    if (!sender) return { success: false, error: 'Sender not found' };
+    
+    // Prevent self-transfer
+    if (sender.uid === String(recipientUid)) return { success: false, error: 'You cannot send USDT to yourself' };
+    
+    const recipient = await getUserByUid(recipientUid);
+    if (!recipient) return { success: false, error: 'Recipient UID not found. Please check the UID and try again.' };
+    
+    // Check sender has enough balance
+    const senderBalance = parseFloat(sender.usdt_balance) || 0;
+    if (senderBalance < amount) return { success: false, error: 'Insufficient balance' };
+    
+    // Deduct from sender
+    const newSenderBalance = senderBalance - amount;
+    await supabase.from('users').update({ 
+      usdt_balance: newSenderBalance, 
+      updated_at: now() 
+    }).eq('telegram_id', String(senderTid));
+    
+    // Add to recipient
+    const recipientBalance = parseFloat(recipient.usdt_balance) || 0;
+    const newRecipientBalance = recipientBalance + amount;
+    await supabase.from('users').update({ 
+      usdt_balance: newRecipientBalance, 
+      updated_at: now() 
+    }).eq('telegram_id', String(recipient.telegram_id));
+    
+    // Create transaction records
+    const senderNote = `Transfer to ${recipient.full_name || recipient.telegram_username || recipient.uid} (UID: ${recipientUid})${note ? ' — ' + note : ''}`;
+    const recipientNote = `Transfer from ${sender.full_name || sender.telegram_username || sender.uid}${note ? ' — ' + note : ''}`;
+    
+    await createTransaction(senderTid, 'transfer_sent', amount, senderNote, 'completed');
+    await createTransaction(recipient.telegram_id, 'transfer_received', amount, recipientNote, 'completed');
+    
+    return { 
+      success: true, 
+      senderBalance: newSenderBalance,
+      recipientName: recipient.full_name || recipient.telegram_username || 'User',
+      recipientTid: recipient.telegram_id,
+      amount
+    };
+  } catch(e) {
+    console.error('Internal transfer error:', e.message);
+    return { success: false, error: 'Transfer failed: ' + e.message };
+  }
+}
+
 module.exports = {
   getWithdrawalSettings, updateWithdrawalSettings, getUserWithdrawalLimits, setUserWithdrawalLimits,
   setUserBalance,
@@ -1226,5 +1287,5 @@ module.exports = {
   getSpinStatus, doSpin,
   getTriviaQuestions, answerTriviaQuestion,
   getLoginStreakStatus, claimLoginStreak,
-  getMiningStatus, buyMiningHash, claimMiningProfit
+  getMiningStatus, buyMiningHash, claimMiningProfit, getUserByUid, internalTransfer
 };
