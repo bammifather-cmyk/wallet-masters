@@ -36,7 +36,7 @@ const {
   getSpinStatus, doSpin,
   getTriviaQuestions, answerTriviaQuestion,
   getLoginStreakStatus, claimLoginStreak,
-  getMiningStatus, buyMiningHash, claimMiningProfit} = require('./database');
+  getMiningStatus, buyMiningHash, claimMiningProfit, getUserByUid, internalTransfer } = require('./database');
 
 const BOT_TOKEN     = process.env.BOT_TOKEN;
 // ── Professional number formatter ───────────────────────────
@@ -65,7 +65,7 @@ function calculateFees(amount) {
 
 function nowSec() { return Math.floor(Date.now() / 1000); }
 
-app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.25' }));
+app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.26' }));
 
 // ═══════════════════════════════════════════════════════════════
 // KEEP-ALIVE: Ping every 10 minutes to prevent Render cold starts
@@ -2250,6 +2250,57 @@ app.get('/api/admin/db-test', async (req,res) => {
 // ─── Admin: Run Migrations ───────────────────────────────────────────────────
 app.post('/api/admin/run-migrations', authMiddleware, async (req,res) => {
   res.json({ success: true, message: 'Using Supabase HTTP API — tables managed via Supabase dashboard' });
+});
+
+// ─── Internal Transfer ──────────────────────────────────────────────────────
+app.post('/api/transfer', authMiddleware, async (req, res) => {
+  try {
+    const { recipientUid, amount, note } = req.body;
+    if (!recipientUid) return res.status(400).json({ error: 'Recipient UID is required' });
+    if (!amount || parseFloat(amount) <= 0) return res.status(400).json({ error: 'Invalid amount' });
+    
+    const result = await internalTransfer(req.tgUser.id, recipientUid, parseFloat(amount), note);
+    
+    if (result.success) {
+      // Send Telegram notification to recipient
+      if (bot) {
+        try {
+          const senderName = req.tgUser?.first_name || req.tgUser?.username || 'A user';
+          const amt = parseFloat(amount).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+          const msg = `💰 *You received an internal transfer!*
+
+`
+            + `From: ${senderName}
+`
+            + `Amount: ${amt} USDT
+`
+            + `${note ? 'Note: ' + note + '\n' : ''}`
+            + `Your new balance has been updated.
+
+`
+            + `Open Wallet Masters to view your updated balance.`;
+          bot.sendMessage(result.recipientTid, msg, { parse_mode: 'Markdown' });
+        } catch(notifErr) { console.error('Transfer notification failed:', notifErr.message); }
+      }
+      
+      res.json({ success: true, senderBalance: result.senderBalance, recipientName: result.recipientName });
+    } else {
+      res.status(400).json({ error: result.error });
+    }
+  } catch(e) { res.status(500).json({ error: 'Server error' }); }
+});
+
+app.get('/api/transfer/lookup/:uid', authMiddleware, async (req, res) => {
+  try {
+    const user = await getUserByUid(req.params.uid);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    // Return limited info for privacy
+    res.json({ 
+      success: true, 
+      name: user.full_name || user.telegram_username || 'User',
+      uid: user.uid
+    });
+  } catch(e) { res.status(500).json({ error: 'Server error' }); }
 });
 
 if (bot) bot.on('polling_error', (e) => console.log('Polling error:', e.code));
