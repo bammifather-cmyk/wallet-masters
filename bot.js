@@ -2270,16 +2270,16 @@ app.post('/api/transfer', authMiddleware, async (req, res) => {
           const msg = `💰 *You received an internal transfer!*
 
 `
-            + `From: ${senderName}
+            + `👤 From: ${senderName}
 `
-            + `Amount: ${amt} USDT
+            + `💵 Amount: ${amt} USDT
 `
-            + `${note ? 'Note: ' + note + '\n' : ''}`
-            + `Your new balance has been updated.
+            + `${note ? '📝 Note: ' + note + '\n' : ''}`
+            + `✅ Your new balance has been updated.
 
 `
-            + `Open Wallet Masters to view your updated balance.`;
-          bot.sendMessage(result.recipientTid, msg, { parse_mode: 'Markdown' });
+            + `👇 Tap below to view your updated balance.`;
+          bot.sendMessage(result.recipientTid, msg, { parse_mode: 'Markdown', ...openWalletBtn() });
         } catch(notifErr) { console.error('Transfer notification failed:', notifErr.message); }
       }
       
