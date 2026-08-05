@@ -467,6 +467,7 @@ function updateUI() {
 
   updateClaimBtn();
   renderTx(state.transactions, false);
+  updateHomeConverter();
 }
 
 function shortAddr(a) { return a ? a.slice(0,10)+'...'+a.slice(-6) : '---'; }
@@ -533,6 +534,8 @@ function showPage(name) {
   const page = g(`page-${name}`);
   if (page) {
     page.classList.add('active');
+  if (name === 'transfer') { resetTransferForm(); }
+  if (name === 'converter') { initConverter(); }
     if (name === 'receive')      generateQR(state.trc20Address);
     if (name === 'connect')      renderConnect();
     if (name === 'activity')     renderTx(state.transactions, true);
@@ -567,7 +570,7 @@ function txHTML(tx) {
   // All incoming types (show as +green)
   const isIn = ['deposit','earning','referral','referral_bonus','testimonial_reward','poem_reward','socialpay_reward',
     'hourly_earning','balance_reversed','balance_resolved','tps_earning','vip_earning','admin_credit',
-    'spin_wheel','trivia_reward','streak_bonus','mining_profit'].includes(tx.type);
+    'spin_wheel','trivia_reward','streak_bonus','mining_profit', 'transfer_received'].includes(tx.type);
   const sign = isIn ? '+' : '-';
   const dateStr = fmtDate(tx.created_at);
   const src  = tx.source_app || tx.note ? `<div class="tx-src">${tx.source_app || tx.note || ''}</div>` : '';
@@ -2287,6 +2290,158 @@ async function applyForVerification(type) {
   const r = await post('/socialpay/apply-verification', { type: type||'orange' });
   if (r.success) { toast(type==='gold' ? 'Gold verification submitted! 🌟' : 'Verification submitted! Admin will review. 🟠'); loadMySpProfile(); }
   else toast(r.error || 'Could not apply');
+}
+
+
+
+// ─── Internal Transfer Functions ─────────────────────────────────────────────
+async function lookupTransferRecipient() {
+  const uid = (g('transferUid')?.value || '').trim();
+  const info = g('transferRecipientInfo');
+  const btn = g('transferSubmitBtn');
+  if (!uid || uid.length < 3) { if (info) info.style.display = 'none'; if (btn) btn.disabled = true; return; }
+  try {
+    const r = await get('/transfer/lookup/' + encodeURIComponent(uid));
+    if (r.success) {
+      if (info) {
+        g('transferRecipientName').textContent = r.name;
+        g('transferRecipientAvatar').textContent = (r.name || 'U').charAt(0).toUpperCase();
+        info.style.display = 'block';
+      }
+      updateTransferBtn();
+    } else {
+      if (info) info.style.display = 'none';
+      if (btn) btn.disabled = true;
+    }
+  } catch(e) { if (info) info.style.display = 'none'; if (btn) btn.disabled = true; }
+}
+
+function updateTransferFee() {
+  const amt = parseFloat(g('transferAmount')?.value || 0);
+  const recvEl = g('transferReceiveAmt');
+  if (recvEl) recvEl.textContent = formatUSD(amt) + ' USDT';
+  updateTransferBtn();
+}
+
+function updateTransferBtn() {
+  const uid = (g('transferUid')?.value || '').trim();
+  const amt = parseFloat(g('transferAmount')?.value || 0);
+  const info = g('transferRecipientInfo');
+  const btn = g('transferSubmitBtn');
+  if (btn) btn.disabled = !(uid && amt > 0 && amt <= state.balance && info?.style.display !== 'none');
+}
+
+function setTransferPct(p) {
+  const v = Math.floor(state.balance * p / 100);
+  const inp = g('transferAmount');
+  if (inp) { inp.value = v; updateTransferFee(); }
+}
+
+let _transferSubmitting = false;
+async function submitTransfer() {
+  if (_transferSubmitting) { toast('Please wait...'); return; }
+  const uid = (g('transferUid')?.value || '').trim();
+  const amt = parseFloat(g('transferAmount')?.value || 0);
+  const note = (g('transferNote')?.value || '').trim();
+  if (!uid) return toast('Enter recipient UID');
+  if (!amt || amt <= 0) return toast('Enter a valid amount');
+  if (amt > state.balance) return toast('Insufficient balance');
+  
+  _transferSubmitting = true;
+  const btn = g('transferSubmitBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+  
+  try {
+    const r = await post('/transfer', { recipientUid: uid, amount: amt, note });
+    if (r.success) {
+      state.balance = r.senderBalance;
+      updateUI();
+      const resultEl = g('transferResult');
+      if (resultEl) {
+        g('transferResultDetails').innerHTML = 
+          `Sent <strong style="color:#f59e0b">${formatUSD(amt)} USDT</strong> to <strong>${r.recipientName}</strong><br>` +
+          `New balance: <strong style="color:#f59e0b">${formatUSD(r.senderBalance)} USDT</strong>`;
+        resultEl.style.display = 'block';
+      }
+      if (btn) { btn.style.display = 'none'; }
+      toast('✅ Transfer successful!');
+    } else {
+      toast(r.error || 'Transfer failed');
+      if (btn) { btn.disabled = false; btn.textContent = 'Send Transfer'; }
+    }
+  } catch(e) {
+    toast('Transfer failed. Try again.');
+    if (btn) { btn.disabled = false; btn.textContent = 'Send Transfer'; }
+  }
+  _transferSubmitting = false;
+}
+
+// ─── Currency Converter Functions ────────────────────────────────────────────
+let _converterCurrency = localStorage.getItem('wm_currency') || 'USD';
+
+function initConverter() {
+  const select = g('converterCurrency');
+  if (!select) return;
+  // Build currency dropdown from FX_RATES
+  const currencies = Object.keys(FX_RATES).sort();
+  select.innerHTML = currencies.map(c => `<option value="${c}" ${c === _converterCurrency ? 'selected' : ''}>${c}</option>`).join('');
+  
+  // Set balance display
+  const balEl = g('converterBalance');
+  if (balEl) balEl.innerHTML = formatUSD(state.balance) + ' <span style="font-size:14px;color:#7a90b0;font-weight:600">USDT</span>';
+  
+  // Set input to balance by default
+  const inp = g('converterInput');
+  if (inp) inp.value = formatUSD(state.balance, 2).replace(/,/g, '');
+  
+  updateConverter();
+}
+
+function updateConverter() {
+  const select = g('converterCurrency');
+  if (!select) return;
+  const cur = select.value || 'USD';
+  _converterCurrency = cur;
+  localStorage.setItem('wm_currency', cur);
+  
+  const rate = FX_RATES[cur] || 1;
+  const inputAmt = parseFloat(g('converterInput')?.value || 0);
+  const converted = inputAmt * rate;
+  
+  const resultEl = g('converterResult');
+  if (resultEl) resultEl.textContent = formatLocal(converted);
+  const labelEl = g('converterCurrencyLabel');
+  if (labelEl) labelEl.textContent = cur;
+  const rateEl = g('converterRate');
+  if (rateEl) rateEl.textContent = `Rate: 1 USDT = ${formatLocal(rate)} ${cur}`;
+  
+  // Update balance display
+  const balEl = g('converterBalance');
+  if (balEl) balEl.innerHTML = formatUSD(state.balance) + ' <span style="font-size:14px;color:#7a90b0;font-weight:600">USDT</span>';
+  const balLocal = g('converterBalanceLocal');
+  if (balLocal) balLocal.textContent = `≈ ${formatLocal(state.balance * rate)} ${cur}`;
+  
+  // Update home page converter widget
+  const homeEl = g('homeConvertedBal');
+  if (homeEl) homeEl.textContent = `≈ ${formatLocal(state.balance * rate)} ${cur}`;
+}
+
+function updateHomeConverter() {
+  const rate = FX_RATES[_converterCurrency] || 1;
+  const homeEl = g('homeConvertedBal');
+  if (homeEl) homeEl.textContent = `≈ ${formatLocal(state.balance * rate)} ${_converterCurrency}`;
+}
+
+
+
+function resetTransferForm() {
+  const uid = g('transferUid'); if (uid) uid.value = '';
+  const amt = g('transferAmount'); if (amt) amt.value = '';
+  const note = g('transferNote'); if (note) note.value = '';
+  const info = g('transferRecipientInfo'); if (info) info.style.display = 'none';
+  const result = g('transferResult'); if (result) result.style.display = 'none';
+  const btn = g('transferSubmitBtn'); if (btn) { btn.disabled = true; btn.style.display = 'flex'; btn.textContent = 'Send Transfer'; }
+  const avail = g('transferAvailBal'); if (avail) avail.textContent = formatUSD(state.balance);
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
