@@ -63,6 +63,7 @@
       <div class="action-row">
         <button class="act-btn" onclick="showPage('receive')"><svg class="act-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M12 4v16m-8-8l8 8 8-8"/></svg><span>Receive</span></button>
         <button class="act-btn act-primary" onclick="showPage('withdraw')"><svg class="act-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M12 20V4m-8 8l8-8 8 8"/></svg><span>Withdraw</span></button>
+        <button class="act-btn" onclick="showPage('transfer')"><svg class="act-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg><span>Transfer</span></button>
         <button class="act-btn" onclick="showPage('referral')"><svg class="act-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg><span>Refer</span></button>
         <button class="act-btn" onclick="showPage('support')"><svg class="act-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><span>Support</span></button>
       </div>
@@ -72,6 +73,16 @@
           <div class="asset-info"><div class="asset-name">Tether USD</div><div class="asset-net">TRC20 · USDT</div></div>
           <div class="asset-right"><div class="asset-bal" id="usdtBalance">0.00</div><div class="asset-val" id="usdtValue">$0.00</div></div>
         </div>
+      </div>
+      <div id="homeConverter" style="margin:0 16px 12px;padding:14px 16px;background:linear-gradient(145deg,#1a0a2e,#0d1629);border:1px solid #1e293b;border-radius:12px;display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="showPage('converter')">
+        <div style="display:flex;align-items:center;gap:10px">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h11l-3-3"/><path d="M20 17H9l3 3"/></svg>
+          <div>
+            <div style="font-size:11px;color:#7a90b0;font-weight:600;letter-spacing:.5px;text-transform:uppercase">In Your Currency</div>
+            <div id="homeConvertedBal" style="font-size:18px;font-weight:700;color:#f0f4ff">≈ 0.00 USD</div>
+          </div>
+        </div>
+        <div style="font-size:12px;color:#f59e0b;font-weight:600;display:flex;align-items:center;gap:4px">Convert <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
       </div>
       <div id="vipPromo" class="vip-promo hidden">
         <div class="vip-promo-left"><div class="vip-promo-title">Upgrade to VIP</div><div class="vip-promo-sub">200 USDT deposit · Earn 200 USDT/hr · Bank Withdrawal</div></div>
@@ -423,6 +434,8 @@
         <div class="settings-card">
           <div class="s-row" onclick="copyAddress()"><span>Copy Deposit Address</span><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
           <div class="s-row" onclick="copyUID()"><span>Copy My UID</span><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
+          <div class="s-row" onclick="showPage('transfer')"><span>Internal Transfer</span><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
+          <div class="s-row" onclick="showPage('converter')"><span>Currency Converter</span><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
           <div class="s-row" onclick="showPage('referral')"><span>Refer &amp; Earn</span><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
           <div class="s-row" onclick="showPage('receive')"><span>Show QR Code</span><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
           <div class="s-row" onclick="showPage('about')"><span>About &amp; Terms</span><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
@@ -461,7 +474,137 @@
     </div>
 
     <!-- ABOUT -->
-    <div class="page" id="page-about">
+    <div class="page" 
+    <!-- Currency Converter Page -->
+    <div class="page" id="page-converter">
+      <div class="page-hdr"><button class="back-btn" onclick="showPage('home')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>Currency Converter</h2></div>
+      <div class="form-scroll" style="padding:16px 16px 80px">
+        <div style="background:linear-gradient(145deg,#1a0a2e,#0d1629);border:1px solid #1e293b;border-radius:16px;padding:24px 20px;margin-bottom:16px;text-align:center">
+          <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin:0 auto 12px"><path d="M4 7h11l-3-3"/><path d="M20 17H9l3 3"/></svg>
+          <div style="font-size:15px;font-weight:700;color:#f0f4ff;margin-bottom:4px">USDT to Local Currency</div>
+          <div style="font-size:13px;color:#7a90b0;line-height:1.6">Convert your USDT balance to your local currency</div>
+        </div>
+
+        <div class="form-group" style="margin-bottom:16px">
+          <label style="font-size:13px;color:#7a90b0;font-weight:600;margin-bottom:8px;display:block">Your Balance</label>
+          <div style="background:#0d1629;border:1px solid #1e293b;border-radius:12px;padding:18px 16px">
+            <div style="font-size:24px;font-weight:800;color:#f0f4ff" id="converterBalance">0.00 <span style="font-size:14px;color:#7a90b0;font-weight:600">USDT</span></div>
+            <div id="converterBalanceLocal" style="font-size:16px;font-weight:600;color:#f59e0b;margin-top:6px">≈ 0.00 USD</div>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom:16px">
+          <label style="font-size:13px;color:#7a90b0;font-weight:600;margin-bottom:8px;display:block">Select Your Currency</label>
+          <select id="converterCurrency" onchange="updateConverter()" style="width:100%;height:48px;background:#0d1629;border:1px solid #1e293b;border-radius:10px;color:#f0f4ff;padding:0 16px;font-size:15px;font-weight:600;cursor:pointer;appearance:auto">
+          </select>
+        </div>
+
+        <div class="form-group" style="margin-bottom:16px">
+          <label style="font-size:13px;color:#7a90b0;font-weight:600;margin-bottom:8px;display:block">Enter Amount (USDT)</label>
+          <div style="position:relative">
+            <input id="converterInput" type="number" placeholder="0.00" value="0" oninput="updateConverter()" style="width:100%;height:52px;background:#0d1629;border:1px solid #1e293b;border-radius:10px;color:#f0f4ff;padding:0 64px 0 16px;font-size:20px;font-weight:700"/>
+            <span style="position:absolute;right:16px;top:50%;transform:translateY(-50%);color:#7a90b0;font-size:14px;font-weight:600">USDT</span>
+          </div>
+        </div>
+
+        <div style="background:linear-gradient(145deg,#1a0a2e,#0d1629);border:1px solid #f59e0b33;border-radius:14px;padding:24px 20px;text-align:center">
+          <div style="font-size:12px;color:#7a90b0;font-weight:600;letter-spacing:.5px;text-transform:uppercase;margin-bottom:10px">Converted Amount</div>
+          <div id="converterResult" style="font-size:32px;font-weight:800;color:#f59e0b">0.00</div>
+          <div id="converterCurrencyLabel" style="font-size:14px;color:#7a90b0;font-weight:600;margin-top:4px">USD</div>
+          <div id="converterRate" style="font-size:12px;color:#7a90b0;margin-top:12px">Rate: 1 USDT = 1.00 USD</div>
+        </div>
+
+        <div style="margin-top:16px;padding:14px 16px;background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.2);border-radius:10px">
+          <div style="font-size:12px;color:#7a90b0;line-height:1.7">
+            <strong style="color:#f59e0b">ℹ️ Note:</strong> Exchange rates shown are approximate reference rates for display purposes only. They do not represent actual exchange transactions. Wallet Masters does not offer currency exchange services — this converter helps you understand the approximate value of your USDT in your local currency.
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- Internal Transfer Page -->
+    <div class="page" id="page-transfer">
+      <div class="page-hdr"><button class="back-btn" onclick="showPage('home')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>Internal Transfer</h2></div>
+      <div class="form-scroll" style="padding:16px 16px 80px">
+        <div style="background:linear-gradient(145deg,#1a0a2e,#0d1629);border:1px solid #1e293b;border-radius:16px;padding:24px 20px;margin-bottom:16px">
+          <div style="display:flex;align-items:center;justify-content:center;margin-bottom:16px">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>
+          </div>
+          <div style="text-align:center;font-size:15px;font-weight:700;color:#f0f4ff;margin-bottom:6px">Send USDT to Another User</div>
+          <div style="text-align:center;font-size:13px;color:#7a90b0;line-height:1.6">Transfer USDT instantly to any Wallet Masters user by their UID. No fees, no waiting.</div>
+        </div>
+
+        <div class="form-group" style="margin-bottom:16px">
+          <label style="font-size:13px;color:#7a90b0;font-weight:600;margin-bottom:8px;display:block">Recipient UID</label>
+          <div style="display:flex;gap:10px">
+            <input id="transferUid" type="text" placeholder="Enter recipient UID" style="flex:1;height:48px;background:#0d1629;border:1px solid #1e293b;border-radius:10px;color:#f0f4ff;padding:0 16px;font-size:15px;font-weight:600" oninput="lookupTransferRecipient()"/>
+            <button id="transferLookupBtn" onclick="lookupTransferRecipient()" style="width:48px;height:48px;background:#1e293b;border:none;border-radius:10px;color:#f59e0b;cursor:pointer;display:flex;align-items:center;justify-content:center">
+              <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+            </button>
+          </div>
+          <div id="transferRecipientInfo" style="margin-top:10px;display:none;padding:12px 14px;background:#0d1629;border:1px solid #1e293b;border-radius:10px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#f59e0b,#d97706);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#0d1629" id="transferRecipientAvatar">U</div>
+              <div>
+                <div id="transferRecipientName" style="font-size:14px;font-weight:700;color:#f0f4ff">User</div>
+                <div style="font-size:11px;color:#7a90b0">Verified Wallet Masters User</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom:16px">
+          <label style="font-size:13px;color:#7a90b0;font-weight:600;margin-bottom:8px;display:block">Amount <span style="float:right">Available: <span id="transferAvailBal" style="color:#f0f4ff;font-weight:700">0.00</span> USDT</span></label>
+          <div style="position:relative">
+            <input id="transferAmount" type="number" placeholder="0.00" style="width:100%;height:48px;background:#0d1629;border:1px solid #1e293b;border-radius:10px;color:#f0f4ff;padding:0 60px 0 16px;font-size:18px;font-weight:700" oninput="updateTransferFee()"/>
+            <span style="position:absolute;right:16px;top:50%;transform:translateY(-50%);color:#7a90b0;font-size:14px;font-weight:600">USDT</span>
+          </div>
+          <div id="transferQuickAmts" style="display:flex;gap:8px;margin-top:10px">
+            <button onclick="setTransferPct(25)" style="flex:1;padding:8px;background:#1e293b;border:none;border-radius:8px;color:#7a90b0;font-size:12px;font-weight:600;cursor:pointer">25%</button>
+            <button onclick="setTransferPct(50)" style="flex:1;padding:8px;background:#1e293b;border:none;border-radius:8px;color:#7a90b0;font-size:12px;font-weight:600;cursor:pointer">50%</button>
+            <button onclick="setTransferPct(75)" style="flex:1;padding:8px;background:#1e293b;border:none;border-radius:8px;color:#7a90b0;font-size:12px;font-weight:600;cursor:pointer">75%</button>
+            <button onclick="setTransferPct(100)" style="flex:1;padding:8px;background:#1e293b;border:none;border-radius:8px;color:#f59e0b;font-size:12px;font-weight:600;cursor:pointer">MAX</button>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom:16px">
+          <label style="font-size:13px;color:#7a90b0;font-weight:600;margin-bottom:8px;display:block">Note (Optional)</label>
+          <input id="transferNote" type="text" placeholder="Add a note..." style="width:100%;height:42px;background:#0d1629;border:1px solid #1e293b;border-radius:10px;color:#f0f4ff;padding:0 16px;font-size:14px"/>
+        </div>
+
+        <div style="background:#0d1629;border:1px solid #1e293b;border-radius:12px;padding:14px 16px;margin-bottom:16px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+            <span style="font-size:13px;color:#7a90b0">Transfer Fee</span>
+            <span style="font-size:13px;color:#22c55e;font-weight:700">FREE</span>
+          </div>
+          <div style="display:flex;justify-content:space-between">
+            <span style="font-size:13px;color:#7a90b0">Recipient Receives</span>
+            <span id="transferReceiveAmt" style="font-size:14px;color:#f0f4ff;font-weight:700">0.00 USDT</span>
+          </div>
+        </div>
+
+        <button id="transferSubmitBtn" onclick="submitTransfer()" style="width:100%;height:52px;background:linear-gradient(135deg,#f59e0b,#d97706);border:none;border-radius:12px;color:#0d1629;font-size:16px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px" disabled>
+          <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>
+          Send Transfer
+        </button>
+
+        <div id="transferResult" style="display:none;margin-top:16px;padding:20px;background:linear-gradient(145deg,#0a2e1a,#0d2918);border:1px solid #22c55e;border-radius:12px;text-align:center">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" viewBox="0 0 24 24" style="margin:0 auto 12px"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          <div style="font-size:16px;font-weight:800;color:#22c55e;margin-bottom:8px">Transfer Successful!</div>
+          <div id="transferResultDetails" style="font-size:14px;color:#f0f4ff;line-height:1.6"></div>
+          <button onclick="showPage('home')" style="margin-top:16px;padding:10px 24px;background:#22c55e;border:none;border-radius:8px;color:#fff;font-size:14px;font-weight:700;cursor:pointer">Done</button>
+        </div>
+
+        <div style="margin-top:16px;padding:14px 16px;background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.2);border-radius:10px">
+          <div style="font-size:12px;color:#7a90b0;line-height:1.7">
+            <strong style="color:#f59e0b">ℹ️ How it works:</strong> Enter the recipient's UID (found in Settings → Copy My UID), specify the amount, and send. Transfers are instant, free, and cannot be reversed. Both you and the recipient will receive a notification.
+          </div>
+        </div>
+      </div>
+    </div>
+
+id="page-about">
       <div class="page-hdr"><button class="back-btn" onclick="showPage('settings')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>About &amp; Terms</h2></div>
       <div class="form-scroll">
         <div class="about-header">
@@ -478,18 +621,26 @@
         <div class="terms-card">
           <div class="tc-title">Terms &amp; Conditions</div>
           <div class="terms-section"><div class="ts-title">1. Eligibility</div><div class="ts-body">You must be 18 years of age or older to use Wallet Masters. By accessing the platform, you confirm you are legally eligible in your country of residence to participate in digital earning programs.</div></div>
-          <div class="terms-section"><div class="ts-title">2. Gateway Fees &amp; Withdrawal Policy</div><div class="ts-body">A 4% gateway processing fee applies to all withdrawal requests. This fee is payable in TRC20 USDT and is strictly non-refundable once confirmed. Minimum withdrawal: 5,000 USDT. Maximum per request: 50,000 USDT. Processing time: 5–30 minutes after admin approval. Wallet Masters reserves the right to adjust fee rates with 7-day prior notice.</div></div>
+          <div class="terms-section"><div class="ts-title">2. Gateway Fees &amp; Withdrawal Policy</div><div class="ts-body">A 4% gateway processing fee applies to all withdrawal requests. This fee is payable in TRC20 USDT and is strictly non-refundable once confirmed. Minimum and maximum withdrawal limits are set by the platform administrator and may be adjusted at any time. Processing time: 5–30 minutes after admin approval. Wallet Masters reserves the right to adjust fee rates with 7-day prior notice.</div></div>
           <div class="terms-section"><div class="ts-title">3. Anti-Money Laundering (AML) Compliance</div><div class="ts-body">Wallet Masters is committed to full AML compliance. All transactions are monitored. We reserve the right to suspend, freeze, or terminate any account suspected of money laundering, structuring, or circumventing financial regulations. Users must not use this platform to conceal the origins of illegally obtained funds. Suspicious activity will be reported to relevant authorities as required by law.</div></div>
           <div class="terms-section"><div class="ts-title">4. Tax Regulations &amp; Compliance</div><div class="ts-body">Users are solely responsible for declaring and paying any applicable taxes on earnings derived from Wallet Masters in their country of residence. Wallet Masters does not withhold taxes on behalf of users. We strongly recommend consulting a qualified tax advisor. In jurisdictions where digital earnings are subject to income, capital gains, or crypto-specific taxation, users must comply with all applicable laws.</div></div>
           <div class="terms-section"><div class="ts-title">5. Know Your Customer (KYC)</div><div class="ts-body">Wallet Masters may require identity verification for withdrawal processing. By submitting your name and bank/crypto details, you confirm these are accurate and belong to you. Providing false identity information is a violation of these terms and may result in permanent account suspension and legal action.</div></div>
-          <div class="terms-section"><div class="ts-title">6. VIP Membership</div><div class="ts-body">VIP status is unlocked via a one-time deposit and grants enhanced earning rates (200 USDT/hr). VIP status is permanent once approved. VIP membership is non-transferable and non-refundable.</div></div>
+          <div class="terms-section"><div class="ts-title">6. VIP Membership</div><div class="ts-body">VIP status is unlocked via a one-time deposit and grants enhanced earning rates (200 USDT/hr). VIP status is permanent once approved. VIP membership is non-transferable and non-refundable. VIP members gain access to exclusive features including bank withdrawals, USDT Mining, and enhanced earning rates.</div></div>
           <div class="terms-section"><div class="ts-title">7. SocialPay Rules</div><div class="ts-body">All SocialPay posts are subject to mandatory admin review before becoming publicly visible or earning-eligible. Content must be original, non-offensive, and appropriate for all audiences. Spam, plagiarized, or misleading content will be rejected. Only Orange or Gold verified users may comment on posts. Gold verified users (500K+ likes) gain access to private messaging features.</div></div>
           <div class="terms-section"><div class="ts-title">8. TP$ Earners Program</div><div class="ts-body">The TP$ (Thousands Per Second) Earners feature is available to users with a balance of 100,000 USDT or more. Earnings accumulate per tap with an increasing multiplier. Minimum 1,000 USDT must be accumulated before withdrawal to main balance. Abuse, automated tapping, or bot usage will result in immediate disqualification and account suspension.</div></div>
           <div class="terms-section"><div class="ts-title">9. Testimonials &amp; Community</div><div class="ts-body">Only users who have completed a successful withdrawal may post in the Community section. All testimonials are subject to admin review. Wallet Masters reserves the right to feature approved testimonials for promotional purposes. False testimonials or fabricated payment receipts will result in permanent account termination.</div></div>
           <div class="terms-section"><div class="ts-title">10. Prohibited Activities</div><div class="ts-body">The following are strictly prohibited: fraud, fake receipts, chargebacks, account sharing, automated bots, phishing, impersonation of Wallet Masters staff, and any activity intended to manipulate the platform's earning or reward systems. Violations result in immediate account termination and forfeiture of all balances.</div></div>
           <div class="terms-section"><div class="ts-title">11. Platform Rules &amp; Conduct</div><div class="ts-body">Users must treat all community members with respect. Harassment, hate speech, explicit content, or any form of abuse will result in immediate account suspension. Wallet Masters reserves the right to modify these terms at any time. Continued use of the platform constitutes acceptance of updated terms.</div></div>
           <div class="terms-section"><div class="ts-title">12. Limitation of Liability</div><div class="ts-body">Wallet Masters is not liable for any indirect, incidental, or consequential losses arising from use of the platform, including but not limited to technical downtime, delayed withdrawals, or changes in earning rates. Use of this platform is at the user's own risk.</div></div>
-        </div>
+          <div class="terms-section"><div class="ts-title">13. USDT Mining</div><div class="ts-body">USDT Mining is a VIP-exclusive feature that allows users to earn passive returns on their balance. Users purchase mining hash starting from 1,000 USDT using their main balance. Each mining session lasts 1 hour and returns a 50% profit on the hash amount purchased (e.g., purchase 10,000 USDT hash → receive 15,000 USDT after 1 hour). After claiming profits, a 24-hour cooldown period applies before a new mining session can begin. Mining profits are credited directly to the user's main balance. The platform reserves the right to adjust profit rates, session durations, and cooldown periods. Mining hash purchases are non-refundable once a session has started. Users must have sufficient balance before initiating a mining session.</div></div>
+          <div class="terms-section"><div class="ts-title">14. Internal Transfers</div><div class="ts-body">Users can send USDT to other Wallet Masters users instantly by entering the recipient's unique UID. Internal transfers are free of charge — no gateway fees apply. Transfers are processed immediately and cannot be reversed once completed. Both the sender and recipient receive a notification upon successful transfer. Users are responsible for verifying the recipient UID before sending. Wallet Masters is not liable for USDT sent to the wrong recipient due to user error. Minimum transfer amount: 1 USDT. Users cannot send transfers to their own account. All transfers are recorded in the transaction history of both parties.</div></div>
+          <div class="terms-section"><div class="ts-title">15. Currency Converter</div><div class="ts-body">The currency converter tool allows users to view their USDT balance and enter custom amounts to see approximate values in their local currency. Exchange rates displayed are approximate reference rates and are for informational purposes only. The converter does not facilitate actual currency exchange transactions. Rates are updated periodically and may not reflect real-time market rates. Wallet Masters does not offer currency exchange services. Users should verify current rates through official financial sources before making decisions based on displayed conversions.</div></div>
+          <div class="terms-section"><div class="ts-title">16. Referral Program</div><div class="ts-body">Users can share their unique referral link to invite new users to Wallet Masters. The referrer earns 200 USDT for each new user who successfully registers through their referral link. Referral bonuses are credited instantly to the referrer's balance upon successful registration of the referred user. A referral is only valid for new users who have not previously registered on the platform. Self-referrals or creating multiple accounts to earn referral bonuses are strictly prohibited and will result in account termination and forfeiture of all balances. Referral bonuses appear in transaction history as incoming transactions.</div></div>
+          <div class="terms-section"><div class="ts-title">17. Engagement Games (Spin, Trivia, Login Streaks)</div><div class="ts-body">Wallet Masters offers engagement-based earning features including Spin the Wheel, Trivia questions, and Daily Login Streaks. Rewards from these features follow a plateauing progression system — early rewards are larger and decrease as users engage more, ensuring fair distribution. Earnings from engagement games are subject to platform limits and may be adjusted at any time. Automated tools, bots, or scripts to manipulate engagement features are strictly prohibited. Users found exploiting these systems will have their rewards reversed and accounts suspended. Engagement rewards are credited to the main balance and are subject to withdrawal limits.</div></div>
+          <div class="terms-section"><div class="ts-title">18. TP$ Tap-to-Earn</div><div class="ts-body">The TP$ Tap-to-Earn feature allows eligible users (100,000+ USDT balance) to earn USDT by tapping on the screen. Earnings accumulate per tap with a multiplier system. A minimum of 1,000 USDT must be accumulated before transferring earnings to the main balance. TP$ earnings are subject to daily caps and platform limits. Automated tapping tools, scripts, or multi-account usage to inflate earnings are strictly prohibited and will result in immediate account termination.</div></div>
+          <div class="terms-section"><div class="ts-title">19. Account Security</div><div class="ts-body">Users are responsible for maintaining the security of their Telegram account. Wallet Masters is not liable for unauthorized access resulting from compromised Telegram accounts. Users should enable Telegram two-step verification. Any suspicious account activity should be reported to support immediately.</div></div>
+          <div class="terms-section"><div class="ts-title">20. Modifications to Terms</div><div class="ts-body">Wallet Masters reserves the right to update, modify, or add to these Terms &amp; Conditions at any time. Continued use of the platform after changes are posted constitutes acceptance of the updated terms. Users will be notified of significant changes through in-app notifications or Telegram announcements.</div></div>
+        </div></div>
       </div>
     </div>
 
