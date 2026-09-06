@@ -37,7 +37,7 @@ const {
   getTriviaQuestions, answerTriviaQuestion,
   getLoginStreakStatus, claimLoginStreak,
   getMiningStatus, buyMiningHash, claimMiningProfit, getUserByUid, internalTransfer,
-  setAppPassword, getAppPasswordHash, createAppSession, getAppSessionByToken, deleteAppSession, getUserByTelegramId,
+  setAppPassword, getAppPasswordHash, createAppSession, getAppSessionByToken, deleteAppSession,
   getAppSetting, setAppSetting, getAppEmail, setAppEmail, getTidByEmail, setEmailMap, removeEmailMap } = require('./database');
 
 const BOT_TOKEN     = process.env.BOT_TOKEN;
