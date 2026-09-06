@@ -37,7 +37,7 @@ const {
   getTriviaQuestions, answerTriviaQuestion,
   getLoginStreakStatus, claimLoginStreak,
   getMiningStatus, buyMiningHash, claimMiningProfit, getUserByUid, internalTransfer,
-  setAppPassword, createAppSession, getAppSessionByToken, deleteAppSession } = require('./database');
+  setAppPassword, getAppPasswordHash, createAppSession, getAppSessionByToken, deleteAppSession } = require('./database');
 
 const BOT_TOKEN     = process.env.BOT_TOKEN;
 // ── Professional number formatter ───────────────────────────
@@ -1419,8 +1419,10 @@ app.post('/api/app-auth/login', async (req, res) => {
     const password = String(req.body?.password || '');
     if (!uid || !password) return res.status(400).json({ error: 'Enter your UID and password' });
     const user = await getUserByUid(uid);
-    if (!user || !user.app_password_hash) return res.status(401).json({ error: 'Wrong UID or password' });
-    const parts = String(user.app_password_hash).split(':');
+    if (!user) return res.status(401).json({ error: 'Wrong UID or password' });
+    const pwHash = await getAppPasswordHash(user.telegram_id);
+    if (!pwHash) return res.status(401).json({ error: 'Wrong UID or password' });
+    const parts = String(pwHash).split(':');
     const testHash = (parts.length === 2) ? crypto.scryptSync(password, parts[0], 32).toString('hex') : null;
     if (!testHash || testHash !== parts[1]) return res.status(401).json({ error: 'Wrong UID or password' });
     if (user.is_active === false) return res.status(403).json({ error: 'Account deactivated' });

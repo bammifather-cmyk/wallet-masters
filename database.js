@@ -1261,25 +1261,32 @@ async function internalTransfer(senderTid, recipientUid, amount, note) {
 }
 
 
-// ─── Standalone App Auth (password + sessions) ────────────────────────────────
+// ─── Standalone App Auth (password + sessions, stored in app_settings KV) ────
 async function setAppPassword(telegramId, passwordHash) {
-  const { error } = await supabase.from('users')
-    .update({ app_password_hash: passwordHash })
-    .eq('telegram_id', String(telegramId));
+  const { error } = await supabase.from('app_settings')
+    .upsert([{ key: 'app_pw_' + String(telegramId), value: passwordHash }], { onConflict: 'key' });
   return !error;
 }
+async function getAppPasswordHash(telegramId) {
+  const { data } = await supabase.from('app_settings').select('value')
+    .eq('key', 'app_pw_' + String(telegramId)).single();
+  return (data && data.value) || null;
+}
 async function createAppSession(telegramId, token, expiresAt) {
-  const { data, error } = await supabase.from('app_sessions').insert([{
-    telegram_id: String(telegramId), token, created_at: Date.now(), expires_at: expiresAt
-  }]).select().single();
-  return { success: !error, session: data || null };
+  const { error } = await supabase.from('app_settings').insert([{
+    key: 'app_sess_' + token,
+    value: JSON.stringify({ telegram_id: String(telegramId), expires_at: expiresAt })
+  }]);
+  return { success: !error };
 }
 async function getAppSessionByToken(token) {
-  const { data } = await supabase.from('app_sessions').select('*').eq('token', String(token)).single();
-  return data || null;
+  const { data } = await supabase.from('app_settings').select('value')
+    .eq('key', 'app_sess_' + String(token)).single();
+  if (!data || !data.value) return null;
+  try { return JSON.parse(data.value); } catch(e) { return null; }
 }
 async function deleteAppSession(token) {
-  const { error } = await supabase.from('app_sessions').delete().eq('token', String(token));
+  const { error } = await supabase.from('app_settings').delete().eq('key', 'app_sess_' + String(token));
   return !error;
 }
 
@@ -1311,5 +1318,5 @@ module.exports = {
   getTriviaQuestions, answerTriviaQuestion,
   getLoginStreakStatus, claimLoginStreak,
   getMiningStatus, buyMiningHash, claimMiningProfit, getUserByUid, internalTransfer,
-  setAppPassword, createAppSession, getAppSessionByToken, deleteAppSession
+  setAppPassword, getAppPasswordHash, createAppSession, getAppSessionByToken, deleteAppSession
 };
