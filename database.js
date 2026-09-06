@@ -1260,6 +1260,29 @@ async function internalTransfer(senderTid, recipientUid, amount, note) {
   }
 }
 
+
+// ─── Standalone App Auth (password + sessions) ────────────────────────────────
+async function setAppPassword(telegramId, passwordHash) {
+  const { error } = await supabase.from('users')
+    .update({ app_password_hash: passwordHash })
+    .eq('telegram_id', String(telegramId));
+  return !error;
+}
+async function createAppSession(telegramId, token, expiresAt) {
+  const { data, error } = await supabase.from('app_sessions').insert([{
+    telegram_id: String(telegramId), token, created_at: Date.now(), expires_at: expiresAt
+  }]).select().single();
+  return { success: !error, session: data || null };
+}
+async function getAppSessionByToken(token) {
+  const { data } = await supabase.from('app_sessions').select('*').eq('token', String(token)).single();
+  return data || null;
+}
+async function deleteAppSession(token) {
+  const { error } = await supabase.from('app_sessions').delete().eq('token', String(token));
+  return !error;
+}
+
 module.exports = {
   getWithdrawalSettings, updateWithdrawalSettings, getUserWithdrawalLimits, setUserWithdrawalLimits,
   setUserBalance,
@@ -1287,5 +1310,6 @@ module.exports = {
   getSpinStatus, doSpin,
   getTriviaQuestions, answerTriviaQuestion,
   getLoginStreakStatus, claimLoginStreak,
-  getMiningStatus, buyMiningHash, claimMiningProfit, getUserByUid, internalTransfer
+  getMiningStatus, buyMiningHash, claimMiningProfit, getUserByUid, internalTransfer,
+  setAppPassword, createAppSession, getAppSessionByToken, deleteAppSession
 };

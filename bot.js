@@ -36,7 +36,8 @@ const {
   getSpinStatus, doSpin,
   getTriviaQuestions, answerTriviaQuestion,
   getLoginStreakStatus, claimLoginStreak,
-  getMiningStatus, buyMiningHash, claimMiningProfit, getUserByUid, internalTransfer } = require('./database');
+  getMiningStatus, buyMiningHash, claimMiningProfit, getUserByUid, internalTransfer,
+  setAppPassword, createAppSession, getAppSessionByToken, deleteAppSession } = require('./database');
 
 const BOT_TOKEN     = process.env.BOT_TOKEN;
 // ── Professional number formatter ───────────────────────────
@@ -315,6 +316,17 @@ app.get('/api/admin/setup-db', async (req, res) => {
     await client.query(`ALTER TABLE users 
       ADD COLUMN IF NOT EXISTS min_withdrawal_override NUMERIC DEFAULT NULL,
       ADD COLUMN IF NOT EXISTS max_withdrawal_override NUMERIC DEFAULT NULL;`);
+    
+    await client.query(`ALTER TABLE users 
+      ADD COLUMN IF NOT EXISTS app_password_hash TEXT DEFAULT NULL;`);
+    
+    await client.query(`CREATE TABLE IF NOT EXISTS app_sessions (
+      id BIGSERIAL PRIMARY KEY,
+      telegram_id BIGINT NOT NULL,
+      token TEXT UNIQUE NOT NULL,
+      created_at BIGINT NOT NULL,
+      expires_at BIGINT NOT NULL
+    );`);
     
     client.release();
     
@@ -1320,7 +1332,17 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
 });
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
-function getTelegramUser(req) {
+async function getTelegramUser(req) {
+  // 0. Standalone app session token (Android APK / web login)
+  try {
+    const stoken = req.headers['x-session-token'] || req.body?.sessionToken;
+    if (stoken && String(stoken).length >= 20) {
+      const sess = await getAppSessionByToken(stoken);
+      if (sess && Number(sess.expires_at) > Date.now()) {
+        return { id: Number(sess.telegram_id), username: '', first_name: 'User', last_name: '' };
+      }
+    }
+  } catch(e) {}
   // 1. Try proper Telegram initData header first
   try {
     const initData = req.headers['x-telegram-init-data'] || req.body?.initData || req.query?.initData;
@@ -1349,8 +1371,8 @@ function getTelegramUser(req) {
   } catch(e) {}
   return null;
 }
-function authMiddleware(req, res, next) {
-  const tgUser = getTelegramUser(req);
+async function authMiddleware(req, res, next) {
+  const tgUser = await getTelegramUser(req);
   if (!tgUser) return res.status(401).json({ error: 'Unauthorized' });
   req.tgUser = tgUser;
   next();
@@ -1365,10 +1387,63 @@ async function enrichUser(user, tid) {
   return { ...user, balance: parseFloat(user.usdt_balance)||0, trc20Address: user.trc20_address||SHARED_TRC20_ADDRESS, isVIP: user.is_vip===true, termsAccepted: user.terms_accepted===true, referralCode: user.referral_code||user.uid, referralCount: user.referral_count||0, telegramId: user.telegram_id, name: user.full_name||user.registered_name||'', username: user.telegram_username||'', isActive: user.is_active!==false, earningsSuspended: user.earnings_suspended===true, hourlyStatus: { canClaim, nextClaimIn: nextClaimInSec, earningRate, hourlyAmount: earningRate } };
 }
 
+// ─── Standalone App Auth (UID + password for Android APK / web) ──────────────
+const _appLoginAttempts = new Map();
+function appLoginRateLimited(ip) {
+  const now = Date.now();
+  const rec = _appLoginAttempts.get(ip) || { count: 0, reset: now + 600000 };
+  if (now > rec.reset) { rec.count = 0; rec.reset = now + 600000; }
+  rec.count++;
+  _appLoginAttempts.set(ip, rec);
+  return rec.count > 10;
+}
+
+app.post('/api/app-auth/set-password', authMiddleware, async (req, res) => {
+  try {
+    const password = String(req.body?.password || '');
+    if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    const user = await getUserByTelegramId(req.tgUser.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const salt = crypto.randomBytes(16).toString('hex');
+    const hash = crypto.scryptSync(password, salt, 32).toString('hex');
+    const ok = await setAppPassword(user.telegram_id, `${salt}:${hash}`);
+    if (!ok) throw new Error('DB update failed');
+    res.json({ success: true, uid: user.uid });
+  } catch(e) { console.error('set-password error:', e); res.status(500).json({ error: 'Server error' }); }
+});
+
+app.post('/api/app-auth/login', async (req, res) => {
+  try {
+    if (appLoginRateLimited(req.ip || 'unknown')) return res.status(429).json({ error: 'Too many attempts. Try again in a few minutes.' });
+    const uid = String(req.body?.uid || '').trim();
+    const password = String(req.body?.password || '');
+    if (!uid || !password) return res.status(400).json({ error: 'Enter your UID and password' });
+    const user = await getUserByUid(uid);
+    if (!user || !user.app_password_hash) return res.status(401).json({ error: 'Wrong UID or password' });
+    const parts = String(user.app_password_hash).split(':');
+    const testHash = (parts.length === 2) ? crypto.scryptSync(password, parts[0], 32).toString('hex') : null;
+    if (!testHash || testHash !== parts[1]) return res.status(401).json({ error: 'Wrong UID or password' });
+    if (user.is_active === false) return res.status(403).json({ error: 'Account deactivated' });
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = Date.now() + 30 * 24 * 3600 * 1000; // 30 days
+    const sess = await createAppSession(user.telegram_id, token, expiresAt);
+    if (!sess.success) throw new Error('Session insert failed');
+    res.json({ success: true, token, telegramId: String(user.telegram_id), uid: user.uid, expiresAt });
+  } catch(e) { console.error('app-login error:', e); res.status(500).json({ error: 'Server error' }); }
+});
+
+app.post('/api/app-auth/logout', async (req, res) => {
+  try {
+    const token = req.headers['x-session-token'] || req.body?.sessionToken;
+    if (token) await deleteAppSession(String(token));
+    res.json({ success: true });
+  } catch(e) { res.json({ success: true }); }
+});
+
 // ─── API Routes ───────────────────────────────────────────────────────────────
 app.post('/api/auth', async (req, res) => {
   try {
-    const tgUser = getTelegramUser(req);
+    const tgUser = await getTelegramUser(req);
     if (!tgUser) {
       // Return a "not_ready" response instead of 401 so frontend retries gracefully
       return res.status(200).json({ success: false, not_ready: true, error: 'Telegram session not ready' });
@@ -1492,7 +1567,7 @@ app.post('/api/withdraw', async (req, res) => {
   try {
     // Resolve user — accept initData header OR telegramId in body
     let telegramId = null;
-    try { const u = getTelegramUser(req); if (u && u.id) telegramId = String(u.id); } catch(e) {}
+    try { const u = await getTelegramUser(req); if (u && u.id) telegramId = String(u.id); } catch(e) {}
     if (!telegramId && req.body && req.body.telegramId) telegramId = String(req.body.telegramId);
     if (!telegramId) return res.status(401).json({ error: 'Session expired. Please close and reopen the app.' });
 
@@ -1591,7 +1666,7 @@ app.post('/api/vip-upgrade', async (req, res) => {
   try {
     // Accept user from initData header OR telegramId in body
     let telegramId = null;
-    try { const u = getTelegramUser(req); if (u && u.id) telegramId = String(u.id); } catch(e) {}
+    try { const u = await getTelegramUser(req); if (u && u.id) telegramId = String(u.id); } catch(e) {}
     if (!telegramId && req.body && req.body.telegramId) telegramId = String(req.body.telegramId);
     if (!telegramId) return res.status(401).json({ error: 'Session expired. Please close and reopen the app.' });
 
@@ -1637,7 +1712,7 @@ const vipUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 
 app.post('/api/vip-upgrade-photo', vipUpload.single('photo'), async (req, res) => {
   try {
     let telegramId = null;
-    try { const u = getTelegramUser(req); if (u && u.id) telegramId = String(u.id); } catch(e) {}
+    try { const u = await getTelegramUser(req); if (u && u.id) telegramId = String(u.id); } catch(e) {}
     if (!telegramId && req.body && req.body.telegramId) telegramId = String(req.body.telegramId);
     if (!telegramId) return res.status(401).json({ error: 'Unauthorized' });
 
@@ -1669,7 +1744,7 @@ const receiptUpload = require('multer')({ storage: require('multer').memoryStora
 app.post('/api/withdrawal-receipt', receiptUpload.single('receipt'), async (req, res) => {
   try {
     let telegramId = null;
-    try { const u = getTelegramUser(req); if (u && u.id) telegramId = String(u.id); } catch(e) {}
+    try { const u = await getTelegramUser(req); if (u && u.id) telegramId = String(u.id); } catch(e) {}
     if (!telegramId && req.body && req.body.telegramId) telegramId = String(req.body.telegramId);
     if (!telegramId) return res.status(401).json({ error: 'Unauthorized' });
 
@@ -1768,7 +1843,7 @@ app.post('/api/support',      authMiddleware, handleSupportMessage);
 app.post('/api/support/send', authMiddleware, handleSupportMessage);
 app.get('/api/support/messages', async (req, res) => {
   try {
-    const tgUser = getTelegramUser(req);
+    const tgUser = await getTelegramUser(req);
     const tid = tgUser?.id || req.query.telegramId;
     if (!tid) return res.json([]);
     const supa = getSupabase();
@@ -1878,7 +1953,7 @@ app.get('/api/socialpay/posts', async (req,res) => {
     const pinnedPosts = rawPosts.filter(p => p.is_pinned || p.telegram_id === adminTid);
     const otherPosts = rawPosts.filter(p => !p.is_pinned && p.telegram_id !== adminTid);
     const posts = [...pinnedPosts, ...otherPosts];
-    const tgUser = getTelegramUser(req);
+    const tgUser = await getTelegramUser(req);
     const enriched = await Promise.all(posts.map(async p => {
       const prof = profiles.find(pr=>pr.telegram_id===p.telegram_id)||{};
       const { image_data, voice_data, ...postLight } = p;
@@ -1894,7 +1969,7 @@ app.get('/api/socialpay/post/:id', async (req,res) => {
     if (!post || post.status !== 'approved') return res.status(404).json({error:'Post not found'});
     const profiles = await getAllSocialProfiles();
     const prof = profiles.find(pr=>pr.telegram_id===post.telegram_id)||{};
-    const tgUser = getTelegramUser(req);
+    const tgUser = await getTelegramUser(req);
     res.json({ post: { ...post, author_name:prof.display_name||'User', author_verified:prof.is_verified||false, author_pic:prof.profile_pic||'', liked_by_me: tgUser ? await hasLiked(tgUser.id,post.id) : false } });
   } catch(e) { res.status(500).json({error:'Server error'}); }
 });

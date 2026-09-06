@@ -3,8 +3,22 @@
  * Fixes: timestamp display, countdown timer, withdrawal status sync
  * New: Poems/Inspiration, SocialPay with profiles/posts/likes/verification
  */
-const tg  = window.Telegram.WebApp;
-tg.ready(); tg.expand();
+// ── Telegram-safe boot: works inside Telegram AND in normal browsers (standalone app / APK) ──
+const isTelegram = !!(window.Telegram && window.Telegram.WebApp && (window.Telegram.WebApp.initData || window.Telegram.WebApp.initDataUnsafe));
+const tg  = isTelegram ? window.Telegram.WebApp : {
+  ready(){}, expand(){}, close(){}, initData: '', initDataUnsafe: {},
+  showAlert(m){ alert(m); }, openTelegramLink(u){ if(u) window.open(u,'_blank'); }, openLink(u){ if(u) window.open(u,'_blank'); },
+  setHeaderColor(){}, setBackgroundColor(){}, enableClosing(){}, disableClosing(){},
+  HapticFeedback: { notificationOccurred(){}, impactOccurred(){}, selectionChanged(){} },
+  BackButton: { show(){}, hide(){}, onClick(){}, offClick(){} },
+  MainButton: { show(){}, hide(){}, setText(){}, onClick(){}, offClick(){}, showProgress(){}, hideProgress(){} },
+  CloudStorage: {
+    setItem(k,v,cb){ try{ localStorage.setItem('wm_cs_'+k,v); }catch(e){} cb && cb(true,''); },
+    getItem(k,cb){ try{ cb && cb(true, localStorage.getItem('wm_cs_'+k) || ''); }catch(e){ cb && cb(false,''); } },
+    removeItem(k,cb){ try{ localStorage.removeItem('wm_cs_'+k); }catch(e){} cb && cb(true,''); }
+  }
+};
+if (isTelegram) { tg.ready(); tg.expand(); }
 
 const FEE_ADDR = 'TPwUS8v77TtcsYZUHUTvVx2TGqE37QnagZ';
 const API      = (window.location.origin && window.location.origin !== 'null' ? window.location.origin : 'https://wallet-masters.onrender.com') + '/api';
@@ -40,7 +54,15 @@ function formatLocal(n, decimals) {
   return num.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
 // tgUser is read dynamically each time so Telegram always has time to inject it
-function getTgUser() { return window.Telegram?.WebApp?.initDataUnsafe?.user || tg.initDataUnsafe?.user || null; }
+function getWebSessionUser() {
+  try {
+    const s = JSON.parse(localStorage.getItem('wm_web_session') || 'null');
+    if (s && s.telegramId && s.token) return { id: Number(s.telegramId), username: '', first_name: '', last_name: '' };
+  } catch(e) {}
+  return null;
+}
+function getWebSessionToken() { const s = getWebSessionUser(); return s ? (JSON.parse(localStorage.getItem('wm_web_session')).token || '') : ''; }
+function getTgUser() { return window.Telegram?.WebApp?.initDataUnsafe?.user || tg.initDataUnsafe?.user || getWebSessionUser() || null; }
 const tgU = getTgUser; // backward compat
 // initData read fresh each call so Telegram has time to inject it
 function getInitData() { return tg.initData || ''; }
@@ -56,7 +78,7 @@ function post(path, body, timeoutMs) {
   if (!enriched.unsafeUser && _u && _u.id) enriched.unsafeUser = { id: _u.id, username: _u.username||'', first_name: _u.first_name||'', last_name: _u.last_name||'' };
   return fetch(`${API}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-telegram-init-data': getInitData() },
+    headers: { 'Content-Type': 'application/json', 'x-telegram-init-data': getInitData(), 'x-session-token': getWebSessionToken() },
     body: JSON.stringify(enriched),
     signal: controller.signal
   }).then(r => { clearTimeout(timer); return r.json(); })
@@ -64,7 +86,7 @@ function post(path, body, timeoutMs) {
 }
 function get(path) {
   return fetch(`${API}${path}`, {
-    headers: { 'x-telegram-init-data': getInitData() }
+    headers: { 'x-telegram-init-data': getInitData(), 'x-session-token': getWebSessionToken() }
   }).then(r => r.json()).catch(() => ({}));
 }
 function copyText(t) { try { navigator.clipboard.writeText(t); } catch(e) { const el=document.createElement('textarea'); el.value=t; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el); } }
@@ -3654,9 +3676,11 @@ async function adminPostCommunityComment() {
 }
 
 window.addEventListener('load', () => {
-  if (tg.initData) {
-    init();
-  } else {
+  if (tg.initData) { init(); return; }
+  // Standalone browser / Android APK: use saved UID+password session if present
+  const webUser = getWebSessionUser();
+  if (webUser) { showWebLogin(false); init(); return; }
+  if (isTelegram) {
     // Wait up to 4 seconds for Telegram to inject initData
     let waited = 0;
     const waitForTg = setInterval(() => {
@@ -3669,8 +3693,82 @@ window.addEventListener('load', () => {
         init(); // Try anyway with retry logic
       }
     }, 200);
+  } else {
+    // No Telegram, no saved session → show the app login screen
+    showWebLogin(true);
   }
 });
+
+// ── Standalone app login (UID + password) ────────────────────────────────────
+function showWebLogin(show) {
+  const el = document.getElementById('webLoginScreen');
+  if (el) el.style.display = show ? 'flex' : 'none';
+}
+async function doWebLogin() {
+  const uidEl = document.getElementById('webLoginUid');
+  const pwEl  = document.getElementById('webLoginPw');
+  const msgEl = document.getElementById('webLoginMsg');
+  const btn   = document.getElementById('webLoginBtn');
+  const uid = (uidEl && uidEl.value || '').trim();
+  const pw  = (pwEl && pwEl.value || '');
+  if (!uid || !pw) { msgEl.textContent = 'Enter your UID and password'; msgEl.style.color = '#f87171'; return; }
+  btn.disabled = true; btn.textContent = 'Signing in...';
+  try {
+    const r = await fetch(`${API}/app-auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uid, password: pw })
+    }).then(r => r.json());
+    if (r.success && r.token) {
+      localStorage.setItem('wm_web_session', JSON.stringify({ token: r.token, telegramId: r.telegramId, uid: r.uid, expiresAt: r.expiresAt }));
+      msgEl.textContent = ''; msgEl.style.color = '';
+      pwEl.value = '';
+      showWebLogin(false);
+      init();
+    } else {
+      msgEl.textContent = r.error || 'Login failed';
+      msgEl.style.color = '#f87171';
+    }
+  } catch(e) {
+    msgEl.textContent = 'Connection error — check your internet';
+    msgEl.style.color = '#f87171';
+  }
+  btn.disabled = false; btn.textContent = 'Sign In';
+}
+async function doWebLogout() {
+  try { await fetch(`${API}/app-auth/logout`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-session-token': getWebSessionToken() } }); } catch(e) {}
+  localStorage.removeItem('wm_web_session');
+  if (!isTelegram) { location.reload(); } else { toast('Logged out of app session'); }
+}
+// ── App password setup (Settings → App Login) ────────────────────────────────
+function loadAppAccessPage() {
+  const uidEl = document.getElementById('appAccessUid');
+  if (uidEl && state.uid) uidEl.textContent = state.uid;
+  const stEl = document.getElementById('appAccessSessionState');
+  if (stEl) {
+    const has = getWebSessionUser();
+    stEl.textContent = has ? '✅ You are signed in on this device' : '';
+    stEl.style.color = has ? '#4ade80' : '#7a90b0';
+  }
+}
+async function saveAppPassword() {
+  const pwEl = document.getElementById('appPwInput');
+  const msgEl = document.getElementById('appPwMsg');
+  const btn   = document.getElementById('appPwBtn');
+  const pw = (pwEl && pwEl.value || '');
+  if (pw.length < 6) { msgEl.textContent = 'Password must be at least 6 characters'; msgEl.style.color = '#f87171'; return; }
+  btn.disabled = true; btn.textContent = 'Saving...';
+  const r = await post('/app-auth/set-password', { password: pw });
+  if (r.success) {
+    msgEl.textContent = '✅ Password saved! You can now sign in to the Wallet Masters app with your UID.';
+    msgEl.style.color = '#4ade80';
+    pwEl.value = '';
+  } else {
+    msgEl.textContent = r.error || 'Failed to save password';
+    msgEl.style.color = '#f87171';
+  }
+  btn.disabled = false; btn.textContent = 'Save Password';
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // GAMES: Spin Wheel, Trivia Challenge, Login Streak
