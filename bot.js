@@ -37,7 +37,7 @@ const {
   getTriviaQuestions, answerTriviaQuestion,
   getLoginStreakStatus, claimLoginStreak,
   getMiningStatus, buyMiningHash, claimMiningProfit, getUserByUid, internalTransfer,
-  setAppPassword, getAppPasswordHash, createAppSession, getAppSessionByToken, deleteAppSession,
+  setAppPassword, getAppPasswordHash, createAppSession, getAppSessionByToken, deleteAppSession, getUserByTelegramId,
   getAppSetting, setAppSetting, getAppEmail, setAppEmail, getTidByEmail, setEmailMap, removeEmailMap } = require('./database');
 
 const BOT_TOKEN     = process.env.BOT_TOKEN;
@@ -1365,7 +1365,13 @@ async function getTelegramUser(req) {
     if (stoken && String(stoken).length >= 20) {
       const sess = await getAppSessionByToken(stoken);
       if (sess && Number(sess.expires_at) > Date.now()) {
-        return { id: Number(sess.telegram_id), username: '', first_name: 'User', last_name: '' };
+        // Pull the user's real name so the header shows it (not a generic "User")
+        let _fname = 'User';
+        try {
+          const _u = await getUserByTelegramId(sess.telegram_id);
+          if (_u) _fname = (_u.registered_name || _u.full_name || _u.telegram_username || 'User').trim() || 'User';
+        } catch(e) {}
+        return { id: Number(sess.telegram_id), username: '', first_name: _fname, last_name: '' };
       }
     }
   } catch(e) {}
