@@ -3696,6 +3696,9 @@ window.addEventListener('load', () => {
   } else {
     // No Telegram, no saved session → show the app login screen
     showWebLogin(true);
+    // Hide the splash preloader — it only hides after auth, which we don't have yet
+    const _splash = document.getElementById('splash');
+    if (_splash) _splash.style.display = 'none';
   }
 });
 
@@ -3737,6 +3740,8 @@ async function doWebLogin() {
       msgEl.textContent = ''; msgEl.style.color = '';
       pwEl.value = '';
       showWebLogin(false);
+      const _sp = document.getElementById('splash');
+      if (_sp) _sp.style.display = 'flex';
       init();
     } else {
       msgEl.textContent = r.error || 'Login failed';
@@ -3770,6 +3775,8 @@ async function doWebRegister() {
       msgEl.textContent = '✅ Account created! Welcome to Wallet Masters.';
       msgEl.style.color = '#4ade80';
       showWebLogin(false);
+      const _sp = document.getElementById('splash');
+      if (_sp) _sp.style.display = 'flex';
       init();
     } else {
       msgEl.textContent = r.error || 'Registration failed';
