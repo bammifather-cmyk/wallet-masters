@@ -184,6 +184,15 @@ async function init(retryCount) {
   // Re-capture user on every attempt (Telegram may inject late)
   const _freshUser = getTgUser();
 
+  // No Telegram user and no saved web session → standalone browser.
+  // Show the login screen instead of retrying /auth forever.
+  if (!_freshUser || !_freshUser.id) {
+    const _sp = document.getElementById('splash');
+    if (_sp) _sp.style.display = 'none';
+    showWebLogin(true);
+    return;
+  }
+
   try {
     const ref  = new URLSearchParams(window.location.search).get('ref') || tg.initDataUnsafe?.start_param?.replace('ref_','') || '';
     const _u2 = getTgUser();
@@ -325,13 +334,21 @@ document.addEventListener('visibilitychange', async () => {
           // Don't show error — user is already in the app
         }
       } else {
-        // App not loaded yet — reinit from splash
-        const splash = document.getElementById('splash');
-        if (splash) {
-          splash.style.display = 'flex';
-          splash.style.opacity = '1';
+        // Nobody authenticated yet — if there's auth available, reinit;
+        // otherwise keep/reshow the web login screen
+        const _vu = getTgUser();
+        if (_vu && _vu.id) {
+          const splash = document.getElementById('splash');
+          if (splash) {
+            splash.style.display = 'flex';
+            splash.style.opacity = '1';
+          }
+          init(0);
+        } else {
+          const splash = document.getElementById('splash');
+          if (splash) splash.style.display = 'none';
+          showWebLogin(true);
         }
-        init(0);
       }
     }
     _lastActiveTime = Date.now();
@@ -358,7 +375,9 @@ window.addEventListener('online', async () => {
       }
     } catch(e) {}
   } else {
-    init(0);
+    const _ou = getTgUser();
+    if (_ou && _ou.id) init(0);
+    else showWebLogin(true);
   }
 });
 
