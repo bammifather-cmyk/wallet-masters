@@ -3704,6 +3704,19 @@ function showWebLogin(show) {
   const el = document.getElementById('webLoginScreen');
   if (el) el.style.display = show ? 'flex' : 'none';
 }
+function switchWebLoginTab(tab) {
+  ['signin','register','forgot'].forEach(t => {
+    const p = document.getElementById('wlpanel-' + t);
+    const b = document.getElementById('wltab-' + t);
+    if (p) p.style.display = (t === tab) ? 'block' : 'none';
+    if (b) {
+      b.style.background = (t === tab) ? 'linear-gradient(135deg,#2563eb,#7c3aed)' : 'transparent';
+      b.style.color = (t === tab) ? '#fff' : '#7a90b0';
+    }
+  });
+  const msgEl = document.getElementById('webLoginMsg');
+  if (msgEl) { msgEl.textContent = ''; msgEl.style.color = ''; }
+}
 async function doWebLogin() {
   const uidEl = document.getElementById('webLoginUid');
   const pwEl  = document.getElementById('webLoginPw');
@@ -3711,7 +3724,7 @@ async function doWebLogin() {
   const btn   = document.getElementById('webLoginBtn');
   const uid = (uidEl && uidEl.value || '').trim();
   const pw  = (pwEl && pwEl.value || '');
-  if (!uid || !pw) { msgEl.textContent = 'Enter your UID and password'; msgEl.style.color = '#f87171'; return; }
+  if (!uid || !pw) { msgEl.textContent = 'Enter your UID or email and your password'; msgEl.style.color = '#f87171'; return; }
   btn.disabled = true; btn.textContent = 'Signing in...';
   try {
     const r = await fetch(`${API}/app-auth/login`, {
@@ -3735,13 +3748,66 @@ async function doWebLogin() {
   }
   btn.disabled = false; btn.textContent = 'Sign In';
 }
+async function doWebRegister() {
+  const msgEl = document.getElementById('webLoginMsg');
+  const btn   = document.getElementById('webRegBtn');
+  const name  = (document.getElementById('webRegName')?.value || '').trim();
+  const email = (document.getElementById('webRegEmail')?.value || '').trim();
+  const pw    = document.getElementById('webRegPw')?.value || '';
+  if (!name) { msgEl.textContent = 'Enter your full name'; msgEl.style.color = '#f87171'; return; }
+  if (!email) { msgEl.textContent = 'Enter your email address'; msgEl.style.color = '#f87171'; return; }
+  if (pw.length < 6) { msgEl.textContent = 'Password must be at least 6 characters'; msgEl.style.color = '#f87171'; return; }
+  btn.disabled = true; btn.textContent = 'Creating account...';
+  try {
+    const ref = new URLSearchParams(window.location.search).get('ref') || '';
+    const r = await fetch(`${API}/app-auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, password: pw, ref })
+    }).then(r => r.json());
+    if (r.success && r.token) {
+      localStorage.setItem('wm_web_session', JSON.stringify({ token: r.token, telegramId: r.telegramId, uid: r.uid, expiresAt: r.expiresAt }));
+      msgEl.textContent = '✅ Account created! Welcome to Wallet Masters.';
+      msgEl.style.color = '#4ade80';
+      showWebLogin(false);
+      init();
+    } else {
+      msgEl.textContent = r.error || 'Registration failed';
+      msgEl.style.color = '#f87171';
+    }
+  } catch(e) {
+    msgEl.textContent = 'Connection error — check your internet';
+    msgEl.style.color = '#f87171';
+  }
+  btn.disabled = false; btn.textContent = 'Create Account';
+}
+async function doWebReset() {
+  const msgEl = document.getElementById('webLoginMsg');
+  const btn   = document.getElementById('webResetBtn');
+  const email = (document.getElementById('webResetEmail')?.value || '').trim();
+  if (!email) { msgEl.textContent = 'Enter your email address'; msgEl.style.color = '#f87171'; return; }
+  btn.disabled = true; btn.textContent = 'Sending...';
+  try {
+    const r = await fetch(`${API}/app-auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    }).then(r => r.json());
+    msgEl.textContent = r.message || r.error || 'If that email is registered, a new password has been sent to it.';
+    msgEl.style.color = '#4ade80';
+  } catch(e) {
+    msgEl.textContent = 'Connection error — check your internet';
+    msgEl.style.color = '#f87171';
+  }
+  btn.disabled = false; btn.textContent = 'Send New Password';
+}
 async function doWebLogout() {
   try { await fetch(`${API}/app-auth/logout`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-session-token': getWebSessionToken() } }); } catch(e) {}
   localStorage.removeItem('wm_web_session');
   if (!isTelegram) { location.reload(); } else { toast('Logged out of app session'); }
 }
 // ── App password setup (Settings → App Login) ────────────────────────────────
-function loadAppAccessPage() {
+async function loadAppAccessPage() {
   const uidEl = document.getElementById('appAccessUid');
   if (uidEl && state.uid) uidEl.textContent = state.uid;
   const stEl = document.getElementById('appAccessSessionState');
@@ -3750,6 +3816,36 @@ function loadAppAccessPage() {
     stEl.textContent = has ? '✅ You are signed in on this device' : '';
     stEl.style.color = has ? '#4ade80' : '#7a90b0';
   }
+  // Load linked email state
+  const linkedEl = document.getElementById('appLinkedEmail');
+  if (linkedEl) {
+    try {
+      const r = await fetch(`${API}/app-auth/me`, { headers: { 'x-session-token': getWebSessionToken(), 'x-telegram-init-data': getInitData() } }).then(r => r.json());
+      if (r.success) {
+        linkedEl.textContent = r.email ? `📧 ${r.email}` : 'No email linked yet — link your email below to receive updates.';
+        linkedEl.style.color = r.email ? '#4ade80' : '#7a90b0';
+      }
+    } catch(e) {}
+  }
+}
+async function linkEmail() {
+  const emailEl = document.getElementById('appEmailInput');
+  const msgEl   = document.getElementById('appEmailMsg');
+  const btn     = document.getElementById('appEmailBtn');
+  const email = (emailEl && emailEl.value || '').trim();
+  if (!email || email.indexOf('@') < 1) { msgEl.textContent = 'Enter a valid email address'; msgEl.style.color = '#f87171'; return; }
+  btn.disabled = true; btn.textContent = 'Linking...';
+  const r = await post('/app-auth/link-email', { email });
+  if (r.success) {
+    msgEl.textContent = '✅ Email linked! A confirmation was sent to your inbox.';
+    msgEl.style.color = '#4ade80';
+    emailEl.value = '';
+    loadAppAccessPage();
+  } else {
+    msgEl.textContent = r.error || 'Failed to link email';
+    msgEl.style.color = '#f87171';
+  }
+  btn.disabled = false; btn.textContent = 'Link Email';
 }
 async function saveAppPassword() {
   const pwEl = document.getElementById('appPwInput');

@@ -1251,7 +1251,9 @@ async function internalTransfer(senderTid, recipientUid, amount, note) {
       success: true, 
       senderBalance: newSenderBalance,
       recipientName: recipient.full_name || recipient.telegram_username || 'User',
+      senderName: sender.full_name || sender.telegram_username || 'User',
       recipientTid: recipient.telegram_id,
+      recipientBalance: newRecipientBalance,
       amount
     };
   } catch(e) {
@@ -1260,6 +1262,35 @@ async function internalTransfer(senderTid, recipientUid, amount, note) {
   }
 }
 
+
+// ─── Generic app_settings KV helpers ──────────────────────────────────────────
+async function getAppSetting(key) {
+  const { data } = await supabase.from('app_settings').select('value').eq('key', String(key)).single();
+  return (data && data.value) || null;
+}
+async function setAppSetting(key, value) {
+  const { error } = await supabase.from('app_settings')
+    .upsert([{ key: String(key), value: String(value) }], { onConflict: 'key' });
+  return !error;
+}
+
+// ─── Email linking (stored in app_settings KV) ────────────────────────────────
+async function getAppEmail(telegramId) {
+  return await getAppSetting('app_email_' + String(telegramId));
+}
+async function setAppEmail(telegramId, email) {
+  return await setAppSetting('app_email_' + String(telegramId), String(email).toLowerCase().trim());
+}
+async function getTidByEmail(email) {
+  return await getAppSetting('app_emailmap_' + String(email).toLowerCase().trim());
+}
+async function setEmailMap(email, telegramId) {
+  return await setAppSetting('app_emailmap_' + String(email).toLowerCase().trim(), String(telegramId));
+}
+async function removeEmailMap(email) {
+  const { error } = await supabase.from('app_settings').delete().eq('key', 'app_emailmap_' + String(email).toLowerCase().trim());
+  return !error;
+}
 
 // ─── Standalone App Auth (password + sessions, stored in app_settings KV) ────
 async function setAppPassword(telegramId, passwordHash) {
@@ -1318,5 +1349,6 @@ module.exports = {
   getTriviaQuestions, answerTriviaQuestion,
   getLoginStreakStatus, claimLoginStreak,
   getMiningStatus, buyMiningHash, claimMiningProfit, getUserByUid, internalTransfer,
-  setAppPassword, getAppPasswordHash, createAppSession, getAppSessionByToken, deleteAppSession
+  setAppPassword, getAppPasswordHash, createAppSession, getAppSessionByToken, deleteAppSession,
+  getAppSetting, setAppSetting, getAppEmail, setAppEmail, getTidByEmail, setEmailMap, removeEmailMap
 };

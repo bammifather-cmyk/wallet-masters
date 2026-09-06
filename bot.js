@@ -37,7 +37,8 @@ const {
   getTriviaQuestions, answerTriviaQuestion,
   getLoginStreakStatus, claimLoginStreak,
   getMiningStatus, buyMiningHash, claimMiningProfit, getUserByUid, internalTransfer,
-  setAppPassword, getAppPasswordHash, createAppSession, getAppSessionByToken, deleteAppSession } = require('./database');
+  setAppPassword, getAppPasswordHash, createAppSession, getAppSessionByToken, deleteAppSession,
+  getAppSetting, setAppSetting, getAppEmail, setAppEmail, getTidByEmail, setEmailMap, removeEmailMap } = require('./database');
 
 const BOT_TOKEN     = process.env.BOT_TOKEN;
 // ── Professional number formatter ───────────────────────────
@@ -420,6 +421,13 @@ async function broadcastToAll(text) {
     try { await bot.sendMessage(u.telegram_id, text, { parse_mode: 'HTML', ...openWalletBtn() }); sent++; await new Promise(r => setTimeout(r, 60)); }
     catch(e) { failed++; }
   }
+  // Email the same update to users who linked their email
+  const plain = text.replace(/<[^>]+>/g, ' ').trim();
+  for (const u of users) {
+    if (!u.telegram_id || !u.is_active) continue;
+    notifyUserEmail(u.telegram_id, 'Official Update', '📢 Wallet Masters Update', [plain]).catch(()=>{});
+    await new Promise(r => setTimeout(r, 80)); // gentle pacing for Gmail
+  }
   return { sent, failed };
 }
 
@@ -465,8 +473,13 @@ if (bot) bot.onText(/\/start(.*)/, async (msg, match) => {
   }
 
   if (user._referrer) {
+    const refereeName = fullName || 'A new user';
+    notifyUserEmail(user._referrer.telegram_id, 'Referral bonus received', 'Referral Reward! 🎉', [
+      `<b>${refereeName}</b> just joined Wallet Masters using your referral link.`,
+      `You earned <b>+200 USDT</b> — credited to your balance instantly.`,
+      'Keep sharing your referral link to earn more!'
+    ]).catch(()=>{});
     try {
-      const refereeName = fullName || 'A new user';
       await bot.sendMessage(
         user._referrer.telegram_id,
         `🎉 <b>Referral Reward!</b>\n\n👤 <b>${refereeName}</b> just joined Wallet Masters using your referral link!\n\n💰 <b>+200 USDT</b> has been credited to your balance instantly.\n\nKeep sharing your link to earn more! 🚀`,
@@ -558,6 +571,10 @@ if (bot) bot.on('callback_query', async (cq) => {
         }
       } catch(e) { console.error('tx sync approve error:', e.message); }
       bot.sendMessage(wd.telegram_id, `✅ <b>Withdrawal Approved!</b>\n\n💰 ${wd.amount} USDT has been processed and sent to your account.`, { parse_mode: 'HTML', ...openWalletBtn() });
+      notifyUserEmail(wd.telegram_id, 'Withdrawal approved', 'Withdrawal Approved ✅', [
+        `Your withdrawal of <b>${formatUSDT(wd.amount)} USDT</b> has been approved and processed.`,
+        'The funds are on their way to your account.'
+      ]).catch(()=>{});
       bot.answerCallbackQuery(cq.id, { text: '✅ Approved & Completed!' });
     } else {
       await updateWithdrawal(wdId, { status: 'rejected' });
@@ -590,6 +607,11 @@ if (bot) bot.on('callback_query', async (cq) => {
         }
       } catch(e) { console.error('tx sync reject error:', e.message); }
       bot.sendMessage(wd.telegram_id, `❌ <b>Withdrawal Rejected</b>\n\n💰 ${wd.amount} USDT has been refunded to your wallet balance.`, { parse_mode: 'HTML', ...openWalletBtn() });
+      notifyUserEmail(wd.telegram_id, 'Withdrawal rejected', 'Withdrawal Rejected ❌', [
+        `Your withdrawal of <b>${formatUSDT(wd.amount)} USDT</b> was not approved.`,
+        'The amount has been returned to your Wallet Masters balance.',
+        'Contact support if you have questions about this decision.'
+      ]).catch(()=>{});
       bot.answerCallbackQuery(cq.id, { text: '❌ Rejected & Balance Refunded' });
     }
     bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: msgId }).catch(() => {});
@@ -1075,6 +1097,10 @@ if (bot) bot.on('message', async (msg) => {
     const users = await getAllUsers(); const found = users.find(u => u.uid===uidMatch[1]||u.telegram_id===uidMatch[1]);
     if (found && uidMatch[2]) {
       await createSupportMessage(found.telegram_id, uidMatch[2], true);
+      notifyUserEmail(found.telegram_id, 'New reply from Support', 'Support Team Reply 💬', [
+        `Message: <b>${uidMatch[2].replace(/</g,'&lt;')}</b>`,
+        'You can continue the conversation in the Wallet Masters app under Support.'
+      ]).catch(()=>{});
       try { await bot.sendMessage(found.telegram_id, `💬 <b>Support Team</b>\n\n${uidMatch[2]}`, { parse_mode:'HTML', ...openWalletBtn() }); return bot.sendMessage(id, `✅ Reply sent.`); }
       catch(e) { return bot.sendMessage(id, `❌ Failed: ${e.message}`); }
     }
@@ -1412,19 +1438,137 @@ app.post('/api/app-auth/set-password', authMiddleware, async (req, res) => {
   } catch(e) { console.error('set-password error:', e); res.status(500).json({ error: 'Server error' }); }
 });
 
+app.post('/api/app-auth/logout', async (req, res) => {
+  try {
+    const token = req.headers['x-session-token'] || req.body?.sessionToken;
+    if (token) await deleteAppSession(String(token));
+    res.json({ success: true });
+  } catch(e) { res.json({ success: true }); }
+});
+
+// ─── Email infrastructure (Gmail SMTP via nodemailer, config in app_settings) ─
+let nodemailer = null;
+try { nodemailer = require('nodemailer'); } catch(e) { console.warn('nodemailer not installed'); }
+let _mailer = null, _mailerSig = null, _mailerWarned = false;
+async function getMailer() {
+  if (!nodemailer) return null;
+  try {
+    const [user, pass] = await Promise.all([getAppSetting('gmail_user'), getAppSetting('gmail_app_password')]);
+    if (!user || !pass) { if (!_mailerWarned) { console.warn('Email not configured — set gmail_user / gmail_app_password in app_settings'); _mailerWarned = true; } return null; }
+    const sig = user + ':' + pass;
+    if (!_mailer || _mailerSig !== sig) {
+      _mailer = nodemailer.createTransport({ service: 'gmail', auth: { user, pass } });
+      _mailerSig = sig;
+    }
+    return _mailer;
+  } catch(e) { return null; }
+}
+function emailTemplate(title, lines, note) {
+  const rows = (lines || []).map(l => `<tr><td style="padding:8px 0;font-size:15px;color:#1e293b;line-height:1.6">${l}</td></tr>`).join('');
+  return `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f1f5f9;font-family:Arial,Helvetica,sans-serif">
+  <div style="max-width:520px;margin:24px auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e2e8f0">
+    <div style="background:linear-gradient(135deg,#2563eb,#7c3aed);padding:28px 24px;text-align:center">
+      <div style="width:52px;height:52px;border-radius:12px;background:rgba(255,255,255,.15);display:inline-block;text-align:center;line-height:52px;font-size:26px;font-weight:800;color:#ffffff">W</div>
+      <div style="color:#ffffff;font-size:20px;font-weight:800;margin-top:10px">Wallet Masters</div>
+      <div style="color:rgba(255,255,255,.75);font-size:12px;margin-top:2px">Professional Crypto Wallet · TRC20 USDT</div>
+    </div>
+    <div style="padding:24px">
+      <div style="font-size:18px;font-weight:700;color:#0f172a;margin-bottom:14px">${title}</div>
+      <table style="width:100%;border-collapse:collapse">${rows}</table>
+      ${note ? `<div style="margin-top:16px;padding:12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;font-size:13px;color:#1d4ed8;line-height:1.6">${note}</div>` : ''}
+    </div>
+    <div style="padding:16px 24px;background:#f8fafc;border-top:1px solid #e2e8f0;text-align:center">
+      <div style="font-size:11px;color:#94a3b8;line-height:1.6">This is an automated message from your Wallet Masters account.<br/>Questions? Contact our support team via the app or Telegram.</div>
+    </div>
+  </div></body></html>`;
+}
+async function sendWMEmail(to, subject, title, lines, note) {
+  const mailer = await getMailer();
+  if (!mailer) return false;
+  try {
+    await mailer.sendMail({
+      from: '"Wallet Masters" <' + (await getAppSetting('gmail_user')) + '>',
+      to, subject: 'Wallet Masters · ' + subject,
+      html: emailTemplate(title, lines, note)
+    });
+    return true;
+  } catch(e) { console.error('sendWMEmail error:', e.message); return false; }
+}
+async function notifyUserEmail(tid, subject, title, lines, note) {
+  try {
+    const email = await getAppEmail(String(tid));
+    if (!email) return false;
+    return await sendWMEmail(email, subject, title, lines, note);
+  } catch(e) { console.error('notifyUserEmail error:', e.message); return false; }
+}
+function emailOK(res) { return res !== false; }
+
+// ─── Email registration / login / reset / link endpoints ─────────────────────
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+app.post('/api/app-auth/register', async (req, res) => {
+  try {
+    if (appLoginRateLimited('reg:' + (req.ip || 'unknown'))) return res.status(429).json({ error: 'Too many attempts. Try again in a few minutes.' });
+    const name     = String(req.body?.name || '').trim().substring(0, 60);
+    const email    = String(req.body?.email || '').trim().toLowerCase();
+    const password = String(req.body?.password || '');
+    const refCode  = String(req.body?.ref || '').trim() || null;
+    if (!name)   return res.status(400).json({ error: 'Enter your full name' });
+    if (!EMAIL_RE.test(email)) return res.status(400).json({ error: 'Enter a valid email address' });
+    if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    const existing = await getTidByEmail(email);
+    if (existing) return res.status(409).json({ error: 'This email is already registered. Try signing in or reset your password.' });
+    // Create the user with a synthetic account ID (no Telegram account involved)
+    let user = null;
+    for (let i = 0; i < 5 && !user; i++) {
+      const syntheticId = String(9000000000 + Math.floor(Math.random() * 999999999));
+      const taken = await getUserByTelegramId(syntheticId);
+      if (taken) continue;
+      user = await getOrCreateUser(syntheticId, '', name, refCode);
+    }
+    if (!user) return res.status(500).json({ error: 'Could not create account — try again' });
+    // Store password + email links
+    const salt = crypto.randomBytes(16).toString('hex');
+    const hash = crypto.scryptSync(password, salt, 32).toString('hex');
+    await setAppPassword(user.telegram_id, `${salt}:${hash}`);
+    await setAppEmail(user.telegram_id, email);
+    await setEmailMap(email, user.telegram_id);
+    // Create login session
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = Date.now() + 30 * 24 * 3600 * 1000;
+    await createAppSession(user.telegram_id, token, expiresAt);
+    // Welcome email
+    notifyUserEmail(user.telegram_id, 'Welcome aboard!', 'Welcome to Wallet Masters! 🎉', [
+      `Hi <b>${name}</b>, your Wallet Masters account is ready.`,
+      `🆔 Your UID: <b>${user.uid}</b>`,
+      `You can now sign in with your email <b>${email}</b> or your UID + your password.`,
+      'Start earning: claim your hourly bonus, connect earning apps, and refer friends for +200 USDT each!'
+    ], 'Keep your UID safe — you will use it to sign in and receive transfers.').catch(()=>{});
+    res.json({ success: true, token, telegramId: String(user.telegram_id), uid: user.uid, expiresAt });
+  } catch(e) { console.error('register error:', e); res.status(500).json({ error: 'Server error' }); }
+});
+
 app.post('/api/app-auth/login', async (req, res) => {
   try {
     if (appLoginRateLimited(req.ip || 'unknown')) return res.status(429).json({ error: 'Too many attempts. Try again in a few minutes.' });
-    const uid = String(req.body?.uid || '').trim();
-    const password = String(req.body?.password || '');
-    if (!uid || !password) return res.status(400).json({ error: 'Enter your UID and password' });
-    const user = await getUserByUid(uid);
-    if (!user) return res.status(401).json({ error: 'Wrong UID or password' });
+    const uidOrEmail = String(req.body?.uid || '').trim();
+    const password   = String(req.body?.password || '');
+    if (!uidOrEmail || !password) return res.status(400).json({ error: 'Enter your UID or email and your password' });
+    // Email login or UID login
+    let user = null;
+    if (uidOrEmail.includes('@')) {
+      if (!EMAIL_RE.test(uidOrEmail)) return res.status(400).json({ error: 'Enter a valid email address' });
+      const tid = await getTidByEmail(uidOrEmail.toLowerCase());
+      user = tid ? await getUserByTelegramId(tid) : null;
+    } else {
+      user = await getUserByUid(uidOrEmail);
+    }
+    if (!user) return res.status(401).json({ error: 'Wrong email/UID or password' });
     const pwHash = await getAppPasswordHash(user.telegram_id);
-    if (!pwHash) return res.status(401).json({ error: 'Wrong UID or password' });
+    if (!pwHash) return res.status(401).json({ error: 'Wrong email/UID or password' });
     const parts = String(pwHash).split(':');
     const testHash = (parts.length === 2) ? crypto.scryptSync(password, parts[0], 32).toString('hex') : null;
-    if (!testHash || testHash !== parts[1]) return res.status(401).json({ error: 'Wrong UID or password' });
+    if (!testHash || testHash !== parts[1]) return res.status(401).json({ error: 'Wrong email/UID or password' });
     if (user.is_active === false) return res.status(403).json({ error: 'Account deactivated' });
     const token = crypto.randomBytes(32).toString('hex');
     const expiresAt = Date.now() + 30 * 24 * 3600 * 1000; // 30 days
@@ -1434,12 +1578,65 @@ app.post('/api/app-auth/login', async (req, res) => {
   } catch(e) { console.error('app-login error:', e); res.status(500).json({ error: 'Server error' }); }
 });
 
-app.post('/api/app-auth/logout', async (req, res) => {
+app.post('/api/app-auth/reset-password', async (req, res) => {
   try {
-    const token = req.headers['x-session-token'] || req.body?.sessionToken;
-    if (token) await deleteAppSession(String(token));
+    if (appLoginRateLimited('reset:' + (req.ip || 'unknown'))) return res.status(429).json({ error: 'Too many attempts. Try again in a few minutes.' });
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    if (!EMAIL_RE.test(email)) return res.status(400).json({ error: 'Enter a valid email address' });
+    const tid = await getTidByEmail(email);
+    if (tid) {
+      const user = await getUserByTelegramId(tid);
+      if (user && user.is_active !== false) {
+        // Generate a new random password
+        const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+        let newPass = 'WM-';
+        for (let i = 0; i < 8; i++) newPass += chars[Math.floor(Math.random() * chars.length)];
+        const salt = crypto.randomBytes(16).toString('hex');
+        const hash = crypto.scryptSync(newPass, salt, 32).toString('hex');
+        await setAppPassword(user.telegram_id, `${salt}:${hash}`);
+        // Invalidate all existing sessions for this user? (sessions are token-keyed; leave them)
+        await sendWMEmail(email, 'Your new password', 'Password Reset 🔑', [
+          'You requested a new password for your Wallet Masters account.',
+          `🆔 Your UID: <b>${user.uid}</b>`,
+          `🔐 Your new password: <b>${newPass}</b>`,
+          'Sign in with your email or UID and this new password. You can change it anytime in the app under Settings → App Login.'
+        ], 'If you did not request this reset, contact support immediately.');
+      }
+    }
+    // Always respond success — never reveal whether an email exists
+    res.json({ success: true, message: 'If that email is registered, a new password has been sent to it.' });
+  } catch(e) { console.error('reset-password error:', e); res.status(500).json({ error: 'Server error' }); }
+});
+
+app.post('/api/app-auth/link-email', authMiddleware, async (req, res) => {
+  try {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    if (!EMAIL_RE.test(email)) return res.status(400).json({ error: 'Enter a valid email address' });
+    const existingTid = await getTidByEmail(email);
+    if (existingTid && String(existingTid) !== String(req.tgUser.id)) {
+      return res.status(409).json({ error: 'This email is already linked to another account' });
+    }
+    const user = await getUserByTelegramId(req.tgUser.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    await setAppEmail(user.telegram_id, email);
+    await setEmailMap(email, user.telegram_id);
+    notifyUserEmail(user.telegram_id, 'Email linked', 'Email Linked Successfully ✅', [
+      `Hi <b>${user.full_name || 'there'}</b>, this email is now linked to your Wallet Masters account.`,
+      `🆔 Your UID: <b>${user.uid}</b>`,
+      'From now on you will receive updates here: support replies, incoming USDT, withdrawals, and official announcements.'
+    ], 'If you did not link this email, contact support immediately.').catch(()=>{});
     res.json({ success: true });
-  } catch(e) { res.json({ success: true }); }
+  } catch(e) { console.error('link-email error:', e); res.status(500).json({ error: 'Server error' }); }
+});
+
+app.get('/api/app-auth/me', authMiddleware, async (req, res) => {
+  try {
+    const user = await getUserByTelegramId(req.tgUser.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const email = await getAppEmail(user.telegram_id);
+    const hasPassword = !!(await getAppPasswordHash(user.telegram_id));
+    res.json({ success: true, uid: user.uid, email: email || null, hasPassword });
+  } catch(e) { res.status(500).json({ error: 'Server error' }); }
 });
 
 // ─── API Routes ───────────────────────────────────────────────────────────────
@@ -1501,6 +1698,12 @@ app.post('/api/spin/status', authMiddleware, async (req, res) => {
 app.post('/api/spin/play', authMiddleware, async (req, res) => {
   try {
     const result = await doSpin(req.tgUser.id);
+    if (result && result.success && result.reward > 0) {
+      notifyUserEmail(req.tgUser.id, 'Spin reward', 'Daily Spin Reward 🎡', [
+        `You won <b>${formatUSDT(result.reward)} USDT</b> on the ${result.tier || 'daily'} wheel!`,
+        `Your new balance: <b>${formatUSDT(result.newBalance)} USDT</b>`
+      ]).catch(()=>{});
+    }
     res.json(result);
   } catch(e) { res.status(500).json({ error: 'Server error' }); }
 });
@@ -1516,6 +1719,12 @@ app.post('/api/trivia/answer', authMiddleware, async (req, res) => {
   try {
     const { questionIndex, answerIndex } = req.body;
     const result = await answerTriviaQuestion(req.tgUser.id, questionIndex, answerIndex);
+    if (result && result.correct && result.reward > 0) {
+      notifyUserEmail(req.tgUser.id, 'Trivia reward', 'Trivia Reward! 🧠', [
+        `Correct answer! You earned <b>${formatUSDT(result.reward)} USDT</b>.`,
+        `${result.completedToday ? 'That was your last question for today — great job!' : 'Your reward has been added to your Wallet Masters balance.'}`
+      ]).catch(()=>{});
+    }
     res.json(result);
   } catch(e) { res.status(500).json({ error: 'Server error' }); }
 });
@@ -1530,6 +1739,13 @@ app.post('/api/streak/status', authMiddleware, async (req, res) => {
 app.post('/api/streak/claim', authMiddleware, async (req, res) => {
   try {
     const result = await claimLoginStreak(req.tgUser.id);
+    if (result && result.success && result.reward > 0) {
+      notifyUserEmail(req.tgUser.id, 'Login streak bonus', 'Login Streak Bonus 🔥', [
+        `Day ${result.currentStreakDay} streak! You earned <b>${formatUSDT(result.reward)} USDT</b>.`,
+        `Your new balance: <b>${formatUSDT(result.newBalance)} USDT</b>`,
+        'Come back tomorrow to keep the streak alive!'
+      ]).catch(()=>{});
+    }
     res.json(result);
   } catch(e) { res.status(500).json({ error: 'Server error' }); }
 });
@@ -1552,6 +1768,12 @@ app.post('/api/mining/buy', authMiddleware, async (req, res) => {
 app.post('/api/mining/claim', authMiddleware, async (req, res) => {
   try {
     const result = await claimMiningProfit(req.tgUser.id);
+    if (result && result.success && result.payoutAmount) {
+      notifyUserEmail(req.tgUser.id, 'Mining profit claimed', 'Mining Profit Claimed ⛏️', [
+        `Your mining session completed! Payout of <b>${formatUSDT(result.payoutAmount)} USDT</b> has been credited to your balance.`,
+        'Ready for another session? Open the app → Earning Apps → USDT Mining.'
+      ]).catch(()=>{});
+    }
     res.json(result);
   } catch(e) { res.status(500).json({ error: 'Server error' }); }
 });
@@ -2339,6 +2561,12 @@ app.post('/api/transfer', authMiddleware, async (req, res) => {
     const result = await internalTransfer(req.tgUser.id, recipientUid, parseFloat(amount), note);
     
     if (result.success) {
+      // Email the recipient if they linked their email
+      notifyUserEmail(result.recipientTid, 'USDT received', 'You received USDT! 💰', [
+        `You received <b>${formatUSDT(result.amount)} USDT</b> from ${result.senderName || 'another user'}.`,
+        `Your new balance: <b>${formatUSDT(result.recipientBalance)} USDT</b>`,
+        'Open the Wallet Masters app to see the full transaction details.'
+      ]).catch(()=>{});
       // Send Telegram notification to recipient
       if (bot) {
         try {
