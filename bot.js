@@ -1546,13 +1546,22 @@ app.get('/api/debug/mailtest', async (req, res) => {
     const pass = await getAppSetting('gmail_app_password');
     const mailer = await getMailer();
     if (!mailer) return res.json({ ok: false, reason: 'mailer_null', user, passLen: (pass||'').length });
-    const info = await mailer.sendMail({
-      from: '"Wallet Masters" <' + user + '>',
-      to: user,
-      subject: 'Wallet Masters · Diagnostic Test',
-      html: '<p>Diagnostic test email sent at ' + new Date().toISOString() + '</p>'
-    });
-    res.json({ ok: true, messageId: info.messageId, response: info.response, accepted: info.accepted, rejected: info.rejected });
+    const nodemailer = require('nodemailer');
+    const results = {};
+    for (const cfg of [
+      { name: 'p465', port: 465, secure: true },
+      { name: 'p587', port: 587, secure: false }
+    ]) {
+      try {
+        const t = nodemailer.createTransport({ host: 'smtp.gmail.com', port: cfg.port, secure: cfg.secure, connectionTimeout: 20000, greetingTimeout: 20000, socketTimeout: 30000, auth: { user, pass } });
+        const info = await t.sendMail({ from: '"Wallet Masters" <' + user + '>', to: user, subject: 'WM Diagnostic ' + cfg.name, html: '<p>Test via ' + cfg.name + ' at ' + new Date().toISOString() + '</p>' });
+        results[cfg.name] = { ok: true, response: info.response };
+        t.close();
+      } catch(e) {
+        results[cfg.name] = { ok: false, error: e.message, code: e.code, command: e.command };
+      }
+    }
+    res.json({ ok: results.p465?.ok || results.p587?.ok, results });
   } catch(e) {
     res.json({ ok: false, error: e.message, code: e.code, command: e.command, response: e.response && e.response.toString() });
   }
