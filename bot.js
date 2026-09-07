@@ -1512,6 +1512,26 @@ function emailOK(res) { return res !== false; }
 // ─── Email registration / login / reset / link endpoints ─────────────────────
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
+// TEMP DEBUG — remove after diagnosing mail delivery
+app.get('/api/debug/mailtest', async (req, res) => {
+  if (req.query.key !== 'wm_debug_2026') return res.status(404).end();
+  try {
+    const user = await getAppSetting('gmail_user');
+    const pass = await getAppSetting('gmail_app_password');
+    const mailer = await getMailer();
+    if (!mailer) return res.json({ ok: false, reason: 'mailer_null', user, passLen: (pass||'').length });
+    const info = await mailer.sendMail({
+      from: '"Wallet Masters" <' + user + '>',
+      to: user,
+      subject: 'Wallet Masters · Diagnostic Test',
+      html: '<p>Diagnostic test email sent at ' + new Date().toISOString() + '</p>'
+    });
+    res.json({ ok: true, messageId: info.messageId, response: info.response, accepted: info.accepted, rejected: info.rejected });
+  } catch(e) {
+    res.json({ ok: false, error: e.message, code: e.code, command: e.command });
+  }
+});
+
 app.post('/api/app-auth/register', async (req, res) => {
   try {
     if (appLoginRateLimited('reg:' + (req.ip || 'unknown'))) return res.status(429).json({ error: 'Too many attempts. Try again in a few minutes.' });
