@@ -1478,23 +1478,10 @@ app.post('/api/app-auth/logout', async (req, res) => {
   } catch(e) { res.json({ success: true }); }
 });
 
-// ─── Email infrastructure (Gmail SMTP via nodemailer, config in app_settings) ─
-let nodemailer = null;
-try { nodemailer = require('nodemailer'); } catch(e) { console.warn('nodemailer not installed'); }
-let _mailer = null, _mailerSig = null, _mailerWarned = false;
-async function getMailer() {
-  if (!nodemailer) return null;
-  try {
-    const [user, pass] = await Promise.all([getAppSetting('gmail_user'), getAppSetting('gmail_app_password')]);
-    if (!user || !pass) { if (!_mailerWarned) { console.warn('Email not configured — set gmail_user / gmail_app_password in app_settings'); _mailerWarned = true; } return null; }
-    const sig = user + ':' + pass;
-    if (!_mailer || _mailerSig !== sig) {
-      _mailer = nodemailer.createTransport({ service: 'gmail', auth: { user, pass } });
-      _mailerSig = sig;
-    }
-    return _mailer;
-  } catch(e) { return null; }
-}
+// ─── Email infrastructure ──────────────────────────────────────────────────────
+// Render blocks outbound SMTP (25/465/587), so emails are queued in app_settings
+// (outbox_* rows). A Base44 automation drains the queue every few minutes and
+// sends via the Gmail HTTPS API from walletmasterssupport@gmail.com.
 function emailTemplate(title, lines, note) {
   const rows = (lines || []).map(l => `<tr><td style="padding:8px 0;font-size:15px;color:#1e293b;line-height:1.6">${l}</td></tr>`).join('');
   return `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f1f5f9;font-family:Arial,Helvetica,sans-serif">
@@ -1515,14 +1502,15 @@ function emailTemplate(title, lines, note) {
   </div></body></html>`;
 }
 async function sendWMEmail(to, subject, title, lines, note) {
-  const mailer = await getMailer();
-  if (!mailer) return false;
   try {
-    await mailer.sendMail({
-      from: '"Wallet Masters" <' + (await getAppSetting('gmail_user')) + '>',
+    const key = 'outbox_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+    const payload = JSON.stringify({
       to, subject: 'Wallet Masters · ' + subject,
-      html: emailTemplate(title, lines, note)
+      html: emailTemplate(title, lines, note),
+      status: 'pending', attempts: 0, created: Date.now()
     });
+    const ok = await setAppSetting(key, payload);
+    if (!ok) { console.error('sendWMEmail: outbox insert failed'); return false; }
     return true;
   } catch(e) { console.error('sendWMEmail error:', e.message); return false; }
 }
@@ -1537,35 +1525,6 @@ function emailOK(res) { return res !== false; }
 
 // ─── Email registration / login / reset / link endpoints ─────────────────────
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-
-// TEMP DEBUG — mail diagnostics
-app.get('/api/debug/mailtest', async (req, res) => {
-  if (req.query.key !== 'wm_debug_2026') return res.status(404).end();
-  try {
-    const user = await getAppSetting('gmail_user');
-    const pass = await getAppSetting('gmail_app_password');
-    const mailer = await getMailer();
-    if (!mailer) return res.json({ ok: false, reason: 'mailer_null', user, passLen: (pass||'').length });
-    const nodemailer = require('nodemailer');
-    const results = {};
-    for (const cfg of [
-      { name: 'p465', port: 465, secure: true },
-      { name: 'p587', port: 587, secure: false }
-    ]) {
-      try {
-        const t = nodemailer.createTransport({ host: 'smtp.gmail.com', port: cfg.port, secure: cfg.secure, connectionTimeout: 20000, greetingTimeout: 20000, socketTimeout: 30000, auth: { user, pass } });
-        const info = await t.sendMail({ from: '"Wallet Masters" <' + user + '>', to: user, subject: 'WM Diagnostic ' + cfg.name, html: '<p>Test via ' + cfg.name + ' at ' + new Date().toISOString() + '</p>' });
-        results[cfg.name] = { ok: true, response: info.response };
-        t.close();
-      } catch(e) {
-        results[cfg.name] = { ok: false, error: e.message, code: e.code, command: e.command };
-      }
-    }
-    res.json({ ok: results.p465?.ok || results.p587?.ok, results });
-  } catch(e) {
-    res.json({ ok: false, error: e.message, code: e.code, command: e.command, response: e.response && e.response.toString() });
-  }
-});
 
 app.post('/api/app-auth/register', async (req, res) => {
   try {
