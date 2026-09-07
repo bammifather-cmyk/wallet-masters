@@ -18,7 +18,7 @@ android {
         release {
             // Injected by CI from repo secrets
             if (project.hasProperty('WM_STORE_FILE')) {
-                storeFile file(WM_STORE_FILE)
+                storeFile rootProject.file(WM_STORE_FILE)
                 storePassword WM_STORE_PASSWORD
                 keyAlias WM_KEY_ALIAS
                 keyPassword WM_KEY_PASSWORD
