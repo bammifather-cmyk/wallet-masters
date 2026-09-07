@@ -3783,7 +3783,8 @@ async function doWebRegister() {
   if (pw.length < 6) { msgEl.textContent = 'Password must be at least 6 characters'; msgEl.style.color = '#f87171'; return; }
   btn.disabled = true; btn.textContent = 'Creating account...';
   try {
-    const ref = new URLSearchParams(window.location.search).get('ref') || '';
+    const typedRef = (document.getElementById('webRegRef')?.value || '').trim().toUpperCase();
+    const ref = typedRef || new URLSearchParams(window.location.search).get('ref') || '';
     const r = await fetch(`${API}/app-auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

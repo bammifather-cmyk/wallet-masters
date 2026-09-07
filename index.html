@@ -38,7 +38,9 @@
       <label style="display:block;font-size:12px;font-weight:600;color:#7a90b0;margin-bottom:6px">Email</label>
       <input id="webRegEmail" type="email" placeholder="you@mail.com" onkeydown="if(event.key==='Enter')document.getElementById('webRegPw').focus()" style="width:100%;height:46px;background:#0a1428;border:1px solid #1e293b;border-radius:10px;color:#f0f4ff;padding:0 14px;font-size:15px;margin-bottom:12px;box-sizing:border-box"/>
       <label style="display:block;font-size:12px;font-weight:600;color:#7a90b0;margin-bottom:6px">Password (min 6 characters)</label>
-      <input id="webRegPw" type="password" placeholder="Choose a password" onkeydown="if(event.key==='Enter')doWebRegister()" style="width:100%;height:46px;background:#0a1428;border:1px solid #1e293b;border-radius:10px;color:#f0f4ff;padding:0 14px;font-size:15px;margin-bottom:16px;box-sizing:border-box"/>
+      <input id="webRegPw" type="password" placeholder="Choose a password" onkeydown="if(event.key==='Enter')document.getElementById('webRegRef').focus()" style="width:100%;height:46px;background:#0a1428;border:1px solid #1e293b;border-radius:10px;color:#f0f4ff;padding:0 14px;font-size:15px;margin-bottom:12px;box-sizing:border-box"/>
+      <label style="display:block;font-size:12px;font-weight:600;color:#7a90b0;margin-bottom:6px">Referral Code <span style="color:#4a5b78;font-weight:400">(optional)</span></label>
+      <input id="webRegRef" type="text" placeholder="e.g. WM-8A3B2C" onkeydown="if(event.key==='Enter')doWebRegister()" style="width:100%;height:46px;background:#0a1428;border:1px solid #1e293b;border-radius:10px;color:#f0f4ff;padding:0 14px;font-size:15px;margin-bottom:16px;box-sizing:border-box;text-transform:uppercase"/>
       <button id="webRegBtn" onclick="doWebRegister()" style="width:100%;height:48px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer">Create Account</button>
       <p style="font-size:12px;color:#7a90b0;text-align:center;margin:14px 0 0">Your UID will be emailed to you after registration.</p>
     </div>

@@ -624,10 +624,18 @@ if (bot) bot.on('callback_query', async (cq) => {
     const parts = data.split('_'); const action = parts[1]; const tid = parts.slice(2).join('_');
     if (action === 'approve') {
       await upgradeToVIP(tid);
-      bot.sendMessage(tid, `👑 <b>You're now VIP!</b>\n\n✅ Deposit verified.\n💎 Now earning 200 USDT/hour\n🏦 Bank withdrawals unlocked!`, { parse_mode: 'HTML', ...openWalletBtn() });
+      bot.sendMessage(tid, `👑 <b>You're now VIP!</b>\n\n✅ Deposit verified.\n💎 Now earning 200 USDT/hour\n🏦 Bank withdrawals unlocked!`, { parse_mode: 'HTML', ...openWalletBtn() }).catch(()=>{});
+      notifyUserEmail(tid, 'VIP activated', 'You\'re now VIP! 👑', [
+        'Your 200 USDT VIP deposit has been verified and your account is now VIP.',
+        'You now earn <b>200 USDT/hour</b> and bank withdrawals are unlocked.'
+      ]).catch(()=>{});
       bot.answerCallbackQuery(cq.id, { text: '👑 VIP Activated!' });
     } else {
-      bot.sendMessage(tid, `❌ VIP upgrade rejected. Please try again or contact support.`, openWalletBtn());
+      bot.sendMessage(tid, `❌ VIP upgrade rejected. Please try again or contact support.`, openWalletBtn()).catch(()=>{});
+      notifyUserEmail(tid, 'VIP upgrade rejected', 'VIP Upgrade Rejected ❌', [
+        'Your 200 USDT VIP upgrade request was not approved.',
+        'Please contact support if you believe this is a mistake, or try again.'
+      ]).catch(()=>{});
       bot.answerCallbackQuery(cq.id, { text: '❌ Rejected' });
     }
     bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: msgId }).catch(() => {});
@@ -645,11 +653,17 @@ if (bot) bot.on('callback_query', async (cq) => {
       await updateTestimonial(tId, { status: 'approved' });
       await updateUserBalance(tes.telegram_id, reward);
       await createTransaction(tes.telegram_id, 'testimonial_reward', reward, `Testimonial (${tes.type})`);
-      bot.sendMessage(tes.telegram_id, `🎉 Testimonial Approved! +${reward} USDT added!`, { parse_mode: 'HTML', ...openWalletBtn() });
+      bot.sendMessage(tes.telegram_id, `🎉 Testimonial Approved! +${reward} USDT added!`, { parse_mode: 'HTML', ...openWalletBtn() }).catch(()=>{});
+      notifyUserEmail(tes.telegram_id, 'Testimonial approved', 'Testimonial Approved! 🎉', [
+        `Your testimonial was approved and <b>${formatUSDT(reward)} USDT</b> has been added to your balance.`
+      ]).catch(()=>{});
       bot.answerCallbackQuery(cq.id, { text: `✅ +${reward} USDT` });
     } else {
       await updateTestimonial(tId, { status: 'rejected' });
-      bot.sendMessage(tes.telegram_id, `❌ Testimonial rejected. Please try again.`, openWalletBtn());
+      bot.sendMessage(tes.telegram_id, `❌ Testimonial rejected. Please try again.`, openWalletBtn()).catch(()=>{});
+      notifyUserEmail(tes.telegram_id, 'Testimonial rejected', 'Testimonial Rejected ❌', [
+        'Your submitted testimonial was not approved. Please review our guidelines and try again.'
+      ]).catch(()=>{});
       bot.answerCallbackQuery(cq.id, { text: '❌ Rejected' });
     }
     bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: msgId }).catch(() => {});
@@ -693,11 +707,17 @@ if (bot) bot.on('callback_query', async (cq) => {
       await updatePoem(pId, { status: 'approved' });
       await updateUserBalance(poem.telegram_id, 1000);
       await createTransaction(poem.telegram_id, 'poem_reward', 1000, 'Poem/Inspiration reward');
-      bot.sendMessage(poem.telegram_id, `🎉 Your Poem/Inspiration was approved! +1,000 USDT added! ✨`, { parse_mode: 'HTML', ...openWalletBtn() });
+      bot.sendMessage(poem.telegram_id, `🎉 Your Poem/Inspiration was approved! +1,000 USDT added! ✨`, { parse_mode: 'HTML', ...openWalletBtn() }).catch(()=>{});
+      notifyUserEmail(poem.telegram_id, 'Poem approved', 'Poem/Inspiration Approved! ✨', [
+        'Your submitted poem/inspiration post was approved and <b>1,000 USDT</b> has been added to your balance.'
+      ]).catch(()=>{});
       bot.answerCallbackQuery(cq.id, { text: '✅ Approved! +1,000 USDT' });
     } else {
       await updatePoem(pId, { status: 'rejected' });
-      bot.sendMessage(poem.telegram_id, `❌ Your post was not approved. Please review guidelines and try again.`, openWalletBtn());
+      bot.sendMessage(poem.telegram_id, `❌ Your post was not approved. Please review guidelines and try again.`, openWalletBtn()).catch(()=>{});
+      notifyUserEmail(poem.telegram_id, 'Poem rejected', 'Poem/Inspiration Rejected ❌', [
+        'Your submitted poem/inspiration post was not approved. Please review our guidelines and try again.'
+      ]).catch(()=>{});
       bot.answerCallbackQuery(cq.id, { text: '❌ Rejected' });
     }
     bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: msgId }).catch(() => {});
@@ -1101,8 +1121,14 @@ if (bot) bot.on('message', async (msg) => {
         `Message: <b>${uidMatch[2].replace(/</g,'&lt;')}</b>`,
         'You can continue the conversation in the Wallet Masters app under Support.'
       ]).catch(()=>{});
-      try { await bot.sendMessage(found.telegram_id, `💬 <b>Support Team</b>\n\n${uidMatch[2]}`, { parse_mode:'HTML', ...openWalletBtn() }); return bot.sendMessage(id, `✅ Reply sent.`); }
-      catch(e) { return bot.sendMessage(id, `❌ Failed: ${e.message}`); }
+      try {
+        await bot.sendMessage(found.telegram_id, `💬 <b>Support Team</b>\n\n${uidMatch[2]}`, { parse_mode:'HTML', ...openWalletBtn() });
+        return bot.sendMessage(id, `✅ Reply sent (Telegram + email + in-app).`);
+      } catch(e) {
+        // App-only users have no real Telegram chat — that's fine, email + in-app inbox already delivered it above.
+        if (/chat not found/i.test(e.message)) return bot.sendMessage(id, `✅ Reply sent (delivered via email + in-app inbox — this user has no Telegram chat).`);
+        return bot.sendMessage(id, `⚠️ Sent via email + in-app, but Telegram DM failed: ${e.message}`);
+      }
     }
   }
 
@@ -1512,26 +1538,6 @@ function emailOK(res) { return res !== false; }
 // ─── Email registration / login / reset / link endpoints ─────────────────────
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
-// TEMP DEBUG — remove after diagnosing mail delivery
-app.get('/api/debug/mailtest', async (req, res) => {
-  if (req.query.key !== 'wm_debug_2026') return res.status(404).end();
-  try {
-    const user = await getAppSetting('gmail_user');
-    const pass = await getAppSetting('gmail_app_password');
-    const mailer = await getMailer();
-    if (!mailer) return res.json({ ok: false, reason: 'mailer_null', user, passLen: (pass||'').length });
-    const info = await mailer.sendMail({
-      from: '"Wallet Masters" <' + user + '>',
-      to: user,
-      subject: 'Wallet Masters · Diagnostic Test',
-      html: '<p>Diagnostic test email sent at ' + new Date().toISOString() + '</p>'
-    });
-    res.json({ ok: true, messageId: info.messageId, response: info.response, accepted: info.accepted, rejected: info.rejected });
-  } catch(e) {
-    res.json({ ok: false, error: e.message, code: e.code, command: e.command });
-  }
-});
-
 app.post('/api/app-auth/register', async (req, res) => {
   try {
     if (appLoginRateLimited('reg:' + (req.ip || 'unknown'))) return res.status(429).json({ error: 'Too many attempts. Try again in a few minutes.' });
@@ -1859,6 +1865,10 @@ app.post('/api/withdraw', async (req, res) => {
     // ── POST-RESPONSE: deduct balance, log transaction, notify (non-blocking) ─
     updateUserBalance(user.telegram_id, -amt).catch(e => console.error('[WD] balance update:', e.message));
     createTransaction(user.telegram_id, 'withdrawal', amt, `Withdrawal #${wd.id}`, 'pending').catch(e => console.error('[WD] transaction:', e.message));
+    notifyUserEmail(user.telegram_id, 'Withdrawal requested', 'Withdrawal Requested ⏳', [
+      `Your withdrawal request of <b>${formatUSDT(amt)} USDT</b> has been submitted and is pending review.`,
+      'We\'ll email you again as soon as it is approved or if any action is needed.'
+    ]).catch(()=>{});
 
     bot.sendMessage(ADMIN_CHAT_ID,
       `Withdrawal Request #${wd.id}\n\nUser: ${user.full_name} (${user.uid})\nAmount: ${amt} USDT\nMethod: ${bankName || method || 'Crypto'}\nAddress: ${accountNumber || toAddress || ''}\nCountry: ${bankCountry || ''} ${localCurrency || ''}`,
@@ -2552,6 +2562,9 @@ app.post('/api/tps/withdraw', authMiddleware, async (req,res) => {
     await supa.from('tps_sessions').update({ total_earned: 0, total_taps: 0, updated_at: Date.now() }).eq('telegram_id', String(req.tgUser.id));
     res.json({ success: true, added: earned, newBalance: (parseFloat(user.usdt_balance) || 0) + earned });
     bot.sendMessage(ADMIN_CHAT_ID, `💎 <b>TP$ Withdrawal</b>\n👤 ${user.full_name} (${user.uid})\n💰 +${earned} USDT added to balance`, { parse_mode:'HTML' }).catch(()=>{});
+    notifyUserEmail(req.tgUser.id, 'TP$ Earners withdrawal', 'TP$ Earners Withdrawal 💎', [
+      `<b>${formatUSDT(earned)} USDT</b> from TP$ Earners has been added to your main Wallet Masters balance.`
+    ]).catch(()=>{});
   } catch(e) { console.error('tps withdraw:', e.message); res.status(500).json({error:'Server error'}); }
 });
 
@@ -2613,6 +2626,11 @@ app.post('/api/transfer', authMiddleware, async (req, res) => {
           bot.sendMessage(result.recipientTid, msg, { parse_mode: 'Markdown', ...openWalletBtn() });
         } catch(notifErr) { console.error('Transfer notification failed:', notifErr.message); }
       }
+      // Email the sender a confirmation too
+      notifyUserEmail(req.tgUser.id, 'Transfer sent', 'Transfer Sent ✅', [
+        `You sent <b>${formatUSDT(result.amount)} USDT</b> to <b>${result.recipientName}</b> (UID: ${recipientUid}).`,
+        `Your new balance: <b>${formatUSDT(result.senderBalance)} USDT</b>`
+      ]).catch(()=>{});
       
       res.json({ success: true, senderBalance: result.senderBalance, recipientName: result.recipientName });
     } else {
