@@ -44,4 +44,9 @@ android {
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.7.0'
     implementation 'androidx.webkit:webkit:1.11.0'
+    // Align transitive Kotlin stdlib versions to avoid duplicate-class errors
+    constraints {
+        implementation('org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22') { because 'align with kotlin-stdlib 1.8.22' }
+        implementation('org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22') { because 'align with kotlin-stdlib 1.8.22' }
+    }
 }
