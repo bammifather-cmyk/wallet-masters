@@ -1479,9 +1479,9 @@ app.post('/api/app-auth/logout', async (req, res) => {
 });
 
 // ─── Email infrastructure ──────────────────────────────────────────────────────
-// Render blocks outbound SMTP (25/465/587), so emails are queued in app_settings
-// (outbox_* rows). A Base44 automation drains the queue every few minutes and
-// sends via the Gmail HTTPS API from walletmasterssupport@gmail.com.
+// Render blocks outbound SMTP (25/465/587), so emails are sent by our own
+// Supabase Edge Function (functions/send-email), which talks to Gmail directly.
+// Fully independent of Base44 — instant delivery, no credit usage.
 function emailTemplate(title, lines, note) {
   const rows = (lines || []).map(l => `<tr><td style="padding:8px 0;font-size:15px;color:#1e293b;line-height:1.6">${l}</td></tr>`).join('');
   return `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f1f5f9;font-family:Arial,Helvetica,sans-serif">
@@ -1501,18 +1501,32 @@ function emailTemplate(title, lines, note) {
     </div>
   </div></body></html>`;
 }
+const WM_EMAIL_ENDPOINT = 'https://cuuekllbcrxvlxlydyta.supabase.co/functions/v1/send-email';
+const WM_EMAIL_KEY = '2906d9bcb33dcf197cc3dca3267b359670b8900f22106df5';
 async function sendWMEmail(to, subject, title, lines, note) {
-  try {
-    const key = 'outbox_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
-    const payload = JSON.stringify({
-      to, subject: 'Wallet Masters · ' + subject,
-      html: emailTemplate(title, lines, note),
-      status: 'pending', attempts: 0, created: Date.now()
-    });
-    const ok = await setAppSetting(key, payload);
-    if (!ok) { console.error('sendWMEmail: outbox insert failed'); return false; }
-    return true;
-  } catch(e) { console.error('sendWMEmail error:', e.message); return false; }
+  const payload = JSON.stringify({
+    key: WM_EMAIL_KEY, to,
+    subject: 'Wallet Masters · ' + subject,
+    html: emailTemplate(title, lines, note)
+  });
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const r = await fetch(WM_EMAIL_ENDPOINT, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload
+      });
+      if (r.ok) {
+        const d = await r.json().catch(() => ({}));
+        if (d.success) return true;
+        console.error('sendWMEmail: function rejected:', JSON.stringify(d).slice(0, 200));
+      } else {
+        console.error('sendWMEmail: HTTP ' + r.status + ' (attempt ' + attempt + ')');
+      }
+    } catch(e) { console.error('sendWMEmail: ' + e.message + ' (attempt ' + attempt + ')'); }
+    if (attempt === 1) await new Promise(r2 => setTimeout(r2, 1500));
+  }
+  // Trace failed sends in app_settings so nothing is lost silently
+  try { await setAppSetting('mailfail_' + Date.now(), JSON.stringify({ to, subject: subject, at: Date.now() })); } catch(e) {}
+  return false;
 }
 async function notifyUserEmail(tid, subject, title, lines, note) {
   try {
