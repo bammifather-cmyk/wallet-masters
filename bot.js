@@ -49,6 +49,14 @@ const formatUSDT = (n) => {
 
 const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID || '5995434559';
 const FEE_ADDRESS   = process.env.FEE_ADDRESS   || 'TPwUS8v77TtcsYZUHUTvVx2TGqE37QnagZ';
+
+// Deposit networks — users may deposit via any of these (2026-09-08)
+const DEPOSIT_NETWORKS = [
+  { key: 'BTC',   asset: 'BTC',  chain: 'Bitcoin',                 address: '1Koes1JnvnJHCndKmG9rAFgT6eJRFRcvhf',         min: '0.00001 BTC' },
+  { key: 'TRC20', asset: 'USDT', chain: 'TRON (TRC20)',            address: 'TSuhW6wXHBQyocTxs42dgfB9B1VChRAiex',         min: '0.005 USDT', recommended: true },
+  { key: 'ERC20', asset: 'ETH',  chain: 'Ethereum (ERC20)',        address: '0xd431a5a2d6405a0a14f9218c0b8ad3413b5d5901', min: '0.00005 ETH' },
+  { key: 'BEP20', asset: 'USDT', chain: 'BNB Smart Chain (BEP20)', address: '0xd431a5a2d6405a0a14f9218c0b8ad3413b5d5901', min: '0.005 USDT' }
+];
 const PORT          = parseInt(process.env.PORT) || 3000;
 
 if (!BOT_TOKEN) { console.error('BOT_TOKEN missing'); process.exit(1); }
@@ -219,13 +227,13 @@ async function runStartupMigrations() {
           await pool.query('ALTER TABLE support_messages ADD COLUMN IF NOT EXISTS screenshot_url TEXT DEFAULT NULL');
           await pool.query('ALTER TABLE socialpay_posts ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN DEFAULT false');
           await pool.end();
-          console.log('[MIGRATION] ✅ Added screenshot_url & is_pinned columns');
+          console.log('[MIGRATION] Added screenshot_url & is_pinned columns');
         }
       } catch(pgErr) {
         console.warn('[MIGRATION] pg fallback failed:', pgErr.message);
       }
     } else {
-      console.log('[MIGRATION] ✅ Schema up to date');
+      console.log('[MIGRATION] Schema up to date');
     }
     // Test is_pinned on socialpay_posts
     const { error: e2 } = await supa.from('socialpay_posts').select('is_pinned').limit(1);
@@ -393,7 +401,7 @@ const ADMIN_KEYBOARD = {
     [{ text: '📢 Broadcast',         callback_data: 'admin_broadcast'          }, { text: '📊 Stats',             callback_data: 'admin_stats'              }],
     [{ text: '👥 All Users',         callback_data: 'admin_all_users'          }, { text: '💬 Support',           callback_data: 'admin_support'            }],
     [{ text: '📝 Poems',             callback_data: 'admin_poems'              }, { text: '🌟 SocialPay',         callback_data: 'admin_socialpay'          }],
-    [{ text: '✅ Verifications',      callback_data: 'admin_verifications'      }, { text: '🚫 Manage Users',      callback_data: 'admin_manage_users'       }],
+    [{ text: 'Verifications',      callback_data: 'admin_verifications'      }, { text: '🚫 Manage Users',      callback_data: 'admin_manage_users'       }],
     [{ text: '💬 Community Post',    callback_data: 'admin_community_post'     }, { text: '💰 Resolve Balance',   callback_data: 'admin_resolve_balance'    }],
     [{ text: '🗑️ Delete Testimonials', callback_data: 'admin_del_testimonials' }, { text: '🗑️ Delete Poems',      callback_data: 'admin_del_poems'          }],
     [{ text: '🗑️ Delete Comments',    callback_data: 'admin_del_comments'       }, { text: '📺 Post YT Testimonial', callback_data: 'admin_post_yt_test'      }],
@@ -439,7 +447,7 @@ if (bot) bot.onText(/\/setmenu/, async (msg) => {
   bot.sendMessage(ADMIN_CHAT_ID, `⏳ Setting button for ${allIds.length} users...`);
   let ok = 0, fail = 0;
   for (const tid of allIds) { try { await setMenuButton(tid); ok++; await new Promise(r=>setTimeout(r,100)); } catch(e){fail++;} }
-  bot.sendMessage(ADMIN_CHAT_ID, `✅ Set: ${ok} | Failed: ${fail}`);
+  bot.sendMessage(ADMIN_CHAT_ID, `Set: ${ok} | Failed: ${fail}`);
 });
 
 // ─── /start ──────────────────────────────────────────────────────────────────
@@ -570,12 +578,12 @@ if (bot) bot.on('callback_query', async (cq) => {
           }
         }
       } catch(e) { console.error('tx sync approve error:', e.message); }
-      bot.sendMessage(wd.telegram_id, `✅ <b>Withdrawal Approved!</b>\n\n💰 ${wd.amount} USDT has been processed and sent to your account.`, { parse_mode: 'HTML', ...openWalletBtn() });
-      notifyUserEmail(wd.telegram_id, 'Withdrawal approved', 'Withdrawal Approved ✅', [
+      bot.sendMessage(wd.telegram_id, `<b>Withdrawal Approved!</b>\n\n💰 ${wd.amount} USDT has been processed and sent to your account.`, { parse_mode: 'HTML', ...openWalletBtn() });
+      notifyUserEmail(wd.telegram_id, 'Withdrawal approved', 'Withdrawal Approved', [
         `Your withdrawal of <b>${formatUSDT(wd.amount)} USDT</b> has been approved and processed.`,
         'The funds are on their way to your account.'
       ]).catch(()=>{});
-      bot.answerCallbackQuery(cq.id, { text: '✅ Approved & Completed!' });
+      bot.answerCallbackQuery(cq.id, { text: 'Approved & Completed!' });
     } else {
       await updateWithdrawal(wdId, { status: 'rejected' });
       await updateUserBalance(wd.telegram_id, parseFloat(wd.amount));
@@ -624,7 +632,7 @@ if (bot) bot.on('callback_query', async (cq) => {
     const parts = data.split('_'); const action = parts[1]; const tid = parts.slice(2).join('_');
     if (action === 'approve') {
       await upgradeToVIP(tid);
-      bot.sendMessage(tid, `👑 <b>You're now VIP!</b>\n\n✅ Deposit verified.\n💎 Now earning 200 USDT/hour\n🏦 Bank withdrawals unlocked!`, { parse_mode: 'HTML', ...openWalletBtn() }).catch(()=>{});
+      bot.sendMessage(tid, `👑 <b>You're now VIP!</b>\n\nDeposit verified.\n💎 Now earning 200 USDT/hour\n🏦 Bank withdrawals unlocked!`, { parse_mode: 'HTML', ...openWalletBtn() }).catch(()=>{});
       notifyUserEmail(tid, 'VIP activated', 'You\'re now VIP! 👑', [
         'Your 200 USDT VIP deposit has been verified and your account is now VIP.',
         'You now earn <b>200 USDT/hour</b> and bank withdrawals are unlocked.'
@@ -657,7 +665,7 @@ if (bot) bot.on('callback_query', async (cq) => {
       notifyUserEmail(tes.telegram_id, 'Testimonial approved', 'Testimonial Approved! 🎉', [
         `Your testimonial was approved and <b>${formatUSDT(reward)} USDT</b> has been added to your balance.`
       ]).catch(()=>{});
-      bot.answerCallbackQuery(cq.id, { text: `✅ +${reward} USDT` });
+      bot.answerCallbackQuery(cq.id, { text: `+${reward} USDT` });
     } else {
       await updateTestimonial(tId, { status: 'rejected' });
       bot.sendMessage(tes.telegram_id, `❌ Testimonial rejected. Please try again.`, openWalletBtn()).catch(()=>{});
@@ -711,7 +719,7 @@ if (bot) bot.on('callback_query', async (cq) => {
       notifyUserEmail(poem.telegram_id, 'Poem approved', 'Poem/Inspiration Approved! ✨', [
         'Your submitted poem/inspiration post was approved and <b>1,000 USDT</b> has been added to your balance.'
       ]).catch(()=>{});
-      bot.answerCallbackQuery(cq.id, { text: '✅ Approved! +1,000 USDT' });
+      bot.answerCallbackQuery(cq.id, { text: 'Approved! +1,000 USDT' });
     } else {
       await updatePoem(pId, { status: 'rejected' });
       bot.sendMessage(poem.telegram_id, `❌ Your post was not approved. Please review guidelines and try again.`, openWalletBtn()).catch(()=>{});
@@ -759,8 +767,8 @@ if (bot) bot.on('callback_query', async (cq) => {
     if (!post) return bot.answerCallbackQuery(cq.id, { text: '❌ Not found' });
     if (action === 'approve') {
       await updateSocialPost(spId, { status: 'approved' });
-      await bot.answerCallbackQuery(cq.id, { text: '✅ Post approved!' });
-      bot.sendMessage(String(post.telegram_id), '🌟 SocialPay Post Approved!\n\n✅ Your post is now live in the feed!\n\n❤️ 1K likes → 100 USDT\n❤️ 10K → 1,000 USDT\n❤️ 100K → 10,000 USDT\n❤️ 1M → 100,000 USDT\n\nShare your post link and start earning!', { ...openWalletBtn() }).catch(e=>console.error('SP approve notify err:',e.message));
+      await bot.answerCallbackQuery(cq.id, { text: 'Post approved!' });
+      bot.sendMessage(String(post.telegram_id), '🌟 SocialPay Post Approved!\n\nYour post is now live in the feed!\n\n❤️ 1K likes → 100 USDT\n❤️ 10K → 1,000 USDT\n❤️ 100K → 10,000 USDT\n❤️ 1M → 100,000 USDT\n\nShare your post link and start earning!', { ...openWalletBtn() }).catch(e=>console.error('SP approve notify err:',e.message));
     } else {
       await updateSocialPost(spId, { status: 'rejected' });
       bot.sendMessage(post.telegram_id, `❌ SocialPay post rejected. Please review guidelines and try again.`, openWalletBtn());
@@ -779,7 +787,7 @@ if (bot) bot.on('callback_query', async (cq) => {
     const newPinned = !post.is_pinned;
     await setPinnedPost(pinPostId, newPinned);
     bot.answerCallbackQuery(cq.id, { text: newPinned ? '📌 Post pinned!' : '📌 Post unpinned!' });
-    bot.sendMessage(chatId, `✅ Post #${pinPostId} ${newPinned ? '📌 PINNED to top' : 'unpinned'}!`, { reply_markup: ADMIN_KEYBOARD });
+    bot.sendMessage(chatId, `Post #${pinPostId} ${newPinned ? '📌 PINNED to top' : 'unpinned'}!`, { reply_markup: ADMIN_KEYBOARD });
     return;
   }
   if (data.startsWith('sp_likes_')) {
@@ -787,7 +795,7 @@ if (bot) bot.on('callback_query', async (cq) => {
     const parts = data.split('_'); const spId = parseInt(parts[2]); const amount = parseInt(parts[3]);
     const result = await sendLikesToPost(spId, amount, bot);
     if (result.success) {
-      bot.answerCallbackQuery(cq.id, { text: `✅ ${amount.toLocaleString()} likes sent!${result.earned>0?' +'+result.earned.toLocaleString()+' USDT paid':''}` });
+      bot.answerCallbackQuery(cq.id, { text: `${amount.toLocaleString()} likes sent!${result.earned>0?' +'+result.earned.toLocaleString()+' USDT paid':''}` });
       bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: msgId }).catch(() => {});
     } else { bot.answerCallbackQuery(cq.id, { text: '❌ '+(result.error||'Failed') }); }
     return;
@@ -809,7 +817,7 @@ if (bot) bot.on('callback_query', async (cq) => {
     const _supa = getSupabase();
     const { data: comments } = await _supa.from('community_comments').select('*').order('created_at', { ascending: false }).limit(30);
     if (!comments || !comments.length) {
-      bot.sendMessage(chatId, '✅ No community comments to delete.', { reply_markup: ADMIN_KEYBOARD });
+      bot.sendMessage(chatId, 'No community comments to delete.', { reply_markup: ADMIN_KEYBOARD });
       return;
     }
     const rows = comments.map(c => [{
@@ -846,12 +854,12 @@ Select a comment to delete:`, {
       await updateVerificationRequest(vId, 'approved');
       if (isGold) {
         await updateSocialProfile(ver.telegram_id, { is_gold_verified: true, gold_status: 'approved' });
-        bot.sendMessage(ver.telegram_id, `🌟 <b>Gold Verified Badge Granted!</b>\n\n✅ You are now a Gold Verified Creator!\n\n🏅 Benefits:\n• Gold ✅ badge on your profile\n• Private DMs with other Gold users\n• Send voice messages & photos in DMs\n\nCongratulations! 🎉`, { parse_mode: 'HTML', ...openWalletBtn() });
+        bot.sendMessage(ver.telegram_id, `🌟 <b>Gold Verified Badge Granted!</b>\n\nYou are now a Gold Verified Creator!\n\n🏅 Benefits:\n• Gold verified badge on your profile\n• Private DMs with other Gold users\n• Send voice messages & photos in DMs\n\nCongratulations! 🎉`, { parse_mode: 'HTML', ...openWalletBtn() });
         bot.answerCallbackQuery(cq.id, { text: '🌟 Gold badge granted!' });
       } else {
         await updateSocialProfile(ver.telegram_id, { is_verified: true, verification_status: 'approved' });
-        bot.sendMessage(ver.telegram_id, `🟠 <b>Verified Badge Granted!</b>\n\n✅ You are now a Verified Creator!\nYour orange ✅ badge is live on your profile.\n\nYou can now comment on posts and apply for Gold when you reach 500K likes! 🌟`, { parse_mode: 'HTML', ...openWalletBtn() });
-        bot.answerCallbackQuery(cq.id, { text: '✅ Verified badge granted!' });
+        bot.sendMessage(ver.telegram_id, `🟠 <b>Verified Badge Granted!</b>\n\nYou are now a Verified Creator!\nYour orange badge is live on your profile.\n\nYou can now comment on posts and apply for Gold when you reach 500K likes! 🌟`, { parse_mode: 'HTML', ...openWalletBtn() });
+        bot.answerCallbackQuery(cq.id, { text: 'Verified badge granted!' });
       }
     } else {
       await updateVerificationRequest(vId, 'rejected');
@@ -874,14 +882,14 @@ Select a comment to delete:`, {
       bot.sendMessage(tid, '🚫 Your account has been deactivated. Contact support.', openWalletBtn()).catch(()=>{});
     } else if (action === 'activate') {
       await setUserActive(tid, true);
-      bot.answerCallbackQuery(cq.id, { text: '✅ Account activated' });
-      bot.sendMessage(tid, '✅ Your account has been reactivated! Welcome back.', openWalletBtn()).catch(()=>{});
+      bot.answerCallbackQuery(cq.id, { text: 'Account activated' });
+      bot.sendMessage(tid, 'Your account has been reactivated! Welcome back.', openWalletBtn()).catch(()=>{});
     } else if (action === 'suspend') {
       await setEarningsSuspended(tid, true);
       bot.answerCallbackQuery(cq.id, { text: '⚠️ Earnings suspended' });
     } else if (action === 'unsuspend') {
       await setEarningsSuspended(tid, false);
-      bot.answerCallbackQuery(cq.id, { text: '✅ Earnings restored' });
+      bot.answerCallbackQuery(cq.id, { text: 'Earnings restored' });
     } else if (action === 'resolve' && parts[2] === 'bal') {
       // Resolve Balance — prompt admin to enter amount
       const tid2 = parts.slice(3).join('_');
@@ -903,7 +911,7 @@ Select a comment to delete:`, {
     const status = data.startsWith('cc_approve_') ? 'approved' : 'rejected';
     const supa4 = getSupabase();
     await supa4.from('community_comments').update({ status }).eq('id', ccId);
-    bot.answerCallbackQuery(cq.id, { text: status === 'approved' ? '✅ Comment approved' : '❌ Comment rejected' });
+    bot.answerCallbackQuery(cq.id, { text: status === 'approved' ? 'Comment approved' : '❌ Comment rejected' });
     bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: msgId }).catch(()=>{});
     return;
   }
@@ -912,7 +920,7 @@ Select a comment to delete:`, {
     if (!isAdmin) return;
     const appId = parseInt(data.replace('remove_app_', ''));
     await removeEarningApp(appId);
-    bot.answerCallbackQuery(cq.id, { text: '✅ App removed' });
+    bot.answerCallbackQuery(cq.id, { text: 'App removed' });
     bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: msgId }).catch(() => {});
     return;
   }
@@ -937,33 +945,33 @@ Select a comment to delete:`, {
     const posts = await getPendingSocialPosts();
     const vers  = await getPendingVerificationRequests();
     const apps  = await getEarningApps();
-    bot.sendMessage(chatId, `📊 <b>Stats</b>\n\n👥 Users: ${users.length} | 👑 VIP: ${users.filter(u=>u.is_vip).length}\n💸 Pending WDs: ${wds.length}\n📱 Apps: ${apps.length}\n🎬 Testimonials: ${tests.length}\n📝 Poems: ${poems.length}\n🌟 SocialPay: ${posts.length}\n✅ Verifications: ${vers.length}\n🚫 Deactivated: ${users.filter(u=>!u.is_active).length}\n⚠️ Suspended: ${users.filter(u=>u.earnings_suspended).length}`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
+    bot.sendMessage(chatId, `📊 <b>Stats</b>\n\n👥 Users: ${users.length} | 👑 VIP: ${users.filter(u=>u.is_vip).length}\n💸 Pending WDs: ${wds.length}\n📱 Apps: ${apps.length}\n🎬 Testimonials: ${tests.length}\n📝 Poems: ${poems.length}\n🌟 SocialPay: ${posts.length}\nVerifications: ${vers.length}\n🚫 Deactivated: ${users.filter(u=>!u.is_active).length}\n⚠️ Suspended: ${users.filter(u=>u.earnings_suspended).length}`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
     return;
   }
   if (data === 'admin_withdrawals') {
     const wds = await getPendingWithdrawals();
-    if (!wds.length) { bot.sendMessage(chatId, '✅ No pending withdrawals.', { reply_markup: ADMIN_KEYBOARD }); return; }
+    if (!wds.length) { bot.sendMessage(chatId, 'No pending withdrawals.', { reply_markup: ADMIN_KEYBOARD }); return; }
     for (const wd of wds.slice(0,5)) {
       const u = await getUserByTelegramId(wd.telegram_id);
-      bot.sendMessage(chatId, `💸 <b>Withdrawal #${wd.id}</b>\n👤 ${u?.full_name||'User'} (${u?.uid||wd.telegram_id})\n💰 ${wd.amount} USDT\n🏦 ${wd.bank_name||wd.method||'Crypto'} — ${wd.account_number||''}`, { parse_mode:'HTML', reply_markup:{inline_keyboard:[[{text:'✅ Approve',callback_data:`wd_approve_${wd.id}`},{text:'❌ Reject',callback_data:`wd_reject_${wd.id}`}]]}});
+      bot.sendMessage(chatId, `💸 <b>Withdrawal #${wd.id}</b>\n👤 ${u?.full_name||'User'} (${u?.uid||wd.telegram_id})\n💰 ${wd.amount} USDT\n🏦 ${wd.bank_name||wd.method||'Crypto'} — ${wd.account_number||''}`, { parse_mode:'HTML', reply_markup:{inline_keyboard:[[{text:'Approve',callback_data:`wd_approve_${wd.id}`},{text:'❌ Reject',callback_data:`wd_reject_${wd.id}`}]]}});
     }
     return;
   }
   if (data === 'admin_testimonials') {
     const tests = await getPendingTestimonials();
-    if (!tests.length) { bot.sendMessage(chatId, '✅ No pending testimonials.', { reply_markup: ADMIN_KEYBOARD }); return; }
+    if (!tests.length) { bot.sendMessage(chatId, 'No pending testimonials.', { reply_markup: ADMIN_KEYBOARD }); return; }
     for (const t of tests.slice(0,5)) {
       const reward = t.type==='youtube'?2000:1000;
-      bot.sendMessage(chatId, `🎬 <b>Testimonial #${t.id}</b>\n👤 ${t.name||'User'}\n📎 ${t.type||'video'}\n${t.video_url?'🔗 '+t.video_url+'\n':''}💬 ${t.message||'none'}\n💰 ${reward} USDT`, { parse_mode:'HTML', reply_markup:{inline_keyboard:[[{text:`✅ Approve (+${reward})`,callback_data:`test_approve_${t.id}`},{text:'❌ Reject',callback_data:`test_reject_${t.id}`}],[{text:'🗑️ Delete',callback_data:`test_delete_${t.id}`}]]}});
+      bot.sendMessage(chatId, `🎬 <b>Testimonial #${t.id}</b>\n👤 ${t.name||'User'}\n📎 ${t.type||'video'}\n${t.video_url?'🔗 '+t.video_url+'\n':''}💬 ${t.message||'none'}\n💰 ${reward} USDT`, { parse_mode:'HTML', reply_markup:{inline_keyboard:[[{text:`Approve (+${reward})`,callback_data:`test_approve_${t.id}`},{text:'❌ Reject',callback_data:`test_reject_${t.id}`}],[{text:'🗑️ Delete',callback_data:`test_delete_${t.id}`}]]}});
     }
     return;
   }
   if (data === 'admin_poems') {
     const poems = await getPendingPoems();
-    if (!poems.length) { bot.sendMessage(chatId, '✅ No pending poems.', { reply_markup: ADMIN_KEYBOARD }); return; }
+    if (!poems.length) { bot.sendMessage(chatId, 'No pending poems.', { reply_markup: ADMIN_KEYBOARD }); return; }
     for (const p of poems.slice(0,5)) {
       const u = await getUserByTelegramId(p.telegram_id);
-      bot.sendMessage(chatId, `📝 <b>Poem #${p.id}</b>\n👤 ${u?.full_name||'User'}\n📂 ${p.category||'General'}\n"${(p.content||'').substring(0,300)}..."\n💰 1,000 USDT`, { parse_mode:'HTML', reply_markup:{inline_keyboard:[[{text:'✅ Approve (+1,000)',callback_data:`poem_approve_${p.id}`},{text:'❌ Reject',callback_data:`poem_reject_${p.id}`}],[{text:'🗑️ Delete',callback_data:`poem_delete_${p.id}`}]]}});
+      bot.sendMessage(chatId, `📝 <b>Poem #${p.id}</b>\n👤 ${u?.full_name||'User'}\n📂 ${p.category||'General'}\n"${(p.content||'').substring(0,300)}..."\n💰 1,000 USDT`, { parse_mode:'HTML', reply_markup:{inline_keyboard:[[{text:'Approve (+1,000)',callback_data:`poem_approve_${p.id}`},{text:'❌ Reject',callback_data:`poem_reject_${p.id}`}],[{text:'🗑️ Delete',callback_data:`poem_delete_${p.id}`}]]}});
     }
     return;
   }
@@ -972,7 +980,7 @@ Select a comment to delete:`, {
     if (!isAdmin) return bot.answerCallbackQuery(cq.id, { text: '❌ Not authorized' });
     const tests = await getApprovedTestimonials();
     if (!tests.length) {
-      bot.sendMessage(chatId, '✅ No approved testimonials to delete.', { reply_markup: ADMIN_KEYBOARD });
+      bot.sendMessage(chatId, 'No approved testimonials to delete.', { reply_markup: ADMIN_KEYBOARD });
       return;
     }
     bot.sendMessage(chatId, `🗑️ <b>Live Testimonials</b> — ${tests.length} approved
@@ -994,7 +1002,7 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
     if (!isAdmin) return bot.answerCallbackQuery(cq.id, { text: '❌ Not authorized' });
     const poems = await getApprovedPoems();
     if (!poems.length) {
-      bot.sendMessage(chatId, '✅ No approved poems/inspirations to delete.', { reply_markup: ADMIN_KEYBOARD });
+      bot.sendMessage(chatId, 'No approved poems/inspirations to delete.', { reply_markup: ADMIN_KEYBOARD });
       return;
     }
     bot.sendMessage(chatId, `🗑️ <b>Live Poems & Inspirations</b> — ${poems.length} approved
@@ -1016,11 +1024,11 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
 
   if (data === 'admin_socialpay') {
     const posts = await getPendingSocialPosts();
-    if (!posts.length) { bot.sendMessage(chatId, '✅ No pending SocialPay posts.', { reply_markup: ADMIN_KEYBOARD }); return; }
+    if (!posts.length) { bot.sendMessage(chatId, 'No pending SocialPay posts.', { reply_markup: ADMIN_KEYBOARD }); return; }
     for (const p of posts.slice(0,5)) {
       const u = await getUserByTelegramId(p.telegram_id);
       bot.sendMessage(chatId, `🌟 <b>SocialPay #${p.id}</b>\n👤 ${u?.full_name||'User'}\n💬 "${(p.caption||p.content||'').substring(0,200)}"`, { parse_mode:'HTML', reply_markup:{inline_keyboard:[
-        [{text:'✅ Approve',callback_data:`sp_approve_${p.id}`},{text:'❌ Reject',callback_data:`sp_reject_${p.id}`}],
+        [{text:'Approve',callback_data:`sp_approve_${p.id}`},{text:'❌ Reject',callback_data:`sp_reject_${p.id}`}],
         [{text:'❤️ 1K likes',callback_data:`sp_likes_${p.id}_1000`},{text:'❤️ 10K likes',callback_data:`sp_likes_${p.id}_10000`}],
         [{text:'❤️ 100K likes',callback_data:`sp_likes_${p.id}_100000`},{text:'❤️ 1M likes',callback_data:`sp_likes_${p.id}_1000000`}]
       ]}});
@@ -1029,11 +1037,11 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
   }
   if (data === 'admin_verifications') {
     const vers = await getPendingVerificationRequests();
-    if (!vers.length) { bot.sendMessage(chatId, '✅ No pending verifications.', { reply_markup: ADMIN_KEYBOARD }); return; }
+    if (!vers.length) { bot.sendMessage(chatId, 'No pending verifications.', { reply_markup: ADMIN_KEYBOARD }); return; }
     for (const v of vers.slice(0,5)) {
       const u = await getUserByTelegramId(v.telegram_id);
       const prof = await getSocialProfile(v.telegram_id);
-      bot.sendMessage(chatId, `${v.type==='gold'?'🌟 Gold':'✅ Orange'} <b>Verification #${v.id}</b>\n👤 ${u?.full_name||'User'}\n❤️ ${(prof?.total_likes||0).toLocaleString()} likes`, { parse_mode:'HTML', reply_markup:{inline_keyboard:[[{text:`${v.type==='gold'?'🌟':'🟠'} Grant Badge`,callback_data:`ver_approve_${v.id}`},{text:'❌ Reject',callback_data:`ver_reject_${v.id}`}]]}});
+      bot.sendMessage(chatId, `${v.type==='gold'?'🌟 Gold':'Orange'} <b>Verification #${v.id}</b>\n👤 ${u?.full_name||'User'}\n❤️ ${(prof?.total_likes||0).toLocaleString()} likes`, { parse_mode:'HTML', reply_markup:{inline_keyboard:[[{text:`${v.type==='gold'?'🌟':'🟠'} Grant Badge`,callback_data:`ver_approve_${v.id}`},{text:'❌ Reject',callback_data:`ver_reject_${v.id}`}]]}});
     }
     return;
   }
@@ -1063,7 +1071,7 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
     try {
       const allMsgs = await getAllSupportThreads(); // returns array of latest msg per user
       if (!allMsgs || !allMsgs.length) {
-        bot.sendMessage(chatId, '✅ No support messages yet.', { reply_markup: ADMIN_KEYBOARD });
+        bot.sendMessage(chatId, 'No support messages yet.', { reply_markup: ADMIN_KEYBOARD });
         return;
       }
       // Group by telegram_id
@@ -1073,7 +1081,7 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
         grouped[m.telegram_id].push(m);
       }
       const tids = Object.keys(grouped);
-      if (!tids.length) { bot.sendMessage(chatId, '✅ No support messages.', { reply_markup: ADMIN_KEYBOARD }); return; }
+      if (!tids.length) { bot.sendMessage(chatId, 'No support messages.', { reply_markup: ADMIN_KEYBOARD }); return; }
       bot.sendMessage(chatId, `💬 <b>Support Inbox</b>\n${tids.length} user(s) have sent messages.`, { parse_mode: 'HTML' });
       for (const tid of tids.slice(0, 8)) {
         const u = await getUserByTelegramId(tid);
@@ -1096,7 +1104,7 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
   if (data === 'admin_add_app')   { bot.sendMessage(chatId, '➕ Send:\n<code>ADD_APP\nName: ...\nToken: ...</code>', { parse_mode: 'HTML' }); return; }
   if (data === 'admin_remove_app') {
     const apps = await getEarningApps();
-    if (!apps.length) { bot.sendMessage(chatId, '✅ No apps.', { reply_markup: ADMIN_KEYBOARD }); return; }
+    if (!apps.length) { bot.sendMessage(chatId, 'No apps.', { reply_markup: ADMIN_KEYBOARD }); return; }
     bot.sendMessage(chatId, '🗑 Select app:', { reply_markup: { inline_keyboard: apps.map(a=>[{text:`🗑 ${a.name}`,callback_data:`remove_app_${a.id}`}]) }});
     return;
   }
@@ -1123,10 +1131,10 @@ if (bot) bot.on('message', async (msg) => {
       ]).catch(()=>{});
       try {
         await bot.sendMessage(found.telegram_id, `💬 <b>Support Team</b>\n\n${uidMatch[2]}`, { parse_mode:'HTML', ...openWalletBtn() });
-        return bot.sendMessage(id, `✅ Reply sent (Telegram + email + in-app).`);
+        return bot.sendMessage(id, `Reply sent (Telegram + email + in-app).`);
       } catch(e) {
         // App-only users have no real Telegram chat — that's fine, email + in-app inbox already delivered it above.
-        if (/chat not found/i.test(e.message)) return bot.sendMessage(id, `✅ Reply sent (delivered via email + in-app inbox — this user has no Telegram chat).`);
+        if (/chat not found/i.test(e.message)) return bot.sendMessage(id, `Reply sent (delivered via email + in-app inbox — this user has no Telegram chat).`);
         return bot.sendMessage(id, `⚠️ Sent via email + in-app, but Telegram DM failed: ${e.message}`);
       }
     }
@@ -1137,10 +1145,10 @@ if (bot) bot.on('message', async (msg) => {
     const users = await getAllUsers(); const u = users.find(usr => usr.uid===manageMatch[1]||usr.telegram_id===manageMatch[1]);
     if (!u) { bot.sendMessage(id, '❌ User not found'); return; }
     bot.sendMessage(id,
-      `🔧 <b>Manage: ${u.full_name||'User'}</b>\n🆔 UID: ${u.uid}\n💰 Balance: ${formatUSDT(u.usdt_balance||0)} USDT\n👑 VIP: ${u.is_vip?'Yes':'No'}\n✅ Active: ${u.is_active!==false?'Yes':'No'}\n⚠️ Suspended: ${u.earnings_suspended?'Yes':'No'}`,
+      `🔧 <b>Manage: ${u.full_name||'User'}</b>\n🆔 UID: ${u.uid}\n💰 Balance: ${formatUSDT(u.usdt_balance||0)} USDT\n👑 VIP: ${u.is_vip?'Yes':'No'}\nActive: ${u.is_active!==false?'Yes':'No'}\n⚠️ Suspended: ${u.earnings_suspended?'Yes':'No'}`,
       { parse_mode:'HTML', reply_markup:{inline_keyboard:[
-        [{text:u.is_active!==false?'🚫 Deactivate Account':'✅ Activate Account', callback_data:`adm_${u.is_active!==false?'deactivate':'activate'}_${u.telegram_id}`}],
-        [{text:u.earnings_suspended?'✅ Restore Earnings':'⚠️ Suspend Earnings', callback_data:`adm_${u.earnings_suspended?'unsuspend':'suspend'}_${u.telegram_id}`}],
+        [{text:u.is_active!==false?'🚫 Deactivate Account':'Activate Account', callback_data:`adm_${u.is_active!==false?'deactivate':'activate'}_${u.telegram_id}`}],
+        [{text:u.earnings_suspended?'Restore Earnings':'⚠️ Suspend Earnings', callback_data:`adm_${u.earnings_suspended?'unsuspend':'suspend'}_${u.telegram_id}`}],
         [{text:'💚 Resolve / Reverse Balance', callback_data:`adm_resolve_bal_${u.telegram_id}`}]
       ]}});
     return;
@@ -1157,7 +1165,7 @@ if (bot) bot.on('message', async (msg) => {
     if (!youtube_url) { bot.sendMessage(id, '❌ Please include a YouTube URL.\n\nFormat: YTTEST:https://youtu.be/xxx|Caption here', { reply_markup: ADMIN_KEYBOARD }); return; }
     try {
       const tes = await createAdminTestimonial({ youtube_url, caption });
-      bot.sendMessage(id, `✅ <b>YouTube Testimonial Posted!</b>\n\n📺 URL: ${youtube_url}\n💬 Caption: ${caption || 'none'}\n\nShows as: <b>Wallet Masters ✅</b>\nStatus: Live immediately`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
+      bot.sendMessage(id, `<b>YouTube Testimonial Posted!</b>\n\n📺 URL: ${youtube_url}\n💬 Caption: ${caption || 'none'}\n\nShows as: <b>Wallet Masters</b>\nStatus: Live immediately`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
     } catch(e) {
       console.error('YTTEST error:', e);
       bot.sendMessage(id, `❌ Failed to post: ${e.message}`, { reply_markup: ADMIN_KEYBOARD });
@@ -1176,7 +1184,7 @@ if (bot) bot.on('message', async (msg) => {
       text: comment.trim(), receipt_image: '', status: 'approved', is_admin: true, created_at: now2
     }]).select().single();
     if (ccErr || !cc) { bot.sendMessage(id, '❌ Error posting comment: ' + (ccErr?.message||'unknown')); return; }
-    bot.sendMessage(id, `✅ Community comment posted!\n\n👤 ${flag} ${name.trim()} — ${location.trim()}\n💬 "${comment.trim().substring(0,200)}"`);
+    bot.sendMessage(id, `Community comment posted!\n\n👤 ${flag} ${name.trim()} — ${location.trim()}\n💬 "${comment.trim().substring(0,200)}"`);
     return;
   }
 
@@ -1189,7 +1197,7 @@ if (bot) bot.on('message', async (msg) => {
     const isPinned = action === 'PIN';
     const ok = await setPinnedPost(postId, isPinned);
     if (ok) {
-      bot.sendMessage(id, `✅ Post #${postId} has been ${isPinned ? '📌 PINNED' : '📌 UNPINNED'}!
+      bot.sendMessage(id, `Post #${postId} has been ${isPinned ? '📌 PINNED' : '📌 UNPINNED'}!
 
 ${isPinned ? 'This post will always appear at the top of SocialPay.' : 'Post returned to normal order.'}`, { reply_markup: ADMIN_KEYBOARD });
     } else {
@@ -1236,7 +1244,7 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
     } catch(e) { console.error('[RESOLVE] tx error:', e.message); }
     // Notify admin
     bot.sendMessage(id,
-      `✅ <b>Balance Updated!</b>\n\n👤 User: <b>${target.full_name||'?'}</b>\n🆔 UID: <code>${target.uid}</code>\n📋 Action: <b>${action}</b>\n💰 Old Balance: <b>${formatUSDT(oldBal)} USDT</b>\n💰 New Balance: <b>${newBalStr} USDT</b>`,
+      `<b>Balance Updated!</b>\n\n👤 User: <b>${target.full_name||'?'}</b>\n🆔 UID: <code>${target.uid}</code>\n📋 Action: <b>${action}</b>\n💰 Old Balance: <b>${formatUSDT(oldBal)} USDT</b>\n💰 New Balance: <b>${newBalStr} USDT</b>`,
       { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
     // Notify user
     bot.sendMessage(target.telegram_id,
@@ -1271,7 +1279,7 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
         if (ccErr || !cc) {
           bot.sendMessage(id, '❌ Error posting community img: ' + (ccErr?.message||'unknown'));
         } else {
-          bot.sendMessage(id, `✅ Community receipt posted!\n\n👤 ${flag} ${name.trim()} — ${location.trim()}\n💬 "${comment.trim().substring(0,200)}"${imageUrl ? '\n📸 Image attached' : ''}`, { reply_markup: ADMIN_KEYBOARD });
+          bot.sendMessage(id, `Community receipt posted!\n\n👤 ${flag} ${name.trim()} — ${location.trim()}\n💬 "${comment.trim().substring(0,200)}"${imageUrl ? '\n📸 Image attached' : ''}`, { reply_markup: ADMIN_KEYBOARD });
         }
         return;
       }
@@ -1288,7 +1296,7 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
           sent++; await new Promise(r=>setTimeout(r,60));
         } catch(e) { failed++; }
       }
-      bot.sendMessage(id, `✅ Broadcast done! Sent: ${sent} | Failed: ${failed}`, { reply_markup: ADMIN_KEYBOARD });
+      bot.sendMessage(id, `Broadcast done! Sent: ${sent} | Failed: ${failed}`, { reply_markup: ADMIN_KEYBOARD });
     }
     return;
   }
@@ -1299,7 +1307,7 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
     if (!amount || amount < 0) return bot.sendMessage(id, '❌ Invalid amount. Example: SETMIN:5000');
     await updateWithdrawalSettings(amount, null, null);
     const s = await getWithdrawalSettings();
-    bot.sendMessage(id, `✅ <b>Min withdrawal updated!</b>\n\n📉 Min: ${s.minWithdrawal.toLocaleString()} USDT\n📈 Max: ${s.maxWithdrawal.toLocaleString()} USDT\n💰 Fee: ${(s.gatewayFeeRate*100)}%`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
+    bot.sendMessage(id, `<b>Min withdrawal updated!</b>\n\n📉 Min: ${s.minWithdrawal.toLocaleString()} USDT\n📈 Max: ${s.maxWithdrawal.toLocaleString()} USDT\n💰 Fee: ${(s.gatewayFeeRate*100)}%`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
     return;
   }
   if (t.startsWith('SETMAX:')) {
@@ -1307,7 +1315,7 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
     if (!amount || amount < 0) return bot.sendMessage(id, '❌ Invalid amount. Example: SETMAX:50000');
     await updateWithdrawalSettings(null, amount, null);
     const s = await getWithdrawalSettings();
-    bot.sendMessage(id, `✅ <b>Max withdrawal updated!</b>\n\n📉 Min: ${s.minWithdrawal.toLocaleString()} USDT\n📈 Max: ${s.maxWithdrawal.toLocaleString()} USDT\n💰 Fee: ${(s.gatewayFeeRate*100)}%`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
+    bot.sendMessage(id, `<b>Max withdrawal updated!</b>\n\n📉 Min: ${s.minWithdrawal.toLocaleString()} USDT\n📈 Max: ${s.maxWithdrawal.toLocaleString()} USDT\n💰 Fee: ${(s.gatewayFeeRate*100)}%`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
     return;
   }
   if (t.startsWith('SETFEE:')) {
@@ -1315,7 +1323,7 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
     if (isNaN(rate) || rate < 0 || rate > 1) return bot.sendMessage(id, '❌ Invalid rate. Example: SETFEE:0.04 (for 4%)');
     await updateWithdrawalSettings(null, null, rate);
     const s = await getWithdrawalSettings();
-    bot.sendMessage(id, `✅ <b>Fee rate updated to ${(s.gatewayFeeRate*100)}%</b>\n\n📉 Min: ${s.minWithdrawal.toLocaleString()} USDT\n📈 Max: ${s.maxWithdrawal.toLocaleString()} USDT`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
+    bot.sendMessage(id, `<b>Fee rate updated to ${(s.gatewayFeeRate*100)}%</b>\n\n📉 Min: ${s.minWithdrawal.toLocaleString()} USDT\n📈 Max: ${s.maxWithdrawal.toLocaleString()} USDT`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
     return;
   }
   if (t.startsWith('SETUSERMIN:')) {
@@ -1327,7 +1335,7 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
     const { data: usr } = await supa.from('users').select('telegram_id,full_name').eq('uid', uid).single();
     if (!usr) return bot.sendMessage(id, `❌ User ${uid} not found`);
     await setUserWithdrawalLimits(usr.telegram_id, amount, undefined);
-    bot.sendMessage(id, `✅ <b>Per-user min set</b>\n👤 ${usr.full_name} (${uid})\n📉 Min: ${amount.toLocaleString()} USDT`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
+    bot.sendMessage(id, `<b>Per-user min set</b>\n👤 ${usr.full_name} (${uid})\n📉 Min: ${amount.toLocaleString()} USDT`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
     return;
   }
   if (t.startsWith('SETUSERMAX:')) {
@@ -1339,7 +1347,7 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
     const { data: usr } = await supa.from('users').select('telegram_id,full_name').eq('uid', uid).single();
     if (!usr) return bot.sendMessage(id, `❌ User ${uid} not found`);
     await setUserWithdrawalLimits(usr.telegram_id, undefined, amount);
-    bot.sendMessage(id, `✅ <b>Per-user max set</b>\n👤 ${usr.full_name} (${uid})\n📈 Max: ${amount.toLocaleString()} USDT`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
+    bot.sendMessage(id, `<b>Per-user max set</b>\n👤 ${usr.full_name} (${uid})\n📈 Max: ${amount.toLocaleString()} USDT`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
     return;
   }
   if (t.startsWith('CLEARUSERLIMITS:')) {
@@ -1349,7 +1357,7 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
     const { data: usr } = await supa.from('users').select('telegram_id,full_name').eq('uid', uid).single();
     if (!usr) return bot.sendMessage(id, `❌ User ${uid} not found`);
     await supa.from('users').update({ min_withdrawal_override: null, max_withdrawal_override: null }).eq('telegram_id', usr.telegram_id);
-    bot.sendMessage(id, `✅ <b>Limits reset to global defaults</b>\n👤 ${usr.full_name} (${uid})`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
+    bot.sendMessage(id, `<b>Limits reset to global defaults</b>\n👤 ${usr.full_name} (${uid})`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
     return;
   }
     if (t.startsWith('BROADCAST:')) {
@@ -1357,7 +1365,7 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
     if (!message) return bot.sendMessage(id, '❌ Empty message');
     bot.sendMessage(id, '📤 Broadcasting...');
     const result = await broadcastToAll(`📢 <b>Wallet Masters Update</b>\n\n${message}`);
-    bot.sendMessage(id, `✅ Done! Sent: ${result.sent} | Failed: ${result.failed}`, { reply_markup: ADMIN_KEYBOARD });
+    bot.sendMessage(id, `Done! Sent: ${result.sent} | Failed: ${result.failed}`, { reply_markup: ADMIN_KEYBOARD });
     return;
   }
   if (t.startsWith('ADD_APP')) {
@@ -1366,7 +1374,7 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
     const token = (lines.find(l=>l.startsWith('Token:'))||'').replace('Token:','').trim();
     if (!name||!token) { bot.sendMessage(id, '❌ Need Name and Token'); return; }
     const app = await addEarningApp({ name, bot_token:token, description:'', icon:'', url:'' });
-    bot.sendMessage(id, `✅ App "${app.name}" added! ID: ${app.id}`, { reply_markup: ADMIN_KEYBOARD });
+    bot.sendMessage(id, `App "${app.name}" added! ID: ${app.id}`, { reply_markup: ADMIN_KEYBOARD });
     return;
   }
   if (t.startsWith('BALANCE:')) {
@@ -1377,7 +1385,7 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
     if (!u) { bot.sendMessage(id,'❌ User not found'); return; }
     await updateUserBalance(u.telegram_id, amount);
     await createTransaction(u.telegram_id,'admin_credit',amount,'Admin credit');
-    bot.sendMessage(id,`✅ Added ${amount} USDT to ${u.full_name}`,{reply_markup:ADMIN_KEYBOARD});
+    bot.sendMessage(id,`Added ${amount} USDT to ${u.full_name}`,{reply_markup:ADMIN_KEYBOARD});
     return;
   }
   } catch(e) { console.error('[MSG HANDLER ERROR]', e?.message || e); try { bot.sendMessage(String(ADMIN_CHAT_ID), '⚠️ Admin handler error: ' + (e?.message||'unknown')); } catch(_){} }
@@ -1442,7 +1450,7 @@ async function enrichUser(user, tid) {
   const earningRate  = user.is_vip ? 200 : 50;
   const canClaim = hourlyStatus.canClaim === true;
   const nextClaimInSec = canClaim ? 0 : Math.round((hourlyStatus.nextClaimIn||hourlyStatus.remainingMs||3600000)/1000);
-  return { ...user, balance: parseFloat(user.usdt_balance)||0, trc20Address: user.trc20_address||SHARED_TRC20_ADDRESS, isVIP: user.is_vip===true, termsAccepted: user.terms_accepted===true, referralCode: user.referral_code||user.uid, referralCount: user.referral_count||0, telegramId: user.telegram_id, name: user.full_name||user.registered_name||'', username: user.telegram_username||'', isActive: user.is_active!==false, earningsSuspended: user.earnings_suspended===true, hourlyStatus: { canClaim, nextClaimIn: nextClaimInSec, earningRate, hourlyAmount: earningRate } };
+  return { ...user, balance: parseFloat(user.usdt_balance)||0, trc20Address: user.trc20_address||SHARED_TRC20_ADDRESS, depositNetworks: DEPOSIT_NETWORKS, isVIP: user.is_vip===true, termsAccepted: user.terms_accepted===true, referralCode: user.referral_code||user.uid, referralCount: user.referral_count||0, telegramId: user.telegram_id, name: user.full_name||user.registered_name||'', username: user.telegram_username||'', isActive: user.is_active!==false, earningsSuspended: user.earnings_suspended===true, hourlyStatus: { canClaim, nextClaimIn: nextClaimInSec, earningRate, hourlyAmount: earningRate } };
 }
 
 // ─── Standalone App Auth (UID + password for Android APK / web) ──────────────
@@ -1492,7 +1500,7 @@ function emailTemplate(title, lines, note) {
       <div style="color:rgba(255,255,255,.75);font-size:12px;margin-top:2px">Professional Crypto Wallet · TRC20 USDT</div>
     </div>
     <div style="padding:24px">
-      <div style="font-size:18px;font-weight:700;color:#0f172a;margin-bottom:14px">${title}</div>
+      <div style="font-size:18px;font-weight:700;color:#0f172a;margin-bottom:14px">${/approved|success|welcome|sent|linked|activated|granted|received|reward|bonus|claimed|posted/i.test(title) ? '<span style=\"display:inline-block;width:20px;height:20px;border-radius:50%;background:#22c55e;color:#ffffff;font-size:13px;line-height:20px;text-align:center;font-weight:700;margin-right:8px;vertical-align:middle\">✓</span>' : ''}${title}</div>
       <table style="width:100%;border-collapse:collapse">${rows}</table>
       ${note ? `<div style="margin-top:16px;padding:12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;font-size:13px;color:#1d4ed8;line-height:1.6">${note}</div>` : ''}
     </div>
@@ -1654,7 +1662,7 @@ app.post('/api/app-auth/link-email', authMiddleware, async (req, res) => {
     if (!user) return res.status(404).json({ error: 'User not found' });
     await setAppEmail(user.telegram_id, email);
     await setEmailMap(email, user.telegram_id);
-    notifyUserEmail(user.telegram_id, 'Email linked', 'Email Linked Successfully ✅', [
+    notifyUserEmail(user.telegram_id, 'Email linked', 'Email Linked Successfully', [
       `Hi <b>${user.full_name || 'there'}</b>, this email is now linked to your Wallet Masters account.`,
       `🆔 Your UID: <b>${user.uid}</b>`,
       'From now on you will receive updates here: support replies, incoming USDT, withdrawals, and official announcements.'
@@ -1833,7 +1841,7 @@ app.post('/api/withdraw', async (req, res) => {
     if (!user) return res.status(404).json({ error: 'User not found.' });
     if (!user.is_vip) return res.status(403).json({ error: 'VIP membership is required to withdraw.' });
 
-    const { amount, isBankWithdrawal, toAddress, bankName, bankCountry, localCurrency, accountNumber, method } = req.body;
+    const { amount, isBankWithdrawal, toAddress, bankName, bankCountry, localCurrency, accountNumber, method, network } = req.body;
     const amt = parseFloat(amount);
     const userLimits = await getUserWithdrawalLimits(user.telegram_id);
     if (!amt || isNaN(amt) || amt < userLimits.minWithdrawal || amt > userLimits.maxWithdrawal) {
@@ -1849,6 +1857,7 @@ app.post('/api/withdraw', async (req, res) => {
       telegram_id: user.telegram_id,
       amount: amt,
       method: method || (isBankWithdrawal ? 'bank' : 'crypto'),
+      network: network || 'TRC20',
       account_number: accountNumber || toAddress || '',
       bank_name: bankName || '',
       country: bankCountry || '',
@@ -1873,7 +1882,7 @@ app.post('/api/withdraw', async (req, res) => {
     ]).catch(()=>{});
 
     bot.sendMessage(ADMIN_CHAT_ID,
-      `Withdrawal Request #${wd.id}\n\nUser: ${user.full_name} (${user.uid})\nAmount: ${amt} USDT\nMethod: ${bankName || method || 'Crypto'}\nAddress: ${accountNumber || toAddress || ''}\nCountry: ${bankCountry || ''} ${localCurrency || ''}`,
+      `Withdrawal Request #${wd.id}\n\nUser: ${user.full_name} (${user.uid})\nAmount: ${amt} USDT\nMethod: ${bankName || method || 'Crypto'}\nNetwork: ${network || 'TRC20'}\nAddress: ${accountNumber || toAddress || ''}\nCountry: ${bankCountry || ''} ${localCurrency || ''}`,
       { reply_markup: { inline_keyboard: [[
         { text: 'Approve', callback_data: 'wd_approve_' + wd.id },
         { text: 'Reject',  callback_data: 'wd_reject_'  + wd.id }
@@ -1918,8 +1927,8 @@ app.post('/api/receipt', authMiddleware, async (req, res) => {
     await updateWithdrawal(wd.id, { status: 'fee_paid' });
     try {
       const buffer = Buffer.from(receiptBase64.replace(/^data:[^;]+;base64,/, ''), 'base64');
-      await bot.sendPhoto(ADMIN_CHAT_ID, buffer, { caption: `💸 <b>Fee Receipt #${wd.id}</b>\n👤 ${user.full_name} (${user.uid})\n💰 ${wd.amount} USDT`, parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: '✅ Approve', callback_data: `wd_approve_${wd.id}` }, { text: '❌ Reject', callback_data: `wd_reject_${wd.id}` }]] }});
-    } catch(e) { bot.sendMessage(ADMIN_CHAT_ID, `💸 Fee receipt submitted for Withdrawal #${wd.id} by ${user.full_name}`, { reply_markup: { inline_keyboard: [[{ text: '✅ Approve', callback_data: `wd_approve_${wd.id}` }, { text: '❌ Reject', callback_data: `wd_reject_${wd.id}` }]] }}).catch(()=>{}); }
+      await bot.sendPhoto(ADMIN_CHAT_ID, buffer, { caption: `💸 <b>Fee Receipt #${wd.id}</b>\n👤 ${user.full_name} (${user.uid})\n💰 ${wd.amount} USDT`, parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: 'Approve', callback_data: `wd_approve_${wd.id}` }, { text: '❌ Reject', callback_data: `wd_reject_${wd.id}` }]] }});
+    } catch(e) { bot.sendMessage(ADMIN_CHAT_ID, `💸 Fee receipt submitted for Withdrawal #${wd.id} by ${user.full_name}`, { reply_markup: { inline_keyboard: [[{ text: 'Approve', callback_data: `wd_approve_${wd.id}` }, { text: '❌ Reject', callback_data: `wd_reject_${wd.id}` }]] }}).catch(()=>{}); }
     res.json({ success: true });
   } catch(e) { res.status(500).json({ error: 'Server error' }); }
 });
@@ -1935,12 +1944,13 @@ app.post('/api/vip-upgrade', async (req, res) => {
     const user = await getUserByTelegramId(telegramId);
     if (!user) return res.status(404).json({ error: 'Account not found. Please restart the app.' });
     if (user.is_vip) return res.status(400).json({ error: 'Your account is already VIP.' });
+    const depositNetwork = (req.body && req.body.depositNetwork) || 'TRC20';
 
     // Record the upgrade request
     try {
       await createWithdrawalRequest({
         telegram_id: user.telegram_id, amount: 200,
-        method: 'vip_upgrade', account_number: 'VIP Deposit', bank_name: 'VIP Upgrade'
+        method: 'vip_upgrade', network: depositNetwork, account_number: 'VIP Deposit', bank_name: 'VIP Upgrade'
       });
     } catch(e) { console.error('[VIP] DB:', e.message); }
 
@@ -1956,6 +1966,7 @@ Name: ${user.full_name}
 UID: ${user.uid}
 Telegram ID: ${user.telegram_id}
 Amount: 200 USDT
+Deposit Network: ${depositNetwork}
 
 Receipt photo uploading separately...`,
       vipMarkup).catch(e => console.error('[VIP notify]:', e.message));
@@ -2020,7 +2031,7 @@ app.post('/api/withdrawal-receipt', receiptUpload.single('receipt'), async (req,
 
     // Notify admin with receipt photo
     const markup = { reply_markup: { inline_keyboard: [[
-      { text: '✅ Approve', callback_data: 'wd_approve_' + withdrawalId },
+      { text: 'Approve', callback_data: 'wd_approve_' + withdrawalId },
       { text: '❌ Reject',  callback_data: 'wd_reject_'  + withdrawalId }
     ]]}};
 
@@ -2132,7 +2143,7 @@ async function handleTestimonialSubmit(req,res) {
     const tes = await createTestimonial(user.telegram_id, { name:user.full_name, type, video_url:youtubeUrl||youtube_url||'', message:caption||'', amount:'' });
     const reward = type==='youtube'?2000:1000;
     res.json({ success:true, testimonial:tes });
-    bot.sendMessage(ADMIN_CHAT_ID, `🎬 <b>Testimonial #${tes.id}</b>\n👤 ${user.full_name} (${user.uid})\n📎 ${type}\n${(youtubeUrl||youtube_url)?'🔗 '+(youtubeUrl||youtube_url)+'\n':''}💬 ${caption||'none'}\n💰 ${reward} USDT`, { parse_mode:'HTML', reply_markup:{inline_keyboard:[[{text:`✅ Approve (+${reward})`,callback_data:`test_approve_${tes.id}`},{text:'❌ Reject',callback_data:`test_reject_${tes.id}`}],[{text:'🗑️ Delete Testimonial',callback_data:`test_delete_${tes.id}`}]]}}).catch(()=>{});
+    bot.sendMessage(ADMIN_CHAT_ID, `🎬 <b>Testimonial #${tes.id}</b>\n👤 ${user.full_name} (${user.uid})\n📎 ${type}\n${(youtubeUrl||youtube_url)?'🔗 '+(youtubeUrl||youtube_url)+'\n':''}💬 ${caption||'none'}\n💰 ${reward} USDT`, { parse_mode:'HTML', reply_markup:{inline_keyboard:[[{text:`Approve (+${reward})`,callback_data:`test_approve_${tes.id}`},{text:'❌ Reject',callback_data:`test_reject_${tes.id}`}],[{text:'🗑️ Delete Testimonial',callback_data:`test_delete_${tes.id}`}]]}}).catch(()=>{});
     if (type!=='youtube'&&(videoData||video_file)) {
       setImmediate(async () => { try { const buf=Buffer.from((videoData||video_file).replace(/^data:[^;]+;base64,/,''),'base64'); bot.sendVideo(ADMIN_CHAT_ID,buf,{caption:`🎥 Testimonial #${tes.id} — ${user.full_name}`}).catch(()=>{}); } catch(e){} });
     }
@@ -2189,7 +2200,7 @@ app.post('/api/poem/submit', authMiddleware, async (req,res) => {
     const poem=await createPoem(user.telegram_id,{title:title||'',category:category||'General',content:content.trim(),author:user.full_name});
     if (!poem) return res.status(500).json({error:'Could not save submission. Please try again.'});
     res.json({success:true,poem});
-    bot.sendMessage(ADMIN_CHAT_ID,`📝 <b>New Poem/Inspiration #${poem.id}</b>\n👤 ${user.full_name||'User'} (${user.uid||'?'})\n📂 Category: ${category || (title.match(/^\[(\w+)\]/) ? title.match(/^\[(\w+)\]/)[1] : 'General')}\n\n"${content.substring(0,400)}"\n\n💰 Reward: 1,000 USDT`,{parse_mode:'HTML',reply_markup:{inline_keyboard:[[{text:'✅ Approve (+1,000)',callback_data:'poem_approve_'+poem.id},{text:'❌ Reject',callback_data:'poem_reject_'+poem.id}],[{text:'🗑️ Delete Post',callback_data:'poem_delete_'+poem.id}]]}}).catch(e=>console.error('Admin notify poem error:',e.message));
+    bot.sendMessage(ADMIN_CHAT_ID,`📝 <b>New Poem/Inspiration #${poem.id}</b>\n👤 ${user.full_name||'User'} (${user.uid||'?'})\n📂 Category: ${category || (title.match(/^\[(\w+)\]/) ? title.match(/^\[(\w+)\]/)[1] : 'General')}\n\n"${content.substring(0,400)}"\n\n💰 Reward: 1,000 USDT`,{parse_mode:'HTML',reply_markup:{inline_keyboard:[[{text:'Approve (+1,000)',callback_data:'poem_approve_'+poem.id},{text:'❌ Reject',callback_data:'poem_reject_'+poem.id}],[{text:'🗑️ Delete Post',callback_data:'poem_delete_'+poem.id}]]}}).catch(e=>console.error('Admin notify poem error:',e.message));
   } catch(e) { res.status(500).json({error:'Server error'}); }
 });
 app.get('/api/poems', async (req, res) => {
@@ -2246,7 +2257,7 @@ app.post('/api/socialpay/post', authMiddleware, async (req,res) => {
     res.json({success:true,post});
     const prof=await getSocialProfile(user.telegram_id);
     const verBadge = prof?.is_gold_verified ? ' 🏆' : (prof?.is_verified ? ' 🟠' : '');
-    bot.sendMessage(ADMIN_CHAT_ID,`🌟 <b>New SocialPay Post #${post.id}</b>\n👤 ${user.full_name||'User'} (${user.uid||'?'})${verBadge}\n📎 Type: ${post_type||'text'}\n💬 "${caption.substring(0,300)}"`,{parse_mode:'HTML',reply_markup:{inline_keyboard:[[{text:'✅ Approve',callback_data:'sp_approve_'+post.id},{text:'❌ Reject',callback_data:'sp_reject_'+post.id}],[{text:'❤️ 1K likes',callback_data:'sp_likes_'+post.id+'_1000'},{text:'❤️ 10K likes',callback_data:'sp_likes_'+post.id+'_10000'}],[{text:'❤️ 100K likes',callback_data:'sp_likes_'+post.id+'_100000'},{text:'❤️ 1M likes',callback_data:'sp_likes_'+post.id+'_1000000'}],[{text:post.is_pinned?'📌 Unpin Post':'📌 Pin to Top',callback_data:'sp_pin_'+post.id}]]}}).catch(e=>console.error('Admin notify SP error:',e.message));
+    bot.sendMessage(ADMIN_CHAT_ID,`🌟 <b>New SocialPay Post #${post.id}</b>\n👤 ${user.full_name||'User'} (${user.uid||'?'})${verBadge}\n📎 Type: ${post_type||'text'}\n💬 "${caption.substring(0,300)}"`,{parse_mode:'HTML',reply_markup:{inline_keyboard:[[{text:'Approve',callback_data:'sp_approve_'+post.id},{text:'❌ Reject',callback_data:'sp_reject_'+post.id}],[{text:'❤️ 1K likes',callback_data:'sp_likes_'+post.id+'_1000'},{text:'❤️ 10K likes',callback_data:'sp_likes_'+post.id+'_10000'}],[{text:'❤️ 100K likes',callback_data:'sp_likes_'+post.id+'_100000'},{text:'❤️ 1M likes',callback_data:'sp_likes_'+post.id+'_1000000'}],[{text:post.is_pinned?'📌 Unpin Post':'📌 Pin to Top',callback_data:'sp_pin_'+post.id}]]}}).catch(e=>console.error('Admin notify SP error:',e.message));
     if (image_data) setImmediate(()=>{ try { const buf=Buffer.from(image_data.replace(/^data:[^;]+;base64,/,''),'base64'); bot.sendPhoto(ADMIN_CHAT_ID,buf,{caption:'SocialPay Photo #'+post.id+' — '+(user.full_name||'User')}).catch(()=>{}); } catch(e){console.error('SP photo send error:',e.message)} });
   } catch(e) { console.error('post error:', e); res.status(500).json({error:'Server error'}); }
 });
@@ -2352,7 +2363,7 @@ app.post('/api/socialpay/apply-verification', authMiddleware, async (req,res) =>
     const request=await createVerificationRequest(req.tgUser.id,type||'orange');
     res.json({success:true});
     const user=await getUserByTelegramId(req.tgUser.id);
-    bot.sendMessage(ADMIN_CHAT_ID,`${type==='gold'?'🌟 Gold':'✅ Orange'} <b>Verification Request</b>\n👤 ${user?.full_name||'User'} (${user?.uid||req.tgUser.id})\n❤️ ${(prof.total_likes||0).toLocaleString()} likes`,{parse_mode:'HTML',reply_markup:{inline_keyboard:[[{text:`${type==='gold'?'🌟 Grant Gold':'🟠 Grant Badge'}`,callback_data:`ver_approve_${request.id}`},{text:'❌ Reject',callback_data:`ver_reject_${request.id}`}]]}}).catch(()=>{});
+    bot.sendMessage(ADMIN_CHAT_ID,`${type==='gold'?'🌟 Gold':'Orange'} <b>Verification Request</b>\n👤 ${user?.full_name||'User'} (${user?.uid||req.tgUser.id})\n❤️ ${(prof.total_likes||0).toLocaleString()} likes`,{parse_mode:'HTML',reply_markup:{inline_keyboard:[[{text:`${type==='gold'?'🌟 Grant Gold':'🟠 Grant Badge'}`,callback_data:`ver_approve_${request.id}`},{text:'❌ Reject',callback_data:`ver_reject_${request.id}`}]]}}).catch(()=>{});
   } catch(e) { res.status(500).json({error:'Server error'}); }
 });
 
@@ -2498,7 +2509,7 @@ app.post('/api/community-comments', authMiddleware, async (req,res) => {
     res.json({ success: true, comment: data });
     bot.sendMessage(ADMIN_CHAT_ID, `💬 <b>Community Comment</b>\n👤 ${user.full_name} (${user.uid})\n"${text.substring(0,300)}"`, {
       parse_mode: 'HTML',
-      reply_markup: { inline_keyboard: [[{text:'✅ Approve', callback_data:'cc_approve_'+data.id},{text:'❌ Reject', callback_data:'cc_reject_'+data.id}]] }
+      reply_markup: { inline_keyboard: [[{text:'Approve', callback_data:'cc_approve_'+data.id},{text:'❌ Reject', callback_data:'cc_reject_'+data.id}]] }
     }).catch(()=>{});
   } catch(e) { console.error('community comment:', e); res.status(500).json({error:'Server error'}); }
 });
@@ -2621,7 +2632,7 @@ app.post('/api/transfer', authMiddleware, async (req, res) => {
             + `💵 Amount: ${amt} USDT
 `
             + `${note ? '📝 Note: ' + note + '\n' : ''}`
-            + `✅ Your new balance has been updated.
+            + `Your new balance has been updated.
 
 `
             + `👇 Tap below to view your updated balance.`;
@@ -2629,7 +2640,7 @@ app.post('/api/transfer', authMiddleware, async (req, res) => {
         } catch(notifErr) { console.error('Transfer notification failed:', notifErr.message); }
       }
       // Email the sender a confirmation too
-      notifyUserEmail(req.tgUser.id, 'Transfer sent', 'Transfer Sent ✅', [
+      notifyUserEmail(req.tgUser.id, 'Transfer sent', 'Transfer Sent', [
         `You sent <b>${formatUSDT(result.amount)} USDT</b> to <b>${result.recipientName}</b> (UID: ${recipientUid}).`,
         `Your new balance: <b>${formatUSDT(result.senderBalance)} USDT</b>`
       ]).catch(()=>{});

@@ -20,8 +20,23 @@ const tg  = isTelegram ? window.Telegram.WebApp : {
 };
 if (isTelegram) { tg.ready(); tg.expand(); }
 
-const FEE_ADDR = 'TPwUS8v77TtcsYZUHUTvVx2TGqE37QnagZ';
+const FEE_ADDR = 'TPwUS8v77TtcsYZUHUTvVx2TGqE37QnagZ'; // Gateway fee collection address (TRC20 only) — unrelated to deposits below
 const API      = (window.location.origin && window.location.origin !== 'null' ? window.location.origin : 'https://wallet-masters.onrender.com') + '/api';
+
+// ── Deposit networks — users can deposit/withdraw via any of these 4 ──────────
+const DEPOSIT_NETWORKS = [
+  { key: 'BTC',   asset: 'BTC',  chain: 'Bitcoin',                 address: '1Koes1JnvnJHCndKmG9rAFgT6eJRFRcvhf',         min: '0.00001 BTC' },
+  { key: 'TRC20', asset: 'USDT', chain: 'TRON (TRC20)',            address: 'TSuhW6wXHBQyocTxs42dgfB9B1VChRAiex',         min: '0.005 USDT', recommended: true },
+  { key: 'ERC20', asset: 'ETH',  chain: 'Ethereum (ERC20)',        address: '0xd431a5a2d6405a0a14f9218c0b8ad3413b5d5901', min: '0.00005 ETH' },
+  { key: 'BEP20', asset: 'USDT', chain: 'BNB Smart Chain (BEP20)', address: '0xd431a5a2d6405a0a14f9218c0b8ad3413b5d5901', min: '0.005 USDT' }
+];
+const DEFAULT_DEPOSIT_NET = DEPOSIT_NETWORKS.find(n => n.key === 'TRC20');
+function getDepositNetwork(key) { return DEPOSIT_NETWORKS.find(n => n.key === key) || DEFAULT_DEPOSIT_NET; }
+// Small professional check badge — replaces the unprofessional ✅ emoji everywhere in the UI
+function checkBadge(color, size) {
+  color = color || '#22c55e'; size = size || 14;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" style="display:inline-block;vertical-align:middle;margin-right:4px;flex-shrink:0" fill="none"><circle cx="12" cy="12" r="11" fill="${color}"/><path d="M7 12.5l3.5 3.5 6.5-7" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
 let MIN_WD   = 5000, MAX_WD = 50000;  // Will be fetched from server
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -32,6 +47,7 @@ const state = {
   referralCode: '', referralCount: 0,
   countdownTimer: null,
   withdrawType: 'crypto', selectedPayment: null, selectedNetwork: 'TRC20',
+  selectedDepositNetwork: 'TRC20', selectedVipNetwork: 'TRC20',
   pendingWithdrawal: null, earningApps: [],
   poemCategory: 'Poem',
   spPostType: 'text', spImageData: null, spVoiceData: null,
@@ -90,7 +106,7 @@ function get(path) {
   }).then(r => r.json()).catch(() => ({}));
 }
 function copyText(t) { try { navigator.clipboard.writeText(t); } catch(e) { const el=document.createElement('textarea'); el.value=t; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el); } }
-function copyAddress() { copyText(state.trc20Address); toast('Address copied!'); }
+function copyAddress() { copyText(getDepositNetwork(state.selectedDepositNetwork).address); toast('Address copied!'); }
 function copyUID()     { copyText(state.uid); toast('UID copied!'); }
 
 let _toastTimer;
@@ -502,8 +518,11 @@ function updateUI() {
   g('balanceUSD').textContent    = bal;
   g('usdtBalance').textContent   = bal;
   g('usdtValue').textContent     = `$${bal}`;
-  g('trc20Address').textContent  = shortAddr(state.trc20Address);
-  g('receiveAddress').textContent = state.trc20Address;
+  const homeNet = getDepositNetwork(state.selectedDepositNetwork);
+  const homeLabel = g('homeAddrLabel');
+  if (homeLabel) homeLabel.textContent = `${homeNet.key} Deposit Address`;
+  g('trc20Address').textContent  = shortAddr(homeNet.address);
+  g('receiveAddress').textContent = homeNet.address;
   g('receiveUID').textContent    = state.uid;
   g('availBalance').textContent  = bal;
 
@@ -578,7 +597,7 @@ function showPage(name) {
     page.classList.add('active');
   if (name === 'transfer') resetTransferForm();
   if (name === 'converter') initConverter();
-    if (name === 'receive')      generateQR(state.trc20Address);
+    if (name === 'receive')      refreshDepositDisplay();
     if (name === 'connect')      renderConnect();
     if (name === 'activity')     renderTx(state.transactions, true);
     if (name === 'support')      { loadSupportMessages(); setTimeout(scrollSupportToBottom, 200); }
@@ -1419,9 +1438,14 @@ function setWithdrawType(t) {
 }
 function selectNetwork(el) {
   if (el.dataset.soon) return;
-  document.querySelectorAll('.net-opt').forEach(e => e.classList.remove('active'));
+  document.querySelectorAll('#cryptoFields .net-opt').forEach(e => e.classList.remove('active'));
   el.classList.add('active');
   state.selectedNetwork = el.dataset.n;
+  const net = getDepositNetwork(state.selectedNetwork);
+  const hint = g('withdrawNetHint');
+  const inp  = g('withdrawAddress');
+  if (hint) hint.textContent = `Send only ${net.asset} (${net.chain}) to a matching address`;
+  if (inp)  inp.placeholder = `Enter ${net.key} wallet address`;
 }
 function setPct(p) {
   const v = Math.min(MAX_WD, Math.max(MIN_WD, Math.floor(state.balance * p / 100)));
@@ -1892,7 +1916,7 @@ async function doSubmitTestimonial(type) {
     const r = await post('/testimonial/submit', body, 20000);
     if (r && (r.success || !r.error)) {
       btn.textContent = 'Submitted! ✓';
-      toast('Testimonial submitted! Admin will review. ✅');
+      toast('Testimonial submitted! Admin will review.');
       setTimeout(() => { const m = g('testimonialModal'); if(m) m.remove(); }, 1200);
     } else {
       toast(r?.error || 'Submission failed. Please try again.');
@@ -1900,7 +1924,7 @@ async function doSubmitTestimonial(type) {
     }
   } catch(e) {
     // If it's a timeout but the request likely went through, show success
-    toast('Testimonial submitted! Admin will review. ✅');
+    toast('Testimonial submitted! Admin will review.');
     btn.textContent = 'Submitted! ✓';
     setTimeout(() => { const m = g('testimonialModal'); if(m) m.remove(); }, 1200);
   }
@@ -2198,7 +2222,7 @@ async function loadMySpProfile() {
     </div>
     <div class="sp-post-grid">${posts.length?posts.map(p=>`<div class="sp-post-card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-        <span style="font-size:11px;color:${p.status==='approved'?'#22c55e':p.status==='rejected'?'#ef4444':'#f59e0b'}">${p.status==='approved'?'✅ Live':p.status==='rejected'?'❌ Rejected':'⏳ Pending'}</span>
+        <span style="font-size:11px;color:${p.status==='approved'?'#22c55e':p.status==='rejected'?'#ef4444':'#f59e0b'}">${p.status==='approved'?checkBadge()+'<span style="vertical-align:middle">Live</span>':p.status==='rejected'?'Rejected':'Pending'}</span>
         <span style="font-size:11px;color:#7a90b0">❤️ ${formatCount(p.likes||0)} admin · ${formatCount(p.user_likes||0)} user</span>
       </div>
       ${p.caption?`<div class="sp-caption" style="font-size:13px">${p.caption.substring(0,150)}</div>`:''}
@@ -2269,12 +2293,12 @@ async function saveSpProfile() {
     if (r.success) {
       _spNewPicData = null;
       if (r.profile) state._mySpProfile = r.profile; updateUI();
-      toast('Profile updated! ✅');
+      toast('Profile updated!');
       showPage('sp-profile-me');
     } else if (r._netError) {
       // Network timeout but server likely saved it - treat as success
       _spNewPicData = null;
-      toast('Profile updated! ✅');
+      toast('Profile updated!');
       showPage('sp-profile-me');
       // Reload profile in background to confirm
       setTimeout(() => loadMySpProfile(), 2000);
@@ -2429,7 +2453,7 @@ async function submitTransfer() {
         resultEl.style.display = 'block';
       }
       if (btn) btn.style.display = 'none';
-      toast('✅ Transfer successful!');
+      toast('Transfer successful!');
     } else {
       toast(r.error || 'Transfer failed');
       if (btn) { btn.disabled = false; btn.textContent = 'Send Transfer'; }
@@ -3106,16 +3130,25 @@ function renderVIPPage() {
         <!-- How to upgrade -->
         <div class="vuc-steps">
           <div class="vuc-step-title">How to Upgrade</div>
-          <div class="vuc-step"><div class="vus-num">1</div><span>Send exactly 200 USDT (TRC20) to the address below</span></div>
+          <div class="vuc-step"><div class="vus-num">1</div><span>Choose your preferred network below and send 200 USDT (or equivalent) to that address</span></div>
           <div class="vuc-step"><div class="vus-num">2</div><span>Take a screenshot of your payment receipt</span></div>
           <div class="vuc-step"><div class="vus-num">3</div><span>Upload the receipt and tap Submit — admin activates within minutes</span></div>
         </div>
 
+        <!-- Network selector -->
+        <div class="form-group" style="padding:0 16px;margin-bottom:14px">
+          <label style="font-size:11px;color:#7a90b0;display:block;margin-bottom:8px">PAY WITH</label>
+          <div class="net-selector" id="vipNetSelector">
+            ${DEPOSIT_NETWORKS.map(n => `<div class="net-opt${n.key==='TRC20'?' active':''}" data-n="${n.key}" onclick="selectVipNetwork(this)">${n.key}${n.recommended?'<span class="net-tag">Recommended</span>':`<span class="net-asset-tag">${n.asset}</span>`}</div>`).join('')}
+          </div>
+        </div>
+
         <!-- Deposit address -->
         <div class="vuc-addr-box">
-          <div class="vuc-addr-label">DEPOSIT ADDRESS (TRC20 — USDT only)</div>
-          <div class="vuc-addr">${state.trc20Address}</div>
-          <button class="btn-secondary" onclick="copyText('${state.trc20Address}')" style="width:100%;margin:0">Copy Address</button>
+          <div class="vuc-addr-label" id="vipAddrLabel">DEPOSIT ADDRESS (USDT · TRON/TRC20)</div>
+          <div class="vuc-addr" id="vipAddrValue">${DEFAULT_DEPOSIT_NET.address}</div>
+          <div style="font-size:10px;color:#5a7090;margin-bottom:10px" id="vipMinNote">Send USDT only via TRON (TRC20)</div>
+          <button class="btn-secondary" onclick="copyText(getDepositNetwork(state.selectedVipNetwork).address);toast('Address copied!')" style="width:100%;margin:0">Copy Address</button>
         </div>
 
         <!-- Receipt upload -->
@@ -3183,7 +3216,7 @@ async function submitVIPUpgrade() {
     const resp = await fetch(window.location.origin + '/api/vip-upgrade', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-telegram-init-data': tg.initData || '' },
-      body: JSON.stringify({ telegramId })
+      body: JSON.stringify({ telegramId, depositNetwork: state.selectedVipNetwork || 'TRC20' })
     });
 
     let result = {};
@@ -3283,6 +3316,34 @@ async function submitVIPUpgrade() {
 // ═══════════════════════════════════════════════════════════════
 // QR CODE GENERATOR — for Receive USDT page
 // ═══════════════════════════════════════════════════════════════
+function selectDepositNetwork(el) {
+  document.querySelectorAll('#depositNetSelector .net-opt').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+  state.selectedDepositNetwork = el.dataset.n;
+  refreshDepositDisplay();
+}
+function selectVipNetwork(el) {
+  document.querySelectorAll('#vipNetSelector .net-opt').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+  state.selectedVipNetwork = el.dataset.n;
+  const net = getDepositNetwork(state.selectedVipNetwork);
+  const labelEl = document.getElementById('vipAddrLabel');
+  const addrEl  = document.getElementById('vipAddrValue');
+  const minEl   = document.getElementById('vipMinNote');
+  if (labelEl) labelEl.textContent = `DEPOSIT ADDRESS (${net.asset} · ${net.chain})`;
+  if (addrEl)  addrEl.textContent  = net.address;
+  if (minEl)   minEl.textContent   = `Min deposit: ${net.min} · Send ${net.asset} only via ${net.chain}`;
+}
+function refreshDepositDisplay() {
+  const net = getDepositNetwork(state.selectedDepositNetwork);
+  const hintEl = document.getElementById('receiveHint');
+  const minEl  = document.getElementById('receiveMinNote');
+  const warnEl = document.getElementById('receiveWarnNote');
+  if (hintEl) hintEl.textContent = `Send ${net.asset} to your ${net.chain} address below`;
+  if (minEl)  minEl.innerHTML    = `Minimum Deposit Amount: <b style="color:#f0f4ff">${net.min}</b>`;
+  if (warnEl) warnEl.textContent = `Only send ${net.asset} via the ${net.chain} network to this address. Sending any other asset or network to this address may result in permanent loss of funds.`;
+  generateQR(net.address);
+}
 function generateQR(address) {
   const el = document.getElementById('qrCanvas');
   if (!el) return;
@@ -3290,13 +3351,14 @@ function generateQR(address) {
   // Set receive address display
   const addrEl = document.getElementById('receiveAddress');
   const uidEl  = document.getElementById('receiveUID');
-  if (addrEl) addrEl.textContent = address || state.trc20Address || '';
+  const net = getDepositNetwork(state.selectedDepositNetwork);
+  if (addrEl) addrEl.textContent = address || net.address || '';
   if (uidEl)  uidEl.textContent  = state.uid || state.referralCode || '';
-  if (!address && !state.trc20Address) {
+  if (!address && !net.address) {
     el.innerHTML = '<div style="color:#5a7090;font-size:12px;padding:20px">Address not available</div>';
     return;
   }
-  const addr = address || state.trc20Address;
+  const addr = address || net.address;
   // Try using QRCode.js library first
   if (typeof QRCode !== 'undefined') {
     try {
@@ -3522,7 +3584,7 @@ async function submitCommunityComment() {
       g('communityCommentText').value = '';
       clearCommunityReceipt();
       btn.textContent = '✓ Submitted for Review!';
-      toast('Comment submitted! Admin will review shortly. ✅');
+      toast('Comment submitted! Admin will review shortly.');
       setTimeout(() => { btn.textContent = 'Share My Story'; btn.disabled = false; }, 2500);
     } else {
       toast(r?.error || 'Could not submit. Make sure you have a completed withdrawal first.');
@@ -3651,7 +3713,7 @@ async function adminPostTestimonial() {
   btn.textContent = 'Posting...'; btn.disabled = true;
   const r = await post('/admin/testimonial', { name, location, country_flag: countryFlag, youtube_url: youtubeUrl, caption, amount });
   if (r.success) {
-    toast('✅ Testimonial posted!');
+    toast('Testimonial posted!');
     ['adminTestName','adminTestLocation','adminTestFlag','adminTestYT','adminTestCaption','adminTestAmount'].forEach(id => { const el = g(id); if(el) el.value=''; });
     btn.textContent = '✓ Posted!';
     setTimeout(() => { btn.textContent = 'Post Testimonial'; btn.disabled = false; }, 2000);
@@ -3668,7 +3730,7 @@ async function adminPostPoem() {
   btn.textContent = 'Posting...'; btn.disabled = true;
   const r = await post('/admin/poem', { author_name: authorName, title, category, content });
   if (r.success) {
-    toast('✅ Poem/Inspiration posted!');
+    toast('Poem/Inspiration posted!');
     ['adminPoemAuthor','adminPoemTitle','adminPoemContent'].forEach(id => { const el=g(id); if(el) el.value=''; });
     btn.textContent = '✓ Posted!';
     setTimeout(() => { btn.textContent = 'Post Poem'; btn.disabled = false; }, 2000);
@@ -3688,7 +3750,7 @@ async function adminPostCommunityComment() {
   }
   const r = await post('/admin/community-comment', body);
   if (r.success) {
-    toast('✅ Comment posted!');
+    toast('Comment posted!');
     btn.textContent = '✓ Posted!';
     setTimeout(() => { btn.textContent = 'Post Comment'; btn.disabled = false; }, 2000);
   } else { toast(r.error || 'Failed'); btn.textContent = 'Post Comment'; btn.disabled = false; }
@@ -3792,7 +3854,7 @@ async function doWebRegister() {
     }).then(r => r.json());
     if (r.success && r.token) {
       localStorage.setItem('wm_web_session', JSON.stringify({ token: r.token, telegramId: r.telegramId, uid: r.uid, expiresAt: r.expiresAt }));
-      msgEl.textContent = '✅ Account created! Welcome to Wallet Masters.';
+      msgEl.textContent = 'Account created! Welcome to Wallet Masters.';
       msgEl.style.color = '#4ade80';
       showWebLogin(false);
       const _sp = document.getElementById('splash');
@@ -3840,7 +3902,7 @@ async function loadAppAccessPage() {
   const stEl = document.getElementById('appAccessSessionState');
   if (stEl) {
     const has = getWebSessionUser();
-    stEl.textContent = has ? '✅ You are signed in on this device' : '';
+    stEl.textContent = has ? 'You are signed in on this device' : '';
     stEl.style.color = has ? '#4ade80' : '#7a90b0';
   }
   // Load linked email state
@@ -3864,7 +3926,7 @@ async function linkEmail() {
   btn.disabled = true; btn.textContent = 'Linking...';
   const r = await post('/app-auth/link-email', { email });
   if (r.success) {
-    msgEl.textContent = '✅ Email linked! A confirmation was sent to your inbox.';
+    msgEl.textContent = 'Email linked! A confirmation was sent to your inbox.';
     msgEl.style.color = '#4ade80';
     emailEl.value = '';
     loadAppAccessPage();
@@ -3883,7 +3945,7 @@ async function saveAppPassword() {
   btn.disabled = true; btn.textContent = 'Saving...';
   const r = await post('/app-auth/set-password', { password: pw });
   if (r.success) {
-    msgEl.textContent = '✅ Password saved! You can now sign in to the Wallet Masters app with your UID.';
+    msgEl.textContent = 'Password saved! You can now sign in to the Wallet Masters app with your UID.';
     msgEl.style.color = '#4ade80';
     pwEl.value = '';
   } else {
@@ -4007,7 +4069,7 @@ async function loadTriviaQuestions() {
 function renderTriviaBody(st) {
   const body = g('triviaBody');
   if (st.completedToday || st.answeredToday >= 5) {
-    body.innerHTML = `<div class="empty-tx">✅ You've completed today's 5 questions!<br>Come back tomorrow for more — your streak keeps growing.</div>`;
+    body.innerHTML = `<div class="empty-tx">${checkBadge()}<span style="vertical-align:middle">You've completed today's 5 questions!</span><br>Come back tomorrow for more — your streak keeps growing.</div>`;
     return;
   }
   const idx = st.answeredToday;
@@ -4036,7 +4098,7 @@ async function submitTriviaAnswer(questionIndex, answerIndex) {
     if (r.correct) {
       state.balance = (state.balance || 0) + r.reward;
       updateUI();
-      toast(`✅ Correct! +${formatUSD(r.reward)} USDT`);
+      toast(`Correct! +${formatUSD(r.reward)} USDT`);
       const nowMs = Date.now();
       state.transactions.unshift({ id: nowMs, type: 'trivia_reward', amount: r.reward, currency: 'USDT', status: 'completed', note: `Trivia Q${questionIndex+1} correct`, created_at: nowMs });
     } else {

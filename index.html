@@ -96,7 +96,7 @@
         <div class="bc-top"><span class="bc-label">Total Portfolio</span><button class="eye-btn" onclick="toggleBalance()"><svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
         <div class="bc-balance"><span id="balanceAmount">0.00</span><span class="bc-cur">USDT</span></div>
         <div class="bc-usd" style="cursor:pointer" onclick="showPage('converter')">≈ <span id="balanceUSD">0.00</span> <span id="balanceCurrency">USD</span> <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="vertical-align:middle;margin-left:4px;opacity:0.6"><polyline points="6 9 12 15 18 9"/></svg></div>
-        <div class="bc-addr"><span class="bc-addr-label">TRC20 Deposit Address</span><div class="bc-addr-row"><span id="trc20Address" class="bc-addr-val">Loading...</span><button class="copy-mini-btn" onclick="copyAddress()">Copy</button></div></div>
+        <div class="bc-addr"><span class="bc-addr-label" id="homeAddrLabel">TRC20 Deposit Address</span><div class="bc-addr-row"><span id="trc20Address" class="bc-addr-val">Loading...</span><button class="copy-mini-btn" onclick="copyAddress()">Copy</button></div></div>
       </div>
       <div class="earn-banner">
         <div class="earn-info"><div class="earn-title" id="earnTitle">Hourly Earnings Active</div><div class="earn-sub" id="earnSub">Earn 50 USDT every hour</div></div>
@@ -139,11 +139,12 @@
           <div class="form-group"><label>Network</label>
             <div class="net-selector">
               <div class="net-opt active" data-n="TRC20" onclick="selectNetwork(this)">TRC20<span class="net-tag">Recommended</span></div>
-              <div class="net-opt net-soon" data-n="ERC20">ERC20<span class="net-tag soon-tag">Coming Soon</span></div>
-              <div class="net-opt net-soon" data-n="BEP20">BEP20<span class="net-tag soon-tag">Coming Soon</span></div>
+              <div class="net-opt" data-n="BTC" onclick="selectNetwork(this)">BTC<span class="net-asset-tag">BTC</span></div>
+              <div class="net-opt" data-n="ERC20" onclick="selectNetwork(this)">ERC20<span class="net-asset-tag">ETH</span></div>
+              <div class="net-opt" data-n="BEP20" onclick="selectNetwork(this)">BEP20<span class="net-asset-tag">USDT</span></div>
             </div>
           </div>
-          <div class="form-group"><label>Recipient Address</label><input id="withdrawAddress" type="text" placeholder="Enter TRC20 wallet address" oninput="onWithdrawInput()"/></div>
+          <div class="form-group"><label>Recipient Address</label><input id="withdrawAddress" type="text" placeholder="Enter TRC20 wallet address" oninput="onWithdrawInput()"/><div style="font-size:10px;color:#5a7090;margin-top:5px" id="withdrawNetHint">Send only USDT (TRC20) to a TRON address</div></div>
         </div>
         <div id="bankFields" class="hidden">
           <!-- Dynamically rendered by initBankWithdrawal() -->
@@ -174,10 +175,21 @@
     <div class="page" id="page-receive">
       <div class="page-hdr"><button class="back-btn" onclick="showPage('home')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>Receive USDT</h2></div>
       <div class="receive-card">
-        <p style="color:#7a90b0;font-size:13px">Send USDT to your TRC20 address below</p>
+        <div class="form-group" style="margin-bottom:14px">
+          <label style="font-size:11px;color:#7a90b0;display:block;margin-bottom:8px">SELECT NETWORK</label>
+          <div class="net-selector" id="depositNetSelector">
+            <div class="net-opt active" data-n="TRC20" onclick="selectDepositNetwork(this)">TRC20<span class="net-tag">Recommended</span></div>
+            <div class="net-opt" data-n="BTC" onclick="selectDepositNetwork(this)">BTC<span class="net-asset-tag">BTC</span></div>
+            <div class="net-opt" data-n="ERC20" onclick="selectDepositNetwork(this)">ERC20<span class="net-asset-tag">ETH</span></div>
+            <div class="net-opt" data-n="BEP20" onclick="selectDepositNetwork(this)">BEP20<span class="net-asset-tag">USDT</span></div>
+          </div>
+        </div>
+        <p style="color:#7a90b0;font-size:13px" id="receiveHint">Send USDT to your TRON (TRC20) address below</p>
         <div id="qrCanvas"></div>
         <div class="recv-addr" id="receiveAddress">Loading...</div>
+        <div style="font-size:11px;color:#7a90b0;margin-bottom:12px" id="receiveMinNote">Minimum Deposit Amount: <b style="color:#f0f4ff">0.005 USDT</b></div>
         <button class="btn-primary" onclick="copyAddress();toast('Address copied!')">Copy Address</button>
+        <div style="margin-top:12px;padding:10px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);border-radius:8px;font-size:11px;color:#f87171;line-height:1.5" id="receiveWarnNote">Only send USDT via the TRON (TRC20) network to this address. Sending any other asset or network to this address may result in permanent loss of funds.</div>
         <div class="recv-uid">Your UID: <span id="receiveUID">---</span></div>
       </div>
     </div>

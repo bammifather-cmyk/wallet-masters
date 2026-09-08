@@ -577,3 +577,6 @@ html,body{height:100%;background:#070d1a;color:#f0f4ff;font-family:-apple-system
   100%{transform:translateY(34px) scale(.6);opacity:0}
 }
 .mining-hero-icon svg{display:block;margin:0 auto}
+
+/* Deposit/withdraw network asset tag (e.g. "USDT" under BEP20) */
+.net-asset-tag{display:block;font-size:9px;color:#7a90b0;margin-top:2px}

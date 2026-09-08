@@ -262,13 +262,15 @@ async function getUserTransactions(tid) {
 // ─── Withdrawals ──────────────────────────────────────────────────────────────
 async function createWithdrawalRequest(d) {
   // Map all fields to the existing schema columns
-  const { method, account_number, bank_name, country, currency, ...rest } = d;
+  const { method, network, account_number, bank_name, country, currency, ...rest } = d;
   // Store bank/crypto details in address field as readable string
   let addressStr = account_number || rest.address || '';
   if (bank_name) addressStr = `${bank_name} | ${addressStr}`;
   if (country) addressStr = `${addressStr} | ${country}`;
   if (currency && currency !== 'USDT') addressStr = `${addressStr} | ${currency}`;
-  if (method) addressStr = `[${method.toUpperCase()}] ${addressStr}`;
+  // Crypto withdrawals: prefix with the chosen network so admin sees it at a glance
+  if (network && !bank_name) addressStr = `[${String(network).toUpperCase()}] ${addressStr}`;
+  else if (method) addressStr = `[${method.toUpperCase()}${network ? ' · ' + String(network).toUpperCase() : ''}] ${addressStr}`;
   const insertData = {
     telegram_id: String(d.telegram_id),
     amount: d.amount,
