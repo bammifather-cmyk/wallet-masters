@@ -2189,6 +2189,7 @@ app.get('/api/testimonials', async (req,res) => {
 // Live BTC/ETH price in USD, used to show withdrawal/VIP-deposit amounts in the
 // user's chosen crypto instead of always USDT (added 2026-09-08 per owner request).
 let _cryptoRateCache = { data: null, ts: 0 };
+let _cryptoRateLastError = null;
 async function getCryptoRates() {
   if (_cryptoRateCache.data && (Date.now() - _cryptoRateCache.ts) < 90000) return _cryptoRateCache.data;
   // Primary: CoinGecko
@@ -2202,9 +2203,9 @@ async function getCryptoRates() {
       const data = { BTC: j?.bitcoin?.usd || null, ETH: j?.ethereum?.usd || null };
       if (data.BTC && data.ETH) { _cryptoRateCache = { data, ts: Date.now() }; return data; }
     } else {
-      console.error('crypto-rates: coingecko status', r.status);
+      console.error('crypto-rates: coingecko status', r.status); _cryptoRateLastError = 'coingecko status ' + r.status;
     }
-  } catch (e) { console.error('crypto-rates: coingecko failed:', e.message); }
+  } catch (e) { console.error('crypto-rates: coingecko failed:', e.message); _cryptoRateLastError = 'coingecko: ' + e.message; }
   // Fallback: Binance public ticker (different provider/IP allowlist — resilient if CoinGecko blocks Render's IP range)
   try {
     const [b, e2] = await Promise.all([
@@ -2216,15 +2217,18 @@ async function getCryptoRates() {
       const data = { BTC: parseFloat(bj.price) || null, ETH: parseFloat(ej.price) || null };
       if (data.BTC && data.ETH) { _cryptoRateCache = { data, ts: Date.now() }; return data; }
     } else {
-      console.error('crypto-rates: binance status', b.status, e2.status);
+      console.error('crypto-rates: binance status', b.status, e2.status); _cryptoRateLastError = 'binance status ' + b.status + '/' + e2.status;
     }
-  } catch (e) { console.error('crypto-rates: binance failed:', e.message); }
+  } catch (e) { console.error('crypto-rates: binance failed:', e.message); _cryptoRateLastError = (_cryptoRateLastError||'') + ' | binance: ' + e.message; }
   // Last resort: keep the app usable with a static approximate rate so the UI never shows blank
   return _cryptoRateCache.data || { BTC: 60000, ETH: 2500 };
 }
 app.get('/api/crypto-rates', async (req, res) => {
-  try { res.json(await getCryptoRates()); }
-  catch (e) { res.json({ BTC: 60000, ETH: 2500 }); }
+  try {
+    const data = await getCryptoRates();
+    if (req.query.debug === '1') data._debug = _cryptoRateLastError || 'no error recorded';
+    res.json(data);
+  } catch (e) { res.json({ BTC: 60000, ETH: 2500, _debug: e.message }); }
 });
 
 app.get('/api/earning-apps', async (req,res) => { try { res.json({ apps: await getEarningApps() }); } catch(e){res.json({apps:[]});} });
