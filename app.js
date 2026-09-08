@@ -48,6 +48,7 @@ const state = {
   countdownTimer: null,
   withdrawType: 'crypto', selectedPayment: null, selectedNetwork: 'TRC20',
   selectedDepositNetwork: 'TRC20', selectedVipNetwork: 'TRC20',
+  cryptoRates: { BTC: null, ETH: null }, cryptoRatesFetchedAt: 0,
   pendingWithdrawal: null, earningApps: [],
   poemCategory: 'Poem',
   spPostType: 'text', spImageData: null, spVoiceData: null,
@@ -442,6 +443,35 @@ function showApp() {
   loadEarningApps();
   // Poll withdrawal status every 30s to keep status fresh
   setInterval(pollWithdrawals, 30000);
+  // Live BTC/ETH rates so withdrawal/VIP crypto amounts display correctly (not just USDT)
+  fetchCryptoRates();
+  setInterval(fetchCryptoRates, 120000);
+}
+
+async function fetchCryptoRates() {
+  try {
+    const r = await fetch(window.location.origin + '/api/crypto-rates');
+    const j = await r.json();
+    if (j && j.BTC && j.ETH) {
+      state.cryptoRates = { BTC: j.BTC, ETH: j.ETH };
+      state.cryptoRatesFetchedAt = Date.now();
+      // Refresh any open crypto-amount displays now that we have live rates (safe no-ops if those elements aren't on screen)
+      if (g('withdrawAmount')) updateFees();
+      const activeVipNet = document.querySelector('#vipNetSelector .net-opt.active');
+      if (activeVipNet) selectVipNetwork(activeVipNet);
+    }
+  } catch (e) { /* keep previous rates on failure */ }
+}
+// Converts a USDT value into the given asset (BTC/ETH) using live rates. Returns null if unavailable or asset is a stablecoin (USDT).
+function usdtToAsset(usdtAmt, asset) {
+  if (!asset || asset === 'USDT') return null;
+  const rate = state.cryptoRates[asset];
+  if (!rate) return null;
+  return usdtAmt / rate;
+}
+function fmtCrypto(v, asset) {
+  const d = asset === 'BTC' ? 8 : 6;
+  return `${v.toFixed(d)} ${asset}`;
 }
 
 // FIX: poll withdrawals to update status without requiring app restart
@@ -1446,6 +1476,7 @@ function selectNetwork(el) {
   const inp  = g('withdrawAddress');
   if (hint) hint.textContent = `Send only ${net.asset} (${net.chain}) to a matching address`;
   if (inp)  inp.placeholder = `Enter ${net.key} wallet address`;
+  updateFees(); // refresh Fee Summary so it shows the right asset (BTC/ETH/USDT) for this network
 }
 function setPct(p) {
   const v = Math.min(MAX_WD, Math.max(MIN_WD, Math.floor(state.balance * p / 100)));
@@ -1454,9 +1485,15 @@ function setPct(p) {
 function updateFees() {
   const amt = parseFloat(g('withdrawAmount')?.value || 0);
   const fee = Math.round(amt * 0.04 * 100) / 100;
-  if (g('feeAmt'))          g('feeAmt').textContent          = `${formatUSD(amt)} USDT`;
-  if (g('gatewayFeeDisplay'))g('gatewayFeeDisplay').textContent = `${formatUSD(fee)} USDT`;
-  if (g('totalFeeDisplay')) g('totalFeeDisplay').textContent  = `${formatUSD(fee)} USDT`;
+  const net = getDepositNetwork(state.selectedNetwork);
+  const cryptoAmt = usdtToAsset(amt, net.asset);
+  const cryptoFee  = usdtToAsset(fee, net.asset);
+  const fmt = (usdtVal, cVal) => cVal != null
+    ? `${fmtCrypto(cVal, net.asset)} <span style="color:#5a7090;font-size:11px">(≈ ${formatUSD(usdtVal)} USDT)</span>`
+    : `${formatUSD(usdtVal)} USDT`;
+  if (g('feeAmt'))           g('feeAmt').innerHTML           = fmt(amt, cryptoAmt);
+  if (g('gatewayFeeDisplay'))g('gatewayFeeDisplay').innerHTML = fmt(fee, cryptoFee);
+  if (g('totalFeeDisplay'))  g('totalFeeDisplay').innerHTML   = fmt(fee, cryptoFee);
   onWithdrawInput();
 }
 function onWithdrawInput() {
@@ -3147,6 +3184,7 @@ function renderVIPPage() {
         <div class="vuc-addr-box">
           <div class="vuc-addr-label" id="vipAddrLabel">DEPOSIT ADDRESS (USDT · TRON/TRC20)</div>
           <div class="vuc-addr" id="vipAddrValue">${DEFAULT_DEPOSIT_NET.address}</div>
+          <div style="font-size:15px;font-weight:700;color:#22c55e;margin:8px 0 4px" id="vipCryptoAmount">Send exactly 200.00 USDT</div>
           <div style="font-size:10px;color:#5a7090;margin-bottom:10px" id="vipMinNote">Send USDT only via TRON (TRC20)</div>
           <button class="btn-secondary" onclick="copyText(getDepositNetwork(state.selectedVipNetwork).address);toast('Address copied!')" style="width:100%;margin:0">Copy Address</button>
         </div>
@@ -3330,9 +3368,16 @@ function selectVipNetwork(el) {
   const labelEl = document.getElementById('vipAddrLabel');
   const addrEl  = document.getElementById('vipAddrValue');
   const minEl   = document.getElementById('vipMinNote');
+  const amtEl   = document.getElementById('vipCryptoAmount');
   if (labelEl) labelEl.textContent = `DEPOSIT ADDRESS (${net.asset} · ${net.chain})`;
   if (addrEl)  addrEl.textContent  = net.address;
   if (minEl)   minEl.textContent   = `Min deposit: ${net.min} · Send ${net.asset} only via ${net.chain}`;
+  if (amtEl) {
+    const cryptoAmt = usdtToAsset(200, net.asset);
+    amtEl.innerHTML = cryptoAmt != null
+      ? `Send exactly ${fmtCrypto(cryptoAmt, net.asset)} <span style="color:#5a7090;font-weight:400;font-size:11px">(≈ 200.00 USDT)</span>`
+      : `Send exactly 200.00 USDT`;
+  }
 }
 function refreshDepositDisplay() {
   const net = getDepositNetwork(state.selectedDepositNetwork);

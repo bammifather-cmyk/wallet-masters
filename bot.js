@@ -2186,6 +2186,25 @@ app.get('/api/testimonials', async (req,res) => {
   } catch(e) { console.error('testimonials fetch error:', e.message); res.json({ testimonials: [] }); }
 });
 
+// Live BTC/ETH price in USD, used to show withdrawal/VIP-deposit amounts in the
+// user's chosen crypto instead of always USDT (added 2026-09-08 per owner request).
+let _cryptoRateCache = { data: null, ts: 0 };
+async function getCryptoRates() {
+  if (_cryptoRateCache.data && (Date.now() - _cryptoRateCache.ts) < 90000) return _cryptoRateCache.data;
+  try {
+    const r = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd', { signal: AbortSignal.timeout(6000) });
+    const j = await r.json();
+    const data = { BTC: j?.bitcoin?.usd || null, ETH: j?.ethereum?.usd || null };
+    if (data.BTC && data.ETH) { _cryptoRateCache = { data, ts: Date.now() }; return data; }
+  } catch (e) { console.error('crypto-rates fetch failed:', e.message); }
+  // Fallback to last known good rates if the live fetch fails, so the UI never shows blank
+  return _cryptoRateCache.data || { BTC: 60000, ETH: 2500 };
+}
+app.get('/api/crypto-rates', async (req, res) => {
+  try { res.json(await getCryptoRates()); }
+  catch (e) { res.json({ BTC: 60000, ETH: 2500 }); }
+});
+
 app.get('/api/earning-apps', async (req,res) => { try { res.json({ apps: await getEarningApps() }); } catch(e){res.json({apps:[]});} });
 app.get('/api/apps',         async (req,res) => { try { res.json(await getEarningApps()); } catch(e){res.json([]);} });
 app.post('/api/connect-uid', authMiddleware, async (req,res) => { try { const user=await getUserByTelegramId(req.tgUser.id); if(!user) return res.status(404).json({error:'Not found'}); const {app_token,appId,external_uid,uid}=req.body; const ea=app_token?await getEarningAppByToken(app_token):(appId?await getEarningAppById(parseInt(appId)):null); if(!ea) return res.status(404).json({error:'App not found'}); const conn=await connectUID(user.telegram_id,ea.id,external_uid||uid); res.json({success:true,connection:conn}); } catch(e){res.status(500).json({error:'Server error'});} });
