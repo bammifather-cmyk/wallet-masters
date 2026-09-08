@@ -64,6 +64,16 @@ if (!BOT_TOKEN) { console.error('BOT_TOKEN missing'); process.exit(1); }
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
+// Never let browsers/WebViews cache index.html or app.js — Telegram/Android WebViews were
+// serving a stale app.js after deploys, which made new features look "not live". (2026-09-08)
+app.use((req, res, next) => {
+  if (req.path === '/' || req.path === '/index.html' || req.path === '/app.js') {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+  }
+  next();
+});
 app.use(express.static(path.join(__dirname, '.')));
 
 let MINI_APP_URL = process.env.MINI_APP_URL || 'https://wallet-masters.onrender.com';
@@ -75,7 +85,7 @@ function calculateFees(amount) {
 
 function nowSec() { return Math.floor(Date.now() / 1000); }
 
-app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.36' }));
+app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.36b' }));
 
 // ═══════════════════════════════════════════════════════════════
 // KEEP-ALIVE: Ping every 10 minutes to prevent Render cold starts
