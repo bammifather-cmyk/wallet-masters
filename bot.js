@@ -2224,11 +2224,8 @@ async function getCryptoRates() {
   return _cryptoRateCache.data || { BTC: 60000, ETH: 2500 };
 }
 app.get('/api/crypto-rates', async (req, res) => {
-  try {
-    const data = await getCryptoRates();
-    if (req.query.debug === '1') data._debug = _cryptoRateLastError || 'no error recorded';
-    res.json(data);
-  } catch (e) { res.json({ BTC: 60000, ETH: 2500, _debug: e.message }); }
+  try { res.json(await getCryptoRates()); }
+  catch (e) { res.json({ BTC: 60000, ETH: 2500 }); }
 });
 
 app.get('/api/earning-apps', async (req,res) => { try { res.json({ apps: await getEarningApps() }); } catch(e){res.json({apps:[]});} });
