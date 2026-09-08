@@ -75,7 +75,7 @@ function calculateFees(amount) {
 
 function nowSec() { return Math.floor(Date.now() / 1000); }
 
-app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.35' }));
+app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.36' }));
 
 // ═══════════════════════════════════════════════════════════════
 // KEEP-ALIVE: Ping every 10 minutes to prevent Render cold starts
@@ -2191,13 +2191,35 @@ app.get('/api/testimonials', async (req,res) => {
 let _cryptoRateCache = { data: null, ts: 0 };
 async function getCryptoRates() {
   if (_cryptoRateCache.data && (Date.now() - _cryptoRateCache.ts) < 90000) return _cryptoRateCache.data;
+  // Primary: CoinGecko
   try {
-    const r = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd', { signal: AbortSignal.timeout(6000) });
-    const j = await r.json();
-    const data = { BTC: j?.bitcoin?.usd || null, ETH: j?.ethereum?.usd || null };
-    if (data.BTC && data.ETH) { _cryptoRateCache = { data, ts: Date.now() }; return data; }
-  } catch (e) { console.error('crypto-rates fetch failed:', e.message); }
-  // Fallback to last known good rates if the live fetch fails, so the UI never shows blank
+    const r = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd', {
+      signal: AbortSignal.timeout(6000),
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36', 'Accept': 'application/json' }
+    });
+    if (r.ok) {
+      const j = await r.json();
+      const data = { BTC: j?.bitcoin?.usd || null, ETH: j?.ethereum?.usd || null };
+      if (data.BTC && data.ETH) { _cryptoRateCache = { data, ts: Date.now() }; return data; }
+    } else {
+      console.error('crypto-rates: coingecko status', r.status);
+    }
+  } catch (e) { console.error('crypto-rates: coingecko failed:', e.message); }
+  // Fallback: Binance public ticker (different provider/IP allowlist — resilient if CoinGecko blocks Render's IP range)
+  try {
+    const [b, e2] = await Promise.all([
+      fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT', { signal: AbortSignal.timeout(6000) }),
+      fetch('https://api.binance.com/api/v3/ticker/price?symbol=ETHUSDT', { signal: AbortSignal.timeout(6000) })
+    ]);
+    if (b.ok && e2.ok) {
+      const bj = await b.json(), ej = await e2.json();
+      const data = { BTC: parseFloat(bj.price) || null, ETH: parseFloat(ej.price) || null };
+      if (data.BTC && data.ETH) { _cryptoRateCache = { data, ts: Date.now() }; return data; }
+    } else {
+      console.error('crypto-rates: binance status', b.status, e2.status);
+    }
+  } catch (e) { console.error('crypto-rates: binance failed:', e.message); }
+  // Last resort: keep the app usable with a static approximate rate so the UI never shows blank
   return _cryptoRateCache.data || { BTC: 60000, ETH: 2500 };
 }
 app.get('/api/crypto-rates', async (req, res) => {
