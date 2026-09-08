@@ -2217,7 +2217,7 @@ async function getCryptoRates() {
       const data = { BTC: parseFloat(bj.price) || null, ETH: parseFloat(ej.price) || null };
       if (data.BTC && data.ETH) { _cryptoRateCache = { data, ts: Date.now() }; return data; }
     } else {
-      console.error('crypto-rates: binance status', b.status, e2.status); _cryptoRateLastError = 'binance status ' + b.status + '/' + e2.status;
+      console.error('crypto-rates: binance status', b.status, e2.status); _cryptoRateLastError = (_cryptoRateLastError||'') + ' || binance status ' + b.status + '/' + e2.status;
     }
   } catch (e) { console.error('crypto-rates: binance failed:', e.message); _cryptoRateLastError = (_cryptoRateLastError||'') + ' | binance: ' + e.message; }
   // Last resort: keep the app usable with a static approximate rate so the UI never shows blank
