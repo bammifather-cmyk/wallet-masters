@@ -133,7 +133,7 @@
       <div class="form-scroll">
         <div id="withdrawTypeRow" class="withdraw-type-row hidden">
           <button class="wtype-btn active" id="btnCrypto" onclick="setWithdrawType('crypto')">Crypto</button>
-          <button class="wtype-btn" id="btnBank" onclick="setWithdrawType('bank')">Bank / Mobile Money</button>
+          <button class="wtype-btn" id="btnExpress" onclick="setWithdrawType('express')">Express</button>
         </div>
         <div id="cryptoFields">
           <div class="form-group"><label>Network</label>
@@ -146,8 +146,8 @@
           </div>
           <div class="form-group"><label>Recipient Address</label><input id="withdrawAddress" type="text" placeholder="Enter TRC20 wallet address" oninput="onWithdrawInput()"/><div style="font-size:10px;color:#5a7090;margin-top:5px" id="withdrawNetHint">Send only USDT (TRC20) to a TRON address</div></div>
         </div>
-        <div id="bankFields" class="hidden">
-          <!-- Dynamically rendered by initBankWithdrawal() -->
+        <div id="expressFields" class="hidden">
+          <!-- Dynamically rendered by initExpressWithdrawal() -->
         </div>
         <div class="form-group">
           <label>Amount <span class="avail-tag" id="availTag">Available: <span id="availBalance">0.00</span> USDT</span></label>
@@ -158,7 +158,7 @@
         <div class="fee-box">
           <div class="fee-box-title">Fee Summary</div>
           <div class="fee-line"><span>Withdrawal Amount</span><span id="feeAmt">0.00 USDT</span></div>
-          <div class="fee-line accent"><span>Gateway Fee (4%)</span><span id="gatewayFeeDisplay">0.00 USDT</span></div>
+          <div class="fee-line accent"><span id="feeLineLabel">Gateway Fee (4%)</span><span id="gatewayFeeDisplay">0.00 USDT</span></div>
           <div class="fee-line total"><span>You Pay (fee only)</span><span id="totalFeeDisplay">0.00 USDT</span></div>
         </div>
         <button id="withdrawBtn" class="btn-primary w100" onclick="submitWithdrawal()" disabled>Continue to Payment</button>
@@ -887,6 +887,6 @@
   })();
   </script>
 
-  <script src="app.js?v=10.38"></script>
+  <script src="app.js?v=10.39"></script>
 </body>
 </html>

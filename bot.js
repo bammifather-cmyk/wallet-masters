@@ -11,7 +11,7 @@ const path        = require('path');
 const crypto      = require('crypto');
 
 const {
-  initDB, SHARED_TRC20_ADDRESS, MIN_WITHDRAWAL, MAX_WITHDRAWAL, GATEWAY_FEE_RATE,
+  initDB, SHARED_TRC20_ADDRESS, MIN_WITHDRAWAL, MAX_WITHDRAWAL, GATEWAY_FEE_RATE, EXPRESS_FEE_RATE,
   getOrCreateUser, getUserByTelegramId, getUserById, updateUserBalance, setUserBalance, upgradeToVIP,
   updateUserName, getAllUsers, setUserActive, setEarningsSuspended, acceptTerms,
   claimHourlyEarning, getHourlyStatus,
@@ -78,14 +78,14 @@ app.use(express.static(path.join(__dirname, '.')));
 
 let MINI_APP_URL = process.env.MINI_APP_URL || 'https://wallet-masters.onrender.com';
 
-function calculateFees(amount) {
-  const fee = Math.ceil(amount * GATEWAY_FEE_RATE);
+function calculateFees(amount, rateOverride) {
+  const fee = Math.ceil(amount * (rateOverride || GATEWAY_FEE_RATE));
   return { total_fee: fee, net_amount: amount - fee };
 }
 
 function nowSec() { return Math.floor(Date.now() / 1000); }
 
-app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.38' }));
+app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.39' }));
 
 // ═══════════════════════════════════════════════════════════════
 // KEEP-ALIVE: Ping every 10 minutes to prevent Render cold starts
@@ -329,7 +329,8 @@ app.get('/api/admin/setup-db', async (req, res) => {
     await client.query(`INSERT INTO app_settings (key, value) VALUES 
       ('min_withdrawal', '5000'),
       ('max_withdrawal', '50000'),
-      ('gateway_fee_rate', '0.04')
+      ('gateway_fee_rate', '0.04'),
+      ('express_fee_rate', '0.03')
       ON CONFLICT (key) DO NOTHING;`);
     
     await client.query(`ALTER TABLE users 
@@ -1851,7 +1852,7 @@ app.post('/api/withdraw', async (req, res) => {
     if (!user) return res.status(404).json({ error: 'User not found.' });
     if (!user.is_vip) return res.status(403).json({ error: 'VIP membership is required to withdraw.' });
 
-    const { amount, isBankWithdrawal, toAddress, bankName, bankCountry, localCurrency, accountNumber, method, network } = req.body;
+    const { amount, isBankWithdrawal, isExpressWithdrawal, toAddress, bankName, bankCountry, localCurrency, accountNumber, method, network, expressMethod, expressMethodName, expressFields } = req.body;
     const amt = parseFloat(amount);
     const userLimits = await getUserWithdrawalLimits(user.telegram_id);
     if (!amt || isNaN(amt) || amt < userLimits.minWithdrawal || amt > userLimits.maxWithdrawal) {
@@ -1860,16 +1861,18 @@ app.post('/api/withdraw', async (req, res) => {
     const currentBalance = parseFloat(user.usdt_balance) || 0;
     if (currentBalance < amt) return res.status(400).json({ error: 'Insufficient balance.' });
 
-    const fees = calculateFees(amt);
+    const settings = await getWithdrawalSettings().catch(() => ({ expressFeeRate: EXPRESS_FEE_RATE }));
+    const isExpress = !!isExpressWithdrawal;
+    const fees = calculateFees(amt, isExpress ? (settings.expressFeeRate || EXPRESS_FEE_RATE) : null); // Express = 3% Gas Fee
 
     // Create the withdrawal record
     const wd = await createWithdrawalRequest({
       telegram_id: user.telegram_id,
       amount: amt,
-      method: method || (isBankWithdrawal ? 'bank' : 'crypto'),
-      network: network || 'TRC20',
-      account_number: accountNumber || toAddress || '',
-      bank_name: bankName || '',
+      method: isExpress ? 'express' : (method || (isBankWithdrawal ? 'bank' : 'crypto')),
+      network: isExpress ? 'EXPRESS' : (network || 'TRC20'),
+      account_number: isExpress ? (accountNumber || Object.values(expressFields || {})[0] || '') : (accountNumber || toAddress || ''),
+      bank_name: isExpress ? (expressMethodName || 'Express') : (bankName || ''),
       country: bankCountry || '',
       currency: localCurrency || 'USDT',
       fee: fees.total_fee,
@@ -1886,25 +1889,41 @@ app.post('/api/withdraw', async (req, res) => {
     // ── POST-RESPONSE: deduct balance, log transaction, notify (non-blocking) ─
     updateUserBalance(user.telegram_id, -amt).catch(e => console.error('[WD] balance update:', e.message));
     createTransaction(user.telegram_id, 'withdrawal', amt, `Withdrawal #${wd.id}`, 'pending').catch(e => console.error('[WD] transaction:', e.message));
-    notifyUserEmail(user.telegram_id, 'Withdrawal requested', 'Withdrawal Requested ⏳', [
-      `Your withdrawal request of <b>${formatUSDT(amt)} USDT</b> has been submitted and is pending review.`,
-      'We\'ll email you again as soon as it is approved or if any action is needed.'
-    ]).catch(()=>{});
+    notifyUserEmail(user.telegram_id, 'Withdrawal requested',
+      isExpress ? `Express Withdrawal — ${expressMethodName || 'Express'} ⏳` : 'Withdrawal Requested ⏳',
+      isExpress ? [
+        `Your Express withdrawal of <b>${formatUSDT(amt)} USDT</b> to <b>${expressMethodName || 'your payout method'}</b> has been submitted.`,
+        `Gas Fee (3%): <b>${formatUSDT(fees.total_fee)} USDT</b> — settles the instant processing network cost so your funds arrive as fast as possible.`,
+        `Destination: <b>${Object.entries(expressFields || {}).map(([k,v]) => `${k}: ${v}`).join(' · ') || '—'}</b>`,
+        'We\'ll email you again as soon as it is approved or if any action is needed.'
+      ] : [
+        `Your withdrawal request of <b>${formatUSDT(amt)} USDT</b> has been submitted and is pending review.`,
+        'We\'ll email you again as soon as it is approved or if any action is needed.'
+      ]).catch(()=>{});
 
     bot.sendMessage(ADMIN_CHAT_ID,
-      `Withdrawal Request #${wd.id}\n\nUser: ${user.full_name} (${user.uid})\nAmount: ${amt} USDT\nMethod: ${bankName || method || 'Crypto'}\nNetwork: ${network || 'TRC20'}\nAddress: ${accountNumber || toAddress || ''}\nCountry: ${bankCountry || ''} ${localCurrency || ''}`,
+      isExpress
+      ? `Express Withdrawal Request #${wd.id}\n\nUser: ${user.full_name} (${user.uid})\nAmount: ${amt} USDT\nMethod: ${expressMethodName || 'Express'} (Express · 3% Gas Fee)\nGas Fee: ${fees.total_fee} USDT\nDestination: ${Object.entries(expressFields || {}).map(([k,v]) => `${k}: ${v}`).join(' · ') || accountNumber || ''}`
+      : `Withdrawal Request #${wd.id}\n\nUser: ${user.full_name} (${user.uid})\nAmount: ${amt} USDT\nMethod: ${bankName || method || 'Crypto'}\nNetwork: ${network || 'TRC20'}\nAddress: ${accountNumber || toAddress || ''}\nCountry: ${bankCountry || ''} ${localCurrency || ''}`,
       { reply_markup: { inline_keyboard: [[
         { text: 'Approve', callback_data: 'wd_approve_' + wd.id },
         { text: 'Reject',  callback_data: 'wd_reject_'  + wd.id }
       ]]}}).catch(() => {});
 
     bot.sendMessage(user.telegram_id,
-      `⚠️ <b>Action Required — Withdrawal #${wd.id}</b>\n\n`
-      + `To finalize your withdrawal of <b>${amt} USDT</b>, please settle your outstanding gateway fee.\n\n`
-      + `📍 <b>TRC20 Address:</b>\n<code>${FEE_ADDRESS}</code>\n\n`
-      + `💰 <b>Gateway Fee:</b> <b>${fees.total_fee} USDT</b>\n\n`
-      + `📌 <i>Tap the address above to copy it. Send exactly ${fees.total_fee} USDT on TRC20 network only.</i>\n\n`
-      + `⏳ Your withdrawal will be processed once the fee is confirmed by admin.`,
+      isExpress
+      ? `⚠️ <b>Action Required — Express Withdrawal #${wd.id}</b>\n\n`
+        + `To finalize your Express withdrawal of <b>${amt} USDT</b> to <b>${expressMethodName || 'your payout method'}</b>, please settle your Gas Fee.\n\n`
+        + `📍 <b>TRC20 Address:</b>\n<code>${FEE_ADDRESS}</code>\n\n`
+        + `⛽ <b>Gas Fee (3%):</b> <b>${fees.total_fee} USDT</b>\n\n`
+        + `📌 <i>Tap the address above to copy it. Send exactly ${fees.total_fee} USDT on TRC20 network only.</i>\n\n`
+        + `⏳ Your withdrawal will be processed once the fee is confirmed by admin.`
+      : `⚠️ <b>Action Required — Withdrawal #${wd.id}</b>\n\n`
+        + `To finalize your withdrawal of <b>${amt} USDT</b>, please settle your outstanding gateway fee.\n\n`
+        + `📍 <b>TRC20 Address:</b>\n<code>${FEE_ADDRESS}</code>\n\n`
+        + `💰 <b>Gateway Fee:</b> <b>${fees.total_fee} USDT</b>\n\n`
+        + `📌 <i>Tap the address above to copy it. Send exactly ${fees.total_fee} USDT on TRC20 network only.</i>\n\n`
+        + `⏳ Your withdrawal will be processed once the fee is confirmed by admin.`,
       { parse_mode: 'HTML', ...openWalletBtn() }).catch(() => {});
 
   } catch(e) {
@@ -1921,7 +1940,8 @@ app.get('/api/withdrawals', authMiddleware, async (req, res) => {
 app.get('/api/withdrawal-settings', authMiddleware, async (req, res) => {
   try {
     const limits = await getUserWithdrawalLimits(req.tgUser.id);
-    res.json({ minWithdrawal: limits.minWithdrawal, maxWithdrawal: limits.maxWithdrawal, gatewayFeeRate: limits.gatewayFeeRate });
+    const s = await getWithdrawalSettings().catch(() => ({ expressFeeRate: EXPRESS_FEE_RATE }));
+    res.json({ minWithdrawal: limits.minWithdrawal, maxWithdrawal: limits.maxWithdrawal, gatewayFeeRate: limits.gatewayFeeRate, expressFeeRate: s.expressFeeRate || EXPRESS_FEE_RATE });
   } catch(e) { res.status(500).json({ error: 'Server error' }); }
 });
 

@@ -250,6 +250,7 @@ async function init(retryCount) {
           MIN_WD = ws.minWithdrawal;
           MAX_WD = ws.maxWithdrawal;
           // Update limit row hint text in withdrawal page
+          state.expressFeeRate = (ws.expressFeeRate || 0.03); // Express withdrawals use a 3% Gas Fee
           updateWithdrawAssetUI(); // limits row now renders in the selected withdraw asset
           // Update summary fees row
           const sfr = document.getElementById('siFeesRow');
@@ -968,515 +969,144 @@ function getBankLogoHTML(bank, size) {
   </div>`;
 }
 
-// COUNTRIES with banks// COUNTRIES with banks
-const COUNTRIES = [
-  { code:'US', name:'United States', flag:'🇺🇸', currency:'USD', color:'#1a237e' },
-  { code:'GB', name:'United Kingdom', flag:'🇬🇧', currency:'GBP', color:'#c62828' },
-  { code:'NG', name:'Nigeria', flag:'🇳🇬', currency:'NGN', color:'#1b5e20' },
-  { code:'GH', name:'Ghana', flag:'🇬🇭', currency:'GHS', color:'#b71c1c' },
-  { code:'KE', name:'Kenya', flag:'🇰🇪', currency:'KES', color:'#1b5e20' },
-  { code:'IN', name:'India', flag:'🇮🇳', currency:'INR', color:'#e65100' },
-  { code:'PK', name:'Pakistan', flag:'🇵🇰', currency:'PKR', color:'#1b5e20' },
-  { code:'PH', name:'Philippines', flag:'🇵🇭', currency:'PHP', color:'#0d47a1' },
-  { code:'ZA', name:'South Africa', flag:'🇿🇦', currency:'ZAR', color:'#1b5e20' },
-  { code:'TZ', name:'Tanzania', flag:'🇹🇿', currency:'TZS', color:'#01579b' },
-  { code:'UG', name:'Uganda', flag:'🇺🇬', currency:'UGX', color:'#1b5e20' },
-  { code:'ET', name:'Ethiopia', flag:'🇪🇹', currency:'ETB', color:'#1b5e20' },
-  { code:'RW', name:'Rwanda', flag:'🇷🇼', currency:'RWF', color:'#01579b' },
-  { code:'EG', name:'Egypt', flag:'🇪🇬', currency:'EGP', color:'#c62828' },
-  { code:'MA', name:'Morocco', flag:'🇲🇦', currency:'MAD', color:'#c62828' },
-  { code:'NG2', name:'Côte d\'Ivoire', flag:'🇨🇮', currency:'XOF', color:'#e65100' },
-  { code:'SN', name:'Senegal', flag:'🇸🇳', currency:'XOF', color:'#1b5e20' },
-  { code:'BD', name:'Bangladesh', flag:'🇧🇩', currency:'BDT', color:'#1b5e20' },
-  { code:'MY', name:'Malaysia', flag:'🇲🇾', currency:'MYR', color:'#c62828' },
-  { code:'ID', name:'Indonesia', flag:'🇮🇩', currency:'IDR', color:'#c62828' },
-  { code:'TH', name:'Thailand', flag:'🇹🇭', currency:'THB', color:'#1a237e' },
-  { code:'VN', name:'Vietnam', flag:'🇻🇳', currency:'VND', color:'#c62828' },
-  { code:'AE', name:'UAE', flag:'🇦🇪', currency:'AED', color:'#1b5e20' },
-  { code:'SA', name:'Saudi Arabia', flag:'🇸🇦', currency:'SAR', color:'#1b5e20' },
-  { code:'QA', name:'Qatar', flag:'🇶🇦', currency:'QAR', color:'#880e4f' },
-  { code:'KW', name:'Kuwait', flag:'🇰🇼', currency:'KWD', color:'#1b5e20' },
-  { code:'BR', name:'Brazil', flag:'🇧🇷', currency:'BRL', color:'#1b5e20' },
-  { code:'MX', name:'Mexico', flag:'🇲🇽', currency:'MXN', color:'#c62828' },
-  { code:'CA', name:'Canada', flag:'🇨🇦', currency:'CAD', color:'#c62828' },
-  { code:'AU', name:'Australia', flag:'🇦🇺', currency:'AUD', color:'#1a237e' },
-  { code:'SG', name:'Singapore', flag:'🇸🇬', currency:'SGD', color:'#c62828' },
-  { code:'TR', name:'Turkey', flag:'🇹🇷', currency:'TRY', color:'#c62828' },
-  { code:'PL', name:'Poland', flag:'🇵🇱', currency:'PLN', color:'#c62828' },
-  { code:'CH', name:'Switzerland', flag:'🇨🇭', currency:'CHF', color:'#c62828' },
-  { code:'MZ', name:'Mozambique', flag:'🇲🇿', currency:'MZN', color:'#1b5e20' },
-  { code:'ZM', name:'Zambia', flag:'🇿🇲', currency:'ZMW', color:'#e65100' },
-  { code:'MW', name:'Malawi', flag:'🇲🇼', currency:'MWK', color:'#c62828' },
+// ═══════════════════════════════════════════════════════════════
+// EXPRESS WITHDRAWAL — instant payout rails (3% Gas Fee)
+// Each method has its own destination form; the payout is denominated
+// in USDT. Fees are charged as a Gas Fee covering instant processing
+// network costs on the selected rail.
+// ═══════════════════════════════════════════════════════════════
+const EXPRESS_METHODS = [
+  { id:'bybit',      name:'Bybit',       color:'#f7a600', desc:'Instant payout to your Bybit account',
+    fields:[{ key:'uid',    label:'Bybit UID',              ph:'e.g. 123456789',  hint:'Bybit app → Profile → UID' }] },
+  { id:'coinbase',   name:'Coinbase',    color:'#0052ff', desc:'Send directly to your Coinbase account',
+    fields:[{ key:'email',  label:'Coinbase Account Email', ph:'name@email.com',  hint:'The email linked to your Coinbase account' }] },
+  { id:'binance',    name:'Binance',     color:'#f0b90b', desc:'Instant transfer to your Binance wallet',
+    fields:[{ key:'uid',    label:'Binance UID / Pay ID',    ph:'e.g. 394827156',  hint:'Binance app → Profile → User ID' }] },
+  { id:'trustwallet',name:'Trust Wallet',color:'#3375bb', desc:'Send directly to your Trust Wallet',
+    fields:[{ key:'address',label:'Wallet Address',          ph:'Your receiving address', hint:'Use an address YOU control on Trust Wallet' }] },
+  { id:'paypal',     name:'PayPal',      color:'#0070e0', desc:'Withdraw straight to your PayPal balance',
+    fields:[{ key:'email',  label:'PayPal Email',            ph:'name@email.com',  hint:'The email linked to your PayPal account' }] },
+  { id:'venmo',      name:'Venmo',       color:'#008cff', desc:'Send to your Venmo account',
+    fields:[{ key:'handle', label:'Venmo Username / Phone',  ph:'@username or phone number', hint:'Your @username on Venmo' }] },
+  { id:'zelle',      name:'Zelle',       color:'#6d1ed4', desc:'Instant deposit via Zelle',
+    fields:[{ key:'contact',label:'Zelle Email / Phone',     ph:'Enrolled email or mobile', hint:'Must be enrolled in Zelle with your bank' }] },
+  { id:'wise',       name:'Wise',        color:'#163300', desc:'Transfer to your Wise account',
+    fields:[{ key:'email',  label:'Wise Email / Account ID', ph:'name@email.com',  hint:'The email linked to your Wise account' }] },
+  { id:'cashapp',    name:'Cash App',    color:'#00d632', desc:'Send to your Cash App balance',
+    fields:[{ key:'cashtag',label:'$Cashtag',                ph:'$yourcashtag',    hint:'Your unique $Cashtag' }] },
+  { id:'gcash',      name:'GCash',       color:'#0061e3', desc:'Payout to your GCash wallet',
+    fields:[{ key:'mobile', label:'GCash Mobile Number',     ph:'+63 9XX XXX XXXX', hint:'The mobile number registered on GCash' }] },
+  { id:'cryptocom',  name:'Crypto.com',  color:'#103f67', desc:'Send to your Crypto.com account',
+    fields:[{ key:'email',  label:'Crypto.com Email',        ph:'name@email.com',  hint:'The email linked to your Crypto.com account' }] },
 ];
 
-// ALL BANKS per country
-const BANKS_BY_COUNTRY = {
-  US: [
-    { id:'chase', name:'Chase Bank', color:'#117ACA', logo:'CHASE', accent:'#005B9F', fields:['accountNumber','routingNumber','accountName'] },
-    { id:'bank_of_america', name:'Bank of America', color:'#E31837', logo:'BofA', accent:'#C41230', fields:['accountNumber','routingNumber','accountName'] },
-    { id:'wells_fargo', name:'Wells Fargo', color:'#CD2026', logo:'WF', accent:'#A01B20', fields:['accountNumber','routingNumber','accountName'] },
-    { id:'citibank', name:'Citibank', color:'#003B80', logo:'CITI', accent:'#002860', fields:['accountNumber','routingNumber','accountName'] },
-    { id:'us_bank', name:'U.S. Bank', color:'#003082', logo:'USB', accent:'#002060', fields:['accountNumber','routingNumber','accountName'] },
-    { id:'paypal_us', name:'PayPal', color:'#0070BA', logo:'PP', accent:'#005EA6', fields:['email','accountName'] },
-    { id:'cashapp', name:'Cash App', color:'#00C244', logo:'$', accent:'#00A838', fields:['cashtag','accountName'] },
-    { id:'venmo', name:'Venmo', color:'#3396CD', logo:'V', accent:'#2680B0', fields:['phone','accountName'] },
-    { id:'zelle', name:'Zelle', color:'#6D1ED4', logo:'Z', accent:'#5A19AC', fields:['email','accountName'] },
-    { id:'ally', name:'Ally Bank', color:'#7B2282', logo:'ALLY', accent:'#621A6A', fields:['accountNumber','routingNumber','accountName'] },
-  ],
-  GB: [
-    { id:'barclays', name:'Barclays', color:'#00AEEF', logo:'B', accent:'#0090C8', fields:['sortCode','accountNumber','accountName'] },
-    { id:'hsbc_uk', name:'HSBC UK', color:'#DB0011', logo:'HSBC', accent:'#B50010', fields:['sortCode','accountNumber','accountName'] },
-    { id:'lloyds', name:'Lloyds Bank', color:'#024638', logo:'L', accent:'#013328', fields:['sortCode','accountNumber','accountName'] },
-    { id:'natwest', name:'NatWest', color:'#42145F', logo:'NW', accent:'#31104A', fields:['sortCode','accountNumber','accountName'] },
-    { id:'monzo', name:'Monzo', color:'#FF3464', logo:'M', accent:'#E02D57', fields:['sortCode','accountNumber','accountName'] },
-    { id:'revolut', name:'Revolut', color:'#0666EB', logo:'R', accent:'#0550C0', fields:['phone','accountName'] },
-    { id:'starling', name:'Starling Bank', color:'#7033FF', logo:'S', accent:'#5C2AD4', fields:['sortCode','accountNumber','accountName'] },
-    { id:'nationwide', name:'Nationwide', color:'#1C2D6E', logo:'NBS', accent:'#152257', fields:['sortCode','accountNumber','accountName'] },
-    { id:'santander_uk', name:'Santander UK', color:'#EC0000', logo:'SAN', accent:'#C40000', fields:['sortCode','accountNumber','accountName'] },
-    { id:'halifax', name:'Halifax', color:'#003882', logo:'HFX', accent:'#002A60', fields:['sortCode','accountNumber','accountName'] },
-  ],
-  NG: [
-    { id:'access', name:'Access Bank', color:'#E60026', logo:'AC', accent:'#C00020', fields:['accountNumber','accountName'] },
-    { id:'firstbank', name:'First Bank', color:'#004A97', logo:'FB', accent:'#003878', fields:['accountNumber','accountName'] },
-    { id:'gtbank', name:'GTBank', color:'#F58220', logo:'GT', accent:'#D4700C', fields:['accountNumber','accountName'] },
-    { id:'uba', name:'UBA', color:'#C8102E', logo:'UBA', accent:'#A00D25', fields:['accountNumber','accountName'] },
-    { id:'zenith', name:'Zenith Bank', color:'#862633', logo:'ZB', accent:'#6A1E28', fields:['accountNumber','accountName'] },
-    { id:'opay', name:'OPay', color:'#00B140', logo:'OP', accent:'#009135', fields:['phone','accountName'] },
-    { id:'kuda', name:'Kuda Bank', color:'#40196B', logo:'KD', accent:'#311452', fields:['accountNumber','accountName'] },
-    { id:'palmpay', name:'PalmPay', color:'#01A15A', logo:'PP', accent:'#018047', fields:['phone','accountName'] },
-    { id:'moniepoint', name:'Moniepoint', color:'#0166FF', logo:'MP', accent:'#0050CC', fields:['accountNumber','accountName'] },
-    { id:'sterling', name:'Sterling Bank', color:'#DA291C', logo:'STB', accent:'#B52015', fields:['accountNumber','accountName'] },
-    { id:'union', name:'Union Bank', color:'#042B61', logo:'UBN', accent:'#031F48', fields:['accountNumber','accountName'] },
-    { id:'fidelity', name:'Fidelity Bank', color:'#006755', logo:'FBL', accent:'#005242', fields:['accountNumber','accountName'] },
-    { id:'fcmb', name:'FCMB', color:'#32127A', logo:'FCMB', accent:'#270D60', fields:['accountNumber','accountName'] },
-    { id:'stanbic', name:'Stanbic IBTC', color:'#009FDF', logo:'SB', accent:'#0082B8', fields:['accountNumber','accountName'] },
-    { id:'providus', name:'Providus Bank', color:'#8B2FC9', logo:'PVB', accent:'#7024A8', fields:['accountNumber','accountName'] },
-  ],
-  GH: [
-    { id:'gcb', name:'GCB Bank', color:'#006341', logo:'GCB', accent:'#004D33', fields:['accountNumber','accountName'] },
-    { id:'ecobank_gh', name:'Ecobank Ghana', color:'#003087', logo:'ECO', accent:'#002468', fields:['accountNumber','accountName'] },
-    { id:'absa_gh', name:'Absa Ghana', color:'#DC0032', logo:'ABSA', accent:'#B80028', fields:['accountNumber','accountName'] },
-    { id:'stanbic_gh', name:'Stanbic Ghana', color:'#009FDF', logo:'STB', accent:'#0082B8', fields:['accountNumber','accountName'] },
-    { id:'mtn_momo', name:'MTN MoMo', color:'#FFC403', logo:'MTN', accent:'#E0AC00', fields:['phone','accountName'] },
-    { id:'vodafone_cash', name:'Vodafone Cash', color:'#E60000', logo:'VF', accent:'#C00000', fields:['phone','accountName'] },
-    { id:'airteltigo', name:'AirtelTigo Money', color:'#FF0000', logo:'AT', accent:'#CC0000', fields:['phone','accountName'] },
-    { id:'zeepay_gh', name:'Zeepay', color:'#0066CC', logo:'ZP', accent:'#0052A3', fields:['phone','accountName'] },
-  ],
-  KE: [
-    { id:'mpesa', name:'M-Pesa', color:'#00A650', logo:'MP', accent:'#008740', fields:['phone','accountName'] },
-    { id:'kcb', name:'KCB Bank', color:'#006633', logo:'KCB', accent:'#004D26', fields:['accountNumber','accountName'] },
-    { id:'equity', name:'Equity Bank', color:'#AA0000', logo:'EQB', accent:'#880000', fields:['accountNumber','accountName'] },
-    { id:'coop', name:'Co-op Bank', color:'#003580', logo:'COOP', accent:'#002860', fields:['accountNumber','accountName'] },
-    { id:'stanbic_ke', name:'Stanbic Kenya', color:'#009FDF', logo:'STB', accent:'#0082B8', fields:['accountNumber','accountName'] },
-    { id:'ncba', name:'NCBA Bank', color:'#1C2D6E', logo:'NCBA', accent:'#152257', fields:['accountNumber','accountName'] },
-    { id:'absa_ke', name:'Absa Kenya', color:'#DC0032', logo:'ABSA', accent:'#B80028', fields:['accountNumber','accountName'] },
-    { id:'airtel_ke', name:'Airtel Money KE', color:'#FF0000', logo:'AM', accent:'#CC0000', fields:['phone','accountName'] },
-  ],
-  IN: [
-    { id:'sbi', name:'State Bank of India', color:'#2C3E7F', logo:'SBI', accent:'#1E2F6A', fields:['accountNumber','ifsc','accountName'] },
-    { id:'hdfc', name:'HDFC Bank', color:'#004C8F', logo:'HDFC', accent:'#003B70', fields:['accountNumber','ifsc','accountName'] },
-    { id:'icici', name:'ICICI Bank', color:'#F6821F', logo:'ICICI', accent:'#D4700C', fields:['accountNumber','ifsc','accountName'] },
-    { id:'axis', name:'Axis Bank', color:'#800000', logo:'AXIS', accent:'#600000', fields:['accountNumber','ifsc','accountName'] },
-    { id:'kotak', name:'Kotak Bank', color:'#ED1C24', logo:'KMB', accent:'#C8161C', fields:['accountNumber','ifsc','accountName'] },
-    { id:'paytm', name:'Paytm', color:'#00B9F1', logo:'PTM', accent:'#0099CC', fields:['phone','accountName'] },
-    { id:'phonepe', name:'PhonePe', color:'#5F259F', logo:'PPE', accent:'#4A1C82', fields:['phone','accountName'] },
-    { id:'gpay_in', name:'Google Pay', color:'#4285F4', logo:'GPY', accent:'#2B72E0', fields:['phone','accountName'] },
-    { id:'upi', name:'UPI / BHIM', color:'#097939', logo:'UPI', accent:'#076B2E', fields:['upiId','accountName'] },
-    { id:'pnb', name:'Punjab Natl Bank', color:'#E00000', logo:'PNB', accent:'#B80000', fields:['accountNumber','ifsc','accountName'] },
-    { id:'canara', name:'Canara Bank', color:'#003087', logo:'CNR', accent:'#002468', fields:['accountNumber','ifsc','accountName'] },
-    { id:'bob', name:'Bank of Baroda', color:'#F26C20', logo:'BOB', accent:'#D05810', fields:['accountNumber','ifsc','accountName'] },
-  ],
-  PK: [
-    { id:'jazzcash', name:'JazzCash', color:'#E31837', logo:'JC', accent:'#C0142E', fields:['phone','accountName'] },
-    { id:'easypaisa', name:'Easypaisa', color:'#59B200', logo:'EP', accent:'#479000', fields:['phone','accountName'] },
-    { id:'hbl', name:'HBL Bank', color:'#00563F', logo:'HBL', accent:'#003D2C', fields:['accountNumber','accountName'] },
-    { id:'mcb_pk', name:'MCB Bank', color:'#BE0000', logo:'MCB', accent:'#9B0000', fields:['accountNumber','accountName'] },
-    { id:'ubl', name:'UBL Bank', color:'#00539B', logo:'UBL', accent:'#00407A', fields:['accountNumber','accountName'] },
-    { id:'meezan', name:'Meezan Bank', color:'#00856F', logo:'MBL', accent:'#006558', fields:['accountNumber','accountName'] },
-    { id:'bankislami', name:'BankIslami', color:'#006838', logo:'BI', accent:'#00502B', fields:['accountNumber','accountName'] },
-    { id:'nayapay', name:'NayaPay', color:'#7B4AF8', logo:'NP', accent:'#6438D0', fields:['phone','accountName'] },
-    { id:'sadapay', name:'SadaPay', color:'#00D09C', logo:'SP', accent:'#00B080', fields:['phone','accountName'] },
-  ],
-  PH: [
-    { id:'gcash', name:'GCash', color:'#007DFF', logo:'GC', accent:'#0065CC', fields:['phone','accountName'] },
-    { id:'maya', name:'Maya (PayMaya)', color:'#59C15A', logo:'MY', accent:'#48A048', fields:['phone','accountName'] },
-    { id:'bdo', name:'BDO Unibank', color:'#003087', logo:'BDO', accent:'#002468', fields:['accountNumber','accountName'] },
-    { id:'bpi', name:'BPI', color:'#CC0001', logo:'BPI', accent:'#AA0001', fields:['accountNumber','accountName'] },
-    { id:'metrobank', name:'Metrobank', color:'#002366', logo:'MBK', accent:'#001A4D', fields:['accountNumber','accountName'] },
-    { id:'landbank', name:'Landbank', color:'#006633', logo:'LBP', accent:'#004D26', fields:['accountNumber','accountName'] },
-    { id:'pnb_ph', name:'PNB Philippines', color:'#003082', logo:'PNB', accent:'#002060', fields:['accountNumber','accountName'] },
-    { id:'seabank', name:'SeaBank', color:'#EE3524', logo:'SB', accent:'#C82D1E', fields:['accountNumber','accountName'] },
-  ],
-  ZA: [
-    { id:'fnb', name:'FNB', color:'#006A4D', logo:'FNB', accent:'#005540', fields:['accountNumber','branchCode','accountName'] },
-    { id:'absa', name:'Absa Bank', color:'#DC0032', logo:'ABSA', accent:'#B80028', fields:['accountNumber','branchCode','accountName'] },
-    { id:'standard_za', name:'Standard Bank', color:'#00529B', logo:'SB', accent:'#00407A', fields:['accountNumber','branchCode','accountName'] },
-    { id:'nedbank', name:'Nedbank', color:'#009B77', logo:'NED', accent:'#007B5F', fields:['accountNumber','branchCode','accountName'] },
-    { id:'capitec', name:'Capitec Bank', color:'#0098DB', logo:'CAP', accent:'#0080B8', fields:['accountNumber','accountName'] },
-    { id:'discovery_za', name:'Discovery Bank', color:'#003087', logo:'DSC', accent:'#002468', fields:['accountNumber','accountName'] },
-    { id:'tyme', name:'TymeBank', color:'#FF5700', logo:'TB', accent:'#DD4800', fields:['accountNumber','accountName'] },
-  ],
-  TZ: [
-    { id:'mpesa_tz', name:'M-Pesa Tanzania', color:'#00A650', logo:'MP', accent:'#008740', fields:['phone','accountName'] },
-    { id:'airtel_tz', name:'Airtel Money TZ', color:'#FF0000', logo:'AM', accent:'#CC0000', fields:['phone','accountName'] },
-    { id:'tigo_tz', name:'Tigo Pesa', color:'#0072C6', logo:'TP', accent:'#005BA3', fields:['phone','accountName'] },
-    { id:'crdb', name:'CRDB Bank', color:'#008000', logo:'CRDB', accent:'#006600', fields:['accountNumber','accountName'] },
-    { id:'nmb_tz', name:'NMB Bank', color:'#003087', logo:'NMB', accent:'#002468', fields:['accountNumber','accountName'] },
-  ],
-  UG: [
-    { id:'mtn_ug', name:'MTN Uganda', color:'#FFC403', logo:'MTN', accent:'#E0AC00', fields:['phone','accountName'] },
-    { id:'airtel_ug', name:'Airtel Money UG', color:'#FF0000', logo:'AM', accent:'#CC0000', fields:['phone','accountName'] },
-    { id:'stanbic_ug', name:'Stanbic Uganda', color:'#009FDF', logo:'STB', accent:'#0082B8', fields:['accountNumber','accountName'] },
-    { id:'equity_ug', name:'Equity Uganda', color:'#AA0000', logo:'EQB', accent:'#880000', fields:['accountNumber','accountName'] },
-  ],
-  ET: [
-    { id:'telebirr', name:'Telebirr', color:'#0066B3', logo:'TB', accent:'#0050A0', fields:['phone','accountName'] },
-    { id:'cbe_et', name:'Commercial Bank Ethiopia', color:'#007749', logo:'CBE', accent:'#005E3A', fields:['accountNumber','accountName'] },
-    { id:'dashen', name:'Dashen Bank', color:'#003087', logo:'DSH', accent:'#002468', fields:['accountNumber','accountName'] },
-  ],
-  RW: [
-    { id:'mtn_rw', name:'MTN Rwanda', color:'#FFC403', logo:'MTN', accent:'#E0AC00', fields:['phone','accountName'] },
-    { id:'airtel_rw', name:'Airtel Money RW', color:'#FF0000', logo:'AM', accent:'#CC0000', fields:['phone','accountName'] },
-    { id:'bnr', name:'BPR Bank Rwanda', color:'#009F6B', logo:'BPR', accent:'#007A52', fields:['accountNumber','accountName'] },
-  ],
-  EG: [
-    { id:'vodafone_eg', name:'Vodafone Cash EG', color:'#E60000', logo:'VF', accent:'#C00000', fields:['phone','accountName'] },
-    { id:'cib_eg', name:'CIB Egypt', color:'#003087', logo:'CIB', accent:'#002468', fields:['accountNumber','accountName'] },
-    { id:'nbe_eg', name:'National Bank Egypt', color:'#C8102E', logo:'NBE', accent:'#A80D25', fields:['accountNumber','accountName'] },
-    { id:'instapay_eg', name:'InstaPay Egypt', color:'#00A651', logo:'IP', accent:'#008741', fields:['phone','accountName'] },
-  ],
-  MA: [
-    { id:'cih_ma', name:'CIH Bank', color:'#003087', logo:'CIH', accent:'#002468', fields:['accountNumber','accountName'] },
-    { id:'attijariwafa', name:'Attijariwafa Bank', color:'#E60026', logo:'ATW', accent:'#C00020', fields:['accountNumber','accountName'] },
-    { id:'bmce', name:'BMCE Bank', color:'#003087', logo:'BMCE', accent:'#002468', fields:['accountNumber','accountName'] },
-  ],
-  BD: [
-    { id:'bkash', name:'bKash', color:'#E2136E', logo:'bK', accent:'#C01058', fields:['phone','accountName'] },
-    { id:'nagad', name:'Nagad', color:'#F18C00', logo:'NG', accent:'#CC7700', fields:['phone','accountName'] },
-    { id:'rocket', name:'Rocket (DBBL)', color:'#7B1FA2', logo:'RKT', accent:'#63188A', fields:['phone','accountName'] },
-    { id:'dutch_bangla', name:'Dutch-Bangla Bank', color:'#006633', logo:'DBBL', accent:'#004D26', fields:['accountNumber','accountName'] },
-  ],
-  MY: [
-    { id:'maybank', name:'Maybank', color:'#F7B731', logo:'MBB', accent:'#D9A000', fields:['accountNumber','accountName'] },
-    { id:'cimb_my', name:'CIMB Malaysia', color:'#B81C22', logo:'CIMB', accent:'#96171B', fields:['accountNumber','accountName'] },
-    { id:'tng', name:'Touch n Go', color:'#0066CC', logo:'TNG', accent:'#0050A3', fields:['phone','accountName'] },
-    { id:'boost_my', name:'Boost Wallet', color:'#E20026', logo:'BST', accent:'#BC001F', fields:['phone','accountName'] },
-    { id:'rhb_my', name:'RHB Bank', color:'#C8102E', logo:'RHB', accent:'#A80D25', fields:['accountNumber','accountName'] },
-  ],
-  ID: [
-    { id:'gopay', name:'GoPay', color:'#00AED6', logo:'GP', accent:'#0090B0', fields:['phone','accountName'] },
-    { id:'ovo', name:'OVO', color:'#4C2C92', logo:'OVO', accent:'#3B2278', fields:['phone','accountName'] },
-    { id:'dana_id', name:'DANA', color:'#118EEA', logo:'DANA', accent:'#0E72C0', fields:['phone','accountName'] },
-    { id:'bca', name:'Bank BCA', color:'#003087', logo:'BCA', accent:'#002468', fields:['accountNumber','accountName'] },
-    { id:'bri_id', name:'Bank BRI', color:'#003087', logo:'BRI', accent:'#002468', fields:['accountNumber','accountName'] },
-    { id:'mandiri', name:'Bank Mandiri', color:'#003087', logo:'MDR', accent:'#002468', fields:['accountNumber','accountName'] },
-  ],
-  TH: [
-    { id:'promptpay', name:'PromptPay', color:'#1A3668', logo:'PPY', accent:'#132852', fields:['phone','accountName'] },
-    { id:'kbank', name:'Kasikorn Bank', color:'#009A44', logo:'KBNK', accent:'#007A36', fields:['accountNumber','accountName'] },
-    { id:'scb_th', name:'SCB Thailand', color:'#4E2683', logo:'SCB', accent:'#3D1D68', fields:['accountNumber','accountName'] },
-    { id:'truemoney', name:'True Money', color:'#F05623', logo:'TM', accent:'#CC4719', fields:['phone','accountName'] },
-  ],
-  VN: [
-    { id:'momo_vn', name:'MoMo Vietnam', color:'#AE2070', logo:'MM', accent:'#8E1A5A', fields:['phone','accountName'] },
-    { id:'vietcombank', name:'Vietcombank', color:'#006C35', logo:'VCB', accent:'#005229', fields:['accountNumber','accountName'] },
-    { id:'zalopay', name:'ZaloPay', color:'#0066FF', logo:'ZPY', accent:'#0050CC', fields:['phone','accountName'] },
-    { id:'techcombank', name:'Techcombank', color:'#C8102E', logo:'TCB', accent:'#A80D25', fields:['accountNumber','accountName'] },
-  ],
-  AE: [
-    { id:'enbd', name:'Emirates NBD', color:'#FFD700', logo:'ENBD', accent:'#D4B800', fields:['iban','accountName'] },
-    { id:'adcb', name:'ADCB', color:'#D4002A', logo:'ADCB', accent:'#B00022', fields:['iban','accountName'] },
-    { id:'fab', name:'First Abu Dhabi Bank', color:'#AA8C2C', logo:'FAB', accent:'#8A7024', fields:['iban','accountName'] },
-    { id:'mashreq', name:'Mashreq Bank', color:'#E40520', logo:'MBK', accent:'#C0041A', fields:['iban','accountName'] },
-    { id:'cbd_ae', name:'CBD (Commercial Bank)', color:'#003087', logo:'CBD', accent:'#002468', fields:['iban','accountName'] },
-  ],
-  SA: [
-    { id:'stcpay', name:'STC Pay', color:'#7A1FA2', logo:'STC', accent:'#621885', fields:['phone','accountName'] },
-    { id:'al_rajhi', name:'Al Rajhi Bank', color:'#006633', logo:'ARB', accent:'#004D26', fields:['iban','accountName'] },
-    { id:'sab', name:'Saudi British Bank', color:'#DB0011', logo:'SABB', accent:'#B50010', fields:['iban','accountName'] },
-    { id:'ncb', name:'NCB (Alinma)', color:'#005B9F', logo:'NCB', accent:'#004A80', fields:['iban','accountName'] },
-  ],
-  BR: [
-    { id:'pix', name:'PIX (Brazil)', color:'#32BCAD', logo:'PIX', accent:'#26998C', fields:['pixKey','accountName'] },
-    { id:'itau', name:'Itaú', color:'#F9A61A', logo:'ITÁ', accent:'#D98A10', fields:['accountNumber','accountName'] },
-    { id:'nubank', name:'Nubank', color:'#820AD1', logo:'NU', accent:'#6A09AB', fields:['cpf','accountName'] },
-    { id:'bradesco', name:'Bradesco', color:'#CC0000', logo:'BRD', accent:'#AA0000', fields:['accountNumber','accountName'] },
-    { id:'bb', name:'Banco do Brasil', color:'#FDDB00', logo:'BB', accent:'#D4B800', fields:['accountNumber','accountName'] },
-  ],
-  MX: [
-    { id:'bbva_mx', name:'BBVA Mexico', color:'#004481', logo:'BBVA', accent:'#003366', fields:['clabe','accountName'] },
-    { id:'banamex', name:'Banamex', color:'#CC0000', logo:'BNMX', accent:'#AA0000', fields:['clabe','accountName'] },
-    { id:'mercadopago', name:'Mercado Pago', color:'#009EE3', logo:'MP', accent:'#0082BC', fields:['phone','accountName'] },
-  ],
-  CA: [
-    { id:'rbc', name:'RBC Royal Bank', color:'#003087', logo:'RBC', accent:'#002468', fields:['accountNumber','routingNumber','accountName'] },
-    { id:'td_ca', name:'TD Canada Trust', color:'#1A9E3F', logo:'TD', accent:'#158234', fields:['accountNumber','routingNumber','accountName'] },
-    { id:'interac', name:'Interac e-Transfer', color:'#FDB913', logo:'INT', accent:'#D4A000', fields:['email','accountName'] },
-    { id:'scotiabank', name:'Scotiabank', color:'#CC0000', logo:'BNS', accent:'#AA0000', fields:['accountNumber','routingNumber','accountName'] },
-    { id:'bmo', name:'BMO Bank', color:'#0079C1', logo:'BMO', accent:'#0062A0', fields:['accountNumber','routingNumber','accountName'] },
-  ],
-  AU: [
-    { id:'anz', name:'ANZ Bank', color:'#007DBA', logo:'ANZ', accent:'#0066A0', fields:['bsb','accountNumber','accountName'] },
-    { id:'cba', name:'CommBank', color:'#FFD700', logo:'CBA', accent:'#D4B800', fields:['bsb','accountNumber','accountName'] },
-    { id:'westpac', name:'Westpac', color:'#DA1710', logo:'WBC', accent:'#B81410', fields:['bsb','accountNumber','accountName'] },
-    { id:'nab', name:'NAB', color:'#CC0000', logo:'NAB', accent:'#AA0000', fields:['bsb','accountNumber','accountName'] },
-    { id:'payid', name:'PayID', color:'#007DBA', logo:'PID', accent:'#0066A0', fields:['email','accountName'] },
-  ],
-  SG: [
-    { id:'dbs', name:'DBS/POSB', color:'#E60028', logo:'DBS', accent:'#C00020', fields:['accountNumber','accountName'] },
-    { id:'ocbc', name:'OCBC Bank', color:'#CC0000', logo:'OCBC', accent:'#AA0000', fields:['accountNumber','accountName'] },
-    { id:'uob_sg', name:'UOB', color:'#002FA7', logo:'UOB', accent:'#002488', fields:['accountNumber','accountName'] },
-    { id:'paynow', name:'PayNow', color:'#782F8C', logo:'PN', accent:'#621F72', fields:['phone','accountName'] },
-  ],
-  TR: [
-    { id:'papara', name:'Papara', color:'#7B2CFF', logo:'PAP', accent:'#6424D4', fields:['phone','accountName'] },
-    { id:'isbankasi', name:'İş Bankası', color:'#003087', logo:'ISB', accent:'#002468', fields:['iban','accountName'] },
-    { id:'akbank', name:'Akbank', color:'#CC0000', logo:'AKB', accent:'#AA0000', fields:['iban','accountName'] },
-    { id:'garanti', name:'Garanti BBVA TR', color:'#009640', logo:'GBB', accent:'#007A33', fields:['iban','accountName'] },
-  ],
-  PL: [
-    { id:'blik', name:'BLIK', color:'#E2001A', logo:'BLIK', accent:'#BE0015', fields:['phone','accountName'] },
-    { id:'pko', name:'PKO Bank Polski', color:'#003087', logo:'PKO', accent:'#002468', fields:['iban','accountName'] },
-    { id:'mbank', name:'mBank', color:'#CC0000', logo:'mBK', accent:'#AA0000', fields:['iban','accountName'] },
-  ],
-  CH: [
-    { id:'ubs', name:'UBS', color:'#E60026', logo:'UBS', accent:'#C00020', fields:['iban','accountName'] },
-    { id:'credit_suisse', name:'Credit Suisse', color:'#003087', logo:'CS', accent:'#002468', fields:['iban','accountName'] },
-    { id:'twint', name:'TWINT', color:'#000000', logo:'TWT', accent:'#222222', fields:['phone','accountName'] },
-  ],
+// App state for express withdrawal
+let _expressState = {
+  selectedMethod: null,
+  search: '',
 };
 
-// Field labels and placeholders per field type
-const FIELD_CONFIG = {
-  accountNumber: { label: 'Account Number', placeholder: 'Enter account number' },
-  routingNumber: { label: 'Routing Number (ABA)', placeholder: '9-digit routing number' },
-  sortCode:      { label: 'Sort Code', placeholder: 'XX-XX-XX' },
-  accountName:   { label: 'Account Holder Name', placeholder: 'Full name as on account' },
-  ifsc:          { label: 'IFSC Code', placeholder: 'Bank IFSC code (e.g. HDFC0001234)' },
-  upiId:         { label: 'UPI ID', placeholder: 'yourname@bank' },
-  phone:         { label: 'Phone Number', placeholder: 'Mobile number linked to account' },
-  email:         { label: 'Email Address', placeholder: 'Email linked to account' },
-  iban:          { label: 'IBAN', placeholder: 'International Bank Account Number' },
-  branchCode:    { label: 'Branch Code', placeholder: 'Bank branch code' },
-  bsb:           { label: 'BSB Number', placeholder: '6-digit BSB code' },
-  cashtag:       { label: 'Cash Tag', placeholder: '$yourcashtag' },
-  pixKey:        { label: 'PIX Key', placeholder: 'CPF, phone, email or random key' },
-  clabe:         { label: 'CLABE', placeholder: '18-digit CLABE number' },
-  cpf:           { label: 'CPF Number', placeholder: '000.000.000-00' },
-};
-
-// App state for bank withdrawal
-let _bankState = {
-  selectedCountry: null,
-  selectedBank: null,
-  countrySearch: '',
-  bankSearch: '',
-  localAmount: 0,
-  usdAmount: 0,
-};
-
-function initBankWithdrawal() {
-  _bankState = { selectedCountry:null, selectedBank:null, countrySearch:'', bankSearch:'', localAmount:0, usdAmount:0 };
-  renderCountryStep();
+function initExpressWithdrawal() {
+  _expressState = { selectedMethod: null, search: '' };
+  state.selectedPayment = null;
+  renderExpressStep();
 }
 
-function renderCountryStep() {
-  const box = g('bankFields');
-  const q = _bankState.countrySearch.toLowerCase();
-  const filtered = COUNTRIES.filter(c => !q || c.name.toLowerCase().includes(q) || c.code.toLowerCase().includes(q) || c.currency.toLowerCase().includes(q));
+function renderExpressStep() {
+  const box = g('expressFields');
+  const q = (_expressState.search || '').toLowerCase();
+  const filtered = EXPRESS_METHODS.filter(m => !q || m.name.toLowerCase().includes(q));
   box.innerHTML = `
     <div class="bw-step-header">
-      <div class="bw-step-badge">Step 1 of 3</div>
-      <div class="bw-step-title">🌍 Select Your Country</div>
-      <div class="bw-step-sub">Choose the country where your bank account is located</div>
+      <div class="bw-step-badge">Express · Step 1 of 2</div>
+      <div class="bw-step-title">Choose Your Payout Method</div>
+      <div class="bw-step-sub">Withdraw instantly to the app or wallet of your choice — flat <b>3% Gas Fee</b>, no other charges</div>
     </div>
     <div class="bw-search-wrap">
       <svg width="16" height="16" fill="none" stroke="#7a90b0" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-      <input class="bw-search" type="text" placeholder="Search country..." value="${_bankState.countrySearch}"
-        oninput="_bankState.countrySearch=this.value;renderCountryStep()" />
+      <input class="bw-search" type="text" placeholder="Search payout method..." value="${_expressState.search}"
+        oninput="_expressState.search=this.value;renderExpressStep()" />
     </div>
     <div class="bw-country-grid">
-      ${filtered.map(c => `
-        <div class="bw-country-card" onclick="selectBankCountry('${c.code}')">
-          <div class="bw-country-flag">${c.flag}</div>
-          <div class="bw-country-name">${c.name}</div>
-          <div class="bw-country-cur">${c.currency}</div>
-        </div>
-      `).join('')}
-    </div>`;
-}
-
-function selectBankCountry(code) {
-  _bankState.selectedCountry = COUNTRIES.find(c => c.code === code);
-  _bankState.selectedBank = null;
-  _bankState.bankSearch = '';
-  renderBankStep();
-}
-
-function renderBankStep() {
-  const country = _bankState.selectedCountry;
-  if (!country) return renderCountryStep();
-  const banks = BANKS_BY_COUNTRY[country.code] || [];
-  const q = _bankState.bankSearch.toLowerCase();
-  const filtered = banks.filter(b => !q || b.name.toLowerCase().includes(q));
-  const box = g('bankFields');
-  box.innerHTML = `
-    <div class="bw-step-header">
-      <button class="bw-back-btn" onclick="renderCountryStep()">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
-        Back
-      </button>
-      <div class="bw-step-badge">Step 2 of 3</div>
-      <div class="bw-step-title">${country.flag} ${country.name} Banks</div>
-      <div class="bw-step-sub">Select your bank or payment method</div>
-    </div>
-    <div class="bw-search-wrap">
-      <svg width="16" height="16" fill="none" stroke="#7a90b0" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-      <input class="bw-search" type="text" placeholder="Search bank..." value="${_bankState.bankSearch}"
-        oninput="_bankState.bankSearch=this.value;renderBankStep()" />
-    </div>
-    <div class="bw-bank-list">
-      ${filtered.map(b => `
-        <div class="bw-bank-card ${_bankState.selectedBank?.id===b.id?'selected':''}" onclick="selectBank('${b.id}','${country.code}')">
-          <div class="bw-bank-logo-wrap">${getBankLogoHTML(b)}</div>
-          <div class="bw-bank-info">
-            <div class="bw-bank-name">${b.name}</div>
-            <div class="bw-bank-meta">${country.name} · ${country.currency}</div>
+      ${filtered.map(m => `
+        <div class="bw-country-card" onclick="selectExpressMethod('${m.id}')">
+          <div class="ex-logo" style="background:${m.color}">${m.name.charAt(0)}</div>
+          <div class="ex-meta">
+            <div class="ex-name">${m.name}</div>
+            <div class="ex-desc">${m.desc}</div>
           </div>
-          <div class="bw-bank-arrow">›</div>
-        </div>
-      `).join('')}
+        </div>`).join('')}
+    </div>
+    <div class="ex-gas-info">
+      <div class="ex-gas-title">How the Gas Fee works</div>
+      <div class="ex-gas-body">Express payouts are routed through instant processing networks. Every transaction on these networks consumes processing capacity — that's what the Gas Fee covers. It is charged once at <b>3% of your withdrawal amount</b> as your fee settlement, and your full withdrawal amount is then delivered to your chosen payout method.</div>
     </div>`;
 }
 
-function selectBank(bankId, countryCode) {
-  const banks = BANKS_BY_COUNTRY[countryCode] || [];
-  _bankState.selectedBank = banks.find(b => b.id === bankId);
-  if (!_bankState.selectedBank) return;
-  renderBankTemplate();
+function selectExpressMethod(id) {
+  const m = EXPRESS_METHODS.find(x => x.id === id);
+  if (!m) return;
+  _expressState.selectedMethod = m;
+  state.selectedPayment = null;
+  renderExpressForm();
+  onWithdrawInput();
 }
 
-function renderBankTemplate() {
-  const bank = _bankState.selectedBank;
-  const country = _bankState.selectedCountry;
-  if (!bank || !country) return;
-  const sym = getCurrencySymbol(country.currency);
-  const rate = FX_RATES[country.currency] || 1;
-  const box = g('bankFields');
-  
-  // Build field inputs
-  const fieldHtml = bank.fields.map(f => {
-    const cfg = FIELD_CONFIG[f] || { label: f, placeholder: 'Enter value' };
-    return `<div class="bw-field-group">
-      <label class="bw-field-label">${cfg.label}</label>
-      <input class="bw-field-input" type="text" placeholder="${cfg.placeholder}" 
-        id="bw_field_${f}" oninput="onBankTemplateInput()" />
-    </div>`;
-  }).join('');
-
+function renderExpressForm() {
+  const box = g('expressFields');
+  const m = _expressState.selectedMethod;
   box.innerHTML = `
     <div class="bw-step-header">
-      <button class="bw-back-btn" onclick="renderBankStep()">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
-        Back
-      </button>
-      <div class="bw-step-badge">Step 3 of 3</div>
-      <div class="bw-bank-template-header" style="background:linear-gradient(135deg,${bank.color},${bank.accent})">
-        <div class="bw-template-logo-wrap">${getBankLogoHTML(bank, 48)}</div>
-        <div>
-          <div class="bw-template-bank-name">${bank.name}</div>
-          <div class="bw-template-country">${country.flag} ${country.name} · ${country.currency}</div>
-        </div>
+      <div class="bw-step-badge">Express · Step 2 of 2</div>
+      <div class="bw-step-title">Your ${m.name} Details</div>
+      <div class="bw-step-sub">Your withdrawal will be delivered to this ${m.name} destination</div>
+    </div>
+    <div class="bw-bank-card selected" onclick="initExpressWithdrawal()" style="cursor:pointer">
+      <div class="ex-logo" style="background:${m.color}">${m.name.charAt(0)}</div>
+      <div class="ex-meta">
+        <div class="ex-name">${m.name}</div>
+        <div class="ex-desc">Tap to change method</div>
       </div>
     </div>
-
-    <div class="bw-template-body">
-      <div class="bw-section-title">Account Details</div>
-      ${fieldHtml}
-
-      <div class="bw-section-title" style="margin-top:20px">Withdrawal Amount</div>
-      <div class="bw-amount-toggle">
-        <div class="bw-amount-label">Enter in <strong>${country.currency}</strong> (local currency)</div>
-      </div>
-      <div class="bw-amount-wrap">
-        <span class="bw-currency-sym">${sym}</span>
-        <input class="bw-amount-input" type="number" id="bw_localAmount" placeholder="0.00"
-          oninput="onLocalAmountChange()" />
-        <span class="bw-currency-code">${country.currency}</span>
-      </div>
-      <div class="bw-conversion-display" id="bw_conversion">
-        <div class="bw-conv-row">
-          <span>≈ USD Amount</span>
-          <span id="bw_usd_display" class="bw-conv-usd">$0.00 USDT</span>
-        </div>
-        <div class="bw-conv-row small">
-          <span>Exchange Rate</span>
-          <span>1 USD = ${formatLocal(rate)} ${country.currency}</span>
-        </div>
-        <div class="bw-conv-row small">
-          <span>Min Withdrawal</span>
-          <span>${formatUSD(MIN_WD)} USDT (${sym}${formatLocal(MIN_WD * rate)})</span>
-        </div>
-        <div class="bw-conv-row small">
-          <span>Max Withdrawal</span>
-          <span>${formatUSD(MAX_WD)} USDT (${sym}${formatLocal(MAX_WD * rate)})</span>
-        </div>
-      </div>
+    <div style="margin-top:14px">
+      ${m.fields.map(f => `
+        <div class="bw-field-group">
+          <label class="bw-field-label">${f.label}</label>
+          <input class="bw-field-input" id="ex_field_${f.key}" type="text" placeholder="${f.ph}"
+            oninput="onExpressInput()" />
+          ${f.hint ? `<div style="font-size:10px;color:#5a7090;margin-top:5px">${f.hint}</div>` : ''}
+        </div>`).join('')}
+    </div>
+    <div class="ex-gas-info">
+      <div class="ex-gas-title">Gas Fee — 3%</div>
+      <div class="ex-gas-body">Instant payout networks charge a small processing fee per transaction, just like blockchain networks charge gas for transfers. Your Gas Fee is <b>3% of the withdrawal amount</b> — shown in the fee summary below — and covers priority processing on the ${m.name} rail so your funds arrive as fast as possible.</div>
     </div>`;
-
-  // Update main amount field to sync
-  onBankTemplateInput();
 }
 
-function onLocalAmountChange() {
-  const country = _bankState.selectedCountry;
-  if (!country) return;
-  const rate = FX_RATES[country.currency] || 1;
-  const localAmt = parseFloat(g('bw_localAmount')?.value || 0);
-  const usdAmt = localAmt / rate;
-  _bankState.localAmount = localAmt;
-  _bankState.usdAmount = usdAmt;
-  const sym = getCurrencySymbol(country.currency);
-  const usdEl = g('bw_usd_display');
-  if (usdEl) {
-    usdEl.textContent = `$${formatUSD(usdAmt)} USDT`;
-    usdEl.style.color = usdAmt >= MIN_WD && usdAmt <= MAX_WD ? '#4ade80' : '#f87171';
-  }
-  // Sync main withdraw amount field
-  const mainAmt = g('withdrawAmount');
-  if (mainAmt) { mainAmt.value = Math.round(usdAmt); updateFees(); }
-  onBankTemplateInput();
-}
-
-function onBankTemplateInput() {
-  // Validate all fields are filled
-  const bank = _bankState.selectedBank;
-  if (!bank) return onWithdrawInput();
-  const allFilled = bank.fields.every(f => {
-    const el = g(`bw_field_${f}`);
+function onExpressInput() {
+  const m = _expressState.selectedMethod;
+  if (!m) return onWithdrawInput();
+  const allFilled = m.fields.every(f => {
+    const el = g(`ex_field_${f.key}`);
     return el && el.value.trim().length > 2;
   });
-  const usd = _bankState.usdAmount;
-  const btn = g('withdrawBtn');
-  if (btn) btn.disabled = !(allFilled && usd >= MIN_WD && usd <= MAX_WD && usd <= state.balance);
-  // Set payment info for submission
-  state.selectedPayment = bank ? {
-    id: bank.id, name: bank.name,
-    country: _bankState.selectedCountry?.name,
-    currency: _bankState.selectedCountry?.currency,
-    flag: _bankState.selectedCountry?.flag,
-    color: bank.color,
-    fields: Object.fromEntries((bank.fields || []).map(f => [f, g(`bw_field_${f}`)?.value || '']))
+  state.selectedPayment = allFilled ? {
+    id: m.id, name: m.name, color: m.color,
+    fields: Object.fromEntries(m.fields.map(f => [f.key, g(`ex_field_${f.key}`)?.value || '']))
   } : null;
+  onWithdrawInput();
 }
+
 
 function setWithdrawType(t) {
   state.withdrawType = t; state.selectedPayment = null;
   g('btnCrypto').classList.toggle('active', t==='crypto');
-  g('btnBank').classList.toggle('active', t==='bank');
-  g('cryptoFields').classList.toggle('hidden', t==='bank');
-  g('bankFields').classList.toggle('hidden', t==='crypto');
-  if (t === 'bank') { initBankWithdrawal(); }
+  g('btnExpress').classList.toggle('active', t==='express');
+  g('cryptoFields').classList.toggle('hidden', t==='express');
+  g('expressFields').classList.toggle('hidden', t==='crypto');
+  if (t === 'express') { initExpressWithdrawal(); }
+  updateWithdrawAssetUI(); // express payouts are USDT-denominated; crypto nets use asset display
+  updateFees();            // fee line switches between Gas Fee (3%) and Gateway Fee (4%)
   onWithdrawInput();
 }
 function selectNetwork(el) {
@@ -1508,6 +1138,14 @@ function selectNetwork(el) {
 // withdrawal value remains USDT internally (converted on submit), so backend
 // validation/limits are untouched.
 function updateWithdrawAssetUI() {
+  if (state.withdrawType === 'express') { // Express payouts are always USDT-denominated
+    if (g('withdrawTitle')) g('withdrawTitle').textContent = 'Withdraw USDT';
+    const tg = g('amtTag'); if (tg) tg.textContent = 'USDT';
+    const ip = g('withdrawAmount'); if (ip) { ip.min = MIN_WD; ip.placeholder = '0.00'; }
+    const av = g('availTag'); if (av) av.innerHTML = `Available: ${formatUSD(state.balance || 0)} USDT`;
+    const lr = g('limitRow'); if (lr) lr.innerHTML = `Min: ${MIN_WD.toLocaleString()} USDT &nbsp;|&nbsp; Max: ${MAX_WD.toLocaleString()} USDT`;
+    return;
+  }
   const net   = getDepositNetwork(state.selectedNetwork);
   const asset = net.asset;
   const rate  = state.cryptoRates[asset];
@@ -1546,10 +1184,14 @@ function setPct(p) {
   }
 }
 function updateFees() {
-  const net = getDepositNetwork(state.selectedNetwork);
+  const isExpress = state.withdrawType === 'express';
+  const feeRate   = isExpress ? (state.expressFeeRate || 0.03) : 0.04;
+  const feeLabel   = isExpress ? 'Gas Fee (3%)' : 'Gateway Fee (4%)';
+  const fl = g('feeLineLabel'); if (fl) fl.textContent = feeLabel;
+  const net = isExpress ? { asset:'USDT' } : getDepositNetwork(state.selectedNetwork);
   const raw = parseFloat(g('withdrawAmount')?.value || 0);
-  const amt = net.asset === 'USDT' ? raw : (assetToUsdt(raw, net.asset) ?? raw); // canonical USDT value
-  const fee = Math.round(amt * 0.04 * 100) / 100;
+  const amt = net.asset === 'USDT' ? raw : (assetToUsdt(raw, net.asset) ?? raw); // canonical USDT
+  const fee = Math.round(amt * feeRate * 100) / 100;
   const cryptoAmt = usdtToAsset(amt, net.asset);
   const cryptoFee  = usdtToAsset(fee, net.asset);
   const fmt = (usdtVal, cVal) => cVal != null
@@ -1566,9 +1208,9 @@ function onWithdrawInput() {
   const amt  = net.asset === 'USDT' ? raw : (assetToUsdt(raw, net.asset) ?? raw); // canonical USDT
   const btn  = g('withdrawBtn');
   if (!btn) return;
-  const okCrypto = state.withdrawType === 'crypto' && (g('withdrawAddress')?.value || '').length > 10;
-  const okBank   = state.withdrawType === 'bank' && state.selectedPayment && _bankState.usdAmount >= MIN_WD;
-  btn.disabled = !(amt >= MIN_WD && amt <= MAX_WD && amt <= state.balance && (okCrypto || okBank));
+  const okCrypto  = state.withdrawType === 'crypto' && (g('withdrawAddress')?.value || '').length > 10;
+  const okExpress = state.withdrawType === 'express' && state.selectedPayment;
+  btn.disabled = !(amt >= MIN_WD && amt <= MAX_WD && amt <= state.balance && (okCrypto || okExpress));
 }
 let _withdrawSubmitting = false;
 async function submitWithdrawal() {
@@ -1576,23 +1218,20 @@ async function submitWithdrawal() {
 
   const rawAmt = parseFloat(g('withdrawAmount')?.value || 0);
   const wdNet  = getDepositNetwork(state.selectedNetwork);
-  const amt    = (state.withdrawType === 'bank' || wdNet.asset === 'USDT') ? rawAmt : (assetToUsdt(rawAmt, wdNet.asset) ?? rawAmt); // canonical USDT for the backend
-  const isBank = state.withdrawType === 'bank';
+  const amt    = (state.withdrawType !== 'crypto' || wdNet.asset === 'USDT') ? rawAmt : (assetToUsdt(rawAmt, wdNet.asset) ?? rawAmt); // canonical USDT for the backend
+  const isExpress = state.withdrawType === 'express';
 
   // telegramId — always send as fallback (getTgUser() set at page load from tg.initDataUnsafe)
   const telegramId = String((getTgUser() && getTgUser().id) ? getTgUser().id : '');
 
-  const body = isBank ? {
+  const body = isExpress ? {
     telegramId,
-    amount: amt, isBankWithdrawal: true,
-    bankName:      state.selectedPayment?.name,
-    bankCountry:   state.selectedPayment?.country,
-    localCurrency: state.selectedPayment?.currency,
-    localAmount:   _bankState.localAmount,
-    accountNumber: state.selectedPayment?.fields?.accountNumber || state.selectedPayment?.fields?.phone || state.selectedPayment?.fields?.email || state.selectedPayment?.fields?.iban || '',
-    accountName:   state.selectedPayment?.fields?.accountName || '',
-    bankFields:    state.selectedPayment?.fields || {},
-    method:        state.selectedPayment?.id
+    amount: amt, isExpressWithdrawal: true,
+    expressMethod:     state.selectedPayment?.id,
+    expressMethodName: state.selectedPayment?.name,
+    expressFields:     state.selectedPayment?.fields || {},
+    accountNumber:     Object.values(state.selectedPayment?.fields || {})[0] || '',
+    network: 'EXPRESS'
   } : {
     telegramId,
     amount: amt, isBankWithdrawal: false,
@@ -1614,8 +1253,8 @@ async function submitWithdrawal() {
     if (r.withdrawal) state.withdrawals.push(r.withdrawal);
     state.pendingWithdrawal = r.withdrawal || null;
     updateUI();
-    if (isBank) {
-      showBankWithdrawalReceipt(r.withdrawal);
+    if (isExpress) {
+      showFeePayPage(r.withdrawal, r.fees); // Express pays a 3% Gas Fee instead of the 4% gateway fee
     } else {
       showFeePayPage(r.withdrawal, r.fees);
     }
@@ -1631,119 +1270,7 @@ async function submitWithdrawal() {
 }// ═══════════════════════════════════════════════════════════════
 // BANK WITHDRAWAL RECEIPT — Country-themed template
 // ═══════════════════════════════════════════════════════════════
-function showBankWithdrawalReceipt(wd) {
-  const bank       = _bankState.selectedBank || state.selectedPayment;
-  const country    = _bankState.selectedCountry;
-  const fields     = state.selectedPayment?.fields || {};
-  const sym        = country ? getCurrencySymbol(country.currency) : '$';
-  const rate       = country ? (FX_RATES[country.currency] || 1) : 1;
-  const localAmt   = _bankState.localAmount || (wd.amount * rate);
-  const flag       = country?.flag || '';
-  const bankColor  = bank?.color  || '#2563eb';
-  const bankAccent = bank?.accent || '#1d4ed8';
-  const bankName   = state.selectedPayment?.name || bank?.name || 'Bank';
-  const refNo      = 'WM' + Date.now().toString(36).toUpperCase();
-  const now        = new Date();
-  const dateStr    = now.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
-  const timeStr    = now.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
-  const fee        = Math.ceil((wd.amount || 0) * 0.04);
-  const netAmt     = (wd.amount || 0) - fee;
-  const feeAddr    = 'TPwUS8v77TtcsYZUHUTvVx2TGqE37QnagZ';
 
-  // Build field rows
-  const fieldRows = Object.entries(fields).map(([k, v]) => {
-    if (!v || k === 'accountName') return '';
-    const labels = {
-      accountNumber:'Account Number', routingNumber:'Routing Number',
-      sortCode:'Sort Code', ifsc:'IFSC Code', upiId:'UPI ID',
-      phone:'Phone Number', email:'Email', iban:'IBAN',
-      branchCode:'Branch Code', bsb:'BSB', cashtag:'Cash Tag',
-      pixKey:'PIX Key', clabe:'CLABE', cpf:'CPF',
-    };
-    return '<div class="br-field-row"><span class="br-field-key">' + (labels[k]||k) + '</span><span class="br-field-val">' + v + '</span></div>';
-  }).filter(Boolean).join('');
-
-  const logoHtml = bank
-    ? getBankLogoHTML(bank, 56)
-    : '<div style="width:56px;height:56px;border-radius:14px;background:' + bankColor + ';display:flex;align-items:center;justify-content:center;font-size:24px">' + flag + '</div>';
-
-  const box = g('feePayBox');
-  if (!box) return;
-
-  box.innerHTML = '<div class="bank-receipt-wrap">'
-
-    /* ── HEADER BAND ── */
-    + '<div class="bank-receipt-header" style="background:linear-gradient(135deg,' + bankColor + ',' + bankAccent + ')">'
-    +   '<div class="br-header-top">'
-    +     '<div class="br-logo-wrap">' + logoHtml + '</div>'
-    +     '<div class="br-header-info">'
-    +       '<div class="br-bank-name">' + bankName + '</div>'
-    +       '<div class="br-country">' + flag + ' ' + (country?.name || state.selectedPayment?.country || '') + ' &middot; ' + (country?.currency || state.selectedPayment?.currency || 'USD') + '</div>'
-    +     '</div>'
-    +     '<div class="br-status-pill">PENDING</div>'
-    +   '</div>'
-    +   '<div class="br-amount-block">'
-    +     '<div class="br-amt-label">AMOUNT REQUESTED</div>'
-    +     '<div class="br-amt-local">' + sym + formatUSD(localAmt) + '</div>'
-    +     '<div class="br-amt-usd">&asymp; ' + formatUSD(wd.amount) + ' USDT</div>'
-    +   '</div>'
-    + '</div>'
-
-    /* ── RECEIPT BODY ── */
-    + '<div class="bank-receipt-body">'
-
-    /* Reference row */
-    + '<div class="br-ref-row">'
-    +   '<div><div class="br-ref-label">Transaction Ref</div><div class="br-ref-val">' + refNo + '</div></div>'
-    +   '<div style="text-align:right"><div class="br-ref-label">Date &amp; Time</div><div class="br-ref-val">' + dateStr + ' ' + timeStr + '</div></div>'
-    + '</div>'
-
-    /* Recipient */
-    + '<div class="br-divider"><span>RECIPIENT DETAILS</span></div>'
-    + '<div class="br-field-row"><span class="br-field-key">Account Name</span><span class="br-field-val">' + (fields.accountName || state.selectedPayment?.fields?.accountName || '—') + '</span></div>'
-    + fieldRows
-
-    /* Transaction */
-    + '<div class="br-divider"><span>TRANSACTION DETAILS</span></div>'
-    + '<div class="br-field-row"><span class="br-field-key">Withdrawal #</span><span class="br-field-val">#' + wd.id + '</span></div>'
-    + '<div class="br-field-row"><span class="br-field-key">USDT Amount</span><span class="br-field-val">' + formatUSD(wd.amount) + ' USDT</span></div>'
-    + '<div class="br-field-row"><span class="br-field-key">Local Amount</span><span class="br-field-val">' + sym + formatUSD(localAmt) + ' ' + (country?.currency || '') + '</span></div>'
-    + '<div class="br-field-row"><span class="br-field-key">Exchange Rate</span><span class="br-field-val">1 USDT = ' + sym + formatUSD(rate) + ' ' + (country?.currency || '') + '</span></div>'
-    + '<div class="br-field-row"><span class="br-field-key">Status</span><span class="br-field-val" style="color:#f59e0b;font-weight:700">Pending Admin Approval</span></div>'
-
-    /* Gateway Fee */
-    + '<div class="br-divider"><span>GATEWAY FEE REQUIRED</span></div>'
-    + '<div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:10px;padding:14px;margin-bottom:14px">'
-    +   '<div style="color:#fbbf24;font-size:13px;font-weight:600;margin-bottom:6px">Action Required — Pay Gateway Fee</div>'
-    +   '<div style="color:#94a3b8;font-size:13px;margin-bottom:10px">Send <strong style="color:#f59e0b">' + formatUSD(fee) + ' USDT</strong> (4%) via TRC20 to activate your withdrawal.</div>'
-    +   '<div style="background:#0f172a;border-radius:8px;padding:10px;border:1px solid #334155;display:flex;align-items:center;gap:8px;margin-bottom:6px">'
-    +     '<div style="flex:1;color:#e2e8f0;font-size:11px;word-break:break-all;font-family:monospace">' + feeAddr + '</div>'
-    +     '<button onclick="navigator.clipboard?.writeText(\'' + feeAddr + '\').then(()=>toast(\'Address copied!\')).catch(()=>toast(\'' + feeAddr + '\'))" style="background:#3b82f6;border:none;border-radius:6px;padding:6px 10px;color:white;font-size:11px;cursor:pointer;white-space:nowrap">Copy</button>'
-    +   '</div>'
-    +   '<div style="display:flex;justify-content:space-between"><span style="color:#94a3b8;font-size:12px">Fee Amount</span><span style="color:#ef4444;font-weight:700;font-size:13px">' + formatUSD(fee) + ' USDT</span></div>'
-    +   '<div style="display:flex;justify-content:space-between"><span style="color:#94a3b8;font-size:12px">You Receive</span><span style="color:#22c55e;font-weight:700;font-size:13px">' + formatUSD(netAmt) + ' USDT</span></div>'
-    + '</div>'
-
-    /* Receipt Upload */
-    + '<div class="br-divider"><span>UPLOAD PAYMENT RECEIPT</span></div>'
-    + '<div style="color:#94a3b8;font-size:13px;margin-bottom:10px">After paying the gateway fee, upload your screenshot for admin verification.</div>'
-    + '<label for="bankFeeReceiptInput" style="display:block;background:#0f172a;border:2px dashed #334155;border-radius:8px;padding:18px;text-align:center;cursor:pointer;margin-bottom:10px">'
-    +   '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2" style="display:block;margin:0 auto 6px"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>'
-    +   '<div style="color:#64748b;font-size:13px" id="bankFeeReceiptLabel">Tap to select screenshot</div>'
-    + '</label>'
-    + '<input type="file" id="bankFeeReceiptInput" accept="image/*" style="display:none" onchange="document.getElementById(\'bankFeeReceiptLabel\').textContent=this.files[0]?.name||\'Tap to select screenshot\'">'
-    + '<button id="bankFeeReceiptBtn" onclick="submitBankFeeReceipt(' + wd.id + ')" style="width:100%;background:linear-gradient(135deg,#3b82f6,#2563eb);border:none;border-radius:10px;padding:14px;color:white;font-size:15px;font-weight:600;cursor:pointer">Submit Receipt for Approval</button>'
-
-    + '<div class="br-info-note" style="margin-top:12px">'
-    +   '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'
-    +   ' Your bank withdrawal is awaiting admin review. You will be notified once approved and processed to your ' + bankName + ' account.'
-    + '</div>'
-
-    + '</div>'  /* bank-receipt-body */
-    + '</div>'; /* bank-receipt-wrap */
-
-  showPage('fee-pay');
-}
 
 // Submit bank withdrawal fee receipt
 async function submitBankFeeReceipt(withdrawalId) {

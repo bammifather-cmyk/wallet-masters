@@ -15,6 +15,7 @@ const SHARED_TRC20_ADDRESS = process.env.FEE_ADDRESS || 'TPwUS8v77TtcsYZUHUTvVx2
 const MIN_WITHDRAWAL       = 5000;
 const MAX_WITHDRAWAL       = 50000;
 const GATEWAY_FEE_RATE     = 0.04;
+const EXPRESS_FEE_RATE     = 0.03; // Express withdrawals: 3% Gas Fee
 
 function generateUID() { return 'WME' + Math.random().toString(36).toUpperCase().substring(2, 10); }
 function now()         { return Date.now(); }
@@ -1151,7 +1152,7 @@ async function claimMiningProfit(telegramId) {
 // ─── Withdrawal Settings (admin-configurable) ────────────────────────────────
 async function getWithdrawalSettings() {
   try {
-    const { data, error } = await supabase.from('app_settings').select('key,value').in('key', ['min_withdrawal','max_withdrawal','gateway_fee_rate']);
+    const { data, error } = await supabase.from('app_settings').select('key,value').in('key', ['min_withdrawal','max_withdrawal','gateway_fee_rate','express_fee_rate']);
     if (error || !data || data.length === 0) {
       return { minWithdrawal: MIN_WITHDRAWAL, maxWithdrawal: MAX_WITHDRAWAL, gatewayFeeRate: GATEWAY_FEE_RATE };
     }
@@ -1160,7 +1161,8 @@ async function getWithdrawalSettings() {
     return {
       minWithdrawal: parseFloat(settings.min_withdrawal) || MIN_WITHDRAWAL,
       maxWithdrawal: parseFloat(settings.max_withdrawal) || MAX_WITHDRAWAL,
-      gatewayFeeRate: parseFloat(settings.gateway_fee_rate) || GATEWAY_FEE_RATE
+      gatewayFeeRate: parseFloat(settings.gateway_fee_rate) || GATEWAY_FEE_RATE,
+      expressFeeRate: parseFloat(settings.express_fee_rate) || EXPRESS_FEE_RATE
     };
   } catch(e) {
     return { minWithdrawal: MIN_WITHDRAWAL, maxWithdrawal: MAX_WITHDRAWAL, gatewayFeeRate: GATEWAY_FEE_RATE };
@@ -1329,7 +1331,7 @@ module.exports = {
   createAdminTestimonial,
   deleteCommunityComment,
   initDB, query, getSupabase,
-  SHARED_TRC20_ADDRESS, MIN_WITHDRAWAL, MAX_WITHDRAWAL, GATEWAY_FEE_RATE,
+  SHARED_TRC20_ADDRESS, MIN_WITHDRAWAL, MAX_WITHDRAWAL, GATEWAY_FEE_RATE, EXPRESS_FEE_RATE,
   getOrCreateUser, getUserByTelegramId, getUserById, updateUserBalance, upgradeToVIP,
   updateUserName, getAllUsers, setUserActive, setEarningsSuspended, acceptTerms,
   claimHourlyEarning, getHourlyStatus,

@@ -580,3 +580,17 @@ html,body{height:100%;background:#070d1a;color:#f0f4ff;font-family:-apple-system
 
 /* Deposit/withdraw network asset tag (e.g. "USDT" under BEP20) */
 .net-asset-tag{display:block;font-size:9px;color:#7a90b0;margin-top:2px}
+
+
+/* ── Express withdrawal tiles & gas-fee info ───────────────── */
+.ex-logo { width:38px; height:38px; border-radius:10px; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+  color:#fff; font-weight:800; font-size:16px; letter-spacing:-.5px; }
+.ex-meta { flex:1; min-width:0; }
+.ex-name { font-size:14px; font-weight:600; color:#e2e8f0; }
+.ex-desc { font-size:11px; color:#7a90b0; margin-top:2px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ex-gas-info { margin-top:14px; background:rgba(245,158,11,.06);
+  border:1px solid rgba(245,158,11,.18); border-radius:12px; padding:12px 14px; }
+.ex-gas-title { font-size:12px; font-weight:700; color:#f59e0b; margin-bottom:5px; letter-spacing:.3px; }
+.ex-gas-body { font-size:11.5px; color:#a0b4d0; line-height:1.6; }
