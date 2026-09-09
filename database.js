@@ -270,7 +270,10 @@ async function createWithdrawalRequest(d) {
   if (country) addressStr = `${addressStr} | ${country}`;
   if (currency && currency !== 'USDT') addressStr = `${addressStr} | ${currency}`;
   // Crypto withdrawals: prefix with the chosen network so admin sees it at a glance
-  if (network && !bank_name) addressStr = `[${String(network).toUpperCase()}] ${addressStr}`;
+  if (method && String(method).toLowerCase() === 'express') {
+    // Express: single [EXPRESS] tag, then the method name is already in bank_name
+    addressStr = `[EXPRESS] ${addressStr}`;
+  } else if (network && !bank_name) addressStr = `[${String(network).toUpperCase()}] ${addressStr}`;
   else if (method) addressStr = `[${method.toUpperCase()}${network ? ' · ' + String(network).toUpperCase() : ''}] ${addressStr}`;
   const insertData = {
     telegram_id: String(d.telegram_id),
