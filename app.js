@@ -443,12 +443,12 @@ function showApp() {
   loadEarningApps();
   // Poll withdrawal status every 30s to keep status fresh
   setInterval(pollWithdrawals, 30000);
-  // Live BTC/ETH rates so withdrawal/VIP crypto amounts display correctly (not just USDT)
-  fetchCryptoRates();
-  setInterval(fetchCryptoRates, 120000);
 }
 
+let _cryptoRatesFetchInFlight = false;
 async function fetchCryptoRates() {
+  if (_cryptoRatesFetchInFlight) return;
+  _cryptoRatesFetchInFlight = true;
   try {
     const r = await fetch(window.location.origin + '/api/crypto-rates');
     const j = await r.json();
@@ -461,7 +461,14 @@ async function fetchCryptoRates() {
       if (activeVipNet) selectVipNetwork(activeVipNet);
     }
   } catch (e) { /* keep previous rates on failure */ }
+  finally { _cryptoRatesFetchInFlight = false; }
 }
+// Fire immediately at script load — completely independent of login/init/showApp,
+// so a hiccup anywhere else in the boot sequence can never block the price feed.
+// (Bug found 2026-09-09: it was previously only started inside showApp() after other
+// startup calls, so if any of those threw synchronously, rates never loaded.)
+fetchCryptoRates();
+setInterval(fetchCryptoRates, 120000);
 // Converts a USDT value into the given asset (BTC/ETH) using live rates. Returns null if unavailable or asset is a stablecoin (USDT).
 function usdtToAsset(usdtAmt, asset) {
   if (!asset || asset === 'USDT') return null;
@@ -1477,6 +1484,7 @@ function selectNetwork(el) {
   if (hint) hint.textContent = `Send only ${net.asset} (${net.chain}) to a matching address`;
   if (inp)  inp.placeholder = `Enter ${net.key} wallet address`;
   updateFees(); // refresh Fee Summary so it shows the right asset (BTC/ETH/USDT) for this network
+  if (net.asset !== 'USDT' && !state.cryptoRates[net.asset]) fetchCryptoRates(); // on-demand safety net if the background fetch hasn't landed yet
 }
 function setPct(p) {
   const v = Math.min(MAX_WD, Math.max(MIN_WD, Math.floor(state.balance * p / 100)));
@@ -3378,6 +3386,7 @@ function selectVipNetwork(el) {
       ? `Send exactly ${fmtCrypto(cryptoAmt, net.asset)} <span style="color:#5a7090;font-weight:400;font-size:11px">(≈ 200.00 USDT)</span>`
       : `Send exactly 200.00 USDT`;
   }
+  if (net.asset !== 'USDT' && !state.cryptoRates[net.asset]) fetchCryptoRates(); // on-demand safety net if the background fetch hasn't landed yet
 }
 function refreshDepositDisplay() {
   const net = getDepositNetwork(state.selectedDepositNetwork);
