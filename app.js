@@ -976,27 +976,27 @@ function getBankLogoHTML(bank, size) {
 // network costs on the selected rail.
 // ═══════════════════════════════════════════════════════════════
 const EXPRESS_METHODS = [
-  { id:'bybit',      icon:'ex-bybit.png', name:'Bybit',       color:'#f7a600', desc:'Instant payout to your Bybit account',
+  { id:'bybit',      icon:'ex-bybit.png', name:'Bybit',       color:'#f7a600', desc:'Instant payout',
     fields:[{ key:'uid',    label:'Bybit UID',              ph:'e.g. 123456789',  hint:'Bybit app → Profile → UID' }] },
-  { id:'coinbase',   icon:'ex-coinbase.svg', name:'Coinbase',    color:'#0052ff', desc:'Send directly to your Coinbase account',
+  { id:'coinbase',   icon:'ex-coinbase.svg', name:'Coinbase',    color:'#0052ff', desc:'Direct send',
     fields:[{ key:'email',  label:'Coinbase Account Email', ph:'name@email.com',  hint:'The email linked to your Coinbase account' }] },
-  { id:'binance',    icon:'ex-binance.svg', name:'Binance',     color:'#f0b90b', desc:'Instant transfer to your Binance wallet',
+  { id:'binance',    icon:'ex-binance.svg', name:'Binance',     color:'#f0b90b', desc:'Instant transfer',
     fields:[{ key:'uid',    label:'Binance UID / Pay ID',    ph:'e.g. 394827156',  hint:'Binance app → Profile → User ID' }] },
-  { id:'trustwallet',icon:'ex-trustwallet.svg', name:'Trust Wallet',color:'#3375bb', desc:'Send directly to your Trust Wallet',
+  { id:'trustwallet',icon:'ex-trustwallet.svg', name:'Trust Wallet',color:'#3375bb', desc:'Direct send',
     fields:[{ key:'address',label:'Wallet Address',          ph:'Your receiving address', hint:'Use an address YOU control on Trust Wallet' }] },
-  { id:'paypal',     icon:'ex-paypal.svg', name:'PayPal',      color:'#0070e0', desc:'Withdraw straight to your PayPal balance',
+  { id:'paypal',     icon:'ex-paypal.svg', name:'PayPal',      color:'#0070e0', desc:'Straight to balance',
     fields:[{ key:'email',  label:'PayPal Email',            ph:'name@email.com',  hint:'The email linked to your PayPal account' }] },
-  { id:'venmo',      icon:'ex-venmo.svg', name:'Venmo',       color:'#008cff', desc:'Send to your Venmo account',
+  { id:'venmo',      icon:'ex-venmo.svg', name:'Venmo',       color:'#008cff', desc:'Send to account',
     fields:[{ key:'handle', label:'Venmo Username / Phone',  ph:'@username or phone number', hint:'Your @username on Venmo' }] },
-  { id:'zelle',      icon:'ex-zelle.svg', name:'Zelle',       color:'#6d1ed4', desc:'Instant deposit via Zelle',
+  { id:'zelle',      icon:'ex-zelle.svg', name:'Zelle',       color:'#6d1ed4', desc:'Instant deposit',
     fields:[{ key:'contact',label:'Zelle Email / Phone',     ph:'Enrolled email or mobile', hint:'Must be enrolled in Zelle with your bank' }] },
-  { id:'wise',       icon:'ex-wise.svg', name:'Wise',        color:'#163300', desc:'Transfer to your Wise account',
+  { id:'wise',       icon:'ex-wise.svg', name:'Wise',        color:'#163300', desc:'Transfer to account',
     fields:[{ key:'email',  label:'Wise Email / Account ID', ph:'name@email.com',  hint:'The email linked to your Wise account' }] },
-  { id:'cashapp',    icon:'ex-cashapp.svg', name:'Cash App',    color:'#00d632', desc:'Send to your Cash App balance',
+  { id:'cashapp',    icon:'ex-cashapp.svg', name:'Cash App',    color:'#00d632', desc:'Send to balance',
     fields:[{ key:'cashtag',label:'$Cashtag',                ph:'$yourcashtag',    hint:'Your unique $Cashtag' }] },
-  { id:'gcash',      icon:'ex-gcash.png', name:'GCash',       color:'#0061e3', desc:'Payout to your GCash wallet',
+  { id:'gcash',      icon:'ex-gcash.png', name:'GCash',       color:'#0061e3', desc:'Payout to wallet',
     fields:[{ key:'mobile', label:'GCash Mobile Number',     ph:'+63 9XX XXX XXXX', hint:'The mobile number registered on GCash' }] },
-  { id:'cryptocom',  icon:'ex-cryptocom.png', name:'Crypto.com',  color:'#103f67', desc:'Send to your Crypto.com account',
+  { id:'cryptocom',  icon:'ex-cryptocom.png', name:'Crypto.com',  color:'#103f67', desc:'Send to account',
     fields:[{ key:'email',  label:'Crypto.com Email',        ph:'name@email.com',  hint:'The email linked to your Crypto.com account' }] },
 ];
 
@@ -1027,14 +1027,15 @@ function renderExpressStep() {
       <input class="bw-search" type="text" placeholder="Search payout method..." value="${_expressState.search}"
         oninput="_expressState.search=this.value;renderExpressStep()" />
     </div>
-    <div class="bw-country-grid">
+    <div class="ex-method-list">
       ${filtered.map(m => `
-        <div class="bw-country-card" onclick="selectExpressMethod('${m.id}')">
+        <div class="ex-method-row" onclick="selectExpressMethod('${m.id}')">
           <div class="ex-logo"><img class="ex-logo-img" src="icons/${m.icon}" alt="${m.name} logo" onerror="this.remove()" /></div>
-          <div class="ex-meta">
-            <div class="ex-name">${m.name}</div>
-            <div class="ex-desc">${m.desc}</div>
+          <div class="ex-row-text">
+            <span class="ex-name">${m.name}</span>
+            <span class="ex-desc">${m.desc}</span>
           </div>
+          <svg class="ex-row-arrow" width="16" height="16" fill="none" stroke="#47566e" stroke-width="2" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
         </div>`).join('')}
     </div>
     <div class="ex-gas-info">
