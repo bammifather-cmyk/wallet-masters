@@ -129,7 +129,7 @@
 
     <!-- WITHDRAW -->
     <div class="page" id="page-withdraw">
-      <div class="page-hdr"><button class="back-btn" onclick="showPage('home')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>Withdraw USDT</h2></div>
+      <div class="page-hdr"><button class="back-btn" onclick="showPage('home')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2 id="withdrawTitle">Withdraw USDT</h2></div>
       <div class="form-scroll">
         <div id="withdrawTypeRow" class="withdraw-type-row hidden">
           <button class="wtype-btn active" id="btnCrypto" onclick="setWithdrawType('crypto')">Crypto</button>
@@ -150,8 +150,8 @@
           <!-- Dynamically rendered by initBankWithdrawal() -->
         </div>
         <div class="form-group">
-          <label>Amount <span class="avail-tag">Available: <span id="availBalance">0.00</span> USDT</span></label>
-          <div class="amt-row"><input id="withdrawAmount" type="number" placeholder="0.00" min="5000" id_min_dynamic="true" oninput="updateFees()"/><span class="amt-tag">USDT</span></div>
+          <label>Amount <span class="avail-tag" id="availTag">Available: <span id="availBalance">0.00</span> USDT</span></label>
+          <div class="amt-row"><input id="withdrawAmount" type="number" placeholder="0.00" min="5000" id_min_dynamic="true" oninput="updateFees()"/><span class="amt-tag" id="amtTag">USDT</span></div>
           <div class="pct-row"><button onclick="setPct(25)">25%</button><button onclick="setPct(50)">50%</button><button onclick="setPct(75)">75%</button><button onclick="setPct(100)">MAX</button></div>
           <div class="limit-row" id="limitRow">Min: 5,000 USDT &nbsp;|&nbsp; Max: 50,000 USDT</div>
         </div>
@@ -887,6 +887,6 @@
   })();
   </script>
 
-  <script src="app.js?v=10.37"></script>
+  <script src="app.js?v=10.38"></script>
 </body>
 </html>

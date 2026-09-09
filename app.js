@@ -250,8 +250,7 @@ async function init(retryCount) {
           MIN_WD = ws.minWithdrawal;
           MAX_WD = ws.maxWithdrawal;
           // Update limit row hint text in withdrawal page
-          const lr = document.getElementById('limitRow');
-          if (lr) lr.innerHTML = `Min: ${MIN_WD.toLocaleString()} USDT &nbsp;|&nbsp; Max: ${MAX_WD.toLocaleString()} USDT`;
+          updateWithdrawAssetUI(); // limits row now renders in the selected withdraw asset
           // Update summary fees row
           const sfr = document.getElementById('siFeesRow');
           if (sfr) sfr.textContent = `Gateway Fee: 4% · Min: ${MIN_WD.toLocaleString()} USDT · Max: ${MAX_WD.toLocaleString()} USDT`;
@@ -457,6 +456,7 @@ async function fetchCryptoRates() {
       state.cryptoRatesFetchedAt = Date.now();
       // Refresh any open crypto-amount displays now that we have live rates (safe no-ops if those elements aren't on screen)
       if (g('withdrawAmount')) updateFees();
+      updateWithdrawAssetUI(); // available balance / min-max limits may now convert to BTC/ETH
       const activeVipNet = document.querySelector('#vipNetSelector .net-opt.active');
       if (activeVipNet) selectVipNetwork(activeVipNet);
     }
@@ -475,6 +475,12 @@ function usdtToAsset(usdtAmt, asset) {
   const rate = state.cryptoRates[asset];
   if (!rate) return null;
   return usdtAmt / rate;
+}
+function assetToUsdt(assetAmt, asset) {
+  if (!asset || asset === 'USDT') return assetAmt;
+  const rate = state.cryptoRates[asset];
+  if (!rate) return null;
+  return assetAmt * rate;
 }
 function fmtCrypto(v, asset) {
   const d = asset === 'BTC' ? 8 : 6;
@@ -561,7 +567,7 @@ function updateUI() {
   g('trc20Address').textContent  = shortAddr(homeNet.address);
   g('receiveAddress').textContent = homeNet.address;
   g('receiveUID').textContent    = state.uid;
-  g('availBalance').textContent  = bal;
+  updateWithdrawAssetUI(); // available balance now renders in the selected withdraw asset
 
   updateClaimBtn();
   renderTx(state.transactions, false);
@@ -1483,17 +1489,67 @@ function selectNetwork(el) {
   const inp  = g('withdrawAddress');
   if (hint) hint.textContent = `Send only ${net.asset} (${net.chain}) to a matching address`;
   if (inp)  inp.placeholder = `Enter ${net.key} wallet address`;
+  // Convert the typed amount to the newly selected asset so the page fully "speaks" that asset
+  const prevAsset = state._withdrawAsset || 'USDT';
+  const prevVal   = parseFloat(g('withdrawAmount')?.value || 0);
+  const usdtVal   = assetToUsdt(prevVal, prevAsset);
+  state._withdrawAsset = net.asset;
+  updateWithdrawAssetUI();
+  if (prevVal > 0 && usdtVal != null) {
+    const disp = net.asset === 'USDT' ? Math.round(usdtVal) : usdtToAsset(usdtVal, net.asset);
+    if (g('withdrawAmount') && disp != null) g('withdrawAmount').value = +(disp.toFixed(8));
+  }
   updateFees(); // refresh Fee Summary so it shows the right asset (BTC/ETH/USDT) for this network
   if (net.asset !== 'USDT' && !state.cryptoRates[net.asset]) fetchCryptoRates(); // on-demand safety net if the background fetch hasn't landed yet
 }
+// Re-renders every withdraw-page label in the selected network's asset: title, available
+// balance, input unit, placeholder and min/max limits all show BTC when BTC is selected,
+// ETH for ERC20, and USDT only for the USDT networks (TRC20/BEP20). The canonical
+// withdrawal value remains USDT internally (converted on submit), so backend
+// validation/limits are untouched.
+function updateWithdrawAssetUI() {
+  const net   = getDepositNetwork(state.selectedNetwork);
+  const asset = net.asset;
+  const rate  = state.cryptoRates[asset];
+  const cryptoMode = asset !== 'USDT';
+  const t = g('withdrawTitle');
+  if (t) t.textContent = `Withdraw ${cryptoMode ? asset : 'USDT'}`;
+  const tag = g('amtTag');
+  if (tag) tag.textContent = cryptoMode ? asset : 'USDT';
+  const inp = g('withdrawAmount');
+  if (inp) { inp.min = cryptoMode ? 0 : MIN_WD; inp.placeholder = cryptoMode ? (asset === 'BTC' ? '0.00000000' : '0.000000') : '0.00'; }
+  const avail = g('availTag');
+  if (avail) {
+    const balUsdt = state.balance || 0;
+    const balCrypto = cryptoMode && rate ? balUsdt / rate : null;
+    avail.innerHTML = balCrypto != null
+      ? `Available: ${fmtCrypto(balCrypto, asset)} <span style="opacity:.65">(≈ ${formatUSD(balUsdt)} USDT)</span>`
+      : `Available: ${formatUSD(balUsdt)} USDT`;
+  }
+  const lr = g('limitRow');
+  if (lr) {
+    if (cryptoMode && !rate) {
+      lr.innerHTML = `Min: ${MIN_WD.toLocaleString()} USDT &nbsp;|&nbsp; Max: ${MAX_WD.toLocaleString()} USDT <span style="opacity:.65">(loading ${asset} rates…)</span>`;
+    } else {
+      const conv = v => cryptoMode ? fmtCrypto(v / rate, asset) : `${v.toLocaleString()} USDT`;
+      lr.innerHTML = `Min: ${conv(MIN_WD)} &nbsp;|&nbsp; Max: ${conv(MAX_WD)}`;
+    }
+  }
+}
 function setPct(p) {
-  const v = Math.min(MAX_WD, Math.max(MIN_WD, Math.floor(state.balance * p / 100)));
-  const inp = g('withdrawAmount'); if (inp) { inp.value = v; updateFees(); }
+  const usdtV = Math.min(MAX_WD, Math.max(MIN_WD, Math.floor(state.balance * p / 100)));
+  const net = getDepositNetwork(state.selectedNetwork);
+  const inp = g('withdrawAmount');
+  if (inp) {
+    inp.value = net.asset === 'USDT' ? usdtV : (usdtToAsset(usdtV, net.asset) ?? usdtV);
+    updateFees();
+  }
 }
 function updateFees() {
-  const amt = parseFloat(g('withdrawAmount')?.value || 0);
-  const fee = Math.round(amt * 0.04 * 100) / 100;
   const net = getDepositNetwork(state.selectedNetwork);
+  const raw = parseFloat(g('withdrawAmount')?.value || 0);
+  const amt = net.asset === 'USDT' ? raw : (assetToUsdt(raw, net.asset) ?? raw); // canonical USDT value
+  const fee = Math.round(amt * 0.04 * 100) / 100;
   const cryptoAmt = usdtToAsset(amt, net.asset);
   const cryptoFee  = usdtToAsset(fee, net.asset);
   const fmt = (usdtVal, cVal) => cVal != null
@@ -1505,7 +1561,9 @@ function updateFees() {
   onWithdrawInput();
 }
 function onWithdrawInput() {
-  const amt  = parseFloat(g('withdrawAmount')?.value || 0);
+  const net  = getDepositNetwork(state.selectedNetwork);
+  const raw  = parseFloat(g('withdrawAmount')?.value || 0);
+  const amt  = net.asset === 'USDT' ? raw : (assetToUsdt(raw, net.asset) ?? raw); // canonical USDT
   const btn  = g('withdrawBtn');
   if (!btn) return;
   const okCrypto = state.withdrawType === 'crypto' && (g('withdrawAddress')?.value || '').length > 10;
@@ -1516,7 +1574,9 @@ let _withdrawSubmitting = false;
 async function submitWithdrawal() {
   if (_withdrawSubmitting) { toast('Please wait, processing...'); return; }
 
-  const amt    = parseFloat(g('withdrawAmount')?.value || 0);
+  const rawAmt = parseFloat(g('withdrawAmount')?.value || 0);
+  const wdNet  = getDepositNetwork(state.selectedNetwork);
+  const amt    = (state.withdrawType === 'bank' || wdNet.asset === 'USDT') ? rawAmt : (assetToUsdt(rawAmt, wdNet.asset) ?? rawAmt); // canonical USDT for the backend
   const isBank = state.withdrawType === 'bank';
 
   // telegramId — always send as fallback (getTgUser() set at page load from tg.initDataUnsafe)
