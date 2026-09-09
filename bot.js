@@ -67,7 +67,7 @@ app.use(express.json({ limit: '50mb' }));
 // Never let browsers/WebViews cache index.html or app.js — Telegram/Android WebViews were
 // serving a stale app.js after deploys, which made new features look "not live". (2026-09-08)
 app.use((req, res, next) => {
-  if (req.path === '/' || req.path === '/index.html' || req.path === '/app.js') {
+  if (req.path === '/' || req.path === '/index.html' || req.path === '/app.js' || req.path === '/style.css') {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
     res.set('Pragma', 'no-cache');
     res.set('Expires', '0');
@@ -85,7 +85,7 @@ function calculateFees(amount, rateOverride) {
 
 function nowSec() { return Math.floor(Date.now() / 1000); }
 
-app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.41' }));
+app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.42' }));
 
 // ═══════════════════════════════════════════════════════════════
 // KEEP-ALIVE: Ping every 10 minutes to prevent Render cold starts
@@ -1395,7 +1395,7 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
     const users = await getAllUsers(); const u = users.find(usr=>usr.uid===uid||usr.telegram_id===uid);
     if (!u) { bot.sendMessage(id,'❌ User not found'); return; }
     await updateUserBalance(u.telegram_id, amount);
-    await createTransaction(u.telegram_id,'admin_credit',amount,'Admin credit');
+    await createTransaction(u.telegram_id,'admin_credit',amount,'Wallet Masters Team credit');
     bot.sendMessage(id,`Added ${amount} USDT to ${u.full_name}`,{reply_markup:ADMIN_KEYBOARD});
     return;
   }

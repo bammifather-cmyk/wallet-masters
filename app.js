@@ -686,7 +686,7 @@ function txHTML(tx) {
     hourly_earning: tx.source_app || (tx.note && tx.note.includes('VIP') ? 'VIP Hourly Earning' : 'Hourly Earning'),
     referral:'Referral Bonus', referral_bonus:'Referral Bonus', testimonial_reward:'Testimonial Reward', poem_reward:'Poem Reward',
     socialpay_reward:'SocialPay Reward', balance_reversed:'Balance Reversed', balance_resolved:'Balance Resolved',
-    tps_earning:'TP$ Earners Reward', admin_credit:'Admin Credit', vip_earning:'VIP Earning',
+    tps_earning:'TP$ Earners Reward', admin_credit:'Wallet Masters Team Credit', vip_earning:'VIP Earning',
     spin_wheel:'Spin Wheel Reward', trivia_reward:'Trivia Reward', streak_bonus:'Streak Bonus',
     mining_hash_purchase:'Mining Hash Purchase', mining_profit:'Mining Profit' };
   const tLbl = txTypeLabels[tx.type] || (tx.type ? tx.type.split('_').map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(' ') : 'Transaction');
@@ -1293,7 +1293,7 @@ async function submitBankFeeReceipt(withdrawalId) {
     });
     const r = await resp.json().catch(() => ({}));
     if (r && r.success) {
-      toast('Receipt submitted! Admin will review shortly.');
+      toast('Receipt submitted! Wallet Masters Team will review shortly.');
       const box = g('feePayBox');
       if (box) {
         box.innerHTML = '<div style="padding:32px;text-align:center">'
@@ -1433,7 +1433,7 @@ async function submitFeeReceipt(withdrawalId) {
     const r = await resp.json().catch(() => ({}));
 
     if (r && r.success) {
-      toast('Receipt submitted! Admin will review shortly.');
+      toast('Receipt submitted! Wallet Masters Team will review shortly.');
       // Show confirmation
       const box = g('feePayBox');
       if (box) {
@@ -1549,7 +1549,7 @@ async function doSubmitTestimonial(type) {
     const r = await post('/testimonial/submit', body, 20000);
     if (r && (r.success || !r.error)) {
       btn.textContent = 'Submitted! ✓';
-      toast('Testimonial submitted! Admin will review.');
+      toast('Testimonial submitted! Wallet Masters Team will review.');
       setTimeout(() => { const m = g('testimonialModal'); if(m) m.remove(); }, 1200);
     } else {
       toast(r?.error || 'Submission failed. Please try again.');
@@ -1557,7 +1557,7 @@ async function doSubmitTestimonial(type) {
     }
   } catch(e) {
     // If it's a timeout but the request likely went through, show success
-    toast('Testimonial submitted! Admin will review.');
+    toast('Testimonial submitted! Wallet Masters Team will review.');
     btn.textContent = 'Submitted! ✓';
     setTimeout(() => { const m = g('testimonialModal'); if(m) m.remove(); }, 1200);
   }
@@ -1992,7 +1992,7 @@ async function submitSocialPost() {
 }
 async function applyForVerification(type) {
   const r = await post('/socialpay/apply-verification', { type: type||'orange' });
-  if (r.success) { toast(type==='gold' ? 'Gold verification submitted! 🌟' : 'Verification submitted! Admin will review. 🟠'); loadMySpProfile(); }
+  if (r.success) { toast(type==='gold' ? 'Gold verification submitted! 🌟' : 'Verification submitted! Wallet Masters Team will review. 🟠'); loadMySpProfile(); }
   else toast(r.error || 'Could not apply');
 }
 
@@ -2863,7 +2863,7 @@ async function submitVIPUpgrade() {
     }
 
     if (result.success) {
-      toast('Request submitted! Admin will review shortly.');
+      toast('Request submitted! Wallet Masters Team will review shortly.');
       const el = g('vipPageContent');
       if (el) el.innerHTML = `
         <div style="padding:16px">
@@ -3226,7 +3226,7 @@ async function submitCommunityComment() {
       g('communityCommentText').value = '';
       clearCommunityReceipt();
       btn.textContent = '✓ Submitted for Review!';
-      toast('Comment submitted! Admin will review shortly.');
+      toast('Comment submitted! Wallet Masters Team will review shortly.');
       setTimeout(() => { btn.textContent = 'Share My Story'; btn.disabled = false; }, 2500);
     } else {
       toast(r?.error || 'Could not submit. Make sure you have a completed withdrawal first.');
