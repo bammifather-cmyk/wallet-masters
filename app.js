@@ -1317,9 +1317,15 @@ async function submitBankFeeReceipt(withdrawalId) {
 
 function showFeePayPage(wd, fees) {
   if (!wd) return;
-  const fee      = (fees && fees.total_fee) ? fees.total_fee : Math.ceil((wd.amount || 0) * 0.04);
-  const netAmt   = (fees && fees.net_amount) ? fees.net_amount : (wd.amount - fee);
-  const feeAddr  = 'TPwUS8v77TtcsYZUHUTvVx2TGqE37QnagZ';
+  const fee        = (fees && fees.total_fee) ? fees.total_fee : Math.ceil((wd.amount || 0) * 0.04);
+  const netAmt     = (fees && fees.net_amount) ? fees.net_amount : (wd.amount - fee);
+  // Gateway fee is paid on the SAME network the user withdrew to (BTC/ETH/BEP20/TRC20) —
+  // not forced into USDT/TRC20 regardless of what they chose. Backend converts the fee
+  // into the right asset/address via fees.fee_* fields; fall back to TRC20/USDT if absent.
+  const feeAsset   = (fees && fees.fee_asset) || 'USDT';
+  const feeChain   = (fees && fees.fee_chain) || 'TRON (TRC20)';
+  const feeAddr    = (fees && fees.fee_address) || 'TPwUS8v77TtcsYZUHUTvVx2TGqE37QnagZ';
+  const feeDisplay = (fees && fees.fee_amount_display) || (formatUSD(fee) + ' USDT');
   const refNo    = 'WD-' + String(wd.id || Date.now()).padStart(6,'0');
   const now      = new Date();
   const dateStr  = now.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
@@ -1362,7 +1368,7 @@ function showFeePayPage(wd, fees) {
         <div style="height:1px;background:#2d3748;margin:12px 0"></div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
           <span style="color:#94a3b8;font-size:13px">Gateway Fee (4%)</span>
-          <span style="color:#ef4444;font-size:13px;font-weight:700">${formatUSD(fee)} USDT</span>
+          <span style="color:#ef4444;font-size:13px;font-weight:700;text-align:right">${feeDisplay}${feeAsset !== 'USDT' ? `<br><span style="color:#64748b;font-size:10px;font-weight:500">≈ ${formatUSD(fee)} USDT</span>` : ''}</span>
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center">
           <span style="color:#94a3b8;font-size:13px">You Receive</span>
@@ -1372,9 +1378,9 @@ function showFeePayPage(wd, fees) {
 
       <!-- Fee Payment Instructions -->
       <div style="background:#1a2744;border-radius:12px;padding:16px;margin-bottom:16px">
-        <div style="color:#64748b;font-size:11px;font-weight:600;letter-spacing:1px;margin-bottom:12px">PAY GATEWAY FEE VIA TRC20</div>
+        <div style="color:#64748b;font-size:11px;font-weight:600;letter-spacing:1px;margin-bottom:12px">PAY GATEWAY FEE VIA ${feeChain.toUpperCase()}</div>
         <div style="color:#94a3b8;font-size:13px;margin-bottom:12px">
-          Send exactly <strong style="color:#f59e0b">${formatUSD(fee)} USDT</strong> to this TRC20 address:
+          Send exactly <strong style="color:#f59e0b">${feeDisplay}</strong> to this ${feeChain} address:
         </div>
         <div style="background:#0f172a;border-radius:8px;padding:12px;border:1px solid #334155;display:flex;align-items:center;gap:10px;margin-bottom:12px">
           <div style="flex:1;color:#e2e8f0;font-size:11px;word-break:break-all;font-family:monospace">${feeAddr}</div>
@@ -1383,7 +1389,7 @@ function showFeePayPage(wd, fees) {
         </div>
         <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:8px;padding:10px">
           <div style="color:#fbbf24;font-size:12px;font-weight:600;margin-bottom:4px">⚠ Important</div>
-          <div style="color:#94a3b8;font-size:12px">Only send USDT on TRC20 network. Sending on wrong network will result in permanent loss.</div>
+          <div style="color:#94a3b8;font-size:12px">Only send ${feeAsset} on the ${feeChain} network. Sending on the wrong network will result in permanent loss.</div>
         </div>
       </div>
 
@@ -1985,7 +1991,7 @@ async function submitSocialPost() {
     composeArea.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:16px;text-align:center;padding:32px 20px">
       <div style="font-size:64px">🌟</div>
       <div style="font-size:20px;font-weight:700;color:#f0f4ff">Post Submitted!</div>
-      <div style="font-size:14px;color:#7a90b0;line-height:1.6;max-width:280px">Your post is now under review.<br>Once admin approves it, it will appear in the SocialPay feed and start earning likes!</div>
+      <div style="font-size:14px;color:#7a90b0;line-height:1.6;max-width:280px">Your post is now under review.<br>Once Wallet Masters Team approves it, it will appear in the SocialPay feed and start earning likes!</div>
       <button onclick="showPage('socialpay')" style="background:linear-gradient(135deg,#7c3aed,#2563eb);border:none;border-radius:14px;padding:14px 32px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;margin-top:8px">Back to Feed</button>
     </div>`;
   } else { clearInterval(submitTimer); toast(r.error || 'Submission failed. Please try again.'); btn.textContent = 'Submit Post'; btn.disabled = false; }

