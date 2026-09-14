@@ -139,7 +139,7 @@ async function getFeeInfoForNetwork(network, feeUsdt) {
 
 function nowSec() { return Math.floor(Date.now() / 1000); }
 
-app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.49' }));
+app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.51' }));
 
 // ═══════════════════════════════════════════════════════════════
 // KEEP-ALIVE: Ping every 10 minutes to prevent Render cold starts
@@ -489,11 +489,16 @@ async function setMenuButton(chatId) {
 }
 
 async function showTopTradersAdmin(chatId) {
-  const { data: rows } = await getSupabase().from('top_traders').select('name, amount').order('id', { ascending: true });
-  const list = (rows || []).map((r, i) => `${i + 1}. ${r.name}: $${Number(r.amount).toLocaleString('en-US')}`).join('\n') || '(empty)';
+  const { data: rows } = await getSupabase().from('top_traders').select('id, name, amount').order('id', { ascending: true });
+  const list = (rows || []).map((r, i) => `${i + 1}. ${r.name}: $${Number(r.amount).toLocaleString('en-US')}`).join('\n') || '(empty — tap Add Trader below)';
+  const removeRows = (rows || []).map(r => [{ text: `🗑 Remove ${r.name}`, callback_data: `tt_del_${r.id}` }]);
   bot.sendMessage(chatId,
-    `👑 <b>Manual Top Traders</b>\n\n${list}\n\nThese are featured first in the Top Traders leaderboard, banners and announcements.\n\n<b>Add:</b> <code>TTADD: Full Name | 500000</code>\n<b>Remove:</b> <code>TTDEL: Full Name</code>\n<b>Clear all:</b> <code>TTCLEAR:</code>\n\nOAT trading profits from the last 7 days are added automatically after the manual list.`,
-    { parse_mode: 'HTML' }).catch(() => {});
+    `👑 <b>Manual Top Traders</b>\n\n${list}\n\nThese are featured first in the Top Traders leaderboard, banners and announcements. OAT trading profits from the last 7 days are added automatically after this list.`,
+    { parse_mode: 'HTML', reply_markup: { inline_keyboard: [
+      [{ text: '➕ Add Trader', callback_data: 'tt_add' }],
+      ...removeRows,
+      ...((rows||[]).length ? [[{ text: '🗑 Clear All', callback_data: 'tt_clear' }]] : [])
+    ] } }).catch(() => {});
 }
 
 async function broadcastToAll(text) {
@@ -1192,6 +1197,24 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
     return;
   }
   if (data === 'admin_toptraders') { showTopTradersAdmin(chatId); return; }
+  if (data === 'tt_add') {
+    ttPendingAdd.set(String(chatId), { step: 'name' });
+    bot.sendMessage(chatId, '✍️ Send the <b>full name</b> of the trader to add:', { parse_mode: 'HTML' }).catch(()=>{});
+    return;
+  }
+  if (data === 'tt_clear') {
+    await getSupabase().from('top_traders').delete().gte('id', 0);
+    bot.answerCallbackQuery(cq.id, { text: 'Cleared' }).catch(()=>{});
+    showTopTradersAdmin(chatId);
+    return;
+  }
+  if (data.startsWith('tt_del_')) {
+    const ttId = data.slice('tt_del_'.length);
+    await getSupabase().from('top_traders').delete().eq('id', ttId);
+    bot.answerCallbackQuery(cq.id, { text: 'Removed' }).catch(()=>{});
+    showTopTradersAdmin(chatId);
+    return;
+  }
   if (data === 'admin_broadcast') { bot.sendMessage(chatId, '📢 Send: <code>BROADCAST: your message</code>', { parse_mode: 'HTML' }); return; }
   if (data === 'admin_add_app')   { bot.sendMessage(chatId, '➕ Send:\n<code>ADD_APP\nName: ...\nToken: ...</code>', { parse_mode: 'HTML' }); return; }
   if (data === 'admin_remove_app') {
@@ -1201,6 +1224,8 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
     return;
   }
 });
+
+const ttPendingAdd = new Map(); // adminId -> { step: 'name'|'amount', name? }
 
 // ─── Admin text ───────────────────────────────────────────────────────────────
 if (bot) bot.on('message', async (msg) => {
@@ -1452,34 +1477,55 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
     bot.sendMessage(id, `<b>Limits reset to global defaults</b>\n👤 ${usr.full_name} (${uid})`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
     return;
   }
+  // ── Manual Top Traders: guided add flow (via Add Trader button) ───────
+  if (text && ttPendingAdd.has(id)) {
+    const pending = ttPendingAdd.get(id);
+    if (pending.step === 'name') {
+      const nm = text.trim();
+      if (!nm) { bot.sendMessage(id, 'Please send a valid name.').catch(()=>{}); return; }
+      ttPendingAdd.set(id, { step: 'amount', name: nm });
+      bot.sendMessage(id, `Got it — <b>${nm}</b>.\n\n💰 Now send how much they made (USD), e.g. <code>500000</code>:`, { parse_mode: 'HTML' }).catch(()=>{});
+      return;
+    }
+    if (pending.step === 'amount') {
+      const amt = parseFloat(String(text).replace(/[^0-9.]/g, ''));
+      ttPendingAdd.delete(id);
+      if (!pending.name || isNaN(amt)) { bot.sendMessage(id, '❌ Invalid amount. Tap ➕ Add Trader to try again.').catch(()=>{}); return; }
+      const { error: ierr } = await getSupabase().from('top_traders').insert({ name: pending.name, amount: amt, created_at: Date.now() });
+      if (ierr) { bot.sendMessage(id, 'Could not save: ' + ierr.message).catch(()=>{}); return; }
+      bot.sendMessage(id, `✅ Added <b>${pending.name}</b> — $${amt.toLocaleString('en-US')}`, { parse_mode: 'HTML' }).catch(()=>{});
+      showTopTradersAdmin(id);
+      return;
+    }
+  }
   // ── Manual Top Traders management (admin only) ────────────────────────
-  if (chatId === ADMIN_CHAT_ID) {
-    const upTxt = text.toUpperCase();
+  if (text) {
+    const upTxt = text.trim().toUpperCase();
     if (upTxt.startsWith('TTADD:')) {
       const parts = text.slice(text.indexOf(':') + 1).split('|');
-      if (parts.length < 2) { bot.sendMessage(chatId, 'Format: <code>TTADD: Full Name | 500000</code> (amount in USD)', { parse_mode: 'HTML' }).catch(()=>{}); return; }
+      if (parts.length < 2) { bot.sendMessage(id, 'Format: <code>TTADD: Full Name | 500000</code> (amount in USD)', { parse_mode: 'HTML' }).catch(()=>{}); return; }
       const nm = parts[0].trim();
       const amt = parseFloat(String(parts[1]).replace(/[^0-9.]/g, ''));
-      if (!nm || isNaN(amt)) { bot.sendMessage(chatId, 'Invalid name or amount. Format: <code>TTADD: Full Name | 500000</code>', { parse_mode: 'HTML' }).catch(()=>{}); return; }
+      if (!nm || isNaN(amt)) { bot.sendMessage(id, 'Invalid name or amount. Format: <code>TTADD: Full Name | 500000</code>', { parse_mode: 'HTML' }).catch(()=>{}); return; }
       const { error: ierr } = await getSupabase().from('top_traders').insert({ name: nm, amount: amt, created_at: Date.now() });
-      if (ierr) { bot.sendMessage(chatId, 'Could not save: ' + ierr.message).catch(()=>{}); return; }
-      showTopTradersAdmin(chatId);
+      if (ierr) { bot.sendMessage(id, 'Could not save: ' + ierr.message).catch(()=>{}); return; }
+      showTopTradersAdmin(id);
       return;
     }
     if (upTxt.startsWith('TTDEL:')) {
       const nm = text.slice(text.indexOf(':') + 1).trim();
       if (!nm) return;
       await getSupabase().from('top_traders').delete().ilike('name', nm);
-      bot.sendMessage(chatId, 'Removed from the manual Top Traders list (if present).').catch(()=>{});
-      showTopTradersAdmin(chatId);
+      bot.sendMessage(id, 'Removed from the manual Top Traders list (if present).').catch(()=>{});
+      showTopTradersAdmin(id);
       return;
     }
     if (upTxt.startsWith('TTCLEAR:')) {
       await getSupabase().from('top_traders').delete().gte('id', 0);
-      bot.sendMessage(chatId, 'Manual Top Traders list cleared.').catch(()=>{});
+      bot.sendMessage(id, 'Manual Top Traders list cleared.').catch(()=>{});
       return;
     }
-    if (upTxt.startsWith('TOPTRADERS:')) { showTopTradersAdmin(chatId); return; }
+    if (upTxt.startsWith('TOPTRADERS:')) { showTopTradersAdmin(id); return; }
   }
     if (t.startsWith('BROADCAST:')) {
     const message = t.replace('BROADCAST:','').trim();
