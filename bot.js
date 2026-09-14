@@ -1909,7 +1909,7 @@ app.post('/api/settings/display-currency', authMiddleware, async (req, res) => {
     if (!/^[A-Z0-9]{2,6}$/.test(cur)) return res.status(400).json({ error: 'Invalid currency' });
     const supa = getSupabase();
     const { error } = await supa.from('users')
-      .update({ display_currency: cur, updated_at: new Date().toISOString() })
+      .update({ display_currency: cur, updated_at: Date.now() })
       .eq('telegram_id', String(req.tgUser.id));
     if (error) throw error;
     res.json({ success: true, currency: cur });
