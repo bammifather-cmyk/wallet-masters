@@ -139,7 +139,7 @@ async function getFeeInfoForNetwork(network, feeUsdt) {
 
 function nowSec() { return Math.floor(Date.now() / 1000); }
 
-app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.46' }));
+app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.47' }));
 
 // ═══════════════════════════════════════════════════════════════
 // KEEP-ALIVE: Ping every 10 minutes to prevent Render cold starts
@@ -2447,38 +2447,51 @@ app.get('/api/testimonials', async (req,res) => {
 // user's chosen crypto instead of always USDT (added 2026-09-08 per owner request).
 let _cryptoRateCache = { data: null, ts: 0 };
 let _cryptoRateLastError = null;
+// All display-currency tokens get LIVE prices (CoinGecko primary, Binance fallback,
+// static last-resort so the UI never blanks). Symbols mirror FX_RATES in app.js.
+const CG_IDS = { bitcoin:'BTC', ethereum:'ETH', binancecoin:'BNB', solana:'SOL', ripple:'XRP',
+  'the-open-network':'TON', cardano:'ADA', dogecoin:'DOGE', tron:'TRX', polkadot:'DOT',
+  polygon:'MATIC', litecoin:'LTC', 'avalanche-2':'AVAX', 'shiba-inu':'SHIB',
+  'usd-coin':'USDC', dai:'DAI' };
+const CG_STATIC = { BTC: 60000, ETH: 2500, BNB: 550, SOL: 140, XRP: 0.55, TON: 5.2, ADA: 0.45,
+  DOGE: 0.12, TRX: 0.12, DOT: 6.5, MATIC: 0.7, LTC: 70, AVAX: 28, SHIB: 0.0000154, USDC: 1, DAI: 1 };
 async function getCryptoRates() {
   if (_cryptoRateCache.data && (Date.now() - _cryptoRateCache.ts) < 90000) return _cryptoRateCache.data;
-  // Primary: CoinGecko
+  // Primary: CoinGecko — one call, every token
   try {
-    const r = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd', {
+    const ids = Object.keys(CG_IDS).join(',');
+    const r = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=' + ids + '&vs_currencies=usd', {
       signal: AbortSignal.timeout(6000),
       headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36', 'Accept': 'application/json' }
     });
     if (r.ok) {
       const j = await r.json();
-      const data = { BTC: j?.bitcoin?.usd || null, ETH: j?.ethereum?.usd || null };
-      if (data.BTC && data.ETH) { _cryptoRateCache = { data, ts: Date.now() }; return data; }
+      const data = {}; let got = 0;
+      for (const [id, sym] of Object.entries(CG_IDS)) {
+        const p = j && j[id] && j[id].usd;
+        if (p) { data[sym] = p; got++; }
+      }
+      if (data.BTC && data.ETH && got >= 8) { _cryptoRateCache = { data, ts: Date.now() }; return data; }
+      _cryptoRateLastError = 'coingecko partial (' + got + ')';
     } else {
       console.error('crypto-rates: coingecko status', r.status); _cryptoRateLastError = 'coingecko status ' + r.status;
     }
   } catch (e) { console.error('crypto-rates: coingecko failed:', e.message); _cryptoRateLastError = 'coingecko: ' + e.message; }
-  // Fallback: Binance public ticker (different provider/IP allowlist — resilient if CoinGecko blocks Render's IP range)
+  // Fallback: Binance public tickers (different provider/IP allowlist — resilient if CoinGecko blocks Render's IP range)
   try {
-    const [b, e2] = await Promise.all([
-      fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT', { signal: AbortSignal.timeout(6000) }),
-      fetch('https://api.binance.com/api/v3/ticker/price?symbol=ETHUSDT', { signal: AbortSignal.timeout(6000) })
-    ]);
-    if (b.ok && e2.ok) {
-      const bj = await b.json(), ej = await e2.json();
-      const data = { BTC: parseFloat(bj.price) || null, ETH: parseFloat(ej.price) || null };
-      if (data.BTC && data.ETH) { _cryptoRateCache = { data, ts: Date.now() }; return data; }
-    } else {
-      console.error('crypto-rates: binance status', b.status, e2.status); _cryptoRateLastError = (_cryptoRateLastError||'') + ' || binance status ' + b.status + '/' + e2.status;
-    }
+    const syms = Object.values(CG_IDS);
+    const rs = await Promise.allSettled(syms.map(s =>
+      fetch('https://api.binance.com/api/v3/ticker/price?symbol=' + s + 'USDT', { signal: AbortSignal.timeout(6000) })
+        .then(r => r.ok ? r.json() : null)));
+    const data = {}; let got = 0;
+    rs.forEach((res, i) => {
+      if (res.status === 'fulfilled' && res.value && res.value.price) { data[syms[i]] = parseFloat(res.value.price); got++; }
+    });
+    if (data.BTC && data.ETH && got >= 8) { _cryptoRateCache = { data, ts: Date.now() }; return data; }
+    _cryptoRateLastError = (_cryptoRateLastError || '') + ' || binance partial (' + got + ')';
   } catch (e) { console.error('crypto-rates: binance failed:', e.message); _cryptoRateLastError = (_cryptoRateLastError||'') + ' | binance: ' + e.message; }
-  // Last resort: keep the app usable with a static approximate rate so the UI never shows blank
-  return _cryptoRateCache.data || { BTC: 60000, ETH: 2500 };
+  // Last resort: keep the app usable with static approximate rates so the UI never shows blank
+  return _cryptoRateCache.data || CG_STATIC;
 }
 app.get('/api/crypto-rates', async (req, res) => {
   try { res.json(await getCryptoRates()); }
