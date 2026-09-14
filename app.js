@@ -74,7 +74,7 @@ function _abbrevNum(v, maxDec) {
 }
 function fmtD(usdtVal, opt) {
   const cur = state.displayCurrency || 'USDT';
-  const rate = cur === 'USDT' ? 1 : (FX_RATES[cur] || 1);
+  const rate = fxRateFor(cur);
   const v = (parseFloat(usdtVal) || 0) * rate;
   const dec = cur === 'BTC' ? 8 : cur === 'ETH' ? 6 : (cur === 'SHIB' ? 0 : 2);
   const full = formatLocal(v, dec);
@@ -83,6 +83,14 @@ function fmtD(usdtVal, opt) {
   return full;
 }
 function fmtDCur() { return state.displayCurrency || 'USDT'; }
+// Live USDT->currency rate: prefers real-time market price (state.cryptoRates,
+// USD per token) over the static FX_RATES fallback. Returns units per 1 USDT.
+function fxRateFor(cur) {
+  if (!cur || cur === 'USDT') return 1;
+  const live = state.cryptoRates && state.cryptoRates[cur];
+  if (live && live > 0) return 1 / live;
+  return FX_RATES[cur] || 1;
+}
 function fmtUSDTShort(usdtVal) {
   const full = formatUSD(usdtVal);
   return full.replace(/[,\.\s]/g, '').length > 11 ? _abbrevNum(usdtVal, 2) : full;
@@ -490,13 +498,14 @@ async function fetchCryptoRates() {
     const r = await fetch(window.location.origin + '/api/crypto-rates');
     const j = await r.json();
     if (j && j.BTC && j.ETH) {
-      state.cryptoRates = { BTC: j.BTC, ETH: j.ETH };
+      state.cryptoRates = j; // every token: BTC ETH BNB SOL XRP TON ADA DOGE TRX DOT MATIC LTC AVAX SHIB USDC DAI
       state.cryptoRatesFetchedAt = Date.now();
       // Refresh any open crypto-amount displays now that we have live rates (safe no-ops if those elements aren't on screen)
       if (g('withdrawAmount')) updateFees();
       updateWithdrawAssetUI(); // available balance / min-max limits may now convert to BTC/ETH
       const activeVipNet = document.querySelector('#vipNetSelector .net-opt.active');
       if (activeVipNet) selectVipNetwork(activeVipNet);
+      if (state.displayCurrency && state.displayCurrency !== 'USDT') updateUI(); // display-currency numbers now use live prices
     }
   } catch (e) { /* keep previous rates on failure */ }
   finally { _cryptoRatesFetchInFlight = false; }
@@ -2191,7 +2200,7 @@ function _renderConverterList(currencies) {
     return '<div onclick="selectConverterCurrency(\'' + c + '\')" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid #1e293b;display:flex;align-items:center;gap:10px;' + (c === _converterCurrency ? 'background:rgba(245,158,11,0.1);color:#f59e0b' : '') + '">' +
       '<span style="font-size:16px">' + icon + '</span>' +
       '<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600;color:' + (c === _converterCurrency ? '#f59e0b' : '#f0f4ff') + '">' + label + '</div>' +
-      '<div style="font-size:11px;color:#7a90b0;margin-top:1px">1 USDT = ' + formatLocal(FX_RATES[c] || 1) + ' ' + c + '</div></div>' +
+      '<div style="font-size:11px;color:#7a90b0;margin-top:1px">1 USDT = ' + formatLocal(fxRateFor(c)) + ' ' + c + '</div></div>' +
       '<button onclick="event.stopPropagation();setAppDisplayCurrency(\'' + c + '\')" style="flex:0 0 auto;background:' + (isDisp ? 'rgba(245,158,11,0.15);color:#f59e0b;border:1px solid #f59e0b55' : 'rgba(59,130,246,0.12);color:#60a5fa;border:1px solid #3b82f655') + ';border-radius:6px;padding:4px 9px;font-size:10px;font-weight:700;cursor:pointer">' + (isDisp ? '✓ Display' : 'Set Display') + '</button>' +
       '</div>';
   }).join('');
@@ -2215,7 +2224,7 @@ function selectConverterCurrency(cur) {
 }
 
 function updateConverter() {
-  const rate = FX_RATES[_converterCurrency] || 1;
+  const rate = fxRateFor(_converterCurrency);
   const inputAmt = parseFloat(g('converterInput')?.value || 0);
   const converted = inputAmt * rate;
 
@@ -2254,7 +2263,7 @@ function updateHomeBalanceCurrency() {
     if (curEl) curEl.textContent = 'USDT';
   } else {
     // Default: big number is USDT; sub-line follows the converter selection
-    const rate = FX_RATES[_converterCurrency] || 1;
+    const rate = fxRateFor(_converterCurrency);
     if (usdEl) {
       const balDecimals = _converterCurrency === 'BTC' ? 8 : _converterCurrency === 'ETH' ? 6 : 2;
       usdEl.textContent = formatLocal(state.balance * rate, balDecimals);
