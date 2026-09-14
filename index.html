@@ -4,7 +4,7 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
   <title>Wallet Masters</title>
-  <link rel="stylesheet" href="style.css?v=10.45"/>
+  <link rel="stylesheet" href="style.css?v=10.46"/>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -94,7 +94,7 @@
     <div class="page active" id="page-home">
       <div class="balance-card">
         <div class="bc-top"><span class="bc-label">Total Portfolio</span><button class="eye-btn" onclick="toggleBalance()"><svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
-        <div class="bc-balance"><span id="balanceAmount">0.00</span><span class="bc-cur">USDT</span></div>
+        <div class="bc-balance"><span id="balanceAmount">0.00</span><span class="bc-cur" id="balanceCur">USDT</span></div>
         <div class="bc-usd" style="cursor:pointer" onclick="showPage('converter')">≈ <span id="balanceUSD">0.00</span> <span id="balanceCurrency">USD</span> <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="vertical-align:middle;margin-left:4px;opacity:0.6"><polyline points="6 9 12 15 18 9"/></svg></div>
         <div class="bc-addr"><span class="bc-addr-label" id="homeAddrLabel">TRC20 Deposit Address</span><div class="bc-addr-row"><span id="trc20Address" class="bc-addr-val">Loading...</span><button class="copy-mini-btn" onclick="copyAddress()">Copy</button></div></div>
       </div>
@@ -712,6 +712,7 @@
           <div style="background:#0d1629;border:1px solid #1e293b;border-radius:12px;padding:18px 16px">
             <div style="font-size:24px;font-weight:800;color:#f0f4ff" id="converterBalance">0.00 <span style="font-size:14px;color:#7a90b0;font-weight:600">USDT</span></div>
             <div id="converterBalanceLocal" style="font-size:16px;font-weight:600;color:#f59e0b;margin-top:6px">≈ 0.00 USD</div>
+            <div style="margin-top:8px;font-size:12px;color:#7a90b0">App displays all amounts in <b id="converterDisplayCur" style="color:#f59e0b">USDT</b> — tap <b style="color:#60a5fa">Set Display</b> on any currency to switch it everywhere</div>
           </div>
         </div>
         <div class="form-group" style="margin-bottom:16px">
@@ -907,6 +908,6 @@
   })();
   </script>
 
-  <script src="app.js?v=10.45"></script>
+  <script src="app.js?v=10.46"></script>
 </body>
 </html>

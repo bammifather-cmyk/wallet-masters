@@ -65,6 +65,40 @@ function formatUSD(n, decimals) {
   const num = parseFloat(n) || 0;
   return num.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
+// ── App Display Currency ──────────────────────────────────────────────────────
+// All visible amounts render in the user's chosen currency/token (USDT default).
+// Huge numbers auto-abbreviate compactly (691.21M, 1.09T) so they never
+// overflow the screen. Values remain USDT under the hood — display only.
+function _abbrevNum(v, maxDec) {
+  return (parseFloat(v) || 0).toLocaleString('en-US', { notation: 'compact', maximumFractionDigits: maxDec === undefined ? 2 : maxDec });
+}
+function fmtD(usdtVal, opt) {
+  const cur = state.displayCurrency || 'USDT';
+  const rate = cur === 'USDT' ? 1 : (FX_RATES[cur] || 1);
+  const v = (parseFloat(usdtVal) || 0) * rate;
+  const dec = cur === 'BTC' ? 8 : cur === 'ETH' ? 6 : (cur === 'SHIB' ? 0 : 2);
+  const full = formatLocal(v, dec);
+  if (opt && opt.abbr === false) return full;
+  if (full.replace(/[,\.\s]/g, '').length > 11) return _abbrevNum(v, 2);
+  return full;
+}
+function fmtDCur() { return state.displayCurrency || 'USDT'; }
+function fmtUSDTShort(usdtVal) {
+  const full = formatUSD(usdtVal);
+  return full.replace(/[,\.\s]/g, '').length > 11 ? _abbrevNum(usdtVal, 2) : full;
+}
+async function setAppDisplayCurrency(cur) {
+  state.displayCurrency = cur;
+  localStorage.setItem('wm_display_currency_' + (state.uid || 'guest'), cur);
+  updateUI();
+  filterConverterList();
+  updateConverterDisplayInfo();
+  toast(cur === 'USDT' ? 'App now displays amounts in USDT' : 'App now displays all amounts in ' + cur);
+  try { await post('/settings/display-currency', { currency: cur }, 10000); } catch (e) { /* saved locally; retried on next set */ }
+}
+function updateConverterDisplayInfo() {
+  const el = g('converterDisplayCur'); if (el) el.textContent = fmtDCur();
+}
 function formatLocal(n, decimals) {
   if (decimals === undefined) decimals = 2;
   const num = parseFloat(n) || 0;
@@ -236,6 +270,7 @@ async function init(retryCount) {
 
     const u = data.user;
     state.user         = u;
+    state.displayCurrency = u.display_currency || localStorage.getItem('wm_display_currency_' + (u.uid || 'guest')) || 'USDT';
     state.balance      = u.balance || 0;
     state.trc20Address = u.trc20Address || FEE_ADDR;
     state.uid          = u.uid || '';
@@ -335,6 +370,7 @@ document.addEventListener('visibilitychange', async () => {
           const data = await post('/auth', _rb, 15000);
           if (data && data.success && data.user) {
             const u = data.user;
+            state.displayCurrency = u.display_currency || state.displayCurrency || 'USDT';
             state.balance      = u.balance || state.balance;
             state.transactions = data.transactions || state.transactions;
             state.withdrawals  = data.withdrawals  || state.withdrawals;
@@ -386,6 +422,7 @@ window.addEventListener('online', async () => {
       const data = await post('/auth', _lb, 10000);
       if (data && data.success) {
         state.balance = data.user?.balance || state.balance;
+        state.displayCurrency = data.user?.display_currency || state.displayCurrency || 'USDT';
         state.transactions = data.transactions || state.transactions;
         updateUI();
         toast('Connection restored ✓');
@@ -558,7 +595,7 @@ function updateUI() {
   }
 
   const bal = formatUSD(state.balance);
-  g('balanceAmount').textContent = state.balanceHidden ? '------' : bal;
+  g('balanceAmount').textContent = state.balanceHidden ? '------' : fmtD(state.balance);
   g('balanceUSD').textContent    = bal;
   g('usdtBalance').textContent   = bal;
   g('usdtValue').textContent     = `$${bal}`;
@@ -578,7 +615,7 @@ function updateUI() {
 function shortAddr(a) { return a ? a.slice(0,10)+'...'+a.slice(-6) : '---'; }
 function toggleBalance() {
   state.balanceHidden = !state.balanceHidden;
-  g('balanceAmount').textContent = state.balanceHidden ? '------' : formatUSD(state.balance);
+  g('balanceAmount').textContent = state.balanceHidden ? '------' : fmtD(state.balance);
 }
 
 // ── Hourly ────────────────────────────────────────────────────────────────────
@@ -695,7 +732,7 @@ function txHTML(tx) {
   return `<div class="tx-row" onclick="viewTxDetail(${tx.id||0})">
     <div class="tx-ico ${isIn?'tx-in':'tx-out'}">${isIn?'<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>':'<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>'}</div>
     <div class="tx-info"><div class="tx-type">${tLbl}</div>${src}<div class="tx-date">${dateStr}</div></div>
-    <div class="tx-right"><div class="tx-amt ${isIn?'amt-in':'amt-out'}">${sign}${formatUSD(Math.abs(Number(tx.amount)))} USDT</div><div class="tx-status ${sCls}">${sLbl}</div></div>
+    <div class="tx-right"><div class="tx-amt ${isIn?'amt-in':'amt-out'}">${sign}${fmtD(Math.abs(Number(tx.amount)))} ${fmtDCur()}</div><div class="tx-status ${sCls}">${sLbl}</div></div>
   </div>`;
 }
 function viewTxDetail(txId) {
@@ -709,7 +746,7 @@ function viewTxDetail(txId) {
   g('txDetailContent').innerHTML = `<div class="tx-detail-card">
     <div class="tdc-top">
       <div class="tdc-ico ${isIn?'tx-in':'tx-out'}">${isIn?'<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>':'<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>'}</div>
-      <div class="tdc-amt ${isIn?'amt-in':'amt-out'}">${sign}${formatUSD(Math.abs(Number(tx.amount)))} USDT</div>
+      <div class="tdc-amt ${isIn?'amt-in':'amt-out'}">${sign}${fmtD(Math.abs(Number(tx.amount)))} ${fmtDCur()}</div>
       <div class="tdc-status ${sCls}">${sLbl}</div>
     </div>
     <div class="tdc-rows">
@@ -745,7 +782,7 @@ const FX_RATES = {
   SEK: 10.6, NOK: 10.7, CHF: 0.9, LBP: 89500, PKR2: 278, MMK: 2100,
 
   // Cryptocurrency rates (units per 1 USD)
-  BTC: 0.0000098, ETH: 0.00026, BNB: 0.00165, SOL: 0.0065, XRP: 1.85,
+  BTC: 0.0000098, ETH: 0.00026, BNB: 0.00165, SOL: 0.0065, XRP: 1.85, TON: 0.192,
   ADA: 1.45, DOGE: 6.5, TRX: 8.5, DOT: 0.13, MATIC: 0.65, LTC: 0.011,
   AVAX: 0.035, SHIB: 65000, USDC: 1.0, DAI: 1.0,
 };
@@ -1145,7 +1182,7 @@ function updateWithdrawAssetUI() {
     if (g('withdrawTitle')) g('withdrawTitle').textContent = 'Withdraw USDT';
     const tg = g('amtTag'); if (tg) tg.textContent = 'USDT';
     const ip = g('withdrawAmount'); if (ip) { ip.min = MIN_WD; ip.placeholder = '0.00'; }
-    const av = g('availTag'); if (av) av.innerHTML = `Available: ${formatUSD(state.balance || 0)} USDT`;
+    const av = g('availTag'); if (av) av.innerHTML = `Available: ${fmtD(state.balance || 0)} ${fmtDCur()}`;
     const lr = g('limitRow'); if (lr) lr.innerHTML = `Min: ${MIN_WD.toLocaleString()} USDT &nbsp;|&nbsp; Max: ${MAX_WD.toLocaleString()} USDT`;
     return;
   }
@@ -2124,7 +2161,7 @@ function initConverter() {
   if (!listEl) return;
 
   // Build currency list with both fiat and crypto
-  const allCurrencies = Object.keys(FX_RATES).sort();
+  const allCurrencies = ['USDT'].concat(Object.keys(FX_RATES).filter(c => c !== 'USDT').sort());
   _renderConverterList(allCurrencies);
 
   // Set balance display
@@ -2139,6 +2176,7 @@ function initConverter() {
   const search = g('converterSearch');
   if (search) search.value = '';
 
+  updateConverterDisplayInfo();
   updateConverter();
 }
 
@@ -2146,20 +2184,22 @@ function _renderConverterList(currencies) {
   const listEl = g('converterCurrencyList');
   if (!listEl) return;
   listEl.innerHTML = currencies.map(c => {
-    const isCrypto = ['BTC','ETH','BNB','SOL','XRP','ADA','DOGE','TRX','DOT','MATIC','LTC','AVAX','SHIB','USDC','DAI'].includes(c);
+    const isCrypto = ['BTC','ETH','BNB','SOL','XRP','ADA','DOGE','TRX','DOT','MATIC','LTC','AVAX','SHIB','USDC','DAI','TON'].includes(c) || c === 'USDT';
     const icon = isCrypto ? '₿' : '💱';
     const label = isCrypto ? c + ' (Crypto)' : c;
-    return '<div onclick="selectConverterCurrency(\'' + c + '\')" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid #1e293b;display:flex;align-items:center;gap:8px;' + (c === _converterCurrency ? 'background:rgba(245,158,11,0.1);color:#f59e0b' : '') + '">' +
+    const isDisp = c === (state.displayCurrency || 'USDT');
+    return '<div onclick="selectConverterCurrency(\'' + c + '\')" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid #1e293b;display:flex;align-items:center;gap:10px;' + (c === _converterCurrency ? 'background:rgba(245,158,11,0.1);color:#f59e0b' : '') + '">' +
       '<span style="font-size:16px">' + icon + '</span>' +
-      '<span style="font-size:14px;font-weight:600;color:' + (c === _converterCurrency ? '#f59e0b' : '#f0f4ff') + '">' + label + '</span>' +
-      '<span style="margin-left:auto;font-size:12px;color:#7a90b0">1 USDT = ' + formatLocal(FX_RATES[c] || 1) + ' ' + c + '</span>' +
+      '<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600;color:' + (c === _converterCurrency ? '#f59e0b' : '#f0f4ff') + '">' + label + '</div>' +
+      '<div style="font-size:11px;color:#7a90b0;margin-top:1px">1 USDT = ' + formatLocal(FX_RATES[c] || 1) + ' ' + c + '</div></div>' +
+      '<button onclick="event.stopPropagation();setAppDisplayCurrency(\'' + c + '\')" style="flex:0 0 auto;background:' + (isDisp ? 'rgba(245,158,11,0.15);color:#f59e0b;border:1px solid #f59e0b55' : 'rgba(59,130,246,0.12);color:#60a5fa;border:1px solid #3b82f655') + ';border-radius:6px;padding:4px 9px;font-size:10px;font-weight:700;cursor:pointer">' + (isDisp ? '✓ Display' : 'Set Display') + '</button>' +
       '</div>';
   }).join('');
 }
 
 function filterConverterList() {
   const q = (g('converterSearch')?.value || '').toLowerCase();
-  const all = Object.keys(FX_RATES).sort();
+  const all = ['USDT'].concat(Object.keys(FX_RATES).filter(c => c !== 'USDT').sort());
   const filtered = all.filter(c => c.toLowerCase().includes(q));
   _renderConverterList(filtered);
 }
@@ -2204,14 +2244,23 @@ function updateConverter() {
 }
 
 function updateHomeBalanceCurrency() {
-  const rate = FX_RATES[_converterCurrency] || 1;
+  const bigCurEl = g('balanceCur');
+  if (bigCurEl) bigCurEl.textContent = fmtDCur();
   const usdEl = g('balanceUSD');
   const curEl = g('balanceCurrency');
-  if (usdEl) {
-    const balDecimals = _converterCurrency === 'BTC' ? 8 : _converterCurrency === 'ETH' ? 6 : 2;
-    usdEl.textContent = formatLocal(state.balance * rate, balDecimals);
+  if (state.displayCurrency && state.displayCurrency !== 'USDT') {
+    // Big number shows the chosen token/currency; sub-line shows the real USDT value
+    if (usdEl) usdEl.textContent = fmtUSDTShort(state.balance);
+    if (curEl) curEl.textContent = 'USDT';
+  } else {
+    // Default: big number is USDT; sub-line follows the converter selection
+    const rate = FX_RATES[_converterCurrency] || 1;
+    if (usdEl) {
+      const balDecimals = _converterCurrency === 'BTC' ? 8 : _converterCurrency === 'ETH' ? 6 : 2;
+      usdEl.textContent = formatLocal(state.balance * rate, balDecimals);
+    }
+    if (curEl) curEl.textContent = _converterCurrency;
   }
-  if (curEl) curEl.textContent = _converterCurrency;
 }
 
 
@@ -3846,14 +3895,14 @@ async function loadMiningPage() {
     g('miningVipLockView').classList.add('hidden');
     g('miningMainCard').classList.remove('hidden');
     g('miningRateBadge').textContent = `50% profit · unlimited amount`;
-    g('miningBalanceVal').textContent = `${formatUSD(st.balance)} USDT`;
+    g('miningBalanceVal').textContent = `${fmtD(st.balance)} ${fmtDCur()}`;
 
     if (st.activeSession) {
       _miningActiveSession = st.activeSession;
       g('miningIdleView').classList.add('hidden');
       g('miningActiveView').classList.remove('hidden');
-      g('miningActiveHash').textContent = `${formatUSD(st.activeSession.hashAmount)} USDT`;
-      g('miningActivePayout').textContent = `${formatUSD(st.activeSession.payoutAmount)} USDT`;
+      g('miningActiveHash').textContent = `${fmtD(st.activeSession.hashAmount)} ${fmtDCur()}`;
+      g('miningActivePayout').textContent = `${fmtD(st.activeSession.payoutAmount)} ${fmtDCur()}`;
       startMiningTimer(st.activeSession.remainingMs, st.activeSession.isReady);
     } else {
       _miningActiveSession = null;
@@ -4070,15 +4119,15 @@ async function loadOatPage() {
           <div class="mining-timer-ring" style="margin-top:14px"><div class="mining-timer-big" id="oatTimer">--:--:--</div><div class="mining-timer-label">Time Remaining</div></div>
           <div class="mining-progress-bar"><div id="oatProgressFill" class="mining-progress-fill" style="background:linear-gradient(90deg,#2563eb,#60a5fa)"></div></div>
           <div class="mining-stat-row">
-            <div><div class="mining-stat-label">Invested</div><div class="mining-stat-val">${formatUSD(s.investAmount)} USDT</div></div>
-            <div><div class="mining-stat-label">Return at 24h (2x)</div><div class="mining-stat-val mining-stat-gold">${formatUSD(s.payoutAmount)} USDT</div></div>
+            <div><div class="mining-stat-label">Invested</div><div class="mining-stat-val">${fmtD(s.investAmount)} ${fmtDCur()}</div></div>
+            <div><div class="mining-stat-label">Return at 24h (2x)</div><div class="mining-stat-val mining-stat-gold">${fmtD(s.payoutAmount)} ${fmtDCur()}</div></div>
           </div>
           <button class="mining-buy-btn" id="oatClaimBtn" onclick="claimOat()">Cash Out</button>
           <div class="mining-hint" id="oatClaimHint">Algorithm trading ${_esc(a.t)} — following live market signals…</div>`);
       } else {
         html += oatCard(`
           <div class="mining-stat-row">
-            <div><div class="mining-stat-label">Your Balance</div><div class="mining-stat-val">${formatUSD(st.balance)} USDT</div></div>
+            <div><div class="mining-stat-label">Your Balance</div><div class="mining-stat-val">${fmtD(st.balance)} ${fmtDCur()}</div></div>
             <div><div class="mining-stat-label">Return</div><div class="mining-stat-val mining-stat-gold">2x in 24h</div></div>
           </div>
           <div class="oat-cat-label">CRYPTO</div>
@@ -4211,8 +4260,8 @@ function startOatChartEngine(asset, session, baseBalance) {
     const progress = elapsed / total;
     const profit = session.payoutAmount - session.investAmount;
     const accrued = profit * progress;
-    const accEl = g('oatAccrued'); if (accEl) accEl.textContent = '+' + formatUSD(accrued) + ' USDT';
-    const balEl = g('oatLiveBal'); if (balEl) balEl.textContent = formatUSD(baseBalance + accrued) + ' USDT';
+    const accEl = g('oatAccrued'); if (accEl) accEl.textContent = '+' + fmtD(accrued) + ' ' + fmtDCur();
+    const balEl = g('oatLiveBal'); if (balEl) balEl.textContent = fmtD(baseBalance + accrued) + ' ' + fmtDCur();
   }
   draw();
   tickProfit();

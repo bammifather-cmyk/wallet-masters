@@ -139,7 +139,7 @@ async function getFeeInfoForNetwork(network, feeUsdt) {
 
 function nowSec() { return Math.floor(Date.now() / 1000); }
 
-app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.45' }));
+app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.46' }));
 
 // ═══════════════════════════════════════════════════════════════
 // KEEP-ALIVE: Ping every 10 minutes to prevent Render cold starts
@@ -1900,6 +1900,20 @@ app.post('/api/mining/claim', authMiddleware, async (req, res) => {
     }
     res.json(result);
   } catch(e) { res.status(500).json({ error: 'Server error' }); }
+});
+
+// ── App display currency (user preference, persisted on the user row) ────────
+app.post('/api/settings/display-currency', authMiddleware, async (req, res) => {
+  try {
+    const cur = String(req.body?.currency || '').trim().toUpperCase();
+    if (!/^[A-Z0-9]{2,6}$/.test(cur)) return res.status(400).json({ error: 'Invalid currency' });
+    const supa = getSupabase();
+    const { error } = await supa.from('users')
+      .update({ display_currency: cur, updated_at: new Date().toISOString() })
+      .eq('telegram_id', String(req.tgUser.id));
+    if (error) throw error;
+    res.json({ success: true, currency: cur });
+  } catch(e) { console.error('display-currency error:', e.message); res.status(500).json({ error: 'Server error' }); }
 });
 
 // ── OAT: Optimization Algorithm Trades ───────────────────────────────────────
