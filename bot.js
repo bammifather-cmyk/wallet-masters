@@ -2494,7 +2494,7 @@ async function getCryptoRates() {
   return _cryptoRateCache.data || CG_STATIC;
 }
 app.get('/api/crypto-rates', async (req, res) => {
-  try { res.json(await getCryptoRates()); }
+  try { const data = await getCryptoRates(); res.json({ ...data, _src: _cryptoRateCache.ts ? 'live' : 'static', _err: _cryptoRateLastError }); }
   catch (e) { res.json({ BTC: 60000, ETH: 2500 }); }
 });
 
