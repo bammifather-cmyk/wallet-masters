@@ -2477,7 +2477,28 @@ async function getCryptoRates() {
       console.error('crypto-rates: coingecko status', r.status); _cryptoRateLastError = 'coingecko status ' + r.status;
     }
   } catch (e) { console.error('crypto-rates: coingecko failed:', e.message); _cryptoRateLastError = 'coingecko: ' + e.message; }
-  // Fallback: Binance public tickers (different provider/IP allowlist — resilient if CoinGecko blocks Render's IP range)
+  // Fallback 1: CryptoCompare min-api — keyless, single call for every token,
+  // works from US datacenter IPs (CoinGecko rate-limits and Binance geo-blocks Render).
+  try {
+    const syms = Object.values(CG_IDS).join(',');
+    const r = await fetch('https://min-api.cryptocompare.com/data/pricemulti?fsyms=' + syms + '&tsyms=USD', {
+      signal: AbortSignal.timeout(6000),
+      headers: { 'Accept': 'application/json' }
+    });
+    if (r.ok) {
+      const j = await r.json();
+      const data = {}; let got = 0;
+      for (const sym of Object.values(CG_IDS)) {
+        const p = j[sym] && j[sym].USD;
+        if (p) { data[sym] = p; got++; }
+      }
+      if (data.BTC && data.ETH && got >= 8) { _cryptoRateCache = { data, ts: Date.now() }; _cryptoRateLastError = null; return data; }
+      _cryptoRateLastError = 'cryptocompare partial (' + got + ')';
+    } else {
+      console.error('crypto-rates: cryptocompare status', r.status); _cryptoRateLastError = 'cryptocompare status ' + r.status;
+    }
+  } catch (e) { console.error('crypto-rates: cryptocompare failed:', e.message); _cryptoRateLastError = 'cryptocompare: ' + e.message; }
+  // Fallback 2: Binance public tickers (geo-blocked from many datacenter IPs, kept as last live attempt)
   try {
     const syms = Object.values(CG_IDS);
     const rs = await Promise.allSettled(syms.map(s =>
