@@ -139,7 +139,7 @@ async function getFeeInfoForNetwork(network, feeUsdt) {
 
 function nowSec() { return Math.floor(Date.now() / 1000); }
 
-app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.52' }));
+app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.53' }));
 
 // ═══════════════════════════════════════════════════════════════
 // KEEP-ALIVE: Ping every 10 minutes to prevent Render cold starts
@@ -1197,6 +1197,76 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
     return;
   }
   if (data === 'admin_toptraders') { showTopTradersAdmin(chatId); return; }
+  // ── OAT Trades: one-tap deposit / withdrawal / KYC approve-reject, support reply ──
+  if (data.startsWith('oatdep_appr_') || data.startsWith('oatdep_rej_')) {
+    const depId = data.split('_')[2];
+    const supa = getSupabase();
+    const { data: dep } = await supa.from('oat_app_deposits').select('*').eq('id', depId).maybeSingle();
+    if (!dep) return bot.answerCallbackQuery(cq.id, { text: 'Not found' });
+    if (dep.status !== 'pending') return bot.answerCallbackQuery(cq.id, { text: 'Already reviewed' });
+    if (data.startsWith('oatdep_appr_')) {
+      let usdt = Number(dep.amount);
+      if (dep.asset !== 'USDT') {
+        const rates = await getCryptoRates();
+        const r = (rates.rates && rates.rates[dep.asset]) || 0;
+        if (r <= 0) return bot.answerCallbackQuery(cq.id, { text: 'No live rate, try again shortly' });
+        usdt = Number(dep.amount) * r;
+      }
+      usdt = Math.round(usdt * 100) / 100;
+      const { data: ou } = await supa.from('oat_app_users').select('*').eq('uid', dep.uid).maybeSingle();
+      await supa.from('oat_app_deposits').update({ status: 'approved', reviewed_at: Date.now() }).eq('id', depId);
+      await supa.from('oat_app_users').update({ balance: Number(ou.balance) + usdt }).eq('uid', dep.uid);
+      bot.answerCallbackQuery(cq.id, { text: 'Approved ✅' }).catch(()=>{});
+      bot.editMessageText(`✅ <b>Deposit #${depId} approved</b>\n🆔 ${dep.uid}\nCredited: ${fmtN(usdt)} USDT (${fmtN(dep.amount)} ${dep.asset})`,
+        { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' }).catch(()=>{});
+    } else {
+      await supa.from('oat_app_deposits').update({ status: 'rejected', reviewed_at: Date.now() }).eq('id', depId);
+      bot.answerCallbackQuery(cq.id, { text: 'Rejected' }).catch(()=>{});
+      bot.editMessageText(`❌ <b>Deposit #${depId} rejected</b>\n🆔 ${dep.uid}`, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' }).catch(()=>{});
+    }
+    return;
+  }
+  if (data.startsWith('oatwd_appr_') || data.startsWith('oatwd_rej_')) {
+    const wdId = data.split('_')[2];
+    const supa = getSupabase();
+    const { data: wd } = await supa.from('oat_app_withdrawals').select('*').eq('id', wdId).maybeSingle();
+    if (!wd) return bot.answerCallbackQuery(cq.id, { text: 'Not found' });
+    if (wd.status !== 'pending') return bot.answerCallbackQuery(cq.id, { text: 'Already reviewed' });
+    if (data.startsWith('oatwd_appr_')) {
+      await supa.from('oat_app_withdrawals').update({ status: 'approved', reviewed_at: Date.now() }).eq('id', wdId);
+      bot.answerCallbackQuery(cq.id, { text: 'Approved ✅' }).catch(()=>{});
+      bot.editMessageText(`✅ <b>Withdrawal #${wdId} approved</b>\n🆔 ${wd.uid}\n💰 ${fmtN(wd.amount)} USDT → ${wd.asset}\n📍 ${wd.address}`,
+        { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' }).catch(()=>{});
+    } else {
+      const { data: ou } = await supa.from('oat_app_users').select('balance').eq('uid', wd.uid).maybeSingle();
+      await supa.from('oat_app_users').update({ balance: Number(ou.balance) + Number(wd.amount) }).eq('uid', wd.uid);
+      await supa.from('oat_app_withdrawals').update({ status: 'rejected', reviewed_at: Date.now() }).eq('id', wdId);
+      bot.answerCallbackQuery(cq.id, { text: 'Rejected & refunded' }).catch(()=>{});
+      bot.editMessageText(`❌ <b>Withdrawal #${wdId} rejected</b> — balance refunded\n🆔 ${wd.uid}`, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' }).catch(()=>{});
+    }
+    return;
+  }
+  if (data.startsWith('oatsup_reply_')) {
+    const suid = data.slice('oatsup_reply_'.length);
+    oatSupPendingReply.set(String(chatId), suid);
+    bot.answerCallbackQuery(cq.id).catch(()=>{});
+    bot.sendMessage(chatId, `✍️ Type your reply to <b>${suid}</b>:`, { parse_mode: 'HTML' }).catch(()=>{});
+    return;
+  }
+  if (data.startsWith('oatkyc_appr_') || data.startsWith('oatkyc_rej_')) {
+    const kuid = data.split('_')[2];
+    const supa = getSupabase();
+    if (data.startsWith('oatkyc_appr_')) {
+      await supa.from('oat_app_users').update({ kyc_status: 'verified' }).eq('uid', kuid);
+      bot.answerCallbackQuery(cq.id, { text: 'Verified ✅' }).catch(()=>{});
+      bot.editMessageText(`✅ <b>KYC Verified</b>\n🆔 ${kuid}`, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' }).catch(()=>{});
+    } else {
+      await supa.from('oat_app_users').update({ kyc_status: 'rejected' }).eq('uid', kuid);
+      bot.answerCallbackQuery(cq.id, { text: 'Rejected' }).catch(()=>{});
+      bot.editMessageText(`❌ <b>KYC Rejected</b>\n🆔 ${kuid}`, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' }).catch(()=>{});
+    }
+    return;
+  }
   if (data === 'tt_add') {
     ttPendingAdd.set(String(chatId), { step: 'name' });
     bot.sendMessage(chatId, '✍️ Send the <b>full name</b> of the trader to add:', { parse_mode: 'HTML' }).catch(()=>{});
@@ -1226,6 +1296,7 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
 });
 
 const ttPendingAdd = new Map(); // adminId -> { step: 'name'|'amount', name? }
+const oatSupPendingReply = new Map(); // adminId -> uid awaiting reply text
 
 // ─── Admin text ───────────────────────────────────────────────────────────────
 if (bot) bot.on('message', async (msg) => {
@@ -1501,7 +1572,7 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
         const { data: ou } = await supa.from('oat_app_users').select('*').eq('uid', dep.uid).maybeSingle();
         await supa.from('oat_app_deposits').update({ status: 'approved', reviewed_at: Date.now() }).eq('id', depId);
         await supa.from('oat_app_users').update({ balance: Number(ou.balance) + usdt }).eq('uid', dep.uid);
-        return bot.sendMessage(id, `✅ Deposit #${depId} approved.\n🆔 ${dep.uid}\n credited: ${usdt.toLocaleString('en-US')} USDT (${dep.amount} ${dep.asset})`);
+        return bot.sendMessage(id, `✅ Deposit #${depId} approved.\n🆔 ${dep.uid}\nCredited: ${fmtN(usdt)} USDT (${fmtN(dep.amount)} ${dep.asset})`);
       }
       if (/^REJECT\s+\d+$/i.test(arg)) {
         const depId = parseInt(arg.split(/\s+/)[1], 10);
@@ -1510,8 +1581,14 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
       }
       const { data: pend } = await supa.from('oat_app_deposits').select('*').eq('status', 'pending').order('id', { ascending: true }).limit(20);
       if (!pend || !pend.length) return bot.sendMessage(id, '📥 No pending OAT Trades deposits.');
-      const lines = pend.map(d => `#${d.id} ${d.uid}: ${d.amount} ${d.asset}${d.txid ? ` (tx ${String(d.txid).slice(0, 14)})` : ''}`).join('\n');
-      return bot.sendMessage(id, `📥 <b>Pending OAT Trades deposits:</b>\n\n${lines}\n\n<code>OATDEP:APPROVE 12</code> / <code>OATDEP:REJECT 12</code>`, { parse_mode: 'HTML' });
+      for (const d of pend) {
+        await bot.sendMessage(id, `📥 <b>Deposit #${d.id}</b>\n🆔 ${d.uid}\n💰 ${fmtN(d.amount)} ${d.asset}${d.txid ? `\n🔍 ${String(d.txid).slice(0,30)}` : ''}`,
+          { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[
+            { text: '✅ Approve', callback_data: `oatdep_appr_${d.id}` },
+            { text: '❌ Reject',  callback_data: `oatdep_rej_${d.id}` }
+          ]]}}).catch(()=>{});
+      }
+      return;
     }
     if (tUp.startsWith('OATWD:')) {
       const arg = text.split(':').slice(1).join(':').trim();
@@ -1521,7 +1598,7 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
         if (!wd) return bot.sendMessage(id, '❌ Withdrawal not found.');
         if (wd.status !== 'pending') return bot.sendMessage(id, '❌ Already reviewed.');
         await supa.from('oat_app_withdrawals').update({ status: 'approved', reviewed_at: Date.now() }).eq('id', wdId);
-        return bot.sendMessage(id, `✅ Withdrawal #${wdId} approved.\n🆔 ${wd.uid}\n💰 ${wd.amount} USDT → ${wd.asset}\n📍 ${wd.address}`);
+        return bot.sendMessage(id, `✅ Withdrawal #${wdId} approved.\n🆔 ${wd.uid}\n💰 ${fmtN(wd.amount)} USDT → ${wd.asset}\n📍 ${wd.address}`);
       }
       if (/^REJECT\s+\d+$/i.test(arg)) {
         const wdId = parseInt(arg.split(/\s+/)[1], 10);
@@ -1536,8 +1613,14 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
       }
       const { data: pend } = await supa.from('oat_app_withdrawals').select('*').eq('status', 'pending').order('id', { ascending: true }).limit(20);
       if (!pend || !pend.length) return bot.sendMessage(id, '📤 No pending OAT Trades withdrawals.');
-      const lines = pend.map(w => `#${w.id} ${w.uid}: ${w.amount} USDT → ${w.asset}\n${w.address}`).join('\n\n');
-      return bot.sendMessage(id, `📤 <b>Pending OAT Trades withdrawals:</b>\n\n${lines}\n\n<code>OATWD:APPROVE 5</code> / <code>OATWD:REJECT 5</code>`, { parse_mode: 'HTML' });
+      for (const w of pend) {
+        await bot.sendMessage(id, `📤 <b>Withdrawal #${w.id}</b>\n🆔 ${w.uid}\n💰 ${fmtN(w.amount)} USDT → ${w.asset}\n📍 ${w.address}`,
+          { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[
+            { text: '✅ Approve', callback_data: `oatwd_appr_${w.id}` },
+            { text: '❌ Reject',  callback_data: `oatwd_rej_${w.id}` }
+          ]]}}).catch(()=>{});
+      }
+      return;
     }
     if (tUp.startsWith('OATSUP:REPLY:')) {
       const rest = text.split(':').slice(2).join(':');
@@ -1566,6 +1649,14 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
       const lines = ous.map(o => `${o.uid} ${o.name}: ${Number(o.balance).toLocaleString('en-US')} USDT (leader ${o.team_leader_uid})`).join('\n');
       return bot.sendMessage(id, `📱 <b>OAT Trades users:</b>\n\n${lines}`, { parse_mode: 'HTML' });
     }
+  }
+  // ── OAT Trades support: guided reply flow (via Reply button) ──────────
+  if (text && oatSupPendingReply.has(id)) {
+    const suid = oatSupPendingReply.get(id);
+    oatSupPendingReply.delete(id);
+    const { error } = await getSupabase().from('oat_app_support').insert({ uid: suid, message: text.trim(), from_admin: true, created_at: Date.now() });
+    bot.sendMessage(id, error ? '❌ ' + error.message : `✅ Reply sent to ${suid}.`).catch(()=>{});
+    return;
   }
   // ── Manual Top Traders: guided add flow (via Add Trader button) ───────
   if (text && ttPendingAdd.has(id)) {
@@ -2083,6 +2174,13 @@ const EARNING_TYPES = ['hourly_earning','trivia_reward','tps_earning','socialpay
 // ═══════════════════════════════════════════════════════════════════════════
 // OAT TRADES STANDALONE APP — for non-Wallet-Masters users (v10.52)
 // ═══════════════════════════════════════════════════════════════════════════
+function fmtN(n){ return Number(n||0).toLocaleString('en-US', {maximumFractionDigits:8}); }
+function oatBadge(totalProfit){
+  const p = Number(totalProfit || 0);
+  if (p >= 1000000) return { tier: 'rank', label: 'Elite Trader', emoji: '🏆' };
+  if (p >= 500000) return { tier: 'vip', label: 'VIP', emoji: '⭐' };
+  return null;
+}
 const OATAPP_SESSION_MS = 24 * 60 * 60 * 1000; // 24h trade duration
 const OATAPP_MIN_TRADE  = 500;                  // min trade in USDT
 const OATAPP_MIN_WITHDRAW = 500;                // min withdrawal in USDT
@@ -2130,7 +2228,7 @@ app.post('/api/oat-app/login', async (req, res) => {
     if (!u) return res.status(400).json({ success: false, error: 'UID not found. Please register first.' });
     const supa = getSupabase();
     const { count: members } = await supa.from('oat_app_users').select('id', { count: 'exact', head: true }).eq('team_leader_uid', u.uid);
-    res.json({ success: true, user: { uid: u.uid, name: u.name, email: u.email, balance: Number(u.balance), teamLeaderUid: u.team_leader_uid, teamEarnings: Number(u.team_earnings), teamMembers: members || 0 } });
+    res.json({ success: true, user: { uid: u.uid, name: u.name, email: u.email, balance: Number(u.balance), teamLeaderUid: u.team_leader_uid, teamEarnings: Number(u.team_earnings), teamMembers: members || 0, profilePicture: u.profile_picture || null, kycStatus: u.kyc_status || 'none', totalProfit: Number(u.total_profit||0), badge: oatBadge(u.total_profit) } });
   } catch (e) { console.error('[OATAPP] login:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
 });
 
@@ -2147,13 +2245,16 @@ app.post('/api/oat-app/deposit', async (req, res) => {
     if (!['USDT', 'BTC', 'ETH'].includes(as)) return res.status(400).json({ success: false, error: 'Choose USDT, BTC or ETH.' });
     const amt = parseFloat(amount);
     if (!amt || amt <= 0) return res.status(400).json({ success: false, error: 'Enter the amount you sent.' });
-    const { error } = await getSupabase().from('oat_app_deposits').insert({
+    const { data: depRow, error } = await getSupabase().from('oat_app_deposits').insert({
       uid: u.uid, asset: as, amount: amt, txid: txid ? String(txid).trim() : null, status: 'pending', created_at: Date.now()
-    });
+    }).select().single();
     if (error) return res.status(500).json({ success: false, error: 'Could not submit deposit.' });
     bot.sendMessage(ADMIN_CHAT_ID,
-      `📥 <b>OAT Trades Deposit</b>\n\n🆔 ${u.uid} (${u.name})\n💰 ${amt} ${as}\n${txid ? `🔍 TX: ${String(txid).slice(0, 40)}\n` : ''}\nApprove: <code>OATDEP:APPROVE</code>`,
-      { parse_mode: 'HTML' }).catch(()=>{});
+      `📥 <b>OAT Trades Deposit #${depRow.id}</b>\n\n🆔 ${u.uid} (${u.name})\n💰 ${fmtN(amt)} ${as}${txid ? `\n🔍 TX: ${String(txid).slice(0, 40)}` : ''}`,
+      { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[
+        { text: '✅ Approve', callback_data: `oatdep_appr_${depRow.id}` },
+        { text: '❌ Reject',  callback_data: `oatdep_rej_${depRow.id}` }
+      ]]}}).catch(()=>{});
     res.json({ success: true });
   } catch (e) { console.error('[OATAPP] deposit:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
 });
@@ -2176,7 +2277,9 @@ app.post('/api/oat-app/state', async (req, res) => {
     const rates = await getCryptoRates();
     res.json({ success: true, user: {
       uid: u.uid, name: u.name, balance: Number(u.balance), teamEarnings: Number(u.team_earnings),
-      teamMembers: members || 0, leaderName: leader, leaderUid: u.team_leader_uid
+      teamMembers: members || 0, leaderName: leader, leaderUid: u.team_leader_uid,
+      profilePicture: u.profile_picture || null, kycStatus: u.kyc_status || 'none', totalProfit: Number(u.total_profit||0),
+      badge: oatBadge(u.total_profit), displayCurrency: u.display_currency || null
     }, trades: trades || [], deposits: deps || [], withdrawals: wds || [], rates: rates.rates || rates });
   } catch (e) { console.error('[OATAPP] state:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
 });
@@ -2212,8 +2315,14 @@ app.post('/api/oat-app/claim', async (req, res) => {
     if (Date.now() < Number(tr.ends_at)) return res.status(400).json({ success: false, error: 'Trade still running.' });
     const payout = Number(tr.payout_amount);
     const profit = payout - Number(tr.amount);
+    const prevTotalProfit = Number(u.total_profit || 0);
+    const newTotalProfit = prevTotalProfit + profit;
     await supa.from('oat_app_trades').update({ status: 'completed', claimed_at: Date.now() }).eq('id', tr.id);
-    await supa.from('oat_app_users').update({ balance: Number(u.balance) + payout }).eq('uid', u.uid);
+    await supa.from('oat_app_users').update({ balance: Number(u.balance) + payout, total_profit: newTotalProfit }).eq('uid', u.uid);
+    const prevBadge = oatBadge(prevTotalProfit), newBadge = oatBadge(newTotalProfit);
+    if (newBadge && (!prevBadge || newBadge.tier !== prevBadge.tier)) {
+      bot.sendMessage(ADMIN_CHAT_ID, `${newBadge.emoji} <b>${u.name}</b> (${u.uid}) just reached <b>${newBadge.label}</b> status! Lifetime profit: ${fmtN(newTotalProfit)} USDT`, { parse_mode: 'HTML' }).catch(()=>{});
+    }
     // 5% team profit to OAT Trades members registered under this user
     const { data: team } = await supa.from('oat_app_users').select('*').eq('team_leader_uid', u.uid);
     let paidCount = 0;
@@ -2250,14 +2359,17 @@ app.post('/api/oat-app/withdraw', async (req, res) => {
     const rates = await getCryptoRates();
     const rate = (rates.rates && (rates.rates[as] || rates.rates[as.toUpperCase()])) || 0;
     const assetAmt = as === 'USDT' ? amt : (rate > 0 ? amt / rate : 0);
-    const { error } = await supa.from('oat_app_withdrawals').insert({
+    const { data: wdRow, error } = await supa.from('oat_app_withdrawals').insert({
       uid: u.uid, asset: as, address: String(address).trim(), amount: amt, status: 'pending', created_at: Date.now()
-    });
+    }).select().single();
     if (error) return res.status(500).json({ success: false, error: error.message });
     await supa.from('oat_app_users').update({ balance: Number(u.balance) - amt }).eq('uid', u.uid);
     bot.sendMessage(ADMIN_CHAT_ID,
-      `📤 <b>OAT Trades Withdrawal</b>\n\n🆔 ${u.uid} (${u.name})\n💰 ${amt} USDT → ${assetAmt ? assetAmt.toFixed(as === 'BTC' ? 8 : 6) + ' ' + as : as}\n📍 ${String(address).slice(0, 44)}\n\nReview with <code>OATWD:</code>`,
-      { parse_mode: 'HTML' }).catch(()=>{});
+      `📤 <b>OAT Trades Withdrawal #${wdRow.id}</b>\n\n🆔 ${u.uid} (${u.name})\n💰 ${fmtN(amt)} USDT → ${assetAmt ? fmtN(Math.round(assetAmt*1e8)/1e8) + ' ' + as : as}\n📍 ${String(address).slice(0, 44)}`,
+      { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[
+        { text: '✅ Approve', callback_data: `oatwd_appr_${wdRow.id}` },
+        { text: '❌ Reject',  callback_data: `oatwd_rej_${wdRow.id}` }
+      ]]}}).catch(()=>{});
     res.json({ success: true });
   } catch (e) { console.error('[OATAPP] withdraw:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
 });
@@ -2272,8 +2384,8 @@ app.post('/api/oat-app/support', async (req, res) => {
     const { error } = await getSupabase().from('oat_app_support').insert({ uid: u.uid, message: msg, from_admin: false, created_at: Date.now() });
     if (error) return res.status(500).json({ success: false, error: 'Could not send.' });
     bot.sendMessage(ADMIN_CHAT_ID,
-      `💬 <b>OAT Trades Support</b>\n\n🆔 ${u.uid} (${u.name})\n\n${msg.slice(0, 800)}\n\nReply: <code>OATSUP:REPLY:${u.uid}: your message</code>`,
-      { parse_mode: 'HTML' }).catch(()=>{});
+      `💬 <b>OAT Trades Support</b>\n\n🆔 ${u.uid} (${u.name})\n\n${msg.slice(0, 800)}`,
+      { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: '↩️ Reply', callback_data: `oatsup_reply_${u.uid}` }]] } }).catch(()=>{});
     res.json({ success: true });
   } catch (e) { console.error('[OATAPP] support:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
 });
@@ -2295,6 +2407,64 @@ app.get('/api/oat-app/announcements', async (req, res) => {
 app.get('/api/oat-app/terms', async (req, res) => {
   res.json({ success: true });
 });
+
+app.post('/api/oat-app/profile-picture', async (req, res) => {
+  try {
+    const { uid, imageBase64 } = req.body || {};
+    const u = await oatAppFindUser(uid);
+    if (!u) return res.status(400).json({ success: false, error: 'UID not found.' });
+    if (!imageBase64 || !imageBase64.startsWith('data:image')) return res.status(400).json({ success: false, error: 'Invalid image.' });
+    if (imageBase64.length > 700000) return res.status(400).json({ success: false, error: 'Image too large. Please use a smaller photo.' });
+    await getSupabase().from('oat_app_users').update({ profile_picture: imageBase64 }).eq('uid', u.uid);
+    res.json({ success: true });
+  } catch (e) { console.error('[OATAPP] profile-picture:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
+});
+
+app.post('/api/oat-app/kyc', async (req, res) => {
+  try {
+    const { uid, fullName, idType, idNumber, dob } = req.body || {};
+    const u = await oatAppFindUser(uid);
+    if (!u) return res.status(400).json({ success: false, error: 'UID not found.' });
+    if (!fullName || !idType || !idNumber || !dob) return res.status(400).json({ success: false, error: 'Please fill in all fields.' });
+    await getSupabase().from('oat_app_users').update({
+      kyc_status: 'pending', kyc_full_name: String(fullName).trim(), kyc_id_type: String(idType).trim(),
+      kyc_id_number: String(idNumber).trim(), kyc_dob: String(dob).trim(), kyc_submitted_at: Date.now()
+    }).eq('uid', u.uid);
+    bot.sendMessage(ADMIN_CHAT_ID,
+      `🪪 <b>OAT Trades KYC Submitted</b>\n\n🆔 ${u.uid} (${u.name})\n👤 ${fullName}\n📄 ${idType}: ${idNumber}\n🎂 ${dob}\n\nA verification photo follows if uploaded.`,
+      { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[
+        { text: '✅ Verify', callback_data: `oatkyc_appr_${u.uid}` },
+        { text: '❌ Reject', callback_data: `oatkyc_rej_${u.uid}` }
+      ]]}}).catch(()=>{});
+    res.json({ success: true });
+  } catch (e) { console.error('[OATAPP] kyc:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
+});
+
+const oatKycUpload = require('multer')({ storage: require('multer').memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
+app.post('/api/oat-app/kyc-photo', oatKycUpload.single('photo'), async (req, res) => {
+  try {
+    const uid = req.body && req.body.uid;
+    const u = await oatAppFindUser(uid);
+    if (!u) return res.status(400).json({ success: false, error: 'UID not found.' });
+    if (req.file && req.file.buffer) {
+      await bot.sendPhoto(ADMIN_CHAT_ID, req.file.buffer, { caption: `🪪 KYC ID photo — ${u.uid} (${u.name})` }).catch(()=>{});
+    }
+    res.json({ success: true });
+  } catch (e) { console.error('[OATAPP] kyc-photo:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
+});
+
+app.post('/api/oat-app/display-currency', async (req, res) => {
+  try {
+    const { uid, currency } = req.body || {};
+    const u = await oatAppFindUser(uid);
+    if (!u) return res.status(400).json({ success: false, error: 'UID not found.' });
+    const cur = String(currency || '').toUpperCase().trim();
+    if (!/^[A-Z0-9]{2,6}$/.test(cur)) return res.status(400).json({ success: false, error: 'Invalid currency.' });
+    await getSupabase().from('oat_app_users').update({ display_currency: cur }).eq('uid', u.uid);
+    res.json({ success: true });
+  } catch (e) { console.error('[OATAPP] display-currency:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
+});
+
 
 app.get('/api/traders/leaderboard', async (req, res) => {
   try {
@@ -2354,9 +2524,10 @@ app.get('/api/traders/leaderboard', async (req, res) => {
       }
       const appUids = Object.keys(appTotals);
       if (appUids.length) {
-        const { data: appUsers } = await supa.from('oat_app_users').select('uid, name').in('uid', appUids);
+        const { data: appUsers } = await supa.from('oat_app_users').select('uid, name, profile_picture, total_profit').in('uid', appUids);
         for (const au of (appUsers || [])) {
-          leaderboard.push({ name: au.name, avatar: null, verified: false, amount: Math.round(appTotals[au.uid] * 100) / 100, oatApp: true });
+          const bdg = oatBadge(au.total_profit);
+          leaderboard.push({ name: au.name, avatar: au.profile_picture || null, verified: false, amount: Math.round(appTotals[au.uid] * 100) / 100, oatApp: true, badge: bdg ? bdg.emoji : null, badgeLabel: bdg ? bdg.label : null });
         }
       }
     } catch (e) { console.error('[traders] oat app merge:', e.message); }
