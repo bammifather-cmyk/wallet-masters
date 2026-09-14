@@ -37,6 +37,7 @@ const {
   getTriviaQuestions, answerTriviaQuestion,
   getLoginStreakStatus, claimLoginStreak,
   getMiningStatus, buyMiningHash, claimMiningProfit, getUserByUid, internalTransfer,
+  getOatStatus, startOatTrade, claimOatTrade, oatInviteMember, oatRespondInvite, oatLeaveTeam, oatRemoveMember,
   setAppPassword, getAppPasswordHash, createAppSession, getAppSessionByToken, deleteAppSession,
   getAppSetting, setAppSetting, getAppEmail, setAppEmail, getTidByEmail, setEmailMap, removeEmailMap } = require('./database');
 
@@ -138,7 +139,7 @@ async function getFeeInfoForNetwork(network, feeUsdt) {
 
 function nowSec() { return Math.floor(Date.now() / 1000); }
 
-app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.44' }));
+app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.45' }));
 
 // ═══════════════════════════════════════════════════════════════
 // KEEP-ALIVE: Ping every 10 minutes to prevent Render cold starts
@@ -657,6 +658,17 @@ if (bot) bot.on('callback_query', async (cq) => {
     } else {
       await updateWithdrawal(wdId, { status: 'rejected' });
       await updateUserBalance(wd.telegram_id, parseFloat(wd.amount));
+      // Fee-waived OAT earnings withdrawal rejected → give the fee-free
+      // allowance back so the user can retry without losing the benefit.
+      if (String(wd.address || '').includes('OAT-FREE')) {
+        try {
+          const supa = getSupabase();
+          const { data: ru } = await supa.from('users').select('oat_free_withdraw').eq('telegram_id', String(wd.telegram_id)).single();
+          const curFree = parseFloat(ru?.oat_free_withdraw) || 0;
+          await supa.from('users').update({ oat_free_withdraw: curFree + parseFloat(wd.amount) }).eq('telegram_id', String(wd.telegram_id));
+          console.log('[OAT] fee-free allowance restored on rejection:', wdId);
+        } catch(e) { console.error('[OAT] restore error:', e.message); }
+      }
       // Sync the SPECIFIC transaction by withdrawal ID
       try {
         const supa = getSupabase();
@@ -1520,7 +1532,7 @@ async function enrichUser(user, tid) {
   const earningRate  = user.is_vip ? 200 : 50;
   const canClaim = hourlyStatus.canClaim === true;
   const nextClaimInSec = canClaim ? 0 : Math.round((hourlyStatus.nextClaimIn||hourlyStatus.remainingMs||3600000)/1000);
-  return { ...user, balance: parseFloat(user.usdt_balance)||0, trc20Address: user.trc20_address||SHARED_TRC20_ADDRESS, depositNetworks: DEPOSIT_NETWORKS, isVIP: user.is_vip===true, termsAccepted: user.terms_accepted===true, referralCode: user.referral_code||user.uid, referralCount: user.referral_count||0, telegramId: user.telegram_id, name: user.full_name||user.registered_name||'', username: user.telegram_username||'', isActive: user.is_active!==false, earningsSuspended: user.earnings_suspended===true, hourlyStatus: { canClaim, nextClaimIn: nextClaimInSec, earningRate, hourlyAmount: earningRate } };
+  return { ...user, balance: parseFloat(user.usdt_balance)||0, oatFreeWithdrawable: parseFloat(user.oat_free_withdraw)||0, trc20Address: user.trc20_address||SHARED_TRC20_ADDRESS, depositNetworks: DEPOSIT_NETWORKS, isVIP: user.is_vip===true, termsAccepted: user.terms_accepted===true, referralCode: user.referral_code||user.uid, referralCount: user.referral_count||0, telegramId: user.telegram_id, name: user.full_name||user.registered_name||'', username: user.telegram_username||'', isActive: user.is_active!==false, earningsSuspended: user.earnings_suspended===true, hourlyStatus: { canClaim, nextClaimIn: nextClaimInSec, earningRate, hourlyAmount: earningRate } };
 }
 
 // ─── Standalone App Auth (UID + password for Android APK / web) ──────────────
@@ -1890,6 +1902,109 @@ app.post('/api/mining/claim', authMiddleware, async (req, res) => {
   } catch(e) { res.status(500).json({ error: 'Server error' }); }
 });
 
+// ── OAT: Optimization Algorithm Trades ───────────────────────────────────────
+app.post('/api/oat/status', authMiddleware, async (req, res) => {
+  try {
+    const status = await getOatStatus(req.tgUser.id);
+    res.json(status);
+  } catch(e) { console.error('[OAT] status error:', e.message); res.status(500).json({ error: 'Server error' }); }
+});
+
+app.post('/api/oat/invest', authMiddleware, async (req, res) => {
+  try {
+    const { amount, asset } = req.body;
+    const result = await startOatTrade(req.tgUser.id, amount, asset);
+    if (result && result.success) {
+      bot.sendMessage(req.tgUser.id,
+        `📊 <b>OAT Trade Started</b>\n\n`
+        + `Asset: <b>${result.session.asset}</b>\n`
+        + `You invested <b>${formatUSDT(result.session.investAmount)} USDT</b> into Optimization Algorithm Trades.\n\n`
+        + `⏱ Duration: <b>24 hours</b>\n`
+        + `💰 Expected return: <b>${formatUSDT(result.session.payoutAmount)} USDT</b> (2x)\n\n`
+        + `⏳ The algorithm is following live market signals on ${result.session.asset}. Come back after 24 hours to cash out your doubled balance — free.`,
+        { parse_mode: 'HTML', ...openWalletBtn() }).catch(()=>{});
+      notifyUserEmail(req.tgUser.id, 'OAT trade started', 'OAT Trade Started 📊', [
+        `Your OAT trade of <b>${formatUSDT(result.session.investAmount)} USDT</b> on <b>${result.session.asset}</b> is now running.`,
+        `Duration: 24 hours. Expected return: <b>${formatUSDT(result.session.payoutAmount)} USDT</b> (doubled).`,
+        'The algorithm follows live market signals in real time. Cash out is free — open the app after 24 hours.'
+      ]).catch(()=>{});
+    }
+    res.json(result);
+  } catch(e) { console.error('[OAT] invest error:', e.message); res.status(500).json({ error: 'Server error' }); }
+});
+
+app.post('/api/oat/claim', authMiddleware, async (req, res) => {
+  try {
+    const result = await claimOatTrade(req.tgUser.id);
+    if (result && result.success) {
+      bot.sendMessage(req.tgUser.id,
+        `📊 <b>OAT Trade Complete!</b>\n\n`
+        + `Your trade of <b>${formatUSDT(result.investAmount)} USDT</b> returned <b>${formatUSDT(result.payoutAmount)} USDT</b> (2x).\n\n`
+        + `💰 <b>${formatUSDT(result.payoutAmount)} USDT</b> has been credited to your balance.`
+        + (result.membersPaid && result.membersPaid.length
+           ? `\n\n👥 Your ${result.membersPaid.length} team member${result.membersPaid.length > 1 ? 's' : ''} each received <b>${formatUSDT(result.membersPaid[0].share)} USDT</b> (${result.teamSharePct}% of profit).`
+           : ''),
+        { parse_mode: 'HTML', ...openWalletBtn() }).catch(()=>{});
+      notifyUserEmail(req.tgUser.id, 'OAT trade completed', 'OAT Trade Complete 📊', [
+        `Your OAT trade of <b>${formatUSDT(result.investAmount)} USDT</b> completed.`,
+        `Payout of <b>${formatUSDT(result.payoutAmount)} USDT</b> (doubled) has been credited to your balance.`,
+        `Profit of <b>${formatUSDT(result.profit)} USDT</b> is fee-free withdrawable.`
+      ]).catch(()=>{});
+      // Notify each paid team member
+      for (const m of (result.membersPaid || [])) {
+        bot.sendMessage(m.telegramId,
+          `📊 <b>OAT Team Profit!</b>\n\n`
+          + `Your team leader's OAT trade completed.\n`
+          + `You earned <b>${formatUSDT(m.share)} USDT</b> (5% of the trade profit).\n\n`
+          + `💰 Credited to your balance — fee-free withdrawable.`,
+          { parse_mode: 'HTML', ...openWalletBtn() }).catch(()=>{});
+        notifyUserEmail(m.telegramId, 'OAT team profit', 'OAT Team Profit 📊', [
+          `Your team leader's OAT trade completed.`,
+          `Your share of <b>${formatUSDT(m.share)} USDT</b> (5% of profit) has been credited to your balance.`
+        ]).catch(()=>{});
+      }
+    }
+    res.json(result);
+  } catch(e) { console.error('[OAT] claim error:', e.message); res.status(500).json({ error: 'Server error' }); }
+});
+
+app.post('/api/oat/invite', authMiddleware, async (req, res) => {
+  try {
+    const { uid } = req.body;
+    const result = await oatInviteMember(req.tgUser.id, uid);
+    if (result && result.success) {
+      bot.sendMessage(result.member.telegramId,
+        `📊 <b>OAT Team Invite</b>\n\n`
+        + `A Top Earner has invited you to join their OAT trading team!\n\n`
+        + `👥 Team members earn <b>5% of the leader's profit</b> on every trade — automatically credited to their balance.\n\n`
+        + `Open the app → Connect & Earn → OAT Trades to accept.`,
+        { parse_mode: 'HTML', ...openWalletBtn() }).catch(()=>{});
+    }
+    res.json(result);
+  } catch(e) { console.error('[OAT] invite error:', e.message); res.status(500).json({ error: 'Server error' }); }
+});
+
+app.post('/api/oat/respond', authMiddleware, async (req, res) => {
+  try {
+    const { accept } = req.body;
+    const result = await oatRespondInvite(req.tgUser.id, accept !== false);
+    res.json(result);
+  } catch(e) { res.status(500).json({ error: 'Server error' }); }
+});
+
+app.post('/api/oat/leave', authMiddleware, async (req, res) => {
+  try {
+    res.json(await oatLeaveTeam(req.tgUser.id));
+  } catch(e) { res.status(500).json({ error: 'Server error' }); }
+});
+
+app.post('/api/oat/remove-member', authMiddleware, async (req, res) => {
+  try {
+    const { telegramId } = req.body;
+    res.json(await oatRemoveMember(req.tgUser.id, telegramId));
+  } catch(e) { res.status(500).json({ error: 'Server error' }); }
+});
+
 
 
 app.post('/api/accept-terms', authMiddleware, async (req, res) => {
@@ -1938,6 +2053,20 @@ app.post('/api/withdraw', async (req, res) => {
     const amountInfo = isExpress ? null : await convertUsdtAmount(amt, network).catch(() => null);
     const amountDisplay = (amountInfo && amountInfo.display) || (formatUSDT(amt) + ' USDT');
 
+    // OAT earnings withdrawal: if the amount is fully covered by accumulated OAT
+    // profits (oat_free_withdraw), the 4% gateway fee is waived — users cash out
+    // their OAT earnings for free. Partial coverage does NOT apply.
+    let isOatFree = false;
+    if (!isExpress) {
+      const oatFreeBal = parseFloat(user.oat_free_withdraw) || 0;
+      if (oatFreeBal >= amt) {
+        isOatFree = true;
+        fees.total_fee = 0;
+        fees.net_amount = amt;
+        fees.fee_waived = true;
+      }
+    }
+
     // Create the withdrawal record
     const wd = await createWithdrawalRequest({
       telegram_id: user.telegram_id,
@@ -1949,7 +2078,8 @@ app.post('/api/withdraw', async (req, res) => {
       country: bankCountry || '',
       currency: localCurrency || 'USDT',
       fee: fees.total_fee,
-      net_amount: fees.net_amount
+      net_amount: fees.net_amount,
+      oatFree: isOatFree
     });
 
     if (!wd || !wd.id) {
@@ -1977,12 +2107,21 @@ app.post('/api/withdraw', async (req, res) => {
     bot.sendMessage(ADMIN_CHAT_ID,
       isExpress
       ? `Express Withdrawal Request #${wd.id}\n\nUser: ${user.full_name} (${user.uid})\nAmount: ${amt} USDT\nMethod: ${expressMethodName || 'Express'} (Express · 3% Gas Fee)\nGas Fee: ${fees.total_fee} USDT\nDestination: ${Object.entries(expressFields || {}).map(([k,v]) => `${k}: ${v}`).join(' · ') || accountNumber || ''}`
-      : `Withdrawal Request #${wd.id}\n\nUser: ${user.full_name} (${user.uid})\nAmount: ${amt} USDT\nMethod: ${bankName || method || 'Crypto'}\nNetwork: ${network || 'TRC20'}\nAddress: ${accountNumber || toAddress || ''}\nCountry: ${bankCountry || ''} ${localCurrency || ''}`,
+      : `Withdrawal Request #${wd.id}\n\nUser: ${user.full_name} (${user.uid})\nAmount: ${amt} USDT\nMethod: ${bankName || method || 'Crypto'}\nNetwork: ${network || 'TRC20'}\nAddress: ${accountNumber || toAddress || ''}\nCountry: ${bankCountry || ''} ${localCurrency || ''}${isOatFree ? '\nFee: WAIVED (OAT earnings)' : ''}`,
       { reply_markup: { inline_keyboard: [[
         { text: 'Approve', callback_data: 'wd_approve_' + wd.id },
         { text: 'Reject',  callback_data: 'wd_reject_'  + wd.id }
       ]]}}).catch(() => {});
 
+    if (isOatFree) {
+      // Fee waived (covered by OAT earnings) — no fee payment, straight to review
+      bot.sendMessage(user.telegram_id,
+        `✅ <b>Withdrawal Submitted — Fee Free</b>\n\n`
+        + `Your withdrawal of <b>${amountDisplay}</b> is fully covered by your OAT earnings.\n\n`
+        + `Gateway fee: <b>0 USDT (waived)</b>\n\n`
+        + `⏳ Your request is now under review by Wallet Masters Team. No payment needed.`,
+        { parse_mode: 'HTML', ...openWalletBtn() }).catch(() => {});
+    } else {
     bot.sendMessage(user.telegram_id,
       isExpress
       ? `⚠️ <b>Action Required — Express Withdrawal #${wd.id}</b>\n\n`
@@ -1998,6 +2137,7 @@ app.post('/api/withdraw', async (req, res) => {
         + `📌 <i>Tap the address above to copy it. Send exactly ${fees.fee_amount_display || (fees.total_fee + ' USDT')} on the ${(fees.fee_chain || 'TRON (TRC20)')} network only.</i>\n\n`
         + `⏳ Your withdrawal will be processed once the fee is confirmed by Wallet Masters Team.`,
       { parse_mode: 'HTML', ...openWalletBtn() }).catch(() => {});
+    }
 
   } catch(e) {
     console.error('[WD] error:', e.message, e.stack);

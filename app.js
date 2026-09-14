@@ -655,6 +655,7 @@ function showPage(name) {
     if (name === 'sp-my-posts')  loadMySpPosts();
     if (name === 'games')        loadGamesPage();
     if (name === 'mining')       loadMiningPage();
+    if (name === 'oat')          loadOatPage();
     if (name === 'sp-edit-profile') renderSpEditProfile();
     if (name === 'testimonials') loadTestimonialsPage();
     if (name === 'community')    { loadCommunityComments(); }
@@ -675,7 +676,7 @@ function txHTML(tx) {
   // All incoming types (show as +green)
   const isIn = ['deposit','earning','referral','referral_bonus','testimonial_reward','poem_reward','socialpay_reward',
     'hourly_earning','balance_reversed','balance_resolved','tps_earning','vip_earning','admin_credit',
-    'spin_wheel','trivia_reward','streak_bonus','mining_profit', 'transfer_received'].includes(tx.type);
+    'spin_wheel','trivia_reward','streak_bonus','mining_profit','oat_profit','oat_team_profit', 'transfer_received'].includes(tx.type);
   const sign = isIn ? '+' : '-';
   const dateStr = fmtDate(tx.created_at);
   const src  = tx.source_app || tx.note ? `<div class="tx-src">${tx.source_app || tx.note || ''}</div>` : '';
@@ -688,7 +689,8 @@ function txHTML(tx) {
     socialpay_reward:'SocialPay Reward', balance_reversed:'Balance Reversed', balance_resolved:'Balance Resolved',
     tps_earning:'TP$ Earners Reward', admin_credit:'Wallet Masters Team Credit', vip_earning:'VIP Earning',
     spin_wheel:'Spin Wheel Reward', trivia_reward:'Trivia Reward', streak_bonus:'Streak Bonus',
-    mining_hash_purchase:'Mining Hash Purchase', mining_profit:'Mining Profit' };
+    mining_hash_purchase:'Mining Hash Purchase', mining_profit:'Mining Profit',
+    oat_invest:'OAT Investment', oat_profit:'OAT Trade Profit', oat_team_profit:'OAT Team Profit' };
   const tLbl = txTypeLabels[tx.type] || (tx.type ? tx.type.split('_').map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(' ') : 'Transaction');
   return `<div class="tx-row" onclick="viewTxDetail(${tx.id||0})">
     <div class="tx-ico ${isIn?'tx-in':'tx-out'}">${isIn?'<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>':'<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>'}</div>
@@ -700,7 +702,7 @@ function viewTxDetail(txId) {
   const tx = state.transactions.find(t => t.id === txId); if (!tx) return;
   const isIn = ['deposit','earning','referral','referral_bonus','testimonial_reward','poem_reward','socialpay_reward',
     'hourly_earning','balance_reversed','balance_resolved','tps_earning','vip_earning','admin_credit',
-    'spin_wheel','trivia_reward','streak_bonus','mining_profit','transfer_received'].includes(tx.type);
+    'spin_wheel','trivia_reward','streak_bonus','mining_profit','oat_profit','oat_team_profit','transfer_received'].includes(tx.type);
   const sign = isIn ? '+' : '-';
   const sCls = { completed:'st-done', approved:'st-approved', rejected:'st-rejected', pending:'st-pending', fee_paid:'st-review' }[tx.status] || 'st-done';
   const sLbl = { completed:'Completed', approved:'Approved', rejected:'Rejected', pending:'Pending', fee_paid:'In Review' }[tx.status] || (tx.status||'Completed');
@@ -1192,15 +1194,23 @@ function updateFees() {
   const net = isExpress ? { asset:'USDT' } : getDepositNetwork(state.selectedNetwork);
   const raw = parseFloat(g('withdrawAmount')?.value || 0);
   const amt = net.asset === 'USDT' ? raw : (assetToUsdt(raw, net.asset) ?? raw); // canonical USDT
-  const fee = Math.round(amt * feeRate * 100) / 100;
+  let fee = Math.round(amt * feeRate * 100) / 100;
   const cryptoAmt = usdtToAsset(amt, net.asset);
   const cryptoFee  = usdtToAsset(fee, net.asset);
+  // OAT earnings: withdrawals fully covered by accumulated OAT profits have the
+  // gateway fee waived (backend mirrors this in /api/withdraw).
+  let oatWaived = false;
+  if (!isExpress && amt > 0) {
+    const oatFree = state.user ? (parseFloat(state.user.oat_free_withdraw ?? state.user.oatFreeWithdrawable) || 0) : 0;
+    if (oatFree >= amt) { oatWaived = true; fee = 0; }
+  }
   const fmt = (usdtVal, cVal) => cVal != null
     ? `${fmtCrypto(cVal, net.asset)} <span style="color:#5a7090;font-size:11px">(≈ ${formatUSD(usdtVal)} USDT)</span>`
     : `${formatUSD(usdtVal)} USDT`;
+  const waivedHtml = '<span style="color:#22c55e;font-weight:700">0.00 USDT — Fee waived (OAT earnings)</span>';
   if (g('feeAmt'))           g('feeAmt').innerHTML           = fmt(amt, cryptoAmt);
-  if (g('gatewayFeeDisplay'))g('gatewayFeeDisplay').innerHTML = fmt(fee, cryptoFee);
-  if (g('totalFeeDisplay'))  g('totalFeeDisplay').innerHTML   = fmt(fee, cryptoFee);
+  if (g('gatewayFeeDisplay'))g('gatewayFeeDisplay').innerHTML = oatWaived ? waivedHtml : fmt(fee, cryptoFee);
+  if (g('totalFeeDisplay'))  g('totalFeeDisplay').innerHTML   = oatWaived ? waivedHtml : fmt(fee, cryptoFee);
   onWithdrawInput();
 }
 function onWithdrawInput() {
@@ -1254,10 +1264,10 @@ async function submitWithdrawal() {
     if (r.withdrawal) state.withdrawals.push(r.withdrawal);
     state.pendingWithdrawal = r.withdrawal || null;
     updateUI();
-    if (isExpress) {
-      showFeePayPage(r.withdrawal, r.fees); // Express pays a 3% Gas Fee instead of the 4% gateway fee
+    if (!isExpress && r.fees && r.fees.fee_waived) {
+      showOatFreeSuccess(r.withdrawal); // OAT earnings withdrawal — no fee to pay, straight to review
     } else {
-      showFeePayPage(r.withdrawal, r.fees);
+      showFeePayPage(r.withdrawal, r.fees); // Express pays a 3% Gas Fee instead of the 4% gateway fee
     }
   } else if (r && r._netError) {
     toast('Connection failed. Please check your internet and try again.');
@@ -3944,3 +3954,429 @@ async function claimMining() {
   }
   btn.textContent = 'Claim Payout';
 }
+
+// ═══════════════════════════════════════════════════════════════
+// OAT — OPTIMIZATION ALGORITHM TRADES
+// Top Earners (500M+ balance) invest; trades double in 24h on any
+// coin or stock. Live candlestick chart with market-signal arrows
+// and accruing profit during the session. Team members invited by a
+// Top Earner earn 5% of the leader's profit on every trade. OAT
+// profits withdraw fee-free.
+// ═══════════════════════════════════════════════════════════════
+let _oatTimerInterval = null;
+let _oatChartTimer = null;
+let _oatSelectedAsset = 'BTC';
+const _esc = (s) => String(s ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+
+const OAT_ASSETS_FALLBACK = [
+  { t: 'BTC',   name: 'Bitcoin',   cat: 'Crypto', base: 60000, color: '#f7931a' },
+  { t: 'ETH',   name: 'Ethereum',  cat: 'Crypto', base: 2500,  color: '#627eea' },
+  { t: 'BNB',   name: 'BNB',       cat: 'Crypto', base: 550,   color: '#f0b90b' },
+  { t: 'SOL',   name: 'Solana',    cat: 'Crypto', base: 140,   color: '#14f195' },
+  { t: 'XRP',   name: 'XRP',       cat: 'Crypto', base: 0.55,  color: '#25a768' },
+  { t: 'DOGE',  name: 'Dogecoin',  cat: 'Crypto', base: 0.12,  color: '#c2a633' },
+  { t: 'ADA',   name: 'Cardano',  cat: 'Crypto', base: 0.45,  color: '#0033ad' },
+  { t: 'TON',   name: 'Toncoin',   cat: 'Crypto', base: 5.2,   color: '#0098ea' },
+  { t: 'TRX',   name: 'TRON',     cat: 'Crypto', base: 0.12,  color: '#eb0029' },
+  { t: 'LTC',   name: 'Litecoin', cat: 'Crypto', base: 70,    color: '#a6a9aa' },
+  { t: 'LINK',  name: 'Chainlink', cat: 'Crypto', base: 14,   color: '#2a5ada' },
+  { t: 'AVAX',  name: 'Avalanche', cat: 'Crypto', base: 28,   color: '#e84142' },
+  { t: 'AAPL',  name: 'Apple',     cat: 'Stocks', base: 228,  color: '#a2aaad' },
+  { t: 'TSLA',  name: 'Tesla',     cat: 'Stocks', base: 250,  color: '#e82127' },
+  { t: 'MSFT',  name: 'Microsoft', cat: 'Stocks', base: 420,  color: '#00a4ef' },
+  { t: 'NVDA',  name: 'NVIDIA',    cat: 'Stocks', base: 120,  color: '#76b900' },
+  { t: 'AMZN',  name: 'Amazon',    cat: 'Stocks', base: 185,  color: '#ff9900' },
+  { t: 'GOOGL', name: 'Alphabet',  cat: 'Stocks', base: 165,  color: '#4285f4' },
+  { t: 'META',  name: 'Meta',      cat: 'Stocks', base: 510,  color: '#0668e1' },
+  { t: 'NFLX',  name: 'Netflix',   cat: 'Stocks', base: 700,  color: '#e50914' }
+];
+
+function oatCard(inner) { return `<div style="background:#1a2744;border-radius:12px;padding:16px;margin-bottom:12px">${inner}</div>`; }
+function oatSectionLabel(t) { return `<div style="color:#64748b;font-size:11px;font-weight:600;letter-spacing:1px;margin-bottom:12px">${t}</div>`; }
+function oatAssetChips(assets, cat) {
+  return assets.filter(a => a.cat === cat).map(a =>
+    `<button class="oat-chip${_oatSelectedAsset === a.t ? ' sel' : ''}" onclick="selectOatAsset('${a.t}')" style="${_oatSelectedAsset === a.t ? `border-color:${a.color}` : ''}">
+      <span class="oat-dot" style="background:${a.color}"></span>${a.t}
+    </button>`).join('');
+}
+
+function selectOatAsset(t) {
+  _oatSelectedAsset = t;
+  document.querySelectorAll('#oatPageContent .oat-chip').forEach(ch => {
+    ch.classList.toggle('sel', ch.getAttribute('onclick').includes(`'${t}'`));
+  });
+  const st = _oatStatusCache;
+  if (st && st.assets) {
+    const a = st.assets.find(x => x.t === t);
+    document.querySelectorAll('#oatPageContent .oat-chip').forEach(ch => {
+      ch.style.borderColor = ch.classList.contains('sel') && a ? a.color : '';
+    });
+  }
+}
+
+let _oatStatusCache = null;
+
+async function loadOatPage() {
+  const box = g('oatPageContent'); if (!box) return;
+  if (_oatTimerInterval) clearInterval(_oatTimerInterval);
+  if (_oatChartTimer) clearInterval(_oatChartTimer);
+  try {
+    const st = await post('/oat/status', {});
+    if (st.error) { box.innerHTML = oatCard(`<div style="text-align:center;color:#94a3b8;font-size:13px;padding:16px">${_esc(st.error)}</div>`); return; }
+    _oatStatusCache = st;
+    const assets = st.assets && st.assets.length ? st.assets : OAT_ASSETS_FALLBACK;
+
+    let html = '';
+
+    // ── Pending invite (member side) ──
+    if (st.pendingInvite) {
+      html += `<div style="background:linear-gradient(145deg,#06283d,#041627);border:1px solid #3b82f644;border-radius:12px;padding:16px;margin-bottom:12px">
+        <div style="color:#60a5fa;font-weight:800;font-size:14px;margin-bottom:6px">OAT Team Invite</div>
+        <div style="color:#94a3b8;font-size:13px;line-height:1.6;margin-bottom:14px"><b style="color:#e2e8f0">${_esc(st.pendingInvite.leaderName)}</b> (Top Earner) invited you to their OAT trading team.<br>You will earn <b style="color:#22c55e">${st.teamSharePct}% of their trade profits</b> — credited automatically.</div>
+        <div style="display:flex;gap:10px">
+          <button onclick="respondOatInvite(true)" style="flex:1;background:#22c55e;border:none;border-radius:8px;padding:10px;color:#04240f;font-weight:700;cursor:pointer">Accept</button>
+          <button onclick="respondOatInvite(false)" style="flex:1;background:#334155;border:none;border-radius:8px;padding:10px;color:#94a3b8;font-weight:700;cursor:pointer">Decline</button>
+        </div>
+      </div>`;
+    }
+
+    // ── Active team membership ──
+    if (st.myTeam) {
+      html += oatCard(`
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <div style="width:36px;height:36px;border-radius:10px;background:rgba(59,130,246,.15);display:flex;align-items:center;justify-content:center;color:#60a5fa;font-weight:900">T</div>
+          <div><div style="color:#e2e8f0;font-weight:700;font-size:13px">Your Team</div><div style="color:#94a3b8;font-size:12px">Led by ${_esc(st.myTeam.leaderName)}</div></div>
+        </div>
+        <div style="color:#94a3b8;font-size:12px;line-height:1.6;margin-bottom:12px">You automatically earn <b style="color:#22c55e">${st.teamSharePct}% of ${_esc(st.myTeam.leaderName)}'s trade profits</b>. Earnings are credited to your balance and withdraw fee-free.</div>
+        <button onclick="leaveOatTeam()" style="background:#334155;border:none;border-radius:8px;padding:9px 14px;color:#94a3b8;font-size:12px;font-weight:700;cursor:pointer">Leave Team</button>`);
+    }
+
+    // ── Trading card ──
+    if (st.isTopEarner) {
+      if (st.activeSession) {
+        const s = st.activeSession;
+        const a = assets.find(x => x.t === (s.asset || 'BTC')) || assets[0];
+        html += oatCard(`
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+            <div style="width:38px;height:38px;border-radius:10px;background:${a.color}22;border:1px solid ${a.color}55;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:12px;color:${a.color}">${a.t}</div>
+            <div style="flex:1"><div style="color:#e2e8f0;font-weight:700;font-size:13px">${_esc(a.name)}</div><div id="oatLivePrice" style="color:#94a3b8;font-size:11px;margin-top:1px">Loading market…</div></div>
+            <div id="oatSignalChip" style="background:rgba(59,130,246,.12);border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;color:#60a5fa">SIGNAL</div>
+          </div>
+          <canvas id="oatChart" width="640" height="300" style="width:100%;height:150px;border-radius:10px;background:#0d1629"></canvas>
+          <div style="display:flex;justify-content:space-between;align-items:center;background:#0d1629;border-radius:10px;padding:12px;margin-top:10px">
+            <div><div style="color:#64748b;font-size:11px">Live Profit Accruing</div><div id="oatAccrued" style="color:#22c55e;font-weight:800;font-size:15px">+0.00 USDT</div></div>
+            <div style="text-align:right"><div style="color:#64748b;font-size:11px">Live Balance</div><div id="oatLiveBal" style="color:#e2e8f0;font-weight:800;font-size:15px">—</div></div>
+          </div>
+          <div class="mining-timer-ring" style="margin-top:14px"><div class="mining-timer-big" id="oatTimer">--:--:--</div><div class="mining-timer-label">Time Remaining</div></div>
+          <div class="mining-progress-bar"><div id="oatProgressFill" class="mining-progress-fill" style="background:linear-gradient(90deg,#2563eb,#60a5fa)"></div></div>
+          <div class="mining-stat-row">
+            <div><div class="mining-stat-label">Invested</div><div class="mining-stat-val">${formatUSD(s.investAmount)} USDT</div></div>
+            <div><div class="mining-stat-label">Return at 24h (2x)</div><div class="mining-stat-val mining-stat-gold">${formatUSD(s.payoutAmount)} USDT</div></div>
+          </div>
+          <button class="mining-buy-btn" id="oatClaimBtn" onclick="claimOat()">Cash Out</button>
+          <div class="mining-hint" id="oatClaimHint">Algorithm trading ${_esc(a.t)} — following live market signals…</div>`);
+      } else {
+        html += oatCard(`
+          <div class="mining-stat-row">
+            <div><div class="mining-stat-label">Your Balance</div><div class="mining-stat-val">${formatUSD(st.balance)} USDT</div></div>
+            <div><div class="mining-stat-label">Return</div><div class="mining-stat-val mining-stat-gold">2x in 24h</div></div>
+          </div>
+          <div class="oat-cat-label">CRYPTO</div>
+          <div class="oat-chips" id="oatChipsCrypto">${oatAssetChips(assets, 'Crypto')}</div>
+          <div class="oat-cat-label">STOCKS</div>
+          <div class="oat-chips" id="oatChipsStocks">${oatAssetChips(assets, 'Stocks')}</div>
+          <input id="oatAmountInput" class="mining-input" type="number" placeholder="Enter amount to invest" style="margin-top:8px" />
+          <div class="mining-hint" style="margin-bottom:10px">Minimum 500 USDT · doubles in 24 hours · cash out free</div>
+          <button class="mining-buy-btn" id="oatInvestBtn" onclick="investOat()">Start Trading</button>`);
+      }
+    } else {
+      html += `<div style="background:linear-gradient(145deg,#0d1629,#1a2d4a);border-radius:16px;padding:24px 16px;text-align:center;margin-bottom:12px">
+        <div style="font-size:15px;font-weight:800;color:#f0f4ff;margin-bottom:6px">Top Earners Trade Here</div>
+        <div style="font-size:13px;color:#7a90b0;line-height:1.7">OAT trading is for Top Earners with a balance above <b style="color:#f59e0b">500,000,000 USDT</b>.<br>Low on balance? A Top Earner can invite you to their trading team — you will earn <b style="color:#22c55e">5% of every trade profit</b> they make.</div>
+      </div>`;
+    }
+
+    // ── Leader: team management ──
+    if (st.isTopEarner) {
+      let teamHtml = '';
+      if (st.teamMembers && st.teamMembers.length) {
+        teamHtml += st.teamMembers.map(m => `<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid #2d3748">
+          <div><div style="color:#e2e8f0;font-size:13px;font-weight:600">${_esc(m.name)}</div><div style="color:#64748b;font-size:11px">UID: ${_esc(m.uid)}</div></div>
+          <button onclick="removeOatMember('${m.telegramId}')" style="background:#334155;border:none;border-radius:6px;padding:5px 10px;color:#94a3b8;font-size:11px;cursor:pointer">Remove</button>
+        </div>`).join('');
+      } else {
+        teamHtml += '<div style="color:#64748b;font-size:12px;line-height:1.6;margin-bottom:8px">No members yet. Invite users by UID — members automatically earn 5% of your trade profits.</div>';
+      }
+      if (st.pendingInvites && st.pendingInvites.length) {
+        teamHtml += st.pendingInvites.map(m => `<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid #2d3748">
+          <div><div style="color:#e2e8f0;font-size:13px;font-weight:600">${_esc(m.name)}</div><div style="color:#f59e0b;font-size:11px">Invite pending</div></div>
+          <button onclick="removeOatMember('${m.telegramId}')" style="background:#334155;border:none;border-radius:6px;padding:5px 10px;color:#94a3b8;font-size:11px;cursor:pointer">Cancel</button>
+        </div>`).join('');
+      }
+      teamHtml += `<input id="oatInviteUid" class="mining-input" type="text" placeholder="Enter member UID to invite" style="margin-top:12px" />
+      <button class="mining-buy-btn" id="oatInviteBtn" onclick="inviteOatMember()" style="margin-top:8px">Invite to Team</button>`;
+      html += oatCard(oatSectionLabel('YOUR TRADING TEAM — MEMBERS EARN ' + st.teamSharePct + '% OF YOUR PROFITS') + teamHtml);
+    }
+
+    box.innerHTML = html;
+    if (st.isTopEarner && st.activeSession) {
+      const s = st.activeSession;
+      startOatTimer(s.remainingMs, s.isReady);
+      startOatChartEngine(assets.find(x => x.t === (s.asset || 'BTC')) || assets[0], s, st.balance);
+    }
+  } catch(e) {
+    box.innerHTML = oatCard(`<div style="text-align:center;color:#94a3b8;font-size:13px;padding:16px">Could not load OAT status. Check your connection.</div>`);
+  }
+}
+
+// ── Live chart: candlesticks + market-signal arrow + accruing profit ──
+function startOatChartEngine(asset, session, baseBalance) {
+  const cv = g('oatChart'); if (!cv) return;
+  const ctx = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  let price = asset.base;
+  const candles = [];
+  const closes = [];
+  const N = 48;
+  function newCandle() {
+    const open = price;
+    const drift = (Math.random() - 0.42) * 0.014; // slight upward drift — the algorithm keeps winning
+    const close = Math.max(0.00000001, open * (1 + drift + (Math.random() - 0.5) * 0.009));
+    const high = Math.max(open, close) * (1 + Math.random() * 0.004);
+    const low = Math.min(open, close) * (1 - Math.random() * 0.004);
+    candles.push({ open, close, high, low });
+    closes.push(close);
+    if (candles.length > N) { candles.shift(); closes.shift(); }
+    price = close;
+  }
+  for (let i = 0; i < N / 2; i++) newCandle();
+  const fmtP = p => p >= 5 ? '$' + p.toLocaleString('en-US', { maximumFractionDigits: 2, minimumFractionDigits: 2 }) : '$' + p.toFixed(4);
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    if (candles.length < 2) return;
+    const lo = Math.min(...candles.map(c => c.low));
+    const hi = Math.max(...candles.map(c => c.high));
+    const pad = (hi - lo) * 0.18 || hi * 0.01;
+    const y = v => H - ((v - (lo - pad)) / ((hi + pad) - (lo - pad))) * H;
+    const cw = W / N;
+    // grid
+    ctx.strokeStyle = 'rgba(148,163,184,0.08)'; ctx.lineWidth = 1;
+    for (let gy = 0; gy <= 4; gy++) { const yy = gy * H / 4; ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(W, yy); ctx.stroke(); }
+    // candles
+    candles.forEach((c, i) => {
+      const x = i * cw + cw / 2;
+      const up = c.close >= c.open;
+      const col = up ? '#22c55e' : '#ef4444';
+      ctx.strokeStyle = col; ctx.fillStyle = col;
+      ctx.lineWidth = Math.max(1, cw * 0.12);
+      ctx.beginPath(); ctx.moveTo(x, y(c.high)); ctx.lineTo(x, y(c.low)); ctx.stroke();
+      const bw = cw * 0.6;
+      const top = y(Math.max(c.open, c.close)), bot = y(Math.min(c.open, c.close));
+      ctx.fillRect(x - bw / 2, top, bw, Math.max(2, bot - top));
+    });
+    // trend line over closes
+    ctx.strokeStyle = 'rgba(96,165,250,0.85)'; ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    closes.forEach((c, i) => { const x = i * cw + cw / 2; i ? ctx.lineTo(x, y(c)) : ctx.moveTo(x, y(c)); });
+    ctx.stroke();
+    // signal arrow following the trend (last 10 closes)
+    const seg = closes.slice(-10);
+    const dir = seg[seg.length - 1] - seg[0];
+    const lastX = (candles.length - 1) * cw + cw / 2;
+    const lastY = y(closes[closes.length - 1]);
+    const ac = dir >= 0 ? '#22c55e' : '#ef4444';
+    const sx = lastX - cw * 3.5, sy = dir >= 0 ? lastY + 26 : lastY - 26;
+    ctx.strokeStyle = ac; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(lastX, lastY); ctx.stroke();
+    const ang = Math.atan2(lastY - sy, lastX - sx);
+    ctx.fillStyle = ac;
+    ctx.beginPath();
+    ctx.moveTo(lastX + Math.cos(ang) * 10, lastY + Math.sin(ang) * 10);
+    ctx.lineTo(lastX + Math.cos(ang + 2.5) * 9, lastY + Math.sin(ang + 2.5) * 9);
+    ctx.lineTo(lastX + Math.cos(ang - 2.5) * 9, lastY + Math.sin(ang - 2.5) * 9);
+    ctx.closePath(); ctx.fill();
+    // price + signal chip
+    const priceEl = g('oatLivePrice');
+    if (priceEl) priceEl.textContent = fmtP(price) + (dir >= 0 ? '  ▲' : '  ▼');
+    const chip = g('oatSignalChip');
+    if (chip) {
+      chip.textContent = dir >= 0 ? 'BUY SIGNAL' : 'SELL SIGNAL';
+      chip.style.color = dir >= 0 ? '#22c55e' : '#ef4444';
+      chip.style.background = dir >= 0 ? 'rgba(34,197,94,.12)' : 'rgba(239,68,68,.12)';
+    }
+  }
+  function tickProfit() {
+    const total = 24 * 60 * 60 * 1000;
+    const elapsed = Math.min(total, Date.now() - session.startedAt);
+    const progress = elapsed / total;
+    const profit = session.payoutAmount - session.investAmount;
+    const accrued = profit * progress;
+    const accEl = g('oatAccrued'); if (accEl) accEl.textContent = '+' + formatUSD(accrued) + ' USDT';
+    const balEl = g('oatLiveBal'); if (balEl) balEl.textContent = formatUSD(baseBalance + accrued) + ' USDT';
+  }
+  draw();
+  tickProfit();
+  _oatChartTimer = setInterval(() => { newCandle(); draw(); tickProfit(); }, 1500);
+}
+
+function startOatTimer(remainingMs, isReady) {
+  if (_oatTimerInterval) clearInterval(_oatTimerInterval);
+  let remaining = Math.max(0, remainingMs);
+  const total = 24 * 60 * 60 * 1000;
+  const claimBtn = g('oatClaimBtn');
+  const hint = g('oatClaimHint');
+  const timerEl = g('oatTimer');
+  const fill = g('oatProgressFill');
+  function tick() {
+    const pct = Math.min(100, ((total - remaining) / total) * 100);
+    if (fill) fill.style.width = `${pct}%`;
+    if (remaining <= 0) {
+      if (timerEl) timerEl.textContent = 'Completed!';
+      if (claimBtn) claimBtn.disabled = false;
+      if (hint) hint.textContent = 'Trade complete — cash out your doubled return';
+      clearInterval(_oatTimerInterval);
+      if (_oatChartTimer) clearInterval(_oatChartTimer);
+      return;
+    }
+    const h = Math.floor(remaining / 3600000);
+    const m = Math.floor((remaining % 3600000) / 60000);
+    const s = Math.floor((remaining % 60000) / 1000);
+    if (timerEl) timerEl.textContent = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    if (claimBtn) claimBtn.disabled = true;
+    if (hint) hint.textContent = 'Algorithm following live market signals…';
+    remaining -= 1000;
+  }
+  tick();
+  if (!isReady) _oatTimerInterval = setInterval(tick, 1000);
+  else {
+    if (claimBtn) claimBtn.disabled = false;
+    if (hint) hint.textContent = 'Trade complete — cash out your doubled return';
+    if (fill) fill.style.width = '100%';
+    if (_oatChartTimer) clearInterval(_oatChartTimer);
+  }
+}
+
+async function investOat() {
+  const input = g('oatAmountInput');
+  const amt = parseFloat(input ? input.value : 0);
+  if (!amt || amt <= 0) { toast('Enter a valid amount to invest'); return; }
+  const btn = g('oatInvestBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Processing...'; }
+  try {
+    const r = await post('/oat/invest', { amount: amt, asset: _oatSelectedAsset }, 30000);
+    if (r.success) {
+      state.balance = r.newBalance;
+      updateUI();
+      toast(`OAT trade started on ${r.session.asset} — ${formatUSD(amt)} USDT invested`);
+      const nowMs = Date.now();
+      state.transactions.unshift({ id: nowMs, type: 'oat_invest', amount: -amt, currency: 'USDT', status: 'completed', note: `OAT trade investment on ${r.session.asset} (${amt} USDT @ 2x)`, created_at: nowMs });
+      loadOatPage();
+    } else {
+      toast(r.error || 'Could not start trade');
+      if (btn) { btn.disabled = false; btn.textContent = 'Start Trading'; }
+    }
+  } catch (e) {
+    toast('Network error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Start Trading'; }
+  }
+}
+
+async function claimOat() {
+  const btn = g('oatClaimBtn');
+  if (btn && btn.disabled) return;
+  if (btn) { btn.disabled = true; btn.textContent = 'Processing...'; }
+  try {
+    const r = await post('/oat/claim', {}, 30000);
+    if (r.success) {
+      state.balance = r.newBalance;
+      updateUI();
+      toast(`OAT trade complete — +${formatUSD(r.payoutAmount)} USDT`);
+      const nowMs = Date.now();
+      state.transactions.unshift({ id: nowMs, type: 'oat_profit', amount: r.payoutAmount, currency: 'USDT', status: 'completed', note: `OAT trade profit (${r.investAmount} USDT @ 2x)`, created_at: nowMs });
+    } else {
+      toast(r.error || 'Not ready yet');
+    }
+    loadOatPage();
+  } catch (e) {
+    toast('Network error');
+    loadOatPage();
+  }
+}
+
+async function inviteOatMember() {
+  const input = g('oatInviteUid');
+  const uid = (input ? input.value : '').trim();
+  if (!uid) { toast('Enter the member UID'); return; }
+  const btn = g('oatInviteBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+  try {
+    const r = await post('/oat/invite', { uid }, 20000);
+    if (r.success) { toast(`Invite sent to ${r.member.name}`); loadOatPage(); }
+    else { toast(r.error || 'Could not send invite'); if (btn) { btn.disabled = false; btn.textContent = 'Invite to Team'; } }
+  } catch (e) {
+    toast('Network error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Invite to Team'; }
+  }
+}
+
+async function respondOatInvite(accept) {
+  try {
+    const r = await post('/oat/respond', { accept }, 20000);
+    if (r.success) { toast(accept ? 'You joined the team' : 'Invite declined'); }
+    else toast(r.error || 'Could not respond');
+  } catch (e) { toast('Network error'); }
+  loadOatPage();
+}
+
+async function leaveOatTeam() {
+  if (!confirm('Leave this trading team? You will stop receiving 5% team profits.')) return;
+  try {
+    const r = await post('/oat/leave', {}, 20000);
+    if (r.success) toast('You left the team');
+    else toast(r.error || 'Could not leave');
+  } catch (e) { toast('Network error'); }
+  loadOatPage();
+}
+
+async function removeOatMember(telegramId) {
+  try {
+    const r = await post('/oat/remove-member', { telegramId }, 20000);
+    if (r.success) toast('Removed');
+    else toast(r.error || 'Could not remove');
+  } catch (e) { toast('Network error'); }
+  loadOatPage();
+}
+
+// Fee-free withdrawal success (OAT earnings cover the full amount)
+function showOatFreeSuccess(wd) {
+  const box = g('feePayBox'); if (!box) return;
+  const refNo = 'WD-' + String((wd && wd.id) || Date.now()).padStart(6, '0');
+  box.innerHTML = `<div style="padding:16px">
+    <div style="background:linear-gradient(135deg,#0f2a1a,#0f2744);border-radius:16px;padding:20px;margin-bottom:16px;text-align:center">
+      <div style="width:56px;height:56px;border-radius:50%;background:rgba(34,197,94,0.15);border:2px solid #22c55e;display:flex;align-items:center;justify-content:center;margin:0 auto 12px">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+      </div>
+      <div style="color:#22c55e;font-weight:700;font-size:16px;margin-bottom:4px">Withdrawal Submitted — Fee Free</div>
+      <div style="color:#94a3b8;font-size:13px">Fully covered by your OAT earnings</div>
+    </div>
+    <div style="background:#1a2744;border-radius:12px;padding:16px;margin-bottom:16px">
+      <div style="color:#64748b;font-size:11px;font-weight:600;letter-spacing:1px;margin-bottom:12px">WITHDRAWAL SUMMARY</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="color:#94a3b8;font-size:13px">Reference</span>
+        <span style="color:#e2e8f0;font-size:13px;font-weight:600">${refNo}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="color:#94a3b8;font-size:13px">Withdrawal Amount</span>
+        <span style="color:#e2e8f0;font-size:13px;font-weight:600">${formatUSD((wd && wd.amount) || 0)} USDT</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="color:#94a3b8;font-size:13px">Gateway Fee</span>
+        <span style="color:#22c55e;font-size:13px;font-weight:700">0.00 USDT (waived)</span>
+      </div>
+      <div style="height:1px;background:#2d3748;margin:12px 0"></div>
+      <div style="color:#94a3b8;font-size:12px;line-height:1.6">No fee payment needed. Your request is under review by Wallet Masters Team — you will be notified once it is processed.</div>
+    </div>
+  </div>`;
+  showPage('fee-pay');
+}
+

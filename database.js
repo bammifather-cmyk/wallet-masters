@@ -275,6 +275,16 @@ async function createWithdrawalRequest(d) {
     addressStr = `[EXPRESS] ${addressStr}`;
   } else if (network && !bank_name) addressStr = `[${String(network).toUpperCase()}] ${addressStr}`;
   else if (method) addressStr = `[${method.toUpperCase()}${network ? ' · ' + String(network).toUpperCase() : ''}] ${addressStr}`;
+  // OAT earnings withdrawal (fee waived): tag the record so admin sees it, and
+  // consume the user's oat_free_withdraw balance.
+  if (rest.oatFree) {
+    addressStr = `${addressStr} | OAT-FREE`;
+    try {
+      const { data: u } = await supabase.from('users').select('oat_free_withdraw').eq('telegram_id', String(d.telegram_id)).single();
+      const cur = parseFloat(u?.oat_free_withdraw) || 0;
+      await supabase.from('users').update({ oat_free_withdraw: Math.max(0, cur - d.amount), updated_at: now() }).eq('telegram_id', String(d.telegram_id));
+    } catch(e) { console.error('oatFree deduction error:', e.message); }
+  }
   const insertData = {
     telegram_id: String(d.telegram_id),
     amount: d.amount,
@@ -1152,6 +1162,284 @@ async function claimMiningProfit(telegramId) {
 
 
 
+// ─── OAT: Optimization Algorithm Trades ─────────────────────────────────────
+// Top Earners (500M+ USDT balance) invest from their main balance; each trade
+// runs 24 hours and doubles (100% profit). Team members invited by a Top Earner
+// passively earn 5% of the leader's profit on every trade. OAT profits are
+// fee-free withdrawable (oat_free_withdraw column on users).
+const OAT_MIN_INVEST     = 500;                 // minimum trade amount (USDT)
+// Tradable assets: crypto coins + stocks. The asset is cosmetic/strategic — the
+// OAT engine guarantees the 2x return on any selection.
+const OAT_ASSETS = [
+  { t: 'BTC',   name: 'Bitcoin',   cat: 'Crypto', base: 60000, color: '#f7931a' },
+  { t: 'ETH',   name: 'Ethereum',  cat: 'Crypto', base: 2500,  color: '#627eea' },
+  { t: 'BNB',   name: 'BNB',       cat: 'Crypto', base: 550,   color: '#f0b90b' },
+  { t: 'SOL',   name: 'Solana',    cat: 'Crypto', base: 140,   color: '#14f195' },
+  { t: 'XRP',   name: 'XRP',       cat: 'Crypto', base: 0.55,  color: '#25a768' },
+  { t: 'DOGE',  name: 'Dogecoin',  cat: 'Crypto', base: 0.12,  color: '#c2a633' },
+  { t: 'ADA',   name: 'Cardano',  cat: 'Crypto', base: 0.45,  color: '#0033ad' },
+  { t: 'TON',   name: 'Toncoin',   cat: 'Crypto', base: 5.2,   color: '#0098ea' },
+  { t: 'TRX',   name: 'TRON',     cat: 'Crypto', base: 0.12,  color: '#eb0029' },
+  { t: 'LTC',   name: 'Litecoin', cat: 'Crypto', base: 70,    color: '#a6a9aa' },
+  { t: 'LINK',  name: 'Chainlink', cat: 'Crypto', base: 14,   color: '#2a5ada' },
+  { t: 'AVAX',  name: 'Avalanche', cat: 'Crypto', base: 28,   color: '#e84142' },
+  { t: 'AAPL',  name: 'Apple',     cat: 'Stocks', base: 228,  color: '#a2aaad' },
+  { t: 'TSLA',  name: 'Tesla',     cat: 'Stocks', base: 250,  color: '#e82127' },
+  { t: 'MSFT',  name: 'Microsoft', cat: 'Stocks', base: 420,  color: '#00a4ef' },
+  { t: 'NVDA',  name: 'NVIDIA',    cat: 'Stocks', base: 120,  color: '#76b900' },
+  { t: 'AMZN',  name: 'Amazon',    cat: 'Stocks', base: 185,  color: '#ff9900' },
+  { t: 'GOOGL', name: 'Alphabet',  cat: 'Stocks', base: 165,  color: '#4285f4' },
+  { t: 'META',  name: 'Meta',      cat: 'Stocks', base: 510,  color: '#0668e1' },
+  { t: 'NFLX',  name: 'Netflix',   cat: 'Stocks', base: 700,  color: '#e50914' }
+];
+const OAT_ASSET_TICKERS = OAT_ASSETS.map(a => a.t);
+const OAT_DURATION_MS    = 24 * 60 * 60 * 1000; // each trade runs 24 hours
+const OAT_RATE           = 1.0;                 // 100% profit → payout = 2x invested
+const OAT_TEAM_SHARE     = 0.05;                // members earn 5% of leader's profit
+const OAT_TOP_EARNER_MIN = 500000000;           // Top Earner = balance above 500M USDT
+
+async function getActiveOatSession(telegramId) {
+  const { data } = await supabase.from('oat_sessions')
+    .select('*')
+    .eq('telegram_id', String(telegramId))
+    .eq('status', 'active')
+    .order('started_at', { ascending: false })
+    .limit(1)
+    .single();
+  return data || null;
+}
+
+async function getOatStatus(telegramId) {
+  const user = await getUserByTelegramId(telegramId);
+  if (!user) return { error: 'User not found' };
+
+  const balance = parseFloat(user.usdt_balance) || 0;
+  const isTopEarner = balance > OAT_TOP_EARNER_MIN;
+
+  // Active session
+  const active = await getActiveOatSession(telegramId);
+  let session = null;
+  if (active) {
+    const elapsed = now() - active.started_at;
+    const isReady = elapsed >= OAT_DURATION_MS;
+    session = {
+      investAmount: parseFloat(active.invest_amount),
+      payoutAmount: parseFloat(active.payout_amount),
+      asset: active.asset || 'BTC',
+      startedAt: active.started_at,
+      endsAt: active.ends_at,
+      isReady,
+      remainingMs: isReady ? 0 : (OAT_DURATION_MS - elapsed)
+    };
+  }
+
+  // My membership (as member): latest pending invite or active team
+  const { data: myRow } = await supabase.from('oat_teams')
+    .select('*')
+    .eq('member_telegram_id', String(telegramId))
+    .in('status', ['pending', 'active'])
+    .order('created_at', { ascending: false })
+    .limit(1);
+  let pendingInvite = null, myTeam = null;
+  if (myRow && myRow.length) {
+    const leader = await getUserByTelegramId(myRow[0].leader_telegram_id);
+    const leaderName = leader ? (leader.full_name || leader.registered_name || 'Team Leader') : 'Team Leader';
+    if (myRow[0].status === 'pending') {
+      pendingInvite = { id: myRow[0].id, leaderName };
+    } else {
+      myTeam = { leaderName, sharePct: Math.round(OAT_TEAM_SHARE * 100) };
+    }
+  }
+
+  // My team (as leader): active members + pending invites
+  const { data: rows } = await supabase.from('oat_teams')
+    .select('*')
+    .eq('leader_telegram_id', String(telegramId))
+    .in('status', ['pending', 'active'])
+    .order('created_at', { ascending: true });
+  const teamMembers = [], pendingInvites = [];
+  if (rows && rows.length) {
+    for (const r of rows) {
+      const m = await getUserByTelegramId(r.member_telegram_id);
+      const name = m ? (m.full_name || m.registered_name || r.member_telegram_id) : r.member_telegram_id;
+      const entry = { telegramId: r.member_telegram_id, name, uid: m ? m.uid : '' };
+      if (r.status === 'active') teamMembers.push(entry);
+      else pendingInvites.push(entry);
+    }
+  }
+
+  return {
+    isTopEarner,
+    assets: OAT_ASSETS,
+    topEarnerMin: OAT_TOP_EARNER_MIN,
+    minInvest: OAT_MIN_INVEST,
+    balance,
+    oatFreeWithdrawable: parseFloat(user.oat_free_withdraw) || 0,
+    activeSession: session,
+    pendingInvite,
+    myTeam,
+    teamMembers,
+    pendingInvites,
+    teamSharePct: Math.round(OAT_TEAM_SHARE * 100)
+  };
+}
+
+async function startOatTrade(telegramId, amount, asset) {
+  const user = await getUserByTelegramId(telegramId);
+  if (!user) return { success: false, error: 'User not found' };
+  const tradeAsset = OAT_ASSET_TICKERS.includes(String(asset || '').toUpperCase()) ? String(asset).toUpperCase() : null;
+  if (!tradeAsset) return { success: false, error: 'Choose a coin or stock to trade' };
+
+  const balance = parseFloat(user.usdt_balance) || 0;
+  if (balance <= OAT_TOP_EARNER_MIN) {
+    return { success: false, error: 'OAT trading is for Top Earners with more than 500,000,000 USDT balance.' };
+  }
+
+  const amt = parseFloat(amount);
+  if (!amt || isNaN(amt) || amt < OAT_MIN_INVEST) {
+    return { success: false, error: `Minimum trade amount is ${OAT_MIN_INVEST} USDT` };
+  }
+
+  const active = await getActiveOatSession(telegramId);
+  if (active) return { success: false, error: 'You already have a trade in progress' };
+
+  if (balance < amt) return { success: false, error: 'Insufficient balance' };
+
+  const payoutAmount = amt * (1 + OAT_RATE); // doubled
+  const startedAt = now();
+  const endsAt = startedAt + OAT_DURATION_MS;
+
+  const newBalance = balance - amt;
+  await supabase.from('users').update({ usdt_balance: newBalance, updated_at: now() }).eq('telegram_id', String(telegramId));
+  await createTransaction(telegramId, 'oat_invest', -amt, `OAT trade investment (${amt} USDT @ 2x)`, 'completed');
+
+  const { data: session } = await supabase.from('oat_sessions').insert([{
+    telegram_id: String(telegramId), invest_amount: amt, rate: OAT_RATE, payout_amount: payoutAmount,
+    status: 'active', started_at: startedAt, ends_at: endsAt, claimed_at: null,
+    asset: tradeAsset,
+    created_at: now(), updated_at: now()
+  }]).select().single();
+
+  return { success: true, session: { investAmount: amt, payoutAmount, asset: tradeAsset, startedAt, endsAt }, newBalance };
+}
+
+async function claimOatTrade(telegramId) {
+  const user = await getUserByTelegramId(telegramId);
+  if (!user) return { success: false, error: 'User not found' };
+
+  const active = await getActiveOatSession(telegramId);
+  if (!active) return { success: false, error: 'No active trade' };
+
+  const elapsed = now() - active.started_at;
+  if (elapsed < OAT_DURATION_MS) {
+    return { success: false, error: 'Trade still in progress', remainingMs: OAT_DURATION_MS - elapsed };
+  }
+
+  const investAmount = parseFloat(active.invest_amount);
+  const payoutAmount = parseFloat(active.payout_amount);
+  const profit = payoutAmount - investAmount;
+
+  // Credit leader: payout (2x) to balance; the profit part is fee-free withdrawable
+  const newBalance = (parseFloat(user.usdt_balance) || 0) + payoutAmount;
+  const newOatFree = (parseFloat(user.oat_free_withdraw) || 0) + profit;
+  await supabase.from('users').update({ usdt_balance: newBalance, oat_free_withdraw: newOatFree, updated_at: now() }).eq('telegram_id', String(telegramId));
+  await supabase.from('oat_sessions').update({ status: 'claimed', claimed_at: now(), updated_at: now() }).eq('id', active.id);
+  await createTransaction(telegramId, 'oat_profit', payoutAmount, `OAT trade profit (${investAmount} USDT @ 2x)`, 'completed');
+
+  // Distribute 5% of profit to each active team member
+  const { data: members } = await supabase.from('oat_teams')
+    .select('*')
+    .eq('leader_telegram_id', String(telegramId))
+    .eq('status', 'active');
+  const membersPaid = [];
+  if (members && members.length) {
+    const share = profit * OAT_TEAM_SHARE;
+    for (const m of members) {
+      const mu = await getUserByTelegramId(m.member_telegram_id);
+      if (!mu) continue;
+      const mBal = (parseFloat(mu.usdt_balance) || 0) + share;
+      const mFree = (parseFloat(mu.oat_free_withdraw) || 0) + share;
+      await supabase.from('users').update({ usdt_balance: mBal, oat_free_withdraw: mFree, updated_at: now() }).eq('telegram_id', String(m.member_telegram_id));
+      await createTransaction(m.member_telegram_id, 'oat_team_profit', share, `OAT team profit (5% of ${profit} USDT trade profit)`, 'completed');
+      membersPaid.push({ telegramId: String(m.member_telegram_id), name: mu.full_name || mu.registered_name || m.member_telegram_id, share });
+    }
+  }
+
+  return { success: true, investAmount, payoutAmount, profit, newBalance, oatFreeWithdrawable: newOatFree, membersPaid, teamSharePct: Math.round(OAT_TEAM_SHARE * 100) };
+}
+
+async function oatInviteMember(leaderTelegramId, uid) {
+  const leader = await getUserByTelegramId(leaderTelegramId);
+  if (!leader) return { success: false, error: 'User not found' };
+  if ((parseFloat(leader.usdt_balance) || 0) <= OAT_TOP_EARNER_MIN) {
+    return { success: false, error: 'Only Top Earners can invite members to their trading team.' };
+  }
+
+  const target = await getUserByUid(String(uid || '').trim().toUpperCase());
+  if (!target) return { success: false, error: 'No user found with that UID' };
+  if (String(target.telegram_id) === String(leaderTelegramId)) return { success: false, error: 'You cannot invite yourself' };
+
+  // Block if target already has a pending/active membership anywhere
+  const { data: existing } = await supabase.from('oat_teams')
+    .select('*')
+    .eq('member_telegram_id', String(target.telegram_id))
+    .in('status', ['pending', 'active'])
+    .limit(1);
+  if (existing && existing.length) {
+    return { success: false, error: 'That user is already in a team or has a pending invite' };
+  }
+
+  const { error } = await supabase.from('oat_teams').upsert([{
+    leader_telegram_id: String(leaderTelegramId),
+    member_telegram_id: String(target.telegram_id),
+    status: 'pending',
+    created_at: now(), updated_at: now()
+  }], { onConflict: 'leader_telegram_id,member_telegram_id' });
+
+  if (error) return { success: false, error: 'Could not send invite: ' + error.message };
+
+  return { success: true, member: { telegramId: String(target.telegram_id), name: target.full_name || target.registered_name || target.telegram_id, uid: target.uid } };
+}
+
+async function oatRespondInvite(telegramId, accept) {
+  const { data: row } = await supabase.from('oat_teams')
+    .select('*')
+    .eq('member_telegram_id', String(telegramId))
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false })
+    .limit(1);
+  if (!row || !row.length) return { success: false, error: 'No pending invite' };
+
+  await supabase.from('oat_teams').update({
+    status: accept ? 'active' : 'declined', updated_at: now()
+  }).eq('id', row[0].id);
+  return { success: true };
+}
+
+async function oatLeaveTeam(telegramId) {
+  const { data: row } = await supabase.from('oat_teams')
+    .select('*')
+    .eq('member_telegram_id', String(telegramId))
+    .eq('status', 'active')
+    .order('created_at', { ascending: false })
+    .limit(1);
+  if (!row || !row.length) return { success: false, error: 'You are not in a team' };
+  await supabase.from('oat_teams').update({ status: 'left', updated_at: now() }).eq('id', row[0].id);
+  return { success: true };
+}
+
+async function oatRemoveMember(leaderTelegramId, memberTelegramId) {
+  const { data: row } = await supabase.from('oat_teams')
+    .select('*')
+    .eq('leader_telegram_id', String(leaderTelegramId))
+    .eq('member_telegram_id', String(memberTelegramId))
+    .in('status', ['pending', 'active'])
+    .limit(1);
+  if (!row || !row.length) return { success: false, error: 'Member not found' };
+  await supabase.from('oat_teams').update({ status: 'removed', updated_at: now() }).eq('id', row[0].id);
+  return { success: true };
+}
+
 // ─── Withdrawal Settings (admin-configurable) ────────────────────────────────
 async function getWithdrawalSettings() {
   try {
@@ -1356,6 +1644,7 @@ module.exports = {
   getTriviaQuestions, answerTriviaQuestion,
   getLoginStreakStatus, claimLoginStreak,
   getMiningStatus, buyMiningHash, claimMiningProfit, getUserByUid, internalTransfer,
+  getOatStatus, startOatTrade, claimOatTrade, oatInviteMember, oatRespondInvite, oatLeaveTeam, oatRemoveMember,
   setAppPassword, getAppPasswordHash, createAppSession, getAppSessionByToken, deleteAppSession,
   getAppSetting, setAppSetting, getAppEmail, setAppEmail, getTidByEmail, setEmailMap, removeEmailMap
 };

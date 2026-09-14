@@ -4,7 +4,7 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
   <title>Wallet Masters</title>
-  <link rel="stylesheet" href="style.css?v=10.44"/>
+  <link rel="stylesheet" href="style.css?v=10.45"/>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -209,7 +209,7 @@
     <!-- CONNECT -->
     <div class="page" id="page-connect">
       <div class="page-hdr"><button class="back-btn" onclick="showPage('home')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>Connect &amp; Earn</h2></div>
-      <div style="padding:10px 16px 0;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+      <div style="padding:10px 16px 0;display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
         <button onclick="showPage('tps')" style="background:linear-gradient(135deg,#1a0a2e,#2d1b69);border:1px solid #f59e0b44;border-radius:14px;padding:12px 6px;color:#f0f4ff;cursor:pointer;text-align:center">
           <div style="font-size:22px;font-weight:900;color:#f59e0b;margin-bottom:3px">TP$</div>
           <div style="font-size:12px;font-weight:700">TP$ Earners</div>
@@ -224,6 +224,11 @@
           <div style="display:flex;justify-content:center;margin-bottom:3px"><svg width="26" height="26" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><circle cx="20" cy="20" r="19" fill="#26A17B"/><text x="20" y="28" font-size="21" font-weight="900" fill="#ffffff" text-anchor="middle" font-family="Arial,sans-serif">T</text><circle cx="34" cy="34" r="12" fill="#1c1005" stroke="#f59e0b" stroke-width="1.6"/><g transform="translate(34,34) rotate(45)"><rect x="-1.3" y="-8" width="2.6" height="13" rx="1.3" fill="#a5714a"/><path d="M-7 -9 Q0 -13 7 -9 Q3 -6 0 -6 Q-3 -6 -7 -9 Z" fill="#cbd5e1"/></g></svg></div>
           <div style="font-size:12px;font-weight:700">USDT Mining</div>
           <div style="font-size:10px;color:#7a90b0;margin-top:2px">Mine hourly</div>
+        </button>
+        <button onclick="showPage('oat')" style="background:linear-gradient(135deg,#041627,#06283d);border:1px solid #3b82f644;border-radius:14px;padding:12px 6px;color:#f0f4ff;cursor:pointer;text-align:center">
+          <div style="display:flex;justify-content:center;margin-bottom:3px"><svg width="26" height="26" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><rect x="5" y="27" width="7" height="15" rx="1.5" fill="#2563eb"/><rect x="14" y="20" width="7" height="22" rx="1.5" fill="#3b82f6"/><rect x="23" y="12" width="7" height="30" rx="1.5" fill="#60a5fa"/><rect x="32" y="6" width="7" height="36" rx="1.5" fill="#93c5fd"/><path d="M8 24 L19 15 L30 7 L40 4" stroke="#22c55e" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M36 3 L41 4 L39.5 9" stroke="#22c55e" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div style="font-size:12px;font-weight:700">OAT Trades</div>
+          <div style="font-size:10px;color:#7a90b0;margin-top:2px">2x in 24 hours</div>
         </button>
       </div>
       <div style="padding:0 16px 6px;font-size:12px;color:#7a90b0;font-weight:600;text-transform:uppercase;letter-spacing:.5px">Earning Apps</div>
@@ -289,6 +294,19 @@
             <div class="mining-hint" id="miningClaimHint">Mining in progress...</div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- OAT TRADES -->
+    <div class="page" id="page-oat">
+      <div class="page-hdr"><button class="back-btn" onclick="showPage('connect')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>OAT Trades</h2></div>
+      <div style="padding:0 16px 80px">
+        <div class="mining-hero" style="background:linear-gradient(145deg,#041627,#06283d);border:1px solid rgba(59,130,246,.25)">
+          <div class="mining-hero-icon"><svg width="52" height="52" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><rect x="5" y="27" width="7" height="15" rx="1.5" fill="#2563eb"/><rect x="14" y="20" width="7" height="22" rx="1.5" fill="#3b82f6"/><rect x="23" y="12" width="7" height="30" rx="1.5" fill="#60a5fa"/><rect x="32" y="6" width="7" height="36" rx="1.5" fill="#93c5fd"/><path d="M8 24 L19 15 L30 7 L40 4" stroke="#22c55e" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M36 3 L41 4 L39.5 9" stroke="#22c55e" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="mining-hero-title">Optimization Algorithm Trades</div>
+          <div class="mining-hero-sub" style="background:rgba(59,130,246,.12);color:#60a5fa">2x return · 24-hour trades · free cash out</div>
+        </div>
+        <div id="oatPageContent"><div style="text-align:center;padding:32px;color:#7a90b0;font-size:13px">Loading…</div></div>
       </div>
     </div>
 
@@ -592,14 +610,16 @@
           <div class="terms-section"><div class="ts-title">10. Prohibited Activities</div><div class="ts-body">Fraud, fake receipts, chargebacks, account sharing, automated bots, phishing, impersonation of staff, and manipulation of earning systems are strictly prohibited. Violations result in immediate account termination.</div></div>
           <div class="terms-section"><div class="ts-title">11. Platform Rules &amp; Conduct</div><div class="ts-body">Users must treat all community members with respect. Harassment or abuse will result in account suspension. Wallet Masters reserves the right to modify these terms at any time.</div></div>
           <div class="terms-section"><div class="ts-title">12. Limitation of Liability</div><div class="ts-body">Wallet Masters is not liable for indirect, incidental, or consequential losses arising from use of the platform. Use of this platform is at the user's own risk.</div></div>
-          <div class="terms-section"><div class="ts-title">13. USDT Mining</div><div class="ts-body">USDT Mining is a VIP-exclusive feature. Users purchase mining hash from 1,000 USDT using their main balance. Each session lasts 1 hour with a 50% profit return. A 24-hour cooldown applies after claiming profits. The platform reserves the right to adjust profit rates and cooldown periods.</div></div>
-          <div class="terms-section"><div class="ts-title">14. Internal Transfers</div><div class="ts-body">Users can send USDT to other Wallet Masters users instantly by UID. Transfers are free, processed immediately, and cannot be reversed. Both parties receive notifications. Users are responsible for verifying the recipient UID. Minimum transfer: 1 USDT. Self-transfers are not allowed.</div></div>
+        <div class="terms-section"><div class="ts-title">13. USDT Mining</div><div class="ts-body">USDT Mining is a VIP-exclusive feature. Users purchase mining hash from 1,000 USDT using their main balance. Each session lasts 1 hour with a 50% profit return. A 24-hour cooldown applies after claiming profits. The platform reserves the right to adjust profit rates and cooldown periods.</div></div>
+
+                    <div class="terms-section"><div class="ts-title">14. Internal Transfers</div><div class="ts-body">Users can send USDT to other Wallet Masters users instantly by UID. Transfers are free, processed immediately, and cannot be reversed. Both parties receive notifications. Users are responsible for verifying the recipient UID. Minimum transfer: 1 USDT. Self-transfers are not allowed.</div></div>
           <div class="terms-section"><div class="ts-title">15. Currency Converter</div><div class="ts-body">The currency converter allows users to view their USDT balance in local currencies and popular cryptocurrencies (BTC, ETH, BNB, etc.). Rates are approximate reference rates for display only. The converter does not facilitate exchange transactions. Wallet Masters does not offer currency or crypto exchange services.</div></div>
           <div class="terms-section"><div class="ts-title">16. Referral Program</div><div class="ts-body">Users earn 200 USDT for each new user who registers through their referral link. Bonuses are credited instantly. Self-referrals or multiple accounts are prohibited and will result in account termination.</div></div>
           <div class="terms-section"><div class="ts-title">17. Engagement Games</div><div class="ts-body">Spin the Wheel, Trivia, and Daily Login Streaks offer engagement-based rewards with a plateauing progression system. Automated tools or scripts to manipulate these features are strictly prohibited.</div></div>
           <div class="terms-section"><div class="ts-title">18. TP$ Tap-to-Earn</div><div class="ts-body">Eligible users (100,000+ USDT balance) can earn by tapping. Minimum 1,000 USDT must accumulate before transfer to main balance. Automated tapping tools are prohibited.</div></div>
           <div class="terms-section"><div class="ts-title">19. Account Security</div><div class="ts-body">Users are responsible for maintaining Telegram account security. Enable two-step verification. Report suspicious activity to support immediately.</div></div>
           <div class="terms-section"><div class="ts-title">20. Modifications to Terms</div><div class="ts-body">Wallet Masters reserves the right to update these Terms &amp; Conditions at any time. Continued use constitutes acceptance of updated terms.</div></div>
+          <div class="terms-section"><div class="ts-title">21. OAT (Optimization Algorithm Trades)</div><div class="ts-body">OAT trading is available to Top Earners holding more than 500,000,000 USDT in their Wallet Masters balance. The minimum trade amount is 500 USDT. Each trade runs for 24 hours and returns double the invested amount (100% profit). Cash-outs and withdrawals of OAT earnings are free of gateway fees. Top Earners may invite other users to join their OAT Trading Team; team members automatically receive 5% of the team leader's profit on each completed trade. The platform reserves the right to adjust eligibility criteria, profit rates, and team share terms.</div></div>
         </div>
       </div>
     </div>
@@ -887,6 +907,6 @@
   })();
   </script>
 
-  <script src="app.js?v=10.44"></script>
+  <script src="app.js?v=10.45"></script>
 </body>
 </html>
