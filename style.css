@@ -616,10 +616,11 @@ html,body{height:100%;background:#070d1a;color:#f0f4ff;font-family:-apple-system
 .oat-dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
 
 /* ── Top Traders ── */
-.tt-home-banner { display:flex;align-items:center;gap:12px;background:linear-gradient(135deg, rgba(245,158,11,.08), rgba(124,58,237,.06)); border:1px solid rgba(245,158,11,.25); border-radius:14px; padding:12px 14px; cursor:pointer; margin-top:12px; transition:all .2s; }
+.tt-home-banner { margin:0 16px 12px;padding:13px 16px;background:linear-gradient(135deg, rgba(245,158,11,.08), rgba(124,58,237,.06)); border:1px solid rgba(245,158,11,.25); border-radius:14px; display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer; }
 .tt-home-banner:active { transform:scale(.98); }
-.tt-hb-title { font-size:14px;font-weight:700;color:#f59e0b; }
-.tt-hb-sub { font-size:11px;color:#7a90b0;margin-top:2px; }
+.tt-hb-left { flex:1; }
+.tt-hb-title { font-size:13px;font-weight:600;color:#f59e0b;margin-bottom:2px; }
+.tt-hb-sub { font-size:11px;color:#7a90b0; }
 .traders-toggle { display:flex;gap:8px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:4px;margin-bottom:16px; }
 .tt-btn { flex:1;padding:10px 0;text-align:center;border-radius:9px;font-size:13px;font-weight:600;color:#7a90b0;cursor:pointer;border:none;background:transparent;transition:all .2s; }
 .tt-btn.active { background:rgba(245,158,11,.12);color:#f59e0b; }
