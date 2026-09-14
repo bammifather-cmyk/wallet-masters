@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { width:1200px; height:900px; overflow:hidden;
+    background: radial-gradient(1200px 600px at 50% -10%, #1a2a4f 0%, #0d1629 45%, #070d1a 100%);
+    font-family:'Inter',sans-serif; color:#f0f4ff; }
+  .frame { position:absolute; inset:26px; border:1px solid rgba(245,158,11,.35); border-radius:22px; }
+  .corner { position:absolute; width:46px; height:46px; border-color:#f59e0b; border-style:solid; }
+  .c-tl { top:16px; left:16px; border-width:2px 0 0 2px; border-radius:22px 0 0 0; }
+  .c-tr { top:16px; right:16px; border-width:2px 2px 0 0; border-radius:0 22px 0 0; }
+  .c-bl { bottom:16px; left:16px; border-width:0 0 2px 2px; border-radius:0 0 0 22px; }
+  .c-br { bottom:16px; right:16px; border-width:0 2px 2px 0; border-radius:0 0 22px 0; }
+  .wrap { padding:64px 80px; text-align:center; }
+  .brand { font-size:15px; letter-spacing:5px; color:#f59e0b; font-weight:700; text-transform:uppercase; }
+  .brand .bar { display:inline-block; width:34px; height:1px; background:linear-gradient(90deg,transparent,#f59e0b); vertical-align:middle; margin:0 14px; }
+  .brand .bar.r { background:linear-gradient(270deg,transparent,#f59e0b); }
+  h1 { font-family:'Playfair Display',serif; font-size:62px; font-weight:800; margin-top:14px;
+    background:linear-gradient(135deg,#ffe9b0 0%,#f59e0b 55%,#b45309 100%);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+  .sub { font-size:15px; color:#7a90b0; margin-top:10px; letter-spacing:2px; text-transform:uppercase; font-weight:500; }
+  .podium { display:flex; justify-content:center; align-items:flex-end; gap:26px; margin-top:44px; }
+  .card { width:300px; background:rgba(255,255,255,.035); border:1px solid rgba(255,255,255,.09);
+    border-radius:20px; padding:30px 18px 26px; position:relative; }
+  .card.first { border-color:rgba(245,158,11,.55);
+    background:linear-gradient(180deg, rgba(245,158,11,.14) 0%, rgba(245,158,11,.04) 60%, rgba(255,255,255,.03) 100%);
+    box-shadow:0 24px 60px rgba(245,158,11,.13); padding-top:40px; }
+  .medal { position:absolute; top:-20px; left:50%; transform:translateX(-50%);
+    width:40px; height:40px; border-radius:50%; background:radial-gradient(circle at 35% 30%, #fde68a, #f59e0b 60%, #92400e);
+    display:flex; align-items:center; justify-content:center; font-weight:800; font-size:16px; color:#3b2a06;
+    box-shadow:0 6px 18px rgba(245,158,11,.4); border:2px solid rgba(255,255,255,.25); }
+  .medal.silver { background:radial-gradient(circle at 35% 30%, #f1f5f9, #94a3b8 60%, #475569); color:#1e293b; }
+  .medal.bronze { background:radial-gradient(circle at 35% 30%, #fdba74, #c2410c 60%, #7c2d12); color:#fff7ed; }
+  .trophy { margin:-58px auto 8px; width:56px; height:56px; filter:drop-shadow(0 8px 20px rgba(245,158,11,.45)); }
+  .card.first .medal { display:none; }
+  .ava { width:84px; height:84px; margin:0 auto 14px; border-radius:50%;
+    background:#0d1629; border:3px solid rgba(245,158,11,.45); display:flex; align-items:center; justify-content:center; overflow:hidden; }
+  .card.first .ava { width:96px; height:96px; border-width:3px; }
+  .ava span { font-size:34px; font-weight:800; color:#f0f4ff; }
+  .name { font-size:20px; font-weight:700; }
+  .card.first .name { font-size:22px; }
+  .vbadge { display:inline-flex; align-items:center; gap:5px; margin-top:8px;
+    background:rgba(59,130,246,.12); border:1px solid rgba(59,130,246,.35); border-radius:999px; padding:4px 12px; }
+  .vbadge svg { display:block; }
+  .vbadge span { font-size:11px; color:#60a5fa; font-weight:600; letter-spacing:.5px; }
+  .amt { font-family:'Playfair Display',serif; font-size:26px; font-weight:700; color:#f59e0b; margin-top:14px; }
+  .card.first .amt { font-size:30px; }
+  .amt-label { font-size:11px; color:#64748b; margin-top:4px; letter-spacing:1.5px; text-transform:uppercase; }
+  .divider { height:1px; margin:40px 80px 0; background:linear-gradient(90deg, transparent, rgba(245,158,11,.4), transparent); }
+  .foot { display:flex; justify-content:space-between; align-items:center; margin:20px 80px 0; font-size:13px; color:#64748b; }
+  .foot b { color:#7a90b0; font-weight:600; }
+</style>
+</head>
+<body>
+<div class="frame"></div>
+<div class="corner c-tl"></div><div class="corner c-tr"></div><div class="corner c-bl"></div><div class="corner c-br"></div>
+<div class="wrap">
+  <div class="brand"><span class="bar"></span>Wallet Masters Presents<span class="bar r"></span></div>
+  <h1>Top Traders of the Week</h1>
+  <div class="sub">September 7 &ndash; 14, 2026 &middot; Weekly Earnings Leaderboard</div>
+
+  <div class="podium">
+    <div class="card">
+      <div class="medal silver">2</div>
+      <div class="ava"><span>A</span></div>
+      <div class="name">Arun Kant Pandey</div>
+      <div class="vbadge"><svg width="12" height="12" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#3b82f6"/><path d="M7 12.5l3.2 3.2L17 9" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Verified</span></div>
+      <div class="amt">$800.00</div>
+      <div class="amt-label">Earned This Week</div>
+    </div>
+    <div class="card first">
+      <div class="trophy"><svg width="56" height="56" viewBox="0 0 24 24" fill="none"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z" stroke="#f59e0b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="rgba(245,158,11,.15)"/><path d="M7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3" stroke="#f59e0b" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+      <div class="ava"><span>R</span></div>
+      <div class="name">Roshni Nadar</div>
+      <div class="vbadge"><svg width="12" height="12" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#3b82f6"/><path d="M7 12.5l3.2 3.2L17 9" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Verified</span></div>
+      <div class="amt">$1,539,251,214.00</div>
+      <div class="amt-label">Earned This Week</div>
+    </div>
+    <div class="card">
+      <div class="medal bronze">3</div>
+      <div class="ava"><span>M</span></div>
+      <div class="name">MK</div>
+      <div class="vbadge"><svg width="12" height="12" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#3b82f6"/><path d="M7 12.5l3.2 3.2L17 9" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Verified</span></div>
+      <div class="amt">$200.00</div>
+      <div class="amt-label">Earned This Week</div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+  <div class="foot">
+    <div><b>Wallet Masters</b> &middot; The Premier Trading &amp; Earnings Platform</div>
+    <div> walletmastersbot &middot; wallet-masters.onrender.com</div>
+  </div>
+</div>
+</body>
+</html>
