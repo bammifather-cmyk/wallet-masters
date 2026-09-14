@@ -1,0 +1,61 @@
+name: Build OAT Trades APK
+
+on:
+  push:
+    branches: [main]
+    paths: ['android-app-oat/**', '.github/workflows/build-oat-apk.yml', 'oat-app/**']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.7'
+
+      - name: Decode signing keystore
+        run: |
+          if [ -n "${{ secrets.WM_KEYSTORE_B64 }}" ]; then
+            mkdir -p android-app-oat/keystore
+            echo "${{ secrets.WM_KEYSTORE_B64 }}" | base64 -d > android-app-oat/keystore/walletmasters.keystore
+            echo "SIGNING=yes" >> $GITHUB_ENV
+          else
+            echo "SIGNING=no" >> $GITHUB_ENV
+          fi
+
+      - name: Build release APK
+        working-directory: android-app-oat
+        run: |
+          if [ "$SIGNING" = "yes" ]; then
+            gradle assembleRelease \
+              -PWM_STORE_FILE=keystore/walletmasters.keystore \
+              -PWM_STORE_PASSWORD="${{ secrets.WM_KS_PASSWORD }}" \
+              -PWM_KEY_ALIAS="${{ secrets.WM_KEY_ALIAS }}" \
+              -PWM_KEY_PASSWORD="${{ secrets.WM_KEY_PASSWORD }}" \
+              --no-daemon
+          else
+            gradle assembleRelease --no-daemon
+          fi
+
+      - name: Attach APK to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: oat-latest
+          name: OAT Trades App
+          files: android-app-oat/app/build/outputs/apk/release/app-release.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
