@@ -139,7 +139,7 @@ async function getFeeInfoForNetwork(network, feeUsdt) {
 
 function nowSec() { return Math.floor(Date.now() / 1000); }
 
-app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.48' }));
+app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.49' }));
 
 // ═══════════════════════════════════════════════════════════════
 // KEEP-ALIVE: Ping every 10 minutes to prevent Render cold starts
@@ -464,6 +464,7 @@ const ADMIN_KEYBOARD = {
     [{ text: '📋 Withdrawals',       callback_data: 'admin_withdrawals'        }, { text: '🎬 Testimonials',      callback_data: 'admin_testimonials'       }],
     [{ text: '➕ Add App',           callback_data: 'admin_add_app'            }, { text: '🗑 Remove App',        callback_data: 'admin_remove_app'         }],
     [{ text: '📢 Broadcast',         callback_data: 'admin_broadcast'          }, { text: '📊 Stats',             callback_data: 'admin_stats'              }],
+    [{ text: '👑 Top Traders', callback_data: 'admin_toptraders' }],
     [{ text: '👥 All Users',         callback_data: 'admin_all_users'          }, { text: '💬 Support',           callback_data: 'admin_support'            }],
     [{ text: '📝 Poems',             callback_data: 'admin_poems'              }, { text: '🌟 SocialPay',         callback_data: 'admin_socialpay'          }],
     [{ text: 'Verifications',      callback_data: 'admin_verifications'      }, { text: '🚫 Manage Users',      callback_data: 'admin_manage_users'       }],
@@ -485,6 +486,14 @@ async function setMenuButton(chatId) {
    
     });
   } catch(e) {}
+}
+
+async function showTopTradersAdmin(chatId) {
+  const { data: rows } = await getSupabase().from('top_traders').select('name, amount').order('id', { ascending: true });
+  const list = (rows || []).map((r, i) => `${i + 1}. ${r.name}: $${Number(r.amount).toLocaleString('en-US')}`).join('\n') || '(empty)';
+  bot.sendMessage(chatId,
+    `👑 <b>Manual Top Traders</b>\n\n${list}\n\nThese are featured first in the Top Traders leaderboard, banners and announcements.\n\n<b>Add:</b> <code>TTADD: Full Name | 500000</code>\n<b>Remove:</b> <code>TTDEL: Full Name</code>\n<b>Clear all:</b> <code>TTCLEAR:</code>\n\nOAT trading profits from the last 7 days are added automatically after the manual list.`,
+    { parse_mode: 'HTML' }).catch(() => {});
 }
 
 async function broadcastToAll(text) {
@@ -1182,6 +1191,7 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
     }
     return;
   }
+  if (data === 'admin_toptraders') { showTopTradersAdmin(chatId); return; }
   if (data === 'admin_broadcast') { bot.sendMessage(chatId, '📢 Send: <code>BROADCAST: your message</code>', { parse_mode: 'HTML' }); return; }
   if (data === 'admin_add_app')   { bot.sendMessage(chatId, '➕ Send:\n<code>ADD_APP\nName: ...\nToken: ...</code>', { parse_mode: 'HTML' }); return; }
   if (data === 'admin_remove_app') {
@@ -1441,6 +1451,35 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
     await supa.from('users').update({ min_withdrawal_override: null, max_withdrawal_override: null }).eq('telegram_id', usr.telegram_id);
     bot.sendMessage(id, `<b>Limits reset to global defaults</b>\n👤 ${usr.full_name} (${uid})`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
     return;
+  }
+  // ── Manual Top Traders management (admin only) ────────────────────────
+  if (chatId === ADMIN_CHAT_ID) {
+    const upTxt = text.toUpperCase();
+    if (upTxt.startsWith('TTADD:')) {
+      const parts = text.slice(text.indexOf(':') + 1).split('|');
+      if (parts.length < 2) { bot.sendMessage(chatId, 'Format: <code>TTADD: Full Name | 500000</code> (amount in USD)', { parse_mode: 'HTML' }).catch(()=>{}); return; }
+      const nm = parts[0].trim();
+      const amt = parseFloat(String(parts[1]).replace(/[^0-9.]/g, ''));
+      if (!nm || isNaN(amt)) { bot.sendMessage(chatId, 'Invalid name or amount. Format: <code>TTADD: Full Name | 500000</code>', { parse_mode: 'HTML' }).catch(()=>{}); return; }
+      const { error: ierr } = await getSupabase().from('top_traders').insert({ name: nm, amount: amt, created_at: Date.now() });
+      if (ierr) { bot.sendMessage(chatId, 'Could not save: ' + ierr.message).catch(()=>{}); return; }
+      showTopTradersAdmin(chatId);
+      return;
+    }
+    if (upTxt.startsWith('TTDEL:')) {
+      const nm = text.slice(text.indexOf(':') + 1).trim();
+      if (!nm) return;
+      await getSupabase().from('top_traders').delete().ilike('name', nm);
+      bot.sendMessage(chatId, 'Removed from the manual Top Traders list (if present).').catch(()=>{});
+      showTopTradersAdmin(chatId);
+      return;
+    }
+    if (upTxt.startsWith('TTCLEAR:')) {
+      await getSupabase().from('top_traders').delete().gte('id', 0);
+      bot.sendMessage(chatId, 'Manual Top Traders list cleared.').catch(()=>{});
+      return;
+    }
+    if (upTxt.startsWith('TOPTRADERS:')) { showTopTradersAdmin(chatId); return; }
   }
     if (t.startsWith('BROADCAST:')) {
     const message = t.replace('BROADCAST:','').trim();
@@ -1912,7 +1951,7 @@ app.get('/api/traders/leaderboard', async (req, res) => {
     const { data: txs, error } = await supa.from('transactions')
       .select('telegram_id, amount')
       .gte('created_at', since)
-      .in('type', EARNING_TYPES);
+      .in('type', ['oat_profit', 'oat_team_profit']);
     if (error) throw error;
     const totals = {};
     for (const t of (txs || [])) totals[t.telegram_id] = (totals[t.telegram_id] || 0) + (parseFloat(t.amount) || 0);
@@ -1938,7 +1977,23 @@ app.get('/api/traders/leaderboard', async (req, res) => {
         amount: Math.round(r.amount * 100) / 100
       };
     });
-    res.json({ success: true, period: days === 30 ? 'month' : 'week', leaderboard });
+    // Manual curated Top Traders (admin-managed) come first, then OAT traders not already listed
+    let manual = [];
+    try {
+      const { data: mrows } = await supa.from('top_traders').select('name, amount').order('id', { ascending: true });
+      manual = mrows || [];
+    } catch (e) { console.error('top_traders read error:', e.message); }
+    const manualList = manual.map(m => ({
+      name: m.name,
+      avatar: null,
+      verified: true,
+      amount: Math.round((parseFloat(m.amount) || 0) * 100) / 100,
+      manual: true
+    }));
+    const listed = new Set(manualList.map(x => String(x.name).toLowerCase()));
+    const computed = leaderboard.filter(x => !listed.has(String(x.name).toLowerCase()));
+    const merged = manualList.concat(computed).slice(0, 10).map((x, i) => Object.assign({ rank: i + 1 }, x));
+    res.json({ success: true, period: days === 30 ? 'month' : 'week', leaderboard: merged });
   } catch (e) { console.error('leaderboard error:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
 });
 

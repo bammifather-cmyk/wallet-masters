@@ -638,7 +638,7 @@ async function loadTopTraders(period) {
     const r = await fetch(API + '/traders/leaderboard?period=' + period, { headers: { 'x-telegram-init-data': getInitData() } });
     const d = await r.json();
     if (!d.success || !d.leaderboard || !d.leaderboard.length) {
-      podium.innerHTML = '<div style="text-align:center;color:#7a90b0;font-size:13px;padding:30px 0;line-height:1.6">No trader earnings recorded yet this ' + period + '.<br>Start earning to claim the top spot.</div>';
+      podium.innerHTML = '<div style="text-align:center;color:#7a90b0;font-size:13px;padding:30px 0;line-height:1.6">No trading profits recorded yet this ' + period + '.<br>Start an OAT trade to claim the top spot.</div>';
       return;
     }
     const badge = (v) => v ? '<span style="display:inline-flex;align-items:center;gap:3px;margin-top:2px">' + checkBadge('#3b82f6', 12) + '<span style="font-size:10px;color:#60a5fa;font-weight:600">Verified</span></span>' : '<span style="display:inline-block;margin-top:2px;font-size:10px;color:#64748b;font-weight:500">Member</span>';
