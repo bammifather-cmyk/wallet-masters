@@ -1,5 +1,5 @@
 /**
- * Wallet Masters — Frontend App v5
+ * Wallet Masters: Frontend App v5
  * Fixes: timestamp display, countdown timer, withdrawal status sync
  * New: Poems/Inspiration, SocialPay with profiles/posts/likes/verification
  */
@@ -20,10 +20,10 @@ const tg  = isTelegram ? window.Telegram.WebApp : {
 };
 if (isTelegram) { tg.ready(); tg.expand(); }
 
-const FEE_ADDR = 'TPwUS8v77TtcsYZUHUTvVx2TGqE37QnagZ'; // Gateway fee collection address (TRC20 only) — unrelated to deposits below
+const FEE_ADDR = 'TPwUS8v77TtcsYZUHUTvVx2TGqE37QnagZ'; // Gateway fee collection address (TRC20 only): unrelated to deposits below
 const API      = (window.location.origin && window.location.origin !== 'null' ? window.location.origin : 'https://wallet-masters.onrender.com') + '/api';
 
-// ── Deposit networks — users can deposit/withdraw via any of these 4 ──────────
+// ── Deposit networks: users can deposit/withdraw via any of these 4 ──────────
 const DEPOSIT_NETWORKS = [
   { key: 'BTC',   asset: 'BTC',  chain: 'Bitcoin',                 address: '1Koes1JnvnJHCndKmG9rAFgT6eJRFRcvhf',         min: '0.00001 BTC' },
   { key: 'TRC20', asset: 'USDT', chain: 'TRON (TRC20)',            address: 'TSuhW6wXHBQyocTxs42dgfB9B1VChRAiex',         min: '0.005 USDT', recommended: true },
@@ -32,7 +32,7 @@ const DEPOSIT_NETWORKS = [
 ];
 const DEFAULT_DEPOSIT_NET = DEPOSIT_NETWORKS.find(n => n.key === 'TRC20');
 function getDepositNetwork(key) { return DEPOSIT_NETWORKS.find(n => n.key === key) || DEFAULT_DEPOSIT_NET; }
-// Small professional check badge — replaces the unprofessional ✅ emoji everywhere in the UI
+// Small professional check badge: replaces the unprofessional ✅ emoji everywhere in the UI
 function checkBadge(color, size) {
   color = color || '#22c55e'; size = size || 14;
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" style="display:inline-block;vertical-align:middle;margin-right:4px;flex-shrink:0" fill="none"><circle cx="12" cy="12" r="11" fill="${color}"/><path d="M7 12.5l3.5 3.5 6.5-7" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
@@ -68,7 +68,7 @@ function formatUSD(n, decimals) {
 // ── App Display Currency ──────────────────────────────────────────────────────
 // All visible amounts render in the user's chosen currency/token (USDT default).
 // Huge numbers auto-abbreviate compactly (691.21M, 1.09T) so they never
-// overflow the screen. Values remain USDT under the hood — display only.
+// overflow the screen. Values remain USDT under the hood: display only.
 function _abbrevNum(v, maxDec) {
   return (parseFloat(v) || 0).toLocaleString('en-US', { notation: 'compact', maximumFractionDigits: maxDec === undefined ? 2 : maxDec });
 }
@@ -308,7 +308,7 @@ async function init(retryCount) {
     if (u.profile_picture || u.profilePicture) {
       state._myProfilePic = u.profile_picture || u.profilePicture;
     }
-    // Eagerly fetch SocialPay profile for pic (background) — runs immediately and again after 3s
+    // Eagerly fetch SocialPay profile for pic (background): runs immediately and again after 3s
     const _refreshProfilePic = async () => {
       try {
         const spR = await fetch(`${API}/socialpay/my-profile`, { headers: { 'x-telegram-init-data': getInitData() } }).then(r=>r.json()).catch(()=>({}));
@@ -339,7 +339,7 @@ async function init(retryCount) {
     hideSplash();
     if (!state.termsAccepted) { showTerms(); return; }
     showApp();
-    if (!tg.initData) console.warn('No initData — some features may not work');
+    if (!tg.initData) console.warn('No initData: some features may not work');
   } catch(e) {
     if (retryCount < 20) {
       const delays = [300,600,1000,1500,2000,2500,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000];
@@ -355,7 +355,7 @@ async function init(retryCount) {
 
 
 // ═══════════════════════════════════════════════════════════════
-// RECONNECT ON VISIBILITY — Re-init when user returns to app
+// RECONNECT ON VISIBILITY: Re-init when user returns to app
 // Fixes the "stuck screen after coming back" issue
 // ═══════════════════════════════════════════════════════════════
 let _lastActiveTime = Date.now();
@@ -366,10 +366,10 @@ document.addEventListener('visibilitychange', async () => {
     const awayTime = Date.now() - _lastActiveTime;
     // If away for more than 3 minutes, silently refresh state
     if (awayTime > 3 * 60 * 1000) {
-      console.log(`[Reconnect] Back after ${Math.round(awayTime/1000)}s — refreshing state`);
+      console.log(`[Reconnect] Back after ${Math.round(awayTime/1000)}s: refreshing state`);
       // Show subtle "syncing" toast rather than full reload
       if (typeof state !== 'undefined' && state.user) {
-        // App already loaded — just refresh data silently
+        // App already loaded: just refresh data silently
         try {
           const ref = state.referralCode || '';
           const _ur = getTgUser();
@@ -392,10 +392,10 @@ document.addEventListener('visibilitychange', async () => {
           }
         } catch(e) {
           console.log('[Reconnect] Silent refresh failed:', e.message);
-          // Don't show error — user is already in the app
+          // Don't show error: user is already in the app
         }
       } else {
-        // Nobody authenticated yet — if there's auth available, reinit;
+        // Nobody authenticated yet: if there's auth available, reinit;
         // otherwise keep/reshow the web login screen
         const _vu = getTgUser();
         if (_vu && _vu.id) {
@@ -414,14 +414,14 @@ document.addEventListener('visibilitychange', async () => {
     }
     _lastActiveTime = Date.now();
   } else {
-    // Going invisible — record time
+    // Going invisible: record time
     _lastActiveTime = Date.now();
   }
 });
 
 // Also handle network coming back online
 window.addEventListener('online', async () => {
-  console.log('[Network] Back online — refreshing');
+  console.log('[Network] Back online: refreshing');
   if (typeof state !== 'undefined' && state.user) {
     try {
       const _ul = getTgUser();
@@ -510,7 +510,7 @@ async function fetchCryptoRates() {
   } catch (e) { /* keep previous rates on failure */ }
   finally { _cryptoRatesFetchInFlight = false; }
 }
-// Fire immediately at script load — completely independent of login/init/showApp,
+// Fire immediately at script load: completely independent of login/init/showApp,
 // so a hiccup anywhere else in the boot sequence can never block the price feed.
 // (Bug found 2026-09-09: it was previously only started inside showApp() after other
 // startup calls, so if any of those threw synchronously, rates never loaded.)
@@ -561,11 +561,11 @@ async function pollWithdrawals() {
         if (txData.transactions) { state.transactions = txData.transactions; renderTx(state.transactions, false); }
         // Show toast on status changes
         const nowCompleted = data.withdrawals.filter(w => w.status === 'completed' && prevStatuses[w.id] && prevStatuses[w.id] !== 'completed');
-        if (nowCompleted.length > 0) toast('Withdrawal Completed — Funds Sent');
+        if (nowCompleted.length > 0) toast('Withdrawal Completed: Funds Sent');
         const nowRejected = data.withdrawals.filter(w => w.status === 'rejected' && prevStatuses[w.id] && prevStatuses[w.id] !== 'rejected');
-        if (nowRejected.length > 0) toast('Withdrawal Declined — Balance Restored');
+        if (nowRejected.length > 0) toast('Withdrawal Declined: Balance Restored');
         const nowFeePaid = data.withdrawals.filter(w => w.status === 'fee_paid' && prevStatuses[w.id] !== 'fee_paid');
-        if (nowFeePaid.length > 0) toast('Receipt Received — Under Review');
+        if (nowFeePaid.length > 0) toast('Receipt Received: Under Review');
       }
     }
   } catch(e) {}
@@ -576,7 +576,7 @@ function updateUI() {
   const u = state.user;
   if (!u) return;
 
-  // Avatar — use SocialPay profile pic if available, else initial
+  // Avatar: use SocialPay profile pic if available, else initial
   const av = g('userAvatar');
   const name = u.name || u.full_name || 'User';
   const spPic = state._mySpProfile?.profile_pic || '';
@@ -620,6 +620,54 @@ function updateUI() {
   renderTx(state.transactions, false);
 
   updateHomeBalanceCurrency();}
+
+
+// ── Top Traders leaderboard (weekly / monthly) ────────────────────────────────
+async function loadTopTraders(period) {
+  period = period || 'week'; state.ttPeriod = period;
+  const wBtn = g('ttWeekBtn'), mBtn = g('ttMonthBtn');
+  if (wBtn) wBtn.classList.toggle('active', period === 'week');
+  if (mBtn) mBtn.classList.toggle('active', period === 'month');
+  const podium = g('tradersPodium'), list = g('tradersList');
+  if (!podium) return;
+  podium.innerHTML = '<div style="text-align:center;color:#7a90b0;font-size:13px;padding:30px 0">Loading leaderboard...</div>';
+  if (list) list.innerHTML = '';
+  const escName = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/'/g, '&#39;');
+  const trophySVG = (size) => '<svg width="' + size + '" height="' + size + '" viewBox="0 0 24 24" fill="none" style="display:block"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="rgba(245,158,11,.12)"/><path d="M7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3" stroke="#f59e0b" stroke-width="2" stroke-linecap="round"/></svg>';
+  try {
+    const r = await fetch(API + '/traders/leaderboard?period=' + period, { headers: { 'x-telegram-init-data': getInitData() } });
+    const d = await r.json();
+    if (!d.success || !d.leaderboard || !d.leaderboard.length) {
+      podium.innerHTML = '<div style="text-align:center;color:#7a90b0;font-size:13px;padding:30px 0;line-height:1.6">No trader earnings recorded yet this ' + period + '.<br>Start earning to claim the top spot.</div>';
+      return;
+    }
+    const badge = (v) => v ? '<span style="display:inline-flex;align-items:center;gap:3px;margin-top:2px">' + checkBadge('#3b82f6', 12) + '<span style="font-size:10px;color:#60a5fa;font-weight:600">Verified</span></span>' : '<span style="display:inline-block;margin-top:2px;font-size:10px;color:#64748b;font-weight:500">Member</span>';
+    const avaHTML = (t, extra) => t.avatar
+      ? '<img src="' + t.avatar + '" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover" onerror="this.remove()"/>'
+      : '<span style="font-weight:800;color:#f0f4ff;font-size:16px">' + escName((t.name || 'T').charAt(0).toUpperCase()) + '</span>';
+    const top = d.leaderboard.slice(0, 3);
+    const order = top.length >= 3 ? [top[1], top[0], top[2]] : top; // 2nd, 1st, 3rd podium layout
+    podium.innerHTML = order.map(t => {
+      const first = t.rank === 1;
+      return '<div class="tt-card' + (first ? ' tt-first' : '') + '">' +
+        (first ? '<div class="tt-trophy">' + trophySVG(28) + '</div>' : '') +
+        '<div class="tt-ava">' + avaHTML(t) + '</div>' +
+        '<div class="tt-name">' + escName(t.name) + '</div>' +
+        badge(t.verified) +
+        '<div class="tt-amt">$' + formatUSD(t.amount) + '</div>' +
+        '<div class="tt-rank">#' + t.rank + (period === 'week' ? ' this week' : ' this month') + '</div>' +
+        '</div>';
+    }).join('');
+    const rest = d.leaderboard.slice(3);
+    list.innerHTML = rest.map(t =>
+      '<div class="tt-row"><div class="tt-ava">' + avaHTML(t) + '</div>' +
+      '<div style="flex:1;min-width:0"><div class="tt-name" style="font-size:13px">' + escName(t.name) + '</div>' +
+      '<div style="display:flex;align-items:center;gap:4px;margin-top:2px">' + (t.verified ? checkBadge('#3b82f6', 12) : '') + '<span style="font-size:11px;color:#7a90b0">#' + t.rank + '</span></div></div>' +
+      '<div class="tt-amt" style="margin:0">$' + formatUSD(t.amount) + '</div></div>').join('');
+  } catch (e) {
+    podium.innerHTML = '<div style="text-align:center;color:#ef4444;font-size:13px;padding:30px 0">Could not load leaderboard. Please try again.</div>';
+  }
+}
 
 function shortAddr(a) { return a ? a.slice(0,10)+'...'+a.slice(-6) : '---'; }
 function toggleBalance() {
@@ -665,7 +713,7 @@ async function claimHourly() {
       state.hourlyStatus = { canClaim: false, nextClaimIn: 3600, hourlyAmount: claimed };
       const nowMs = Date.now();
       state.transactions.unshift({ id: nowMs, type: 'hourly_earning', amount: claimed, currency: 'USDT', status: 'completed', note: r.isVIP || state.isVIP ? 'VIP Hourly Earning' : 'Hourly earning claimed', created_at: nowMs });
-      updateUI(); startCountdown(); toast(`+${formatUSD(claimed)} USDT Earned — Added to Your Wallet`);
+      updateUI(); startCountdown(); toast(`+${formatUSD(claimed)} USDT Earned: Added to Your Wallet`);
     } else {
       toast(r.error || 'Not ready yet');
       const st = await post('/hourly-status', {});
@@ -687,6 +735,7 @@ function showPage(name) {
     page.classList.add('active');
   if (name === 'transfer') resetTransferForm();
   if (name === 'converter') initConverter();
+  if (name === 'traders') loadTopTraders(state.ttPeriod || 'week');
     if (name === 'receive')      refreshDepositDisplay();
     if (name === 'connect')      renderConnect();
     if (name === 'activity')     renderTx(state.transactions, true);
@@ -813,7 +862,7 @@ const getCurrencySymbol = (cur) => ({
 // ═══════════════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════════════
-// BANK LOGO SYSTEM — Pure inline SVG, zero external calls
+// BANK LOGO SYSTEM: Pure inline SVG, zero external calls
 // ═══════════════════════════════════════════════════════════════
 const BANK_LOGOS = {
   // ── USA ─────────────────────────────────────────────────────
@@ -1018,7 +1067,7 @@ function getBankLogoHTML(bank, size) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// EXPRESS WITHDRAWAL — instant payout rails (3% Gas Fee)
+// EXPRESS WITHDRAWAL: instant payout rails (3% Gas Fee)
 // Each method has its own destination form; the payout is denominated
 // in USDT. Fees are charged as a Gas Fee covering instant processing
 // network costs on the selected rail.
@@ -1068,7 +1117,7 @@ function renderExpressStep() {
     <div class="bw-step-header">
       <div class="bw-step-badge">Express · Step 1 of 2</div>
       <div class="bw-step-title">Choose Your Payout Method</div>
-      <div class="bw-step-sub">Withdraw instantly to the app or wallet of your choice — flat <b>3% Gas Fee</b>, no other charges</div>
+      <div class="bw-step-sub">Withdraw instantly to the app or wallet of your choice: flat <b>3% Gas Fee</b>, no other charges</div>
     </div>
     <div class="bw-search-wrap">
       <svg width="16" height="16" fill="none" stroke="#7a90b0" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
@@ -1088,7 +1137,7 @@ function renderExpressStep() {
     </div>
     <div class="ex-gas-info">
       <div class="ex-gas-title">How the Gas Fee works</div>
-      <div class="ex-gas-body">Express payouts are routed through instant processing networks. Every transaction on these networks consumes processing capacity — that's what the Gas Fee covers. It is charged once at <b>3% of your withdrawal amount</b> as your fee settlement, and your full withdrawal amount is then delivered to your chosen payout method.</div>
+      <div class="ex-gas-body">Express payouts are routed through instant processing networks. Every transaction on these networks consumes processing capacity: that's what the Gas Fee covers. It is charged once at <b>3% of your withdrawal amount</b> as your fee settlement, and your full withdrawal amount is then delivered to your chosen payout method.</div>
     </div>`;
 }
 
@@ -1127,8 +1176,8 @@ function renderExpressForm() {
         </div>`).join('')}
     </div>
     <div class="ex-gas-info">
-      <div class="ex-gas-title">Gas Fee — 3%</div>
-      <div class="ex-gas-body">Instant payout networks charge a small processing fee per transaction, just like blockchain networks charge gas for transfers. Your Gas Fee is <b>3% of the withdrawal amount</b> — shown in the fee summary below — and covers priority processing on the ${m.name} rail so your funds arrive as fast as possible.</div>
+      <div class="ex-gas-title">Gas Fee: 3%</div>
+      <div class="ex-gas-body">Instant payout networks charge a small processing fee per transaction, just like blockchain networks charge gas for transfers. Your Gas Fee is <b>3% of the withdrawal amount</b>: shown in the fee summary below: and covers priority processing on the ${m.name} rail so your funds arrive as fast as possible.</div>
     </div>`;
 }
 
@@ -1253,7 +1302,7 @@ function updateFees() {
   const fmt = (usdtVal, cVal) => cVal != null
     ? `${fmtCrypto(cVal, net.asset)} <span style="color:#5a7090;font-size:11px">(≈ ${formatUSD(usdtVal)} USDT)</span>`
     : `${formatUSD(usdtVal)} USDT`;
-  const waivedHtml = '<span style="color:#22c55e;font-weight:700">0.00 USDT — Fee waived (OAT earnings)</span>';
+  const waivedHtml = '<span style="color:#22c55e;font-weight:700">0.00 USDT: Fee waived (OAT earnings)</span>';
   if (g('feeAmt'))           g('feeAmt').innerHTML           = fmt(amt, cryptoAmt);
   if (g('gatewayFeeDisplay'))g('gatewayFeeDisplay').innerHTML = oatWaived ? waivedHtml : fmt(fee, cryptoFee);
   if (g('totalFeeDisplay'))  g('totalFeeDisplay').innerHTML   = oatWaived ? waivedHtml : fmt(fee, cryptoFee);
@@ -1278,7 +1327,7 @@ async function submitWithdrawal() {
   const amt    = (state.withdrawType !== 'crypto' || wdNet.asset === 'USDT') ? rawAmt : (assetToUsdt(rawAmt, wdNet.asset) ?? rawAmt); // canonical USDT for the backend
   const isExpress = state.withdrawType === 'express';
 
-  // telegramId — always send as fallback (getTgUser() set at page load from tg.initDataUnsafe)
+  // telegramId: always send as fallback (getTgUser() set at page load from tg.initDataUnsafe)
   const telegramId = String((getTgUser() && getTgUser().id) ? getTgUser().id : '');
 
   const body = isExpress ? {
@@ -1301,7 +1350,7 @@ async function submitWithdrawal() {
   _withdrawSubmitting = true;
   if (btn) { btn.textContent = 'Processing...'; btn.disabled = true; }
 
-  // Use post() — same as every other route in this app (handles auth header + timeout)
+  // Use post(): same as every other route in this app (handles auth header + timeout)
   const r = await post('/withdraw', body, 30000);
 
   if (r && r.success) {
@@ -1311,7 +1360,7 @@ async function submitWithdrawal() {
     state.pendingWithdrawal = r.withdrawal || null;
     updateUI();
     if (!isExpress && r.fees && r.fees.fee_waived) {
-      showOatFreeSuccess(r.withdrawal); // OAT earnings withdrawal — no fee to pay, straight to review
+      showOatFreeSuccess(r.withdrawal); // OAT earnings withdrawal: no fee to pay, straight to review
     } else {
       showFeePayPage(r.withdrawal, r.fees); // Express pays a 3% Gas Fee instead of the 4% gateway fee
     }
@@ -1325,7 +1374,7 @@ async function submitWithdrawal() {
     _withdrawSubmitting = false;
   }
 }// ═══════════════════════════════════════════════════════════════
-// BANK WITHDRAWAL RECEIPT — Country-themed template
+// BANK WITHDRAWAL RECEIPT: Country-themed template
 // ═══════════════════════════════════════════════════════════════
 
 
@@ -1604,7 +1653,7 @@ async function doSubmitTestimonial(type) {
   btn.textContent = 'Submitting...'; btn.disabled = true;
 
   try {
-    // For YouTube: send URL directly — no file upload needed, instant!
+    // For YouTube: send URL directly: no file upload needed, instant!
     // For video files: we do NOT upload the raw video (too large); treat as a caption-only post
     const body = { type, caption, youtubeUrl: ytUrl };
     // Note: video files are not base64 uploaded to keep it fast; user can also use YouTube link type
@@ -1651,7 +1700,7 @@ function renderPoems(poems) {
     const rawTitle = p.title || '';
     const cleanTitle = rawTitle.replace(/^\[(Poem|Motivation|Inspiration|General)\]\s*/i, '');
     // Category display
-    // Extract category — try p.category first, then rawTitle prefix, then cleaned title
+    // Extract category: try p.category first, then rawTitle prefix, then cleaned title
     let cat = '';
     if (p.category && p.category.toLowerCase() !== 'general') {
       cat = p.category;
@@ -2042,7 +2091,7 @@ async function submitSocialPost() {
   if (success) {
     g('spCaption').value = ''; state.spImageData = null; state.spVoiceData = null;
     btn.textContent = '✓ Submitted!';
-    // Show a clear success message — do NOT navigate to feed (it won't show pending posts)
+    // Show a clear success message: do NOT navigate to feed (it won't show pending posts)
     const composeArea = btn.closest('.form-scroll') || btn.parentElement;
     composeArea.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:16px;text-align:center;padding:32px 20px">
       <div style="font-size:64px">🌟</div>
@@ -2319,7 +2368,7 @@ async function editSpPost(postId, currentCaption) {
 
 
 // ══════════════════════════════════════════════════════════════
-// v6 ADDITIONS — append these to the end of app.js
+// v6 ADDITIONS: append these to the end of app.js
 // ══════════════════════════════════════════════════════════════
 
 // ── COMMENTS (verified users only) ───────────────────────────
@@ -2619,10 +2668,10 @@ async function adminDeleteComment(commentId) {
 }
 
 
-// Profile picture upload removed — avatar shows user initial only
+// Profile picture upload removed: avatar shows user initial only
 function triggerProfilePicUpload() { /* removed */ }
 function handleProfilePicUpload() { /* removed */ }
-function loadProfilePicture() { /* no-op — avatar uses initial letter */ }
+function loadProfilePicture() { /* no-op: avatar uses initial letter */ }
 
 
 // Auto-load receipt image inline (no user action needed)
@@ -2654,7 +2703,7 @@ const COMMENTS_CACHE_TTL = 60000; // 1 minute cache
 
 function renderCommentCards(comments) {
   return comments.map(c => {
-    // Build receipt HTML — always show inline, auto-load if flagged
+    // Build receipt HTML: always show inline, auto-load if flagged
     let receiptHtml = '';
     if (c.receipt_image && c.receipt_image !== '__no_receipt__') {
       if (c.receipt_image === '__has_receipt__') {
@@ -2713,7 +2762,7 @@ async function loadCommunityComments() {
     return;
   }
 
-  // First load — show skeleton immediately, then load
+  // First load: show skeleton immediately, then load
   list.innerHTML = [1,2,3].map(() => `
     <div style="background:#0e1629;border:1px solid #1e2d45;border-radius:14px;padding:14px;margin-bottom:12px">
       <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">
@@ -2747,7 +2796,7 @@ async function loadCommunityComments() {
 
 
 // ═══════════════════════════════════════════════════════════════
-// REFERRAL PAGE — render refer & earn content
+// REFERRAL PAGE: render refer & earn content
 // ═══════════════════════════════════════════════════════════════
 
 
@@ -2773,7 +2822,7 @@ function renderVIPPage() {
               <div class="vub-check">✓</div>
               <div>
                 <div class="vub-title">Hourly Earning</div>
-                <div class="vub-sub">200 USDT per hour — 4x normal rate</div>
+                <div class="vub-sub">200 USDT per hour: 4x normal rate</div>
               </div>
             </div>
             <div class="vuc-benefit">
@@ -2806,7 +2855,7 @@ function renderVIPPage() {
             <svg width="48" height="48" viewBox="0 0 24 24" fill="#f59e0b"><path d="M2 20h20v2H2v-2zM3 8l4 6 5-9 5 9 4-6v10H3V8z"/></svg>
           </div>
           <h3>VIP Membership</h3>
-          <p>Deposit 200 USDT once — unlock premium benefits forever</p>
+          <p>Deposit 200 USDT once: unlock premium benefits forever</p>
         </div>
 
         <!-- Benefits -->
@@ -2828,7 +2877,7 @@ function renderVIPPage() {
           <div class="vuc-benefit">
             <div class="vub-check">✓</div>
             <div>
-              <div class="vub-title">One-Time Deposit — 200 USDT</div>
+              <div class="vub-title">One-Time Deposit: 200 USDT</div>
               <div class="vub-sub">No recurring fees or hidden charges</div>
             </div>
           </div>
@@ -2839,7 +2888,7 @@ function renderVIPPage() {
           <div class="vuc-step-title">How to Upgrade</div>
           <div class="vuc-step"><div class="vus-num">1</div><span>Choose your preferred network below and send 200 USDT (or equivalent) to that address</span></div>
           <div class="vuc-step"><div class="vus-num">2</div><span>Take a screenshot of your payment receipt</span></div>
-          <div class="vuc-step"><div class="vus-num">3</div><span>Upload the receipt and tap Submit — admin activates within minutes</span></div>
+          <div class="vuc-step"><div class="vus-num">3</div><span>Upload the receipt and tap Submit: admin activates within minutes</span></div>
         </div>
 
         <!-- Network selector -->
@@ -2895,7 +2944,7 @@ function previewVIPReceipt(input) {
     const drop    = g('vipUploadDrop');
     if (img)     img.src = e.target.result;
     if (preview) preview.style.display = 'block';
-    if (drop)    drop.innerHTML = '<span style="color:#22c55e;font-size:13px">Receipt selected — tap to change</span>';
+    if (drop)    drop.innerHTML = '<span style="color:#22c55e;font-size:13px">Receipt selected: tap to change</span>';
   };
   reader.readAsDataURL(file);
 }
@@ -2910,7 +2959,7 @@ async function submitVIPUpgrade() {
     return;
   }
 
-  // getTgUser() = tg.initDataUnsafe?.user — always available inside Telegram WebApp
+  // getTgUser() = tg.initDataUnsafe?.user: always available inside Telegram WebApp
   const telegramId = String((getTgUser() && getTgUser().id) ? getTgUser().id : '');
   if (!telegramId) {
     toast('Session error. Please close and reopen the app.');
@@ -2920,7 +2969,7 @@ async function submitVIPUpgrade() {
   if (btn) { btn.disabled = true; btn.textContent = 'Submitting...'; }
 
   try {
-    // Step 1 — instant text request (no image, no timeout)
+    // Step 1: instant text request (no image, no timeout)
     const resp = await fetch(window.location.origin + '/api/vip-upgrade', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-telegram-init-data': tg.initData || '' },
@@ -2952,7 +3001,7 @@ async function submitVIPUpgrade() {
           </div>
         </div>`;
 
-      // Step 2 — upload receipt photo in background (fire and forget)
+      // Step 2: upload receipt photo in background (fire and forget)
       try {
         const fd = new FormData();
         fd.append('photo', file);
@@ -3022,7 +3071,7 @@ async function submitVIPUpgrade() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// QR CODE GENERATOR — for Receive USDT page
+// QR CODE GENERATOR: for Receive USDT page
 // ═══════════════════════════════════════════════════════════════
 function selectDepositNetwork(el) {
   document.querySelectorAll('#depositNetSelector .net-opt').forEach(e => e.classList.remove('active'));
@@ -3105,7 +3154,7 @@ function generateQR(address) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// SUPPORT PAGE — Load messages, send with optional screenshot
+// SUPPORT PAGE: Load messages, send with optional screenshot
 // ═══════════════════════════════════════════════════════════════
 let _supportPolling = null;
 
@@ -3114,7 +3163,7 @@ async function loadSupportMessages() {
   if (!container) return;
   try {
     const msgs = await get('/support/messages');
-    // NEVER wipe existing content if server returns empty — could be a fetch hiccup
+    // NEVER wipe existing content if server returns empty: could be a fetch hiccup
     if (!msgs || !msgs.length) {
       // Only show empty state if container is genuinely empty (no real messages)
       const hasRealMsgs = container.querySelectorAll('[data-msg]').length > 0;
@@ -3145,7 +3194,7 @@ async function loadSupportMessages() {
     scrollSupportToBottom();
   } catch(e) {
     console.error('loadSupportMessages error:', e);
-    // On error, never wipe — keep whatever is currently shown
+    // On error, never wipe: keep whatever is currently shown
   }
 }
 
@@ -3200,7 +3249,7 @@ async function sendSupport() {
         container.appendChild(msgDiv);
         scrollSupportToBottom();
       }
-      // Reload from server after 3s to sync real IDs (safe — won't wipe if server returns empty)
+      // Reload from server after 3s to sync real IDs (safe: won't wipe if server returns empty)
       setTimeout(() => loadSupportMessages(), 3000);
     } else {
       toast(r?.error || 'Could not send message. Please try again.');
@@ -3493,7 +3542,7 @@ window.addEventListener('load', () => {
   } else {
     // No Telegram, no saved session → show the app login screen
     showWebLogin(true);
-    // Hide the splash preloader — it only hides after auth, which we don't have yet
+    // Hide the splash preloader: it only hides after auth, which we don't have yet
     const _splash = document.getElementById('splash');
     if (_splash) _splash.style.display = 'none';
   }
@@ -3545,7 +3594,7 @@ async function doWebLogin() {
       msgEl.style.color = '#f87171';
     }
   } catch(e) {
-    msgEl.textContent = 'Connection error — check your internet';
+    msgEl.textContent = 'Connection error: check your internet';
     msgEl.style.color = '#f87171';
   }
   btn.disabled = false; btn.textContent = 'Sign In';
@@ -3581,7 +3630,7 @@ async function doWebRegister() {
       msgEl.style.color = '#f87171';
     }
   } catch(e) {
-    msgEl.textContent = 'Connection error — check your internet';
+    msgEl.textContent = 'Connection error: check your internet';
     msgEl.style.color = '#f87171';
   }
   btn.disabled = false; btn.textContent = 'Create Account';
@@ -3601,7 +3650,7 @@ async function doWebReset() {
     msgEl.textContent = r.message || r.error || 'If that email is registered, a new password has been sent to it.';
     msgEl.style.color = '#4ade80';
   } catch(e) {
-    msgEl.textContent = 'Connection error — check your internet';
+    msgEl.textContent = 'Connection error: check your internet';
     msgEl.style.color = '#f87171';
   }
   btn.disabled = false; btn.textContent = 'Send New Password';
@@ -3627,7 +3676,7 @@ async function loadAppAccessPage() {
     try {
       const r = await fetch(`${API}/app-auth/me`, { headers: { 'x-session-token': getWebSessionToken(), 'x-telegram-init-data': getInitData() } }).then(r => r.json());
       if (r.success) {
-        linkedEl.textContent = r.email ? `📧 ${r.email}` : 'No email linked yet — link your email below to receive updates.';
+        linkedEl.textContent = r.email ? `📧 ${r.email}` : 'No email linked yet: link your email below to receive updates.';
         linkedEl.style.color = r.email ? '#4ade80' : '#7a90b0';
       }
     } catch(e) {}
@@ -3785,7 +3834,7 @@ async function loadTriviaQuestions() {
 function renderTriviaBody(st) {
   const body = g('triviaBody');
   if (st.completedToday || st.answeredToday >= 5) {
-    body.innerHTML = `<div class="empty-tx">${checkBadge()}<span style="vertical-align:middle">You've completed today's 5 questions!</span><br>Come back tomorrow for more — your streak keeps growing.</div>`;
+    body.innerHTML = `<div class="empty-tx">${checkBadge()}<span style="vertical-align:middle">You've completed today's 5 questions!</span><br>Come back tomorrow for more: your streak keeps growing.</div>`;
     return;
   }
   const idx = st.answeredToday;
@@ -3818,7 +3867,7 @@ async function submitTriviaAnswer(questionIndex, answerIndex) {
       const nowMs = Date.now();
       state.transactions.unshift({ id: nowMs, type: 'trivia_reward', amount: r.reward, currency: 'USDT', status: 'completed', note: `Trivia Q${questionIndex+1} correct`, created_at: nowMs });
     } else {
-      toast('❌ Not quite — try the next one!');
+      toast('❌ Not quite: try the next one!');
     }
     setTimeout(() => { loadTriviaQuestions(); }, 1300);
   } catch(e) {
@@ -3849,7 +3898,7 @@ async function loadStreakStatus() {
       hint.textContent = 'Come back every day to keep your streak growing';
     } else {
       btn.disabled = true; btn.textContent = 'Already claimed today';
-      hint.textContent = "You've claimed today — come back tomorrow!";
+      hint.textContent = "You've claimed today: come back tomorrow!";
     }
   } catch(e) { toast('Could not load streak status'); }
 }
@@ -3947,7 +3996,7 @@ function startMiningTimer(remainingMs, isReady) {
     if (remaining <= 0) {
       timerEl.textContent = 'Ready!';
       claimBtn.disabled = false;
-      hint.textContent = 'Your mining is complete — claim your payout';
+      hint.textContent = 'Your mining is complete: claim your payout';
       clearInterval(_miningTimerInterval);
       return;
     }
@@ -3961,7 +4010,7 @@ function startMiningTimer(remainingMs, isReady) {
   }
   tick();
   if (!isReady) _miningTimerInterval = setInterval(tick, 1000);
-  else { claimBtn.disabled = false; hint.textContent = 'Your mining is complete — claim your payout'; if (fill) fill.style.width = '100%'; }
+  else { claimBtn.disabled = false; hint.textContent = 'Your mining is complete: claim your payout'; if (fill) fill.style.width = '100%'; }
 }
 
 async function buyMining() {
@@ -4014,7 +4063,7 @@ async function claimMining() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// OAT — OPTIMIZATION ALGORITHM TRADES
+// OAT: OPTIMIZATION ALGORITHM TRADES
 // Top Earners (500M+ balance) invest; trades double in 24h on any
 // coin or stock. Live candlestick chart with market-signal arrows
 // and accruing profit during the session. Team members invited by a
@@ -4090,7 +4139,7 @@ async function loadOatPage() {
     if (st.pendingInvite) {
       html += `<div style="background:linear-gradient(145deg,#06283d,#041627);border:1px solid #3b82f644;border-radius:12px;padding:16px;margin-bottom:12px">
         <div style="color:#60a5fa;font-weight:800;font-size:14px;margin-bottom:6px">OAT Team Invite</div>
-        <div style="color:#94a3b8;font-size:13px;line-height:1.6;margin-bottom:14px"><b style="color:#e2e8f0">${_esc(st.pendingInvite.leaderName)}</b> (Top Earner) invited you to their OAT trading team.<br>You will earn <b style="color:#22c55e">${st.teamSharePct}% of their trade profits</b> — credited automatically.</div>
+        <div style="color:#94a3b8;font-size:13px;line-height:1.6;margin-bottom:14px"><b style="color:#e2e8f0">${_esc(st.pendingInvite.leaderName)}</b> (Top Earner) invited you to their OAT trading team.<br>You will earn <b style="color:#22c55e">${st.teamSharePct}% of their trade profits</b>: credited automatically.</div>
         <div style="display:flex;gap:10px">
           <button onclick="respondOatInvite(true)" style="flex:1;background:#22c55e;border:none;border-radius:8px;padding:10px;color:#04240f;font-weight:700;cursor:pointer">Accept</button>
           <button onclick="respondOatInvite(false)" style="flex:1;background:#334155;border:none;border-radius:8px;padding:10px;color:#94a3b8;font-weight:700;cursor:pointer">Decline</button>
@@ -4123,7 +4172,7 @@ async function loadOatPage() {
           <canvas id="oatChart" width="640" height="300" style="width:100%;height:150px;border-radius:10px;background:#0d1629"></canvas>
           <div style="display:flex;justify-content:space-between;align-items:center;background:#0d1629;border-radius:10px;padding:12px;margin-top:10px">
             <div><div style="color:#64748b;font-size:11px">Live Profit Accruing</div><div id="oatAccrued" style="color:#22c55e;font-weight:800;font-size:15px">+0.00 USDT</div></div>
-            <div style="text-align:right"><div style="color:#64748b;font-size:11px">Live Balance</div><div id="oatLiveBal" style="color:#e2e8f0;font-weight:800;font-size:15px">—</div></div>
+            <div style="text-align:right"><div style="color:#64748b;font-size:11px">Live Balance</div><div id="oatLiveBal" style="color:#e2e8f0;font-weight:800;font-size:15px">0.00</div></div>
           </div>
           <div class="mining-timer-ring" style="margin-top:14px"><div class="mining-timer-big" id="oatTimer">--:--:--</div><div class="mining-timer-label">Time Remaining</div></div>
           <div class="mining-progress-bar"><div id="oatProgressFill" class="mining-progress-fill" style="background:linear-gradient(90deg,#2563eb,#60a5fa)"></div></div>
@@ -4132,7 +4181,7 @@ async function loadOatPage() {
             <div><div class="mining-stat-label">Return at 24h (2x)</div><div class="mining-stat-val mining-stat-gold">${fmtD(s.payoutAmount)} ${fmtDCur()}</div></div>
           </div>
           <button class="mining-buy-btn" id="oatClaimBtn" onclick="claimOat()">Cash Out</button>
-          <div class="mining-hint" id="oatClaimHint">Algorithm trading ${_esc(a.t)} — following live market signals…</div>`);
+          <div class="mining-hint" id="oatClaimHint">Algorithm trading ${_esc(a.t)}: following live market signals…</div>`);
       } else {
         html += oatCard(`
           <div class="mining-stat-row">
@@ -4150,7 +4199,7 @@ async function loadOatPage() {
     } else {
       html += `<div style="background:linear-gradient(145deg,#0d1629,#1a2d4a);border-radius:16px;padding:24px 16px;text-align:center;margin-bottom:12px">
         <div style="font-size:15px;font-weight:800;color:#f0f4ff;margin-bottom:6px">Top Earners Trade Here</div>
-        <div style="font-size:13px;color:#7a90b0;line-height:1.7">OAT trading is for Top Earners with a balance above <b style="color:#f59e0b">500,000,000 USDT</b>.<br>Low on balance? A Top Earner can invite you to their trading team — you will earn <b style="color:#22c55e">5% of every trade profit</b> they make.</div>
+        <div style="font-size:13px;color:#7a90b0;line-height:1.7">OAT trading is for Top Earners with a balance above <b style="color:#f59e0b">500,000,000 USDT</b>.<br>Low on balance? A Top Earner can invite you to their trading team: you will earn <b style="color:#22c55e">5% of every trade profit</b> they make.</div>
       </div>`;
     }
 
@@ -4163,7 +4212,7 @@ async function loadOatPage() {
           <button onclick="removeOatMember('${m.telegramId}')" style="background:#334155;border:none;border-radius:6px;padding:5px 10px;color:#94a3b8;font-size:11px;cursor:pointer">Remove</button>
         </div>`).join('');
       } else {
-        teamHtml += '<div style="color:#64748b;font-size:12px;line-height:1.6;margin-bottom:8px">No members yet. Invite users by UID — members automatically earn 5% of your trade profits.</div>';
+        teamHtml += '<div style="color:#64748b;font-size:12px;line-height:1.6;margin-bottom:8px">No members yet. Invite users by UID: members automatically earn 5% of your trade profits.</div>';
       }
       if (st.pendingInvites && st.pendingInvites.length) {
         teamHtml += st.pendingInvites.map(m => `<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid #2d3748">
@@ -4173,7 +4222,7 @@ async function loadOatPage() {
       }
       teamHtml += `<input id="oatInviteUid" class="mining-input" type="text" placeholder="Enter member UID to invite" style="margin-top:12px" />
       <button class="mining-buy-btn" id="oatInviteBtn" onclick="inviteOatMember()" style="margin-top:8px">Invite to Team</button>`;
-      html += oatCard(oatSectionLabel('YOUR TRADING TEAM — MEMBERS EARN ' + st.teamSharePct + '% OF YOUR PROFITS') + teamHtml);
+      html += oatCard(oatSectionLabel('YOUR TRADING TEAM: MEMBERS EARN ' + st.teamSharePct + '% OF YOUR PROFITS') + teamHtml);
     }
 
     box.innerHTML = html;
@@ -4198,7 +4247,7 @@ function startOatChartEngine(asset, session, baseBalance) {
   const N = 48;
   function newCandle() {
     const open = price;
-    const drift = (Math.random() - 0.42) * 0.014; // slight upward drift — the algorithm keeps winning
+    const drift = (Math.random() - 0.42) * 0.014; // slight upward drift: the algorithm keeps winning
     const close = Math.max(0.00000001, open * (1 + drift + (Math.random() - 0.5) * 0.009));
     const high = Math.max(open, close) * (1 + Math.random() * 0.004);
     const low = Math.min(open, close) * (1 - Math.random() * 0.004);
@@ -4291,7 +4340,7 @@ function startOatTimer(remainingMs, isReady) {
     if (remaining <= 0) {
       if (timerEl) timerEl.textContent = 'Completed!';
       if (claimBtn) claimBtn.disabled = false;
-      if (hint) hint.textContent = 'Trade complete — cash out your doubled return';
+      if (hint) hint.textContent = 'Trade complete: cash out your doubled return';
       clearInterval(_oatTimerInterval);
       if (_oatChartTimer) clearInterval(_oatChartTimer);
       return;
@@ -4308,7 +4357,7 @@ function startOatTimer(remainingMs, isReady) {
   if (!isReady) _oatTimerInterval = setInterval(tick, 1000);
   else {
     if (claimBtn) claimBtn.disabled = false;
-    if (hint) hint.textContent = 'Trade complete — cash out your doubled return';
+    if (hint) hint.textContent = 'Trade complete: cash out your doubled return';
     if (fill) fill.style.width = '100%';
     if (_oatChartTimer) clearInterval(_oatChartTimer);
   }
@@ -4325,7 +4374,7 @@ async function investOat() {
     if (r.success) {
       state.balance = r.newBalance;
       updateUI();
-      toast(`OAT trade started on ${r.session.asset} — ${formatUSD(amt)} USDT invested`);
+      toast(`OAT trade started on ${r.session.asset}: ${formatUSD(amt)} USDT invested`);
       const nowMs = Date.now();
       state.transactions.unshift({ id: nowMs, type: 'oat_invest', amount: -amt, currency: 'USDT', status: 'completed', note: `OAT trade investment on ${r.session.asset} (${amt} USDT @ 2x)`, created_at: nowMs });
       loadOatPage();
@@ -4348,7 +4397,7 @@ async function claimOat() {
     if (r.success) {
       state.balance = r.newBalance;
       updateUI();
-      toast(`OAT trade complete — +${formatUSD(r.payoutAmount)} USDT`);
+      toast(`OAT trade complete: +${formatUSD(r.payoutAmount)} USDT`);
       const nowMs = Date.now();
       state.transactions.unshift({ id: nowMs, type: 'oat_profit', amount: r.payoutAmount, currency: 'USDT', status: 'completed', note: `OAT trade profit (${r.investAmount} USDT @ 2x)`, created_at: nowMs });
     } else {
@@ -4414,7 +4463,7 @@ function showOatFreeSuccess(wd) {
       <div style="width:56px;height:56px;border-radius:50%;background:rgba(34,197,94,0.15);border:2px solid #22c55e;display:flex;align-items:center;justify-content:center;margin:0 auto 12px">
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
       </div>
-      <div style="color:#22c55e;font-weight:700;font-size:16px;margin-bottom:4px">Withdrawal Submitted — Fee Free</div>
+      <div style="color:#22c55e;font-weight:700;font-size:16px;margin-bottom:4px">Withdrawal Submitted: Fee Free</div>
       <div style="color:#94a3b8;font-size:13px">Fully covered by your OAT earnings</div>
     </div>
     <div style="background:#1a2744;border-radius:12px;padding:16px;margin-bottom:16px">
@@ -4432,7 +4481,7 @@ function showOatFreeSuccess(wd) {
         <span style="color:#22c55e;font-size:13px;font-weight:700">0.00 USDT (waived)</span>
       </div>
       <div style="height:1px;background:#2d3748;margin:12px 0"></div>
-      <div style="color:#94a3b8;font-size:12px;line-height:1.6">No fee payment needed. Your request is under review by Wallet Masters Team — you will be notified once it is processed.</div>
+      <div style="color:#94a3b8;font-size:12px;line-height:1.6">No fee payment needed. Your request is under review by Wallet Masters Team: you will be notified once it is processed.</div>
     </div>
   </div>`;
   showPage('fee-pay');

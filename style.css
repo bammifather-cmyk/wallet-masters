@@ -614,3 +614,24 @@ html,body{height:100%;background:#070d1a;color:#f0f4ff;font-family:-apple-system
 .oat-chip{flex:0 0 auto;display:flex;align-items:center;gap:6px;background:#0d1629;border:1px solid #2d3748;border-radius:20px;padding:7px 13px;color:#e2e8f0;font-size:12px;font-weight:700;cursor:pointer;transition:border-color .2s,background .2s}
 .oat-chip.sel{background:rgba(59,130,246,.14);border-color:#60a5fa}
 .oat-dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+
+/* ── Top Traders ── */
+.tt-home-banner { display:flex;align-items:center;gap:12px;background:linear-gradient(135deg, rgba(245,158,11,.08), rgba(124,58,237,.06)); border:1px solid rgba(245,158,11,.25); border-radius:14px; padding:12px 14px; cursor:pointer; margin-top:12px; transition:all .2s; }
+.tt-home-banner:active { transform:scale(.98); }
+.tt-hb-title { font-size:14px;font-weight:700;color:#f59e0b; }
+.tt-hb-sub { font-size:11px;color:#7a90b0;margin-top:2px; }
+.traders-toggle { display:flex;gap:8px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:4px;margin-bottom:16px; }
+.tt-btn { flex:1;padding:10px 0;text-align:center;border-radius:9px;font-size:13px;font-weight:600;color:#7a90b0;cursor:pointer;border:none;background:transparent;transition:all .2s; }
+.tt-btn.active { background:rgba(245,158,11,.12);color:#f59e0b; }
+.tt-podium { display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;align-items:end; }
+.tt-card { position:relative;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:16px 8px 14px;text-align:center;min-width:0; }
+.tt-first { border-color:rgba(245,158,11,.45);background:linear-gradient(180deg, rgba(245,158,11,.10), rgba(255,255,255,.03));padding-top:22px; }
+.tt-trophy { position:absolute;top:-15px;left:50%;transform:translateX(-50%); }
+.tt-ava { width:46px;height:46px;margin:0 auto 8px;border-radius:50%;background:#0d1629;border:2px solid rgba(245,158,11,.4);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0; }
+.tt-first .tt-ava { width:56px;height:56px;border-width:3px; }
+.tt-name { font-size:12px;font-weight:700;color:#f0f4ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+.tt-amt { font-size:13px;font-weight:800;color:#f59e0b;margin-top:3px; }
+.tt-rank { font-size:10px;color:#64748b;margin-top:3px; }
+.tt-row { display:flex;align-items:center;gap:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:10px 14px;margin-top:10px; }
+.tt-row .tt-ava { width:34px;height:34px;margin:0;border-color:rgba(255,255,255,.12); }
+.tt-row .tt-ava span { font-size:13px; }

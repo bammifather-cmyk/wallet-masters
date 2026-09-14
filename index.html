@@ -4,7 +4,7 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
   <title>Wallet Masters</title>
-  <link rel="stylesheet" href="style.css?v=10.47"/>
+  <link rel="stylesheet" href="style.css?v=10.48"/>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -15,7 +15,7 @@
     <span style="font-size:38px;font-weight:800;color:#fff;font-family:Arial,sans-serif">W</span>
   </div>
   <h1 style="font-size:24px;font-weight:800;color:#f0f4ff;margin:0 0 4px;text-align:center">Wallet Masters</h1>
-  <p style="font-size:13px;color:#7a90b0;margin:0 0 20px;text-align:center">Your crypto wallet — no Telegram needed</p>
+  <p style="font-size:13px;color:#7a90b0;margin:0 0 20px;text-align:center">Your crypto wallet: no Telegram needed</p>
   <div id="webLoginTabs" style="width:100%;max-width:340px;display:flex;background:#0d1629;border:1px solid #1e293b;border-radius:12px;padding:4px;margin-bottom:16px">
     <button id="wltab-signin" onclick="switchWebLoginTab('signin')" style="flex:1;height:38px;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff">Sign In</button>
     <button id="wltab-register" onclick="switchWebLoginTab('register')" style="flex:1;height:38px;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;background:transparent;color:#7a90b0">Register</button>
@@ -105,6 +105,11 @@
       <div class="games-promo" onclick="showPage('games')">
         <div class="games-promo-left"><div class="games-promo-title">🎮 Play &amp; Earn</div><div class="games-promo-sub">Spin, answer trivia &amp; keep your streak alive</div></div>
         <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+      </div>
+      <div class="tt-home-banner" onclick="showPage('traders')">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="rgba(245,158,11,.12)"/><path d="M7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3" stroke="#f59e0b" stroke-width="2" stroke-linecap="round"/></svg>
+        <div style="flex:1"><div class="tt-hb-title">Top Traders</div><div class="tt-hb-sub">See this week's biggest earners</div></div>
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="opacity:.5"><polyline points="9 18 15 12 9 6"/></svg>
       </div>
       <div class="action-row">
         <button class="act-btn" onclick="showPage('receive')"><svg class="act-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M12 4v16m-8-8l8 8 8-8"/></svg><span>Receive</span></button>
@@ -360,7 +365,7 @@
     <div class="page" id="page-poems">
       <div class="page-hdr"><button class="back-btn" onclick="showPage('home')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>Poems &amp; Inspiration</h2></div>
       <div style="padding:12px 16px 0">
-        <button class="btn-primary" onclick="showPage('poem-submit')" style="margin-bottom:12px">✍️ Submit a Poem / Inspiration — Earn 1,000 USDT</button>
+        <button class="btn-primary" onclick="showPage('poem-submit')" style="margin-bottom:12px">✍️ Submit a Poem / Inspiration: Earn 1,000 USDT</button>
       </div>
       <div class="poem-tabs">
         <button class="poem-tab active" onclick="filterPoems('all',this)">All</button>
@@ -479,7 +484,7 @@
         </div>
         <div style="background:linear-gradient(135deg,#1a0a0a,#2a0a0a);border-radius:12px;padding:14px;border:1.5px solid #e60000;margin-top:4px">
           <div style="color:#ff4444;font-size:13px;font-weight:800;margin-bottom:6px">🚀 QUICK APPROVAL TIP</div>
-          <div style="color:#e0e0e0;font-size:13px;line-height:1.7">Submit a <b style="color:#ff6666">YouTube video link</b> for the <b style="color:#22c55e">fastest approval</b> and earn <b style="color:#f0b90b">+2,000 USDT</b> — double the reward! Upload your testimonial video to YouTube, copy the link, and paste it below. YouTube submissions are reviewed and approved within minutes.</div>
+          <div style="color:#e0e0e0;font-size:13px;line-height:1.7">Submit a <b style="color:#ff6666">YouTube video link</b> for the <b style="color:#22c55e">fastest approval</b> and earn <b style="color:#f0b90b">+2,000 USDT</b>: double the reward! Upload your testimonial video to YouTube, copy the link, and paste it below. YouTube submissions are reviewed and approved within minutes.</div>
         </div>
         <div style="background:#1a2544;border-radius:12px;padding:14px;border-left:3px solid #f0b90b">
           <div style="color:#f0b90b;font-size:12px;font-weight:700;margin-bottom:6px">HOW IT WORKS</div>
@@ -527,7 +532,7 @@
         <div style="background:linear-gradient(145deg,#1a0a2e,#0d1629);border:1px solid #1e293b;border-radius:16px;padding:22px 20px;margin-bottom:16px;text-align:center">
           <div style="width:56px;height:56px;border-radius:14px;background:linear-gradient(135deg,#2563eb,#7c3aed);display:flex;align-items:center;justify-content:center;margin:0 auto 12px"><span style="font-size:26px;font-weight:800;color:#fff">W</span></div>
           <div style="font-size:15px;font-weight:700;color:#f0f4ff;margin-bottom:4px">Wallet Masters App</div>
-          <div style="font-size:13px;color:#7a90b0;line-height:1.6">Sign in to the Wallet Masters app on your phone — no Telegram needed. Create a password below, then use your UID + password in the app.</div>
+          <div style="font-size:13px;color:#7a90b0;line-height:1.6">Sign in to the Wallet Masters app on your phone: no Telegram needed. Create a password below, then use your UID + password in the app.</div>
         </div>
         <div style="background:#0d1629;border:1px solid #1e293b;border-radius:12px;padding:16px;margin-bottom:16px">
           <label style="display:block;font-size:12px;font-weight:600;color:#7a90b0;margin-bottom:6px">Your UID</label>
@@ -592,7 +597,7 @@
         </div>
         <div class="about-card">
           <div class="about-section"><div class="as-title">What is Wallet Masters?</div><div class="as-body">Wallet Masters is a professional USDT crypto wallet built on the TRON (TRC20) blockchain. Users earn passive income hourly, connect earning apps, and withdraw funds to crypto wallets or instantly to popular payout apps via Express Withdrawals (VIP members).</div></div>
-          <div class="about-section"><div class="as-title">How Earnings Work</div><div class="as-body">Standard members earn 50 USDT every hour. VIP members earn 200 USDT per hour. Simply claim your hourly bonus once per hour — earnings are credited instantly to your wallet balance.</div></div>
+          <div class="about-section"><div class="as-title">How Earnings Work</div><div class="as-body">Standard members earn 50 USDT every hour. VIP members earn 200 USDT per hour. Simply claim your hourly bonus once per hour: earnings are credited instantly to your wallet balance.</div></div>
           <div class="about-section"><div class="as-title">SocialPay</div><div class="as-body">Post pictures, voice messages, and stories. Wallet Masters Team reviews and sends likes to great posts. Earn 100 USDT for 1K likes, 1,000 USDT for 10K likes, 10,000 USDT for 100K likes, and up to 100,000 USDT for 1M likes!</div></div>
           <div class="about-section"><div class="as-title">Referral Program</div><div class="as-body">Share your unique referral link and earn 200 USDT for every new user who joins Wallet Masters through your link.</div></div>
         </div>
@@ -698,7 +703,16 @@
       </div>
     </div>
 
-    <!-- Currency Converter Page -->
+    <!-- Top Traders Page -->
+<div class="page" id="page-traders">
+  <div class="page-hdr"><button class="back-btn" onclick="showPage('home')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>Top Traders</h2></div>
+  <div class="traders-toggle"><button id="ttWeekBtn" class="tt-btn active" onclick="loadTopTraders('week')">This Week</button><button id="ttMonthBtn" class="tt-btn" onclick="loadTopTraders('month')">This Month</button></div>
+  <div id="tradersPodium" class="tt-podium"></div>
+  <div id="tradersList"></div>
+  <div style="margin-top:16px;background:rgba(59,130,246,.06);border:1px solid rgba(59,130,246,.18);border-radius:12px;padding:12px 14px;font-size:11px;color:#7a90b0;line-height:1.6">Leaderboard ranks total earnings from all Wallet Masters activities: hourly earnings, mining, trading, games, social rewards and referrals. Top traders are announced every week and every month.</div>
+</div>
+
+<!-- Currency Converter Page -->
     <div class="page" id="page-converter">
       <div class="page-hdr"><button class="back-btn" onclick="showPage('home')"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><h2>Currency Converter</h2></div>
       <div class="form-scroll" style="padding:16px 16px 80px">
@@ -712,7 +726,7 @@
           <div style="background:#0d1629;border:1px solid #1e293b;border-radius:12px;padding:18px 16px">
             <div style="font-size:24px;font-weight:800;color:#f0f4ff" id="converterBalance">0.00 <span style="font-size:14px;color:#7a90b0;font-weight:600">USDT</span></div>
             <div id="converterBalanceLocal" style="font-size:16px;font-weight:600;color:#f59e0b;margin-top:6px">≈ 0.00 USD</div>
-            <div style="margin-top:8px;font-size:12px;color:#7a90b0">App displays all amounts in <b id="converterDisplayCur" style="color:#f59e0b">USDT</b> — tap <b style="color:#60a5fa">Set Display</b> on any currency to switch it everywhere</div>
+            <div style="margin-top:8px;font-size:12px;color:#7a90b0">App displays all amounts in <b id="converterDisplayCur" style="color:#f59e0b">USDT</b>: tap <b style="color:#60a5fa">Set Display</b> on any currency to switch it everywhere</div>
           </div>
         </div>
         <div class="form-group" style="margin-bottom:16px">
@@ -780,7 +794,7 @@
                 <div style="font-size:10px;color:#5a7090;margin-bottom:18px" id="tpsRateHint">Tap 10 more times to increase rate</div>
                 <!-- Big tap button -->
                 <button id="tpsTapBtn" onclick="tapTps()" style="width:150px;height:150px;border-radius:50%;background:linear-gradient(135deg,#f59e0b,#b45309,#f59e0b);border:none;color:#fff;font-size:32px;font-weight:900;cursor:pointer;transition:transform 0.08s,box-shadow 0.08s;box-shadow:0 0 40px rgba(245,158,11,0.5),0 0 80px rgba(245,158,11,0.2);display:inline-flex;align-items:center;justify-content:center;user-select:none;-webkit-user-select:none">TP$</button>
-                <div style="font-size:11px;color:#5a7090;margin-top:10px">Tap to earn USDT — rate grows every 10 taps</div>
+                <div style="font-size:11px;color:#5a7090;margin-top:10px">Tap to earn USDT: rate grows every 10 taps</div>
               </div>
               <!-- Withdraw button -->
               <button id="tpsWithdrawBtn" onclick="withdrawTps()" class="btn-primary w100" style="margin-top:14px" disabled>Transfer to Balance (min 1,000 USDT)</button>
@@ -850,7 +864,7 @@
     <div style="background:#131f35;border-radius:12px;padding:14px;font-size:12px;color:#7a90b0;line-height:1.7;max-height:200px;overflow-y:auto;margin-bottom:16px">
       By using Wallet Masters you agree to our Terms &amp; Conditions. You must be 18+. A 4% gateway fee applies to withdrawals. Fraudulent activity results in account termination. Wallet Masters reserves the right to modify earning rates, fees, and limits at any time.
     </div>
-    <button class="btn-primary" onclick="acceptTerms()">✓ I Accept — Start Earning!</button>
+    <button class="btn-primary" onclick="acceptTerms()">✓ I Accept: Start Earning!</button>
   </div>
 </div>
 
@@ -908,6 +922,6 @@
   })();
   </script>
 
-  <script src="app.js?v=10.47"></script>
+  <script src="app.js?v=10.48"></script>
 </body>
 </html>

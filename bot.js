@@ -1,6 +1,6 @@
 // Deploy trigger
 /**
- * Wallet Masters — Bot v7
+ * Wallet Masters: Bot v7
  * Database: PostgreSQL/Supabase (persistent)
  */
 require('dotenv').config();
@@ -51,7 +51,7 @@ const formatUSDT = (n) => {
 const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID || '5995434559';
 const FEE_ADDRESS   = process.env.FEE_ADDRESS   || 'TPwUS8v77TtcsYZUHUTvVx2TGqE37QnagZ';
 
-// Deposit networks — users may deposit via any of these (2026-09-08)
+// Deposit networks: users may deposit via any of these (2026-09-08)
 const DEPOSIT_NETWORKS = [
   { key: 'BTC',   asset: 'BTC',  chain: 'Bitcoin',                 address: '1Koes1JnvnJHCndKmG9rAFgT6eJRFRcvhf',         min: '0.00001 BTC' },
   { key: 'TRC20', asset: 'USDT', chain: 'TRON (TRC20)',            address: 'TSuhW6wXHBQyocTxs42dgfB9B1VChRAiex',         min: '0.005 USDT', recommended: true },
@@ -65,7 +65,7 @@ if (!BOT_TOKEN) { console.error('BOT_TOKEN missing'); process.exit(1); }
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
-// Never let browsers/WebViews cache index.html or app.js — Telegram/Android WebViews were
+// Never let browsers/WebViews cache index.html or app.js: Telegram/Android WebViews were
 // serving a stale app.js after deploys, which made new features look "not live". (2026-09-08)
 app.use((req, res, next) => {
   if (req.path === '/' || req.path === '/index.html' || req.path === '/app.js' || req.path === '/style.css') {
@@ -105,7 +105,7 @@ async function convertUsdtAmount(amtUsdt, network) {
 }
 
 // Extracts the [NETWORK] tag a withdrawal was stored with (see createWithdrawalRequest),
-// so approve/reject — which only have the DB row, not the original request — can still
+// so approve/reject: which only have the DB row, not the original request: can still
 // show the right asset.
 function networkFromWithdrawalAddress(address) {
   const m = String(address || '').match(/^\[([A-Z0-9]+)/i);
@@ -139,7 +139,7 @@ async function getFeeInfoForNetwork(network, feeUsdt) {
 
 function nowSec() { return Math.floor(Date.now() / 1000); }
 
-app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.47' }));
+app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.48' }));
 
 // ═══════════════════════════════════════════════════════════════
 // KEEP-ALIVE: Ping every 10 minutes to prevent Render cold starts
@@ -278,7 +278,7 @@ async function runStartupMigrations() {
     // Test if screenshot_url column exists by trying to select it
     const { error: e1 } = await supa.from('support_messages').select('screenshot_url').limit(1);
     if (e1 && e1.message && e1.message.includes('screenshot_url')) {
-      // Column missing — try adding via pg direct connection
+      // Column missing: try adding via pg direct connection
       try {
         const { Pool } = require('pg');
         const dbPassword = process.env.SUPABASE_DB_PASSWORD || '';
@@ -428,9 +428,9 @@ initDB().then(async () => {
     const supa = getSupabase();
     const { error: migErr } = await supa.from('socialpay_posts').select('is_pinned').limit(1);
     if (migErr) {
-      // Column doesn't exist — try to add via upsert hack: won't work via REST API
+      // Column doesn't exist: try to add via upsert hack: won't work via REST API
       // Log it and fall back gracefully in queries
-      console.log('[MIGRATION] is_pinned column missing — admin posts sort by telegram_id fallback');
+      console.log('[MIGRATION] is_pinned column missing: admin posts sort by telegram_id fallback');
     } else {
       console.log('[MIGRATION] is_pinned column OK');
     }
@@ -549,7 +549,7 @@ if (bot) bot.onText(/\/start(.*)/, async (msg, match) => {
     const refereeName = fullName || 'A new user';
     notifyUserEmail(user._referrer.telegram_id, 'Referral bonus received', 'Referral Reward! 🎉', [
       `<b>${refereeName}</b> just joined Wallet Masters using your referral link.`,
-      `You earned <b>+200 USDT</b> — credited to your balance instantly.`,
+      `You earned <b>+200 USDT</b>: credited to your balance instantly.`,
       'Keep sharing your referral link to earn more!'
     ]).catch(()=>{});
     try {
@@ -589,12 +589,12 @@ if (bot) bot.on('callback_query', async (cq) => {
           `📈 Max: ${settings.maxWithdrawal.toLocaleString()} USDT\n` +
           `💰 Fee: ${(settings.gatewayFeeRate * 100)}%\n\n` +
           `<b>Commands (reply with these):</b>\n` +
-          `<code>SETMIN:5000</code> — Set global min\n` +
-          `<code>SETMAX:50000</code> — Set global max\n` +
-          `<code>SETFEE:0.04</code> — Set fee rate (e.g. 0.04 = 4%)\n` +
-          `<code>SETUSERMIN:UID:amount</code> — Per-user min\n` +
-          `<code>SETUSERMAX:UID:amount</code> — Per-user max\n` +
-          `<code>CLEARUSERLIMITS:UID</code> — Reset user to global`,
+          `<code>SETMIN:5000</code>: Set global min\n` +
+          `<code>SETMAX:50000</code>: Set global max\n` +
+          `<code>SETFEE:0.04</code>: Set fee rate (e.g. 0.04 = 4%)\n` +
+          `<code>SETUSERMIN:UID:amount</code>: Per-user min\n` +
+          `<code>SETUSERMAX:UID:amount</code>: Per-user max\n` +
+          `<code>CLEARUSERLIMITS:UID</code>: Reset user to global`,
           { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD }
         );
       } catch(e) {
@@ -622,7 +622,7 @@ if (bot) bot.on('callback_query', async (cq) => {
           await supa.from('transactions').update({ status: 'completed' }).eq('id', byNote[0].id);
           console.log('[APPROVE] Updated tx by note match:', byNote[0].id);
         } else {
-          // Fallback: match by amount — get most recent pending withdrawal tx with same amount
+          // Fallback: match by amount: get most recent pending withdrawal tx with same amount
           const { data: byAmt } = await supa.from('transactions')
             .select('id').eq('telegram_id', String(wd.telegram_id))
             .eq('type', 'withdrawal').eq('status', 'pending').eq('amount', String(wd.amount))
@@ -644,7 +644,7 @@ if (bot) bot.on('callback_query', async (cq) => {
         }
       } catch(e) { console.error('tx sync approve error:', e.message); }
       // Show the amount in the SAME asset the user actually withdrew (BTC/ETH), not always
-      // USDT — the withdrawal record only stores a [NETWORK] tag on `address`, so recover it.
+      // USDT: the withdrawal record only stores a [NETWORK] tag on `address`, so recover it.
       const approveNet = networkFromWithdrawalAddress(wd.address);
       const approveInfo = await convertUsdtAmount(parseFloat(wd.amount) || 0, approveNet).catch(() => null);
       const approveDisplay = (approveInfo && approveInfo.display) || (formatUSDT(wd.amount) + ' USDT');
@@ -887,7 +887,7 @@ if (bot) bot.on('callback_query', async (cq) => {
   if (data === 'admin_post_yt_test') {
     if (!isAdmin) return bot.answerCallbackQuery(cq.id, { text: '❌ Not authorized' });
     bot.sendMessage(chatId,
-      `📺 <b>Post YouTube Testimonial</b>\n\nSend your testimonial in this format:\n<code>YTTEST:https://youtube.com/...|Caption text here</code>\n\n<i>Example:</i>\n<code>YTTEST:https://youtu.be/abc123|This user earned $10,000 on Wallet Masters!</code>\n\n• The name will show as <b>Wallet Masters</b> with a verified badge\n• Caption is optional — leave blank after | if not needed`,
+      `📺 <b>Post YouTube Testimonial</b>\n\nSend your testimonial in this format:\n<code>YTTEST:https://youtube.com/...|Caption text here</code>\n\n<i>Example:</i>\n<code>YTTEST:https://youtu.be/abc123|This user earned $10,000 on Wallet Masters!</code>\n\n• The name will show as <b>Wallet Masters</b> with a verified badge\n• Caption is optional: leave blank after | if not needed`,
       { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD }
     );
     return;
@@ -903,7 +903,7 @@ if (bot) bot.on('callback_query', async (cq) => {
       return;
     }
     const rows = comments.map(c => [{
-      text: `🗑️ #${c.id} — ${(c.name||'User').substring(0,18)}: ${(c.text||c.message||'').substring(0,30)}...`,
+      text: `🗑️ #${c.id}: ${(c.name||'User').substring(0,18)}: ${(c.text||c.message||'').substring(0,30)}...`,
       callback_data: `del_comment_${c.id}`
     }]);
     bot.sendMessage(chatId, `🗑️ <b>Delete Community Comment</b>
@@ -973,7 +973,7 @@ Select a comment to delete:`, {
       await setEarningsSuspended(tid, false);
       bot.answerCallbackQuery(cq.id, { text: 'Earnings restored' });
     } else if (action === 'resolve' && parts[2] === 'bal') {
-      // Resolve Balance — prompt admin to enter amount
+      // Resolve Balance: prompt admin to enter amount
       const tid2 = parts.slice(3).join('_');
       const u2 = await getUserByTelegramId(tid2);
       if (!u2) return bot.answerCallbackQuery(cq.id, { text: '❌ User not found' });
@@ -1035,7 +1035,7 @@ Select a comment to delete:`, {
     if (!wds.length) { bot.sendMessage(chatId, 'No pending withdrawals.', { reply_markup: ADMIN_KEYBOARD }); return; }
     for (const wd of wds.slice(0,5)) {
       const u = await getUserByTelegramId(wd.telegram_id);
-      bot.sendMessage(chatId, `💸 <b>Withdrawal #${wd.id}</b>\n👤 ${u?.full_name||'User'} (${u?.uid||wd.telegram_id})\n💰 ${wd.amount} USDT\n🏦 ${wd.bank_name||wd.method||'Crypto'} — ${wd.account_number||''}`, { parse_mode:'HTML', reply_markup:{inline_keyboard:[[{text:'Approve',callback_data:`wd_approve_${wd.id}`},{text:'❌ Reject',callback_data:`wd_reject_${wd.id}`}]]}});
+      bot.sendMessage(chatId, `💸 <b>Withdrawal #${wd.id}</b>\n👤 ${u?.full_name||'User'} (${u?.uid||wd.telegram_id})\n💰 ${wd.amount} USDT\n🏦 ${wd.bank_name||wd.method||'Crypto'}: ${wd.account_number||''}`, { parse_mode:'HTML', reply_markup:{inline_keyboard:[[{text:'Approve',callback_data:`wd_approve_${wd.id}`},{text:'❌ Reject',callback_data:`wd_reject_${wd.id}`}]]}});
     }
     return;
   }
@@ -1065,7 +1065,7 @@ Select a comment to delete:`, {
       bot.sendMessage(chatId, 'No approved testimonials to delete.', { reply_markup: ADMIN_KEYBOARD });
       return;
     }
-    bot.sendMessage(chatId, `🗑️ <b>Live Testimonials</b> — ${tests.length} approved
+    bot.sendMessage(chatId, `🗑️ <b>Live Testimonials</b>: ${tests.length} approved
 
 Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
     for (const t of tests.slice(0, 8)) {
@@ -1087,7 +1087,7 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
       bot.sendMessage(chatId, 'No approved poems/inspirations to delete.', { reply_markup: ADMIN_KEYBOARD });
       return;
     }
-    bot.sendMessage(chatId, `🗑️ <b>Live Poems & Inspirations</b> — ${poems.length} approved
+    bot.sendMessage(chatId, `🗑️ <b>Live Poems & Inspirations</b>: ${poems.length} approved
 
 Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
     for (const p of poems.slice(0, 8)) {
@@ -1141,7 +1141,7 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
     if (!isAdmin) return bot.answerCallbackQuery(cq.id, { text: '❌ Not authorized' });
     bot.answerCallbackQuery(cq.id);
     bot.sendMessage(chatId,
-      `💰 <b>Resolve / Set User Balance</b>\n\n<b>RESOLVE:UID:AMOUNT</b> — Sets balance to exact amount\n<b>ADD:UID:AMOUNT</b> — Adds amount to existing balance\n\nGet UID from 👥 All Users, then send:\n<code>RESOLVE:UID:AMOUNT</code>\n<code>ADD:UID:AMOUNT</code>\n\n<i>Example (set to 5000): RESOLVE:WMERHEX58DT:5000</i>\n<i>Example (add 500): ADD:WMERHEX58DT:500</i>`,
+      `💰 <b>Resolve / Set User Balance</b>\n\n<b>RESOLVE:UID:AMOUNT</b>: Sets balance to exact amount\n<b>ADD:UID:AMOUNT</b>: Adds amount to existing balance\n\nGet UID from 👥 All Users, then send:\n<code>RESOLVE:UID:AMOUNT</code>\n<code>ADD:UID:AMOUNT</code>\n\n<i>Example (set to 5000): RESOLVE:WMERHEX58DT:5000</i>\n<i>Example (add 500): ADD:WMERHEX58DT:500</i>`,
       { parse_mode: 'HTML' }); return;
   }
   if (data === 'admin_all_users') {
@@ -1198,7 +1198,7 @@ if (bot) bot.on('message', async (msg) => {
   const id = String(msg.from?.id);
   if (id !== String(ADMIN_CHAT_ID)) return;
   if (msg.web_app_data) return;
-  const isAdmin = true; // always true here — guard above already checked
+  const isAdmin = true; // always true here: guard above already checked
   const text  = msg.text;
   const photo = msg.photo; const video = msg.video; const voice = msg.voice;
 
@@ -1215,8 +1215,8 @@ if (bot) bot.on('message', async (msg) => {
         await bot.sendMessage(found.telegram_id, `💬 <b>Support Team</b>\n\n${uidMatch[2]}`, { parse_mode:'HTML', ...openWalletBtn() });
         return bot.sendMessage(id, `Reply sent (Telegram + email + in-app).`);
       } catch(e) {
-        // App-only users have no real Telegram chat — that's fine, email + in-app inbox already delivered it above.
-        if (/chat not found/i.test(e.message)) return bot.sendMessage(id, `Reply sent (delivered via email + in-app inbox — this user has no Telegram chat).`);
+        // App-only users have no real Telegram chat: that's fine, email + in-app inbox already delivered it above.
+        if (/chat not found/i.test(e.message)) return bot.sendMessage(id, `Reply sent (delivered via email + in-app inbox: this user has no Telegram chat).`);
         return bot.sendMessage(id, `⚠️ Sent via email + in-app, but Telegram DM failed: ${e.message}`);
       }
     }
@@ -1237,7 +1237,7 @@ if (bot) bot.on('message', async (msg) => {
   }
 
 
-  // ── YTTEST:url|caption — Admin posts YouTube testimonial as Wallet Masters ──
+  // ── YTTEST:url|caption: Admin posts YouTube testimonial as Wallet Masters ──
   if (text && text.startsWith('YTTEST:')) {
     // `id` is already verified as ADMIN above (line: if (id !== ADMIN_CHAT_ID) return;)
     const raw = text.slice(7).trim();
@@ -1255,23 +1255,23 @@ if (bot) bot.on('message', async (msg) => {
     return;
   }
 
-  // ── COMMUNITY: Name|Location|Flag|Comment — Admin posts community comment ──
+  // ── COMMUNITY: Name|Location|Flag|Comment: Admin posts community comment ──
   const communityMatch = text?.match(/^COMMUNITY:([^|]+)\|([^|]+)\|([^|]+)\|(.+)$/i);
   if (communityMatch) {  // Already verified as admin by guard above
     const [, name, location, flag, comment] = communityMatch;
     const supa = getSupabase();
     const now2 = Math.floor(Date.now()/1000);
     const { data: cc, error: ccErr } = await supa.from('community_comments').insert([{
-      telegram_id: 'admin', user_name: `${flag} ${name.trim()} — ${location.trim()}`,
+      telegram_id: 'admin', user_name: `${flag} ${name.trim()}: ${location.trim()}`,
       text: comment.trim(), receipt_image: '', status: 'approved', is_admin: true, created_at: now2
     }]).select().single();
     if (ccErr || !cc) { bot.sendMessage(id, '❌ Error posting comment: ' + (ccErr?.message||'unknown')); return; }
-    bot.sendMessage(id, `Community comment posted!\n\n👤 ${flag} ${name.trim()} — ${location.trim()}\n💬 "${comment.trim().substring(0,200)}"`);
+    bot.sendMessage(id, `Community comment posted!\n\n👤 ${flag} ${name.trim()}: ${location.trim()}\n💬 "${comment.trim().substring(0,200)}"`);
     return;
   }
 
 
-  // ── PIN:postId — Admin pins a SocialPay post ──────────────────────────────
+  // ── PIN:postId: Admin pins a SocialPay post ──────────────────────────────
   const pinMatch = text?.match(/^(PIN|UNPIN):(\d+)$/i);
   if (pinMatch) {
     const action = pinMatch[1].toUpperCase();
@@ -1295,9 +1295,9 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
     return;
   }
 
-  // ── RESOLVE: uid:amount — Admin credits a user's balance ──────────────────
-  // ── RESOLVE:UID:AMOUNT — SETS balance to exact amount ─────────────────────
-  // ── ADD:UID:AMOUNT — ADDS amount to existing balance ─────────────────────
+  // ── RESOLVE: uid:amount: Admin credits a user's balance ──────────────────
+  // ── RESOLVE:UID:AMOUNT: SETS balance to exact amount ─────────────────────
+  // ── ADD:UID:AMOUNT: ADDS amount to existing balance ─────────────────────
   const resolveMatch = text?.match(/^(RESOLVE|ADD|SETBAL):([A-Z0-9]+):([\d.]+)$/i);
   if (resolveMatch) {  // already guarded: only admin can reach here (line 3)
     const cmd = resolveMatch[1].toUpperCase();
@@ -1337,7 +1337,7 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
 
   if (!text) {
     if (photo && msg.caption && (msg.caption.startsWith('COMMUNITY_IMG:') || msg.caption.startsWith('COMMUNITY:'))) {
-      // COMMUNITY_IMG:Name|Location|Flag|Comment — Admin posts community receipt with image
+      // COMMUNITY_IMG:Name|Location|Flag|Comment: Admin posts community receipt with image
       const capMatch = msg.caption.match(/^COMMUNITY(?:_IMG)?:([^|]+)\|([^|]+)\|([^|]+)\|(.+)$/i);
       if (capMatch) {
         const [, name, location, flag, comment] = capMatch;
@@ -1351,7 +1351,7 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
         const now2 = Math.floor(Date.now()/1000);
         const { data: cc, error: ccErr } = await supa.from('community_comments').insert([{
           telegram_id: 'admin',
-          user_name: `${flag} ${name.trim()} — ${location.trim()}`,
+          user_name: `${flag} ${name.trim()}: ${location.trim()}`,
           text: comment.trim(),
           receipt_image: imageUrl,
           status: 'approved',
@@ -1361,7 +1361,7 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
         if (ccErr || !cc) {
           bot.sendMessage(id, '❌ Error posting community img: ' + (ccErr?.message||'unknown'));
         } else {
-          bot.sendMessage(id, `Community receipt posted!\n\n👤 ${flag} ${name.trim()} — ${location.trim()}\n💬 "${comment.trim().substring(0,200)}"${imageUrl ? '\n📸 Image attached' : ''}`, { reply_markup: ADMIN_KEYBOARD });
+          bot.sendMessage(id, `Community receipt posted!\n\n👤 ${flag} ${name.trim()}: ${location.trim()}\n💬 "${comment.trim().substring(0,200)}"${imageUrl ? '\n📸 Image attached' : ''}`, { reply_markup: ADMIN_KEYBOARD });
         }
         return;
       }
@@ -1571,7 +1571,7 @@ app.post('/api/app-auth/logout', async (req, res) => {
 // ─── Email infrastructure ──────────────────────────────────────────────────────
 // Render blocks outbound SMTP (25/465/587), so emails are sent by our own
 // Supabase Edge Function (functions/send-email), which talks to Gmail directly.
-// Fully independent of Base44 — instant delivery, no credit usage.
+// Fully independent of Base44: instant delivery, no credit usage.
 function emailTemplate(title, lines, note) {
   const rows = (lines || []).map(l => `<tr><td style="padding:8px 0;font-size:15px;color:#1e293b;line-height:1.6">${l}</td></tr>`).join('');
   return `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f1f5f9;font-family:Arial,Helvetica,sans-serif">
@@ -1650,7 +1650,7 @@ app.post('/api/app-auth/register', async (req, res) => {
       if (taken) continue;
       user = await getOrCreateUser(syntheticId, '', name, refCode);
     }
-    if (!user) return res.status(500).json({ error: 'Could not create account — try again' });
+    if (!user) return res.status(500).json({ error: 'Could not create account: try again' });
     // Store password + email links
     const salt = crypto.randomBytes(16).toString('hex');
     const hash = crypto.scryptSync(password, salt, 32).toString('hex');
@@ -1667,7 +1667,7 @@ app.post('/api/app-auth/register', async (req, res) => {
       `🆔 Your UID: <b>${user.uid}</b>`,
       `You can now sign in with your email <b>${email}</b> or your UID + your password.`,
       'Start earning: claim your hourly bonus, connect earning apps, and refer friends for +200 USDT each!'
-    ], 'Keep your UID safe — you will use it to sign in and receive transfers.').catch(()=>{});
+    ], 'Keep your UID safe: you will use it to sign in and receive transfers.').catch(()=>{});
     res.json({ success: true, token, telegramId: String(user.telegram_id), uid: user.uid, expiresAt });
   } catch(e) { console.error('register error:', e); res.status(500).json({ error: 'Server error' }); }
 });
@@ -1727,7 +1727,7 @@ app.post('/api/app-auth/reset-password', async (req, res) => {
         ], 'If you did not request this reset, contact support immediately.');
       }
     }
-    // Always respond success — never reveal whether an email exists
+    // Always respond success: never reveal whether an email exists
     res.json({ success: true, message: 'If that email is registered, a new password has been sent to it.' });
   } catch(e) { console.error('reset-password error:', e); res.status(500).json({ error: 'Server error' }); }
 });
@@ -1846,7 +1846,7 @@ app.post('/api/trivia/answer', authMiddleware, async (req, res) => {
     if (result && result.correct && result.reward > 0) {
       notifyUserEmail(req.tgUser.id, 'Trivia reward', 'Trivia Reward! 🧠', [
         `Correct answer! You earned <b>${formatUSDT(result.reward)} USDT</b>.`,
-        `${result.completedToday ? 'That was your last question for today — great job!' : 'Your reward has been added to your Wallet Masters balance.'}`
+        `${result.completedToday ? 'That was your last question for today: great job!' : 'Your reward has been added to your Wallet Masters balance.'}`
       ]).catch(()=>{});
     }
     res.json(result);
@@ -1902,6 +1902,46 @@ app.post('/api/mining/claim', authMiddleware, async (req, res) => {
   } catch(e) { res.status(500).json({ error: 'Server error' }); }
 });
 
+// ── Top Traders leaderboard (weekly + monthly earnings champions) ─────────────
+const EARNING_TYPES = ['hourly_earning','trivia_reward','tps_earning','socialpay_reward','streak_bonus','spin_wheel','mining_profit','poem_reward','testimonial_reward','referral_bonus','oat_profit','oat_team_profit'];
+app.get('/api/traders/leaderboard', async (req, res) => {
+  try {
+    const days = req.query.period === 'month' ? 30 : 7;
+    const since = Date.now() - days * 24 * 3600 * 1000;
+    const supa = getSupabase();
+    const { data: txs, error } = await supa.from('transactions')
+      .select('telegram_id, amount')
+      .gte('created_at', since)
+      .in('type', EARNING_TYPES);
+    if (error) throw error;
+    const totals = {};
+    for (const t of (txs || [])) totals[t.telegram_id] = (totals[t.telegram_id] || 0) + (parseFloat(t.amount) || 0);
+    const ranked = Object.entries(totals)
+      .map(([tid, amt]) => ({ telegram_id: tid, amount: amt }))
+      .sort((x, y) => y.amount - x.amount).slice(0, 10);
+    let users = [];
+    if (ranked.length) {
+      const { data: u } = await supa.from('users')
+        .select('telegram_id, full_name, registered_name, telegram_username, profile_picture, is_vip')
+        .in('telegram_id', ranked.map(r => r.telegram_id));
+      users = u || [];
+    }
+    const umap = {};
+    users.forEach(u => { umap[u.telegram_id] = u; });
+    const leaderboard = ranked.map((r, i) => {
+      const u = umap[r.telegram_id] || {};
+      return {
+        rank: i + 1,
+        name: u.registered_name || u.full_name || u.telegram_username || ('Trader ' + (i + 1)),
+        avatar: u.profile_picture || null,
+        verified: u.is_vip === true,
+        amount: Math.round(r.amount * 100) / 100
+      };
+    });
+    res.json({ success: true, period: days === 30 ? 'month' : 'week', leaderboard });
+  } catch (e) { console.error('leaderboard error:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
+});
+
 // ── App display currency (user preference, persisted on the user row) ────────
 app.post('/api/settings/display-currency', authMiddleware, async (req, res) => {
   try {
@@ -1935,12 +1975,12 @@ app.post('/api/oat/invest', authMiddleware, async (req, res) => {
         + `You invested <b>${formatUSDT(result.session.investAmount)} USDT</b> into Optimization Algorithm Trades.\n\n`
         + `⏱ Duration: <b>24 hours</b>\n`
         + `💰 Expected return: <b>${formatUSDT(result.session.payoutAmount)} USDT</b> (2x)\n\n`
-        + `⏳ The algorithm is following live market signals on ${result.session.asset}. Come back after 24 hours to cash out your doubled balance — free.`,
+        + `⏳ The algorithm is following live market signals on ${result.session.asset}. Come back after 24 hours to cash out your doubled balance: free.`,
         { parse_mode: 'HTML', ...openWalletBtn() }).catch(()=>{});
       notifyUserEmail(req.tgUser.id, 'OAT trade started', 'OAT Trade Started 📊', [
         `Your OAT trade of <b>${formatUSDT(result.session.investAmount)} USDT</b> on <b>${result.session.asset}</b> is now running.`,
         `Duration: 24 hours. Expected return: <b>${formatUSDT(result.session.payoutAmount)} USDT</b> (doubled).`,
-        'The algorithm follows live market signals in real time. Cash out is free — open the app after 24 hours.'
+        'The algorithm follows live market signals in real time. Cash out is free: open the app after 24 hours.'
       ]).catch(()=>{});
     }
     res.json(result);
@@ -1970,7 +2010,7 @@ app.post('/api/oat/claim', authMiddleware, async (req, res) => {
           `📊 <b>OAT Team Profit!</b>\n\n`
           + `Your team leader's OAT trade completed.\n`
           + `You earned <b>${formatUSDT(m.share)} USDT</b> (5% of the trade profit).\n\n`
-          + `💰 Credited to your balance — fee-free withdrawable.`,
+          + `💰 Credited to your balance: fee-free withdrawable.`,
           { parse_mode: 'HTML', ...openWalletBtn() }).catch(()=>{});
         notifyUserEmail(m.telegramId, 'OAT team profit', 'OAT Team Profit 📊', [
           `Your team leader's OAT trade completed.`,
@@ -1990,7 +2030,7 @@ app.post('/api/oat/invite', authMiddleware, async (req, res) => {
       bot.sendMessage(result.member.telegramId,
         `📊 <b>OAT Team Invite</b>\n\n`
         + `A Top Earner has invited you to join their OAT trading team!\n\n`
-        + `👥 Team members earn <b>5% of the leader's profit</b> on every trade — automatically credited to their balance.\n\n`
+        + `👥 Team members earn <b>5% of the leader's profit</b> on every trade: automatically credited to their balance.\n\n`
         + `Open the app → Connect & Earn → OAT Trades to accept.`,
         { parse_mode: 'HTML', ...openWalletBtn() }).catch(()=>{});
     }
@@ -2030,7 +2070,7 @@ app.post('/api/accept-terms', authMiddleware, async (req, res) => {
 
 app.post('/api/withdraw', async (req, res) => {
   try {
-    // Resolve user — accept initData header OR telegramId in body
+    // Resolve user: accept initData header OR telegramId in body
     let telegramId = null;
     try { const u = await getTelegramUser(req); if (u && u.id) telegramId = String(u.id); } catch(e) {}
     if (!telegramId && req.body && req.body.telegramId) telegramId = String(req.body.telegramId);
@@ -2053,7 +2093,7 @@ app.post('/api/withdraw', async (req, res) => {
     const isExpress = !!isExpressWithdrawal;
     const fees = calculateFees(amt, isExpress ? (settings.expressFeeRate || EXPRESS_FEE_RATE) : null); // Express = 3% Gas Fee
     // Crypto (non-express) withdrawals: fee must be paid on the SAME network the user
-    // chose (BTC/ETH/BEP20/TRC20), not always forced into USDT/TRC20 — see getFeeInfoForNetwork.
+    // chose (BTC/ETH/BEP20/TRC20), not always forced into USDT/TRC20: see getFeeInfoForNetwork.
     const feeInfo = isExpress ? null : await getFeeInfoForNetwork(network, fees.total_fee).catch(() => null);
     if (feeInfo) {
       fees.fee_asset = feeInfo.asset;
@@ -2068,7 +2108,7 @@ app.post('/api/withdraw', async (req, res) => {
     const amountDisplay = (amountInfo && amountInfo.display) || (formatUSDT(amt) + ' USDT');
 
     // OAT earnings withdrawal: if the amount is fully covered by accumulated OAT
-    // profits (oat_free_withdraw), the 4% gateway fee is waived — users cash out
+    // profits (oat_free_withdraw), the 4% gateway fee is waived: users cash out
     // their OAT earnings for free. Partial coverage does NOT apply.
     let isOatFree = false;
     if (!isExpress) {
@@ -2100,17 +2140,17 @@ app.post('/api/withdraw', async (req, res) => {
       return res.status(500).json({ error: 'Could not create withdrawal. Please try again.' });
     }
 
-    // ── RESPOND IMMEDIATELY — before any further DB/Telegram calls ──────────
+    // ── RESPOND IMMEDIATELY: before any further DB/Telegram calls ──────────
     res.json({ success: true, withdrawal: wd, fees });
 
     // ── POST-RESPONSE: deduct balance, log transaction, notify (non-blocking) ─
     updateUserBalance(user.telegram_id, -amt).catch(e => console.error('[WD] balance update:', e.message));
     createTransaction(user.telegram_id, 'withdrawal', amt, `Withdrawal #${wd.id}`, 'pending').catch(e => console.error('[WD] transaction:', e.message));
     notifyUserEmail(user.telegram_id, 'Withdrawal requested',
-      isExpress ? `Express Withdrawal — ${expressMethodName || 'Express'} ⏳` : 'Withdrawal Requested ⏳',
+      isExpress ? `Express Withdrawal: ${expressMethodName || 'Express'} ⏳` : 'Withdrawal Requested ⏳',
       isExpress ? [
         `Your Express withdrawal of <b>${formatUSDT(amt)} USDT</b> to <b>${expressMethodName || 'your payout method'}</b> has been submitted.`,
-        `Gas Fee (3%): <b>${formatUSDT(fees.total_fee)} USDT</b> — settles the instant processing network cost so your funds arrive as fast as possible.`,
+        `Gas Fee (3%): <b>${formatUSDT(fees.total_fee)} USDT</b>: settles the instant processing network cost so your funds arrive as fast as possible.`,
         `Destination: <b>${Object.entries(expressFields || {}).map(([k,v]) => `${k}: ${v}`).join(' · ') || '—'}</b>`,
         'We\'ll email you again as soon as it is approved or if any action is needed.'
       ] : [
@@ -2128,9 +2168,9 @@ app.post('/api/withdraw', async (req, res) => {
       ]]}}).catch(() => {});
 
     if (isOatFree) {
-      // Fee waived (covered by OAT earnings) — no fee payment, straight to review
+      // Fee waived (covered by OAT earnings): no fee payment, straight to review
       bot.sendMessage(user.telegram_id,
-        `✅ <b>Withdrawal Submitted — Fee Free</b>\n\n`
+        `✅ <b>Withdrawal Submitted: Fee Free</b>\n\n`
         + `Your withdrawal of <b>${amountDisplay}</b> is fully covered by your OAT earnings.\n\n`
         + `Gateway fee: <b>0 USDT (waived)</b>\n\n`
         + `⏳ Your request is now under review by Wallet Masters Team. No payment needed.`,
@@ -2138,13 +2178,13 @@ app.post('/api/withdraw', async (req, res) => {
     } else {
     bot.sendMessage(user.telegram_id,
       isExpress
-      ? `⚠️ <b>Action Required — Express Withdrawal #${wd.id}</b>\n\n`
+      ? `⚠️ <b>Action Required: Express Withdrawal #${wd.id}</b>\n\n`
         + `To finalize your Express withdrawal of <b>${amt} USDT</b> to <b>${expressMethodName || 'your payout method'}</b>, please settle your Gas Fee.\n\n`
         + `📍 <b>TRC20 Address:</b>\n<code>${FEE_ADDRESS}</code>\n\n`
         + `⛽ <b>Gas Fee (3%):</b> <b>${fees.total_fee} USDT</b>\n\n`
         + `📌 <i>Tap the address above to copy it. Send exactly ${fees.total_fee} USDT on TRC20 network only.</i>\n\n`
         + `⏳ Your withdrawal will be processed once the fee is confirmed by Wallet Masters Team.`
-      : `⚠️ <b>Action Required — Withdrawal #${wd.id}</b>\n\n`
+      : `⚠️ <b>Action Required: Withdrawal #${wd.id}</b>\n\n`
         + `To finalize your withdrawal of <b>${amountDisplay}</b>${amountInfo && amountInfo.asset !== 'USDT' ? ` (≈ ${formatUSDT(amt)} USDT)` : ''}, please settle your outstanding gateway fee.\n\n`
         + `📍 <b>${(fees.fee_chain || 'TRON (TRC20)')} Address:</b>\n<code>${fees.fee_address || FEE_ADDRESS}</code>\n\n`
         + `💰 <b>Gateway Fee:</b> <b>${fees.fee_amount_display || (fees.total_fee + ' USDT')}</b>\n\n`
@@ -2211,7 +2251,7 @@ app.post('/api/vip-upgrade', async (req, res) => {
       });
     } catch(e) { console.error('[VIP] DB:', e.message); }
 
-    // Notify admin instantly (text only — no timeout risk)
+    // Notify admin instantly (text only: no timeout risk)
     const vipMarkup = { reply_markup: { inline_keyboard: [[
       { text: 'Activate VIP', callback_data: `vip_approve_${user.telegram_id}` },
       { text: 'Reject',       callback_data: `vip_reject_${user.telegram_id}` }
@@ -2294,12 +2334,12 @@ app.post('/api/withdrawal-receipt', receiptUpload.single('receipt'), async (req,
 
     if (req.file && req.file.buffer) {
       bot.sendPhoto(ADMIN_CHAT_ID, req.file.buffer, {
-        caption: `Fee Receipt — Withdrawal #${withdrawalId}\nUser: ${user.full_name} (${user.uid})\nID: ${user.telegram_id}`,
+        caption: `Fee Receipt: Withdrawal #${withdrawalId}\nUser: ${user.full_name} (${user.uid})\nID: ${user.telegram_id}`,
         ...markup
       }).catch(e => console.error('[receipt photo]:', e.message));
     } else {
       bot.sendMessage(ADMIN_CHAT_ID,
-        `Fee Receipt Submitted — Withdrawal #${withdrawalId}\nUser: ${user.full_name} (${user.uid})\n(No photo attached)`,
+        `Fee Receipt Submitted: Withdrawal #${withdrawalId}\nUser: ${user.full_name} (${user.uid})\n(No photo attached)`,
         markup).catch(() => {});
     }
   } catch(e) {
@@ -2316,8 +2356,8 @@ async function handleSupportMessage(req, res) {
     const { message, screenshot } = req.body;
     if (!message || !message.trim()) return res.status(400).json({error:'Message is required'});
     const supa = getSupabase();
-    // Store in DB — only columns that exist in the schema
-    // Build insert payload — only include screenshot_url if it exists
+    // Store in DB: only columns that exist in the schema
+    // Build insert payload: only include screenshot_url if it exists
     const msgPayload = {
       telegram_id: String(req.tgUser.id),
       message: message.trim(),
@@ -2328,7 +2368,7 @@ async function handleSupportMessage(req, res) {
     // Store screenshot URL if provided (base64 stored as text, or URL)
     if (screenshot) {
       // For base64 images, store as-is (the column is TEXT so it can hold base64)
-      // But base64 is too large for a DB column — store a marker instead and rely on Telegram photo
+      // But base64 is too large for a DB column: store a marker instead and rely on Telegram photo
       // Store just the fact that a screenshot was attached
       msgPayload.screenshot_url = '__HAS_SCREENSHOT__';
     }
@@ -2402,7 +2442,7 @@ async function handleTestimonialSubmit(req,res) {
     res.json({ success:true, testimonial:tes });
     bot.sendMessage(ADMIN_CHAT_ID, `🎬 <b>Testimonial #${tes.id}</b>\n👤 ${user.full_name} (${user.uid})\n📎 ${type}\n${(youtubeUrl||youtube_url)?'🔗 '+(youtubeUrl||youtube_url)+'\n':''}💬 ${caption||'none'}\n💰 ${reward} USDT`, { parse_mode:'HTML', reply_markup:{inline_keyboard:[[{text:`Approve (+${reward})`,callback_data:`test_approve_${tes.id}`},{text:'❌ Reject',callback_data:`test_reject_${tes.id}`}],[{text:'🗑️ Delete Testimonial',callback_data:`test_delete_${tes.id}`}]]}}).catch(()=>{});
     if (type!=='youtube'&&(videoData||video_file)) {
-      setImmediate(async () => { try { const buf=Buffer.from((videoData||video_file).replace(/^data:[^;]+;base64,/,''),'base64'); bot.sendVideo(ADMIN_CHAT_ID,buf,{caption:`🎥 Testimonial #${tes.id} — ${user.full_name}`}).catch(()=>{}); } catch(e){} });
+      setImmediate(async () => { try { const buf=Buffer.from((videoData||video_file).replace(/^data:[^;]+;base64,/,''),'base64'); bot.sendVideo(ADMIN_CHAT_ID,buf,{caption:`🎥 Testimonial #${tes.id}: ${user.full_name}`}).catch(()=>{}); } catch(e){} });
     }
   } catch(e) { console.error('testimonial error:', e); res.status(500).json({error:'Server error'}); }
 }
@@ -2410,7 +2450,7 @@ app.post('/api/testimonial',        authMiddleware, handleTestimonialSubmit);
 app.post('/api/testimonial/submit', authMiddleware, handleTestimonialSubmit);
 
 // ─── Wallet Profile Picture Upload ───────────────────────────────────────────
-// Profile picture upload removed — endpoint disabled
+// Profile picture upload removed: endpoint disabled
 app.post('/api/profile/picture', authMiddleware, (req, res) => {
   res.json({ success: false, error: 'Feature not available' });
 });
@@ -2457,7 +2497,7 @@ const CG_STATIC = { BTC: 60000, ETH: 2500, BNB: 550, SOL: 140, XRP: 0.55, TON: 5
   DOGE: 0.12, TRX: 0.12, DOT: 6.5, MATIC: 0.7, LTC: 70, AVAX: 28, SHIB: 0.0000154, USDC: 1, DAI: 1 };
 async function getCryptoRates() {
   if (_cryptoRateCache.data && (Date.now() - _cryptoRateCache.ts) < 90000) return _cryptoRateCache.data;
-  // Primary: CoinGecko — one call, every token
+  // Primary: CoinGecko: one call, every token
   try {
     const ids = Object.keys(CG_IDS).join(',');
     const r = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=' + ids + '&vs_currencies=usd', {
@@ -2477,7 +2517,7 @@ async function getCryptoRates() {
       console.error('crypto-rates: coingecko status', r.status); _cryptoRateLastError = 'coingecko status ' + r.status;
     }
   } catch (e) { console.error('crypto-rates: coingecko failed:', e.message); _cryptoRateLastError = 'coingecko: ' + e.message; }
-  // Fallback 1: CryptoCompare min-api — keyless, single call for every token,
+  // Fallback 1: CryptoCompare min-api: keyless, single call for every token,
   // works from US datacenter IPs (CoinGecko rate-limits and Binance geo-blocks Render).
   try {
     const syms = Object.values(CG_IDS).join(',');
@@ -2591,7 +2631,7 @@ app.post('/api/socialpay/post', authMiddleware, async (req,res) => {
     const prof=await getSocialProfile(user.telegram_id);
     const verBadge = prof?.is_gold_verified ? ' 🏆' : (prof?.is_verified ? ' 🟠' : '');
     bot.sendMessage(ADMIN_CHAT_ID,`🌟 <b>New SocialPay Post #${post.id}</b>\n👤 ${user.full_name||'User'} (${user.uid||'?'})${verBadge}\n📎 Type: ${post_type||'text'}\n💬 "${caption.substring(0,300)}"`,{parse_mode:'HTML',reply_markup:{inline_keyboard:[[{text:'Approve',callback_data:'sp_approve_'+post.id},{text:'❌ Reject',callback_data:'sp_reject_'+post.id}],[{text:'❤️ 1K likes',callback_data:'sp_likes_'+post.id+'_1000'},{text:'❤️ 10K likes',callback_data:'sp_likes_'+post.id+'_10000'}],[{text:'❤️ 100K likes',callback_data:'sp_likes_'+post.id+'_100000'},{text:'❤️ 1M likes',callback_data:'sp_likes_'+post.id+'_1000000'}],[{text:post.is_pinned?'📌 Unpin Post':'📌 Pin to Top',callback_data:'sp_pin_'+post.id}]]}}).catch(e=>console.error('Admin notify SP error:',e.message));
-    if (image_data) setImmediate(()=>{ try { const buf=Buffer.from(image_data.replace(/^data:[^;]+;base64,/,''),'base64'); bot.sendPhoto(ADMIN_CHAT_ID,buf,{caption:'SocialPay Photo #'+post.id+' — '+(user.full_name||'User')}).catch(()=>{}); } catch(e){console.error('SP photo send error:',e.message)} });
+    if (image_data) setImmediate(()=>{ try { const buf=Buffer.from(image_data.replace(/^data:[^;]+;base64,/,''),'base64'); bot.sendPhoto(ADMIN_CHAT_ID,buf,{caption:'SocialPay Photo #'+post.id+': '+(user.full_name||'User')}).catch(()=>{}); } catch(e){console.error('SP photo send error:',e.message)} });
   } catch(e) { console.error('post error:', e); res.status(500).json({error:'Server error'}); }
 });
 
@@ -2933,7 +2973,7 @@ app.get('/api/admin/db-test', async (req,res) => {
 
 // ─── Admin: Run Migrations ───────────────────────────────────────────────────
 app.post('/api/admin/run-migrations', authMiddleware, async (req,res) => {
-  res.json({ success: true, message: 'Using Supabase HTTP API — tables managed via Supabase dashboard' });
+  res.json({ success: true, message: 'Using Supabase HTTP API: tables managed via Supabase dashboard' });
 });
 
 // ─── Internal Transfer ──────────────────────────────────────────────────────
