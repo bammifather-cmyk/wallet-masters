@@ -1235,9 +1235,9 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
       bot.answerCallbackQuery(cq.id, { text: 'Approved ✅' }).catch(()=>{});
       bot.editMessageText(`✅ <b>Deposit #${depId} approved</b>\n🆔 ${dep.uid}\nCredited: ${fmtN(usdt)} USDT (${fmtN(dep.amount)} ${dep.asset})`,
         { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' }).catch(()=>{});
-      notifyOATUserEmail(dep.uid, 'Deposit approved', 'Deposit approved & credited', [
-        `Your deposit of <b>${fmtN(usdt)} USDT</b> (${fmtN(dep.amount)} ${dep.asset}) has been approved and credited to your OAT Trades balance.`,
-        'Start a trade from the app — minimum 500 USDT, 2x payout after 24 hours.'
+      notifyOATUserEmail(dep.uid, 'Deposit approved', 'Deposit approved', [
+        (String(dep.asset).toUpperCase() === 'USDT' ? `Your deposit of <b>${fmtN(usdt)} USDT</b> has been approved and credited to your OAT Trades balance.` : `Your deposit of <b>${fmtN(dep.amount)} ${dep.asset}</b> (${fmtN(usdt)} USDT) has been approved and credited to your OAT Trades balance.`),
+        'Start a trade from the app: minimum 500 USDT, 2x payout after 24 hours.'
       ], null, 'approved').catch(()=>{});
     } else {
       await supa.from('oat_app_deposits').update({ status: 'rejected', reviewed_at: Date.now() }).eq('id', depId);
@@ -1612,9 +1612,9 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
         const { data: ou } = await supa.from('oat_app_users').select('*').eq('uid', dep.uid).maybeSingle();
         await supa.from('oat_app_deposits').update({ status: 'approved', reviewed_at: Date.now() }).eq('id', depId);
         await supa.from('oat_app_users').update({ balance: Number(ou.balance) + usdt }).eq('uid', dep.uid);
-        notifyOATUserEmail(dep.uid, 'Deposit approved', 'Deposit approved & credited', [
-          `Your deposit of <b>${fmtN(usdt)} USDT</b> (${fmtN(dep.amount)} ${dep.asset}) has been approved and credited to your OAT Trades balance.`,
-          'Start a trade from the app — minimum 500 USDT, 2x payout after 24 hours.'
+        notifyOATUserEmail(dep.uid, 'Deposit approved', 'Deposit approved', [
+          (String(dep.asset).toUpperCase() === 'USDT' ? `Your deposit of <b>${fmtN(usdt)} USDT</b> has been approved and credited to your OAT Trades balance.` : `Your deposit of <b>${fmtN(dep.amount)} ${dep.asset}</b> (${fmtN(usdt)} USDT) has been approved and credited to your OAT Trades balance.`),
+          'Start a trade from the app: minimum 500 USDT, 2x payout after 24 hours.'
         ], null, 'approved').catch(()=>{});
         return bot.sendMessage(id, `✅ Deposit #${depId} approved.\n🆔 ${dep.uid}\nCredited: ${fmtN(usdt)} USDT (${fmtN(dep.amount)} ${dep.asset})`);
       }
@@ -2353,7 +2353,7 @@ app.post('/api/oat-app/register', async (req, res) => {
       `Your UID: <b>${uid}</b>`,
       `Invited by: <b>${inv}</b>`,
       'Deposit USDT, BTC or ETH to start trading. Minimum trade is 500 USDT with 2x payout after 24 hours.'
-    ], 'Keep your UID safe — it is your login for the OAT Trades app.', 'trophy').catch(()=>{});
+    ], 'Keep your UID safe: it is your login for the OAT Trades app.', 'trophy').catch(()=>{});
     res.json({ success: true, uid, name: nm });
   } catch (e) { console.error('[OATAPP] register:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
 });
