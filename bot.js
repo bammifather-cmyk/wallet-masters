@@ -427,7 +427,7 @@ if (bot) {
     bot.sendMessage(ADMIN_CHAT_ID,
       `🚀 <b>Deployment Live</b>
 
-✅ <b>Wallet Masters v${APP_VERSION}</b> is deployed and running.
+✅ <b>OAT Trades + Wallet Masters v${APP_VERSION}</b> is deployed and running.
 🕒 ${new Date().toLocaleString('en-NG', { timeZone: 'Africa/Lagos' })} (WAT)
 
 — Sent automatically on every deployment`,
