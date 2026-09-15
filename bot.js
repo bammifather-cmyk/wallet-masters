@@ -139,7 +139,7 @@ async function getFeeInfoForNetwork(network, feeUsdt) {
 
 function nowSec() { return Math.floor(Date.now() / 1000); }
 
-app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.58' }));
+app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.59' }));
 
 // ═══════════════════════════════════════════════════════════════
 // KEEP-ALIVE: Ping every 10 minutes to prevent Render cold starts
@@ -421,7 +421,7 @@ try { bot = new TelegramBot(BOT_TOKEN, { polling: true }); console.log('Bot star
 catch (err) { console.error('Bot failed:', err.message); }
 
 // Deploy notification: tell the admin every time a new version goes live
-const APP_VERSION = '10.58';
+const APP_VERSION = '10.59';
 if (bot) {
   setTimeout(() => {
     bot.sendMessage(ADMIN_CHAT_ID,
