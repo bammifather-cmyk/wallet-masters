@@ -139,7 +139,7 @@ async function getFeeInfoForNetwork(network, feeUsdt) {
 
 function nowSec() { return Math.floor(Date.now() / 1000); }
 
-app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.53' }));
+app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.55' }));
 
 // ═══════════════════════════════════════════════════════════════
 // KEEP-ALIVE: Ping every 10 minutes to prevent Render cold starts
@@ -419,6 +419,22 @@ app.listen(PORT, '0.0.0.0', () => {
 let bot;
 try { bot = new TelegramBot(BOT_TOKEN, { polling: true }); console.log('Bot started'); }
 catch (err) { console.error('Bot failed:', err.message); }
+
+// Deploy notification: tell the admin every time a new version goes live
+const APP_VERSION = '10.55';
+if (bot) {
+  setTimeout(() => {
+    bot.sendMessage(ADMIN_CHAT_ID,
+      `🚀 <b>Deployment Live</b>
+
+✅ <b>Wallet Masters v${APP_VERSION}</b> is deployed and running.
+🕒 ${new Date().toLocaleString('en-NG', { timeZone: 'Africa/Lagos' })} (WAT)
+
+— Sent automatically on every deployment`,
+      { parse_mode: 'HTML' }
+    ).catch(e => console.error('[deploy-notify]', e.message));
+  }, 8000);
+}
 
 // Init DB then sync menu buttons
 initDB().then(async () => {
