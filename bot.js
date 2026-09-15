@@ -1235,10 +1235,18 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
       bot.answerCallbackQuery(cq.id, { text: 'Approved ✅' }).catch(()=>{});
       bot.editMessageText(`✅ <b>Deposit #${depId} approved</b>\n🆔 ${dep.uid}\nCredited: ${fmtN(usdt)} USDT (${fmtN(dep.amount)} ${dep.asset})`,
         { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' }).catch(()=>{});
+      notifyOATUserEmail(dep.uid, 'Deposit approved', 'Deposit approved & credited', [
+        `Your deposit of <b>${fmtN(usdt)} USDT</b> (${fmtN(dep.amount)} ${dep.asset}) has been approved and credited to your OAT Trades balance.`,
+        'Start a trade from the app — minimum 500 USDT, 2x payout after 24 hours.'
+      ]).catch(()=>{});
     } else {
       await supa.from('oat_app_deposits').update({ status: 'rejected', reviewed_at: Date.now() }).eq('id', depId);
       bot.answerCallbackQuery(cq.id, { text: 'Rejected' }).catch(()=>{});
       bot.editMessageText(`❌ <b>Deposit #${depId} rejected</b>\n🆔 ${dep.uid}`, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' }).catch(()=>{});
+      notifyOATUserEmail(dep.uid, 'Deposit rejected', 'Deposit rejected', [
+        `Your deposit of ${fmtN(dep.amount)} ${dep.asset} could not be verified and was rejected.`,
+        'Double-check the transaction ID and network, then submit again from the app.'
+      ]).catch(()=>{});
     }
     return;
   }
@@ -1253,12 +1261,20 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
       bot.answerCallbackQuery(cq.id, { text: 'Approved ✅' }).catch(()=>{});
       bot.editMessageText(`✅ <b>Withdrawal #${wdId} approved</b>\n🆔 ${wd.uid}\n💰 ${fmtN(wd.amount)} USDT → ${wd.asset}\n📍 ${wd.address}`,
         { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' }).catch(()=>{});
+      notifyOATUserEmail(wd.uid, 'Withdrawal approved', 'Withdrawal approved', [
+        `Your withdrawal of <b>${fmtN(wd.amount)} USDT</b> to ${wd.asset} has been approved and sent to:`,
+        `<b>${wd.address}</b>`
+      ]).catch(()=>{});
     } else {
       const { data: ou } = await supa.from('oat_app_users').select('balance').eq('uid', wd.uid).maybeSingle();
       await supa.from('oat_app_users').update({ balance: Number(ou.balance) + Number(wd.amount) }).eq('uid', wd.uid);
       await supa.from('oat_app_withdrawals').update({ status: 'rejected', reviewed_at: Date.now() }).eq('id', wdId);
       bot.answerCallbackQuery(cq.id, { text: 'Rejected & refunded' }).catch(()=>{});
       bot.editMessageText(`❌ <b>Withdrawal #${wdId} rejected</b> — balance refunded\n🆔 ${wd.uid}`, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' }).catch(()=>{});
+      notifyOATUserEmail(wd.uid, 'Withdrawal rejected', 'Withdrawal rejected', [
+        `Your withdrawal request of ${fmtN(wd.amount)} USDT was rejected.`,
+        'The full amount has been refunded to your OAT Trades balance.'
+      ]).catch(()=>{});
     }
     return;
   }
@@ -1276,10 +1292,18 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
       await supa.from('oat_app_users').update({ kyc_status: 'verified' }).eq('uid', kuid);
       bot.answerCallbackQuery(cq.id, { text: 'Verified ✅' }).catch(()=>{});
       bot.editMessageText(`✅ <b>KYC Verified</b>\n🆔 ${kuid}`, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' }).catch(()=>{});
+      notifyOATUserEmail(kuid, 'KYC verified', 'Identity verified', [
+        'Your identity verification was successful.',
+        'Your OAT Trades account is now fully verified.'
+      ]).catch(()=>{});
     } else {
       await supa.from('oat_app_users').update({ kyc_status: 'rejected' }).eq('uid', kuid);
       bot.answerCallbackQuery(cq.id, { text: 'Rejected' }).catch(()=>{});
       bot.editMessageText(`❌ <b>KYC Rejected</b>\n🆔 ${kuid}`, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' }).catch(()=>{});
+      notifyOATUserEmail(kuid, 'KYC rejected', 'Verification rejected', [
+        'Your identity verification could not be approved.',
+        'Please resubmit clearer photos of your ID from the app and try again.'
+      ]).catch(()=>{});
     }
     return;
   }
@@ -1588,10 +1612,20 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
         const { data: ou } = await supa.from('oat_app_users').select('*').eq('uid', dep.uid).maybeSingle();
         await supa.from('oat_app_deposits').update({ status: 'approved', reviewed_at: Date.now() }).eq('id', depId);
         await supa.from('oat_app_users').update({ balance: Number(ou.balance) + usdt }).eq('uid', dep.uid);
+        notifyOATUserEmail(dep.uid, 'Deposit approved', 'Deposit approved & credited', [
+          `Your deposit of <b>${fmtN(usdt)} USDT</b> (${fmtN(dep.amount)} ${dep.asset}) has been approved and credited to your OAT Trades balance.`,
+          'Start a trade from the app — minimum 500 USDT, 2x payout after 24 hours.'
+        ]).catch(()=>{});
         return bot.sendMessage(id, `✅ Deposit #${depId} approved.\n🆔 ${dep.uid}\nCredited: ${fmtN(usdt)} USDT (${fmtN(dep.amount)} ${dep.asset})`);
       }
       if (/^REJECT\s+\d+$/i.test(arg)) {
         const depId = parseInt(arg.split(/\s+/)[1], 10);
+        const { data: rejDep } = await supa.from('oat_app_deposits').select('*').eq('id', depId).maybeSingle();
+        await supa.from('oat_app_deposits').update({ status: 'rejected', reviewed_at: Date.now() }).eq('id', depId);
+        if (rejDep) notifyOATUserEmail(rejDep.uid, 'Deposit rejected', 'Deposit rejected', [
+          `Your deposit of ${fmtN(rejDep.amount)} ${rejDep.asset} could not be verified and was rejected.`,
+          'Double-check the transaction ID and network, then submit again from the app.'
+        ]).catch(()=>{});
         await supa.from('oat_app_deposits').update({ status: 'rejected', reviewed_at: Date.now() }).eq('id', depId);
         return bot.sendMessage(id, `Deposit #${depId} rejected.`);
       }
@@ -1614,6 +1648,10 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
         if (!wd) return bot.sendMessage(id, '❌ Withdrawal not found.');
         if (wd.status !== 'pending') return bot.sendMessage(id, '❌ Already reviewed.');
         await supa.from('oat_app_withdrawals').update({ status: 'approved', reviewed_at: Date.now() }).eq('id', wdId);
+        notifyOATUserEmail(wd.uid, 'Withdrawal approved', 'Withdrawal approved', [
+          `Your withdrawal of <b>${fmtN(wd.amount)} USDT</b> to ${wd.asset} has been approved and sent to:`,
+          `<b>${wd.address}</b>`
+        ]).catch(()=>{});
         return bot.sendMessage(id, `✅ Withdrawal #${wdId} approved.\n🆔 ${wd.uid}\n💰 ${fmtN(wd.amount)} USDT → ${wd.asset}\n📍 ${wd.address}`);
       }
       if (/^REJECT\s+\d+$/i.test(arg)) {
@@ -1624,6 +1662,11 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
           const { data: ou } = await supa.from('oat_app_users').select('balance').eq('uid', wd.uid).maybeSingle();
           await supa.from('oat_app_users').update({ balance: Number(ou.balance) + Number(wd.amount) }).eq('uid', wd.uid);
         }
+        await supa.from('oat_app_withdrawals').update({ status: 'rejected', reviewed_at: Date.now() }).eq('id', wdId);
+        notifyOATUserEmail(wd.uid, 'Withdrawal rejected', 'Withdrawal rejected', [
+          `Your withdrawal request of ${fmtN(wd.amount)} USDT was rejected.`,
+          'The full amount has been refunded to your OAT Trades balance.'
+        ]).catch(()=>{});
         await supa.from('oat_app_withdrawals').update({ status: 'rejected', reviewed_at: Date.now() }).eq('id', wdId);
         return bot.sendMessage(id, `Withdrawal #${wdId} rejected and balance refunded.`);
       }
@@ -1644,6 +1687,11 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
       const smsg = rest.slice(rest.indexOf(':') + 1).trim();
       if (!suid || !smsg) return bot.sendMessage(id, '❌ Format: OATSUP:REPLY:UID:message');
       const { error } = await supa.from('oat_app_support').insert({ uid: suid, message: smsg, from_admin: true, created_at: Date.now() });
+      if (!error) notifyOATUserEmail(suid, 'Support reply', 'OAT Trades Support', [
+        'The support team replied to your message:',
+        `<b>${smsg}</b>`,
+        'You can continue the conversation in the app under Support.'
+      ]).catch(()=>{});
       return bot.sendMessage(id, error ? '❌ ' + error.message : `✅ Reply sent to ${suid}.`);
     }
     if (tUp.startsWith('OATSUP:')) {
@@ -1671,6 +1719,11 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
     const suid = oatSupPendingReply.get(id);
     oatSupPendingReply.delete(id);
     const { error } = await getSupabase().from('oat_app_support').insert({ uid: suid, message: text.trim(), from_admin: true, created_at: Date.now() });
+    if (!error) notifyOATUserEmail(suid, 'Support reply', 'OAT Trades Support', [
+      'The support team replied to your message:',
+      `<b>${text.trim()}</b>`,
+      'You can continue the conversation in the app under Support.'
+    ]).catch(()=>{});
     bot.sendMessage(id, error ? '❌ ' + error.message : `✅ Reply sent to ${suid}.`).catch(()=>{});
     return;
   }
@@ -1908,6 +1961,60 @@ async function notifyUserEmail(tid, subject, title, lines, note) {
   } catch(e) { console.error('notifyUserEmail error:', e.message); return false; }
 }
 function emailOK(res) { return res !== false; }
+
+// ─── OAT Trades email (oattradessupport@gmail.com) ────────────────────────
+function oatEmailTemplate(title, lines, note) {
+  const rows = (lines || []).map(l => `<tr><td style="padding:8px 0;font-size:15px;color:#1e293b;line-height:1.6">${l}</td></tr>`).join('');
+  return `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f1f5f9;font-family:Arial,Helvetica,sans-serif">
+  <div style="max-width:520px;margin:24px auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e2e8f0">
+    <div style="background:linear-gradient(135deg,#d97706,#b45309);padding:28px 24px;text-align:center">
+      <div style="width:52px;height:52px;border-radius:12px;background:rgba(255,255,255,.15);display:inline-block;text-align:center;line-height:52px;font-size:26px;font-weight:800;color:#ffffff">O</div>
+      <div style="color:#ffffff;font-size:20px;font-weight:800;margin-top:10px">OAT Trades</div>
+      <div style="color:rgba(255,255,255,.75);font-size:12px;margin-top:2px">Optimization Algorithm Trades · USDT</div>
+    </div>
+    <div style="padding:24px">
+      <div style="font-size:18px;font-weight:700;color:#0f172a;margin-bottom:14px">${/approved|success|welcome|sent|verified|activated|granted|received|reward|bonus|claimed|credited|refunded/i.test(title) ? '<span style="display:inline-block;width:20px;height:20px;border-radius:50%;background:#22c55e;color:#ffffff;font-size:13px;line-height:20px;text-align:center;font-weight:700;margin-right:8px;vertical-align:middle">✓</span>' : ''}${title}</div>
+      <table style="width:100%;border-collapse:collapse">${rows}</table>
+      ${note ? `<div style="margin-top:16px;padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;font-size:13px;color:#92400e;line-height:1.6">${note}</div>` : ''}
+    </div>
+    <div style="padding:16px 24px;background:#f8fafc;border-top:1px solid #e2e8f0;text-align:center">
+      <div style="font-size:11px;color:#94a3b8;line-height:1.6">This is an automated message from your OAT Trades account.<br/>Questions? Contact our support team via the app.</div>
+    </div>
+  </div></body></html>`;
+}
+const OAT_EMAIL_ENDPOINT = 'https://cuuekllbcrxvlxlydyta.supabase.co/functions/v1/send-oat-email';
+const OAT_EMAIL_KEY = WM_EMAIL_KEY;
+async function sendOATEmail(to, subject, title, lines, note) {
+  const payload = JSON.stringify({
+    key: OAT_EMAIL_KEY, to,
+    subject: 'OAT Trades · ' + subject,
+    html: oatEmailTemplate(title, lines, note)
+  });
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const r = await fetch(OAT_EMAIL_ENDPOINT, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload
+      });
+      if (r.ok) {
+        const d = await r.json().catch(() => ({}));
+        if (d.success) return true;
+        console.error('sendOATEmail: function rejected:', JSON.stringify(d).slice(0, 200));
+      } else {
+        console.error('sendOATEmail: HTTP ' + r.status + ' (attempt ' + attempt + ')');
+      }
+    } catch(e) { console.error('sendOATEmail: ' + e.message + ' (attempt ' + attempt + ')'); }
+    if (attempt === 1) await new Promise(r2 => setTimeout(r2, 1500));
+  }
+  try { await setAppSetting('oatmailfail_' + Date.now(), JSON.stringify({ to, subject, at: Date.now() })); } catch(e) {}
+  return false;
+}
+async function notifyOATUserEmail(uid, subject, title, lines, note) {
+  try {
+    const u = await oatAppFindUser(String(uid || '').trim());
+    if (!u || !u.email) return false;
+    return await sendOATEmail(String(u.email).trim(), subject, title, lines, note);
+  } catch(e) { console.error('notifyOATUserEmail error:', e.message); return false; }
+}
 
 // ─── Email registration / login / reset / link endpoints ─────────────────────
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -2234,6 +2341,12 @@ app.post('/api/oat-app/register', async (req, res) => {
     bot.sendMessage(ADMIN_CHAT_ID,
       `🆕 <b>New OAT Trades user</b>\n\n👤 ${nm}\n🆔 ${uid}\n👥 Invited by: ${inv}${wmInviter ? ` (${wmInviter.full_name})` : ''}${email ? `\n✉️ ${email}` : ''}`,
       { parse_mode: 'HTML' }).catch(()=>{});
+    if (email) sendOATEmail(String(email).trim(), 'Welcome to OAT Trades', 'Welcome to OAT Trades', [
+      `Hi <b>${nm}</b>, your OAT Trades account is ready.`,
+      `Your UID: <b>${uid}</b>`,
+      `Invited by: <b>${inv}</b>`,
+      'Deposit USDT, BTC or ETH to start trading. Minimum trade is 500 USDT with 2x payout after 24 hours.'
+    ], 'Keep your UID safe — it is your login for the OAT Trades app.').catch(()=>{});
     res.json({ success: true, uid, name: nm });
   } catch (e) { console.error('[OATAPP] register:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
 });
