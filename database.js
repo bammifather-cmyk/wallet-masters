@@ -1267,6 +1267,22 @@ async function getOatStatus(telegramId) {
       else pendingInvites.push(entry);
     }
   }
+  // Members who joined the standalone OAT Trades app using this leader's UID as
+  // their inviter. They never go through the Telegram invite/accept flow above
+  // (no oat_teams row), so without this merge they were invisible on the
+  // leader's team list even though they already earn their 5% share on claim.
+  if (user.uid) {
+    try {
+      const { data: appMembers } = await supabase.from('oat_app_users')
+        .select('uid, name, profile_picture')
+        .eq('team_leader_uid', user.uid);
+      if (appMembers && appMembers.length) {
+        for (const am of appMembers) {
+          teamMembers.push({ telegramId: null, name: am.name, uid: am.uid, profilePicture: am.profile_picture || null, source: 'oat_trades' });
+        }
+      }
+    } catch (e) { /* non-fatal: main team list still shows */ }
+  }
 
   return {
     isTopEarner,

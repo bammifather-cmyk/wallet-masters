@@ -549,7 +549,7 @@ const CURRENCIES = ['USDT','USD','BTC','ETH','EUR','GBP','NGN','GHS','KES','ZAR'
 const FX_RATES = {USD:1, EUR:0.92, GBP:0.79, NGN:1650, GHS:15.3, KES:129, ZAR:18.1, INR:83.4};
 const CRYPTO_SYM = ['BTC','ETH','SOL','BNB','XRP'];
 
-const fmt = (n, dec) => Number(n||0).toLocaleString('en-US', {maximumFractionDigits: dec!=null ? dec : 2});
+const fmt = (n, dec) => { const d = dec!=null ? dec : 2; return Number(n||0).toLocaleString('en-US', {minimumFractionDigits: d, maximumFractionDigits: d}); };
 const fmtCur = cur => (cur==='BTC' ? 8 : (cur==='ETH' ? 6 : 2));
 function esc(s){ return String(s||'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function showErr(id, msg){ const e=$(id); e.textContent=msg; e.style.display=msg?'block':'none'; }
@@ -634,6 +634,15 @@ function convertFromUsdt(usdtAmt, cur){
   return {val:usdtAmt, sym:'USDT'};
 }
 function userCur(){ return (U && (U.displayCurrency || localStorage.getItem('oat_currency_'+U.uid))) || 'USDT'; }
+// Renders a USDT-denominated ledger amount (trade/withdrawal/team-earning amounts,
+// live profit, etc.) in whatever currency/token the user currently has selected.
+// Deposit rows keep their own recorded asset (that's literally what was sent),
+// and Top Traders figures stay in USD per the official leaderboard rule.
+function fmtInCur(usdtAmt){
+  const cur = userCur();
+  const c = convertFromUsdt(usdtAmt, cur);
+  return fmt(c.val, fmtCur(cur))+' '+c.sym;
+}
 
 function openCurrencyModal(){
   const grid = $('curGrid');
@@ -767,7 +776,7 @@ function paintTrade(){
   const active = (STATE.trades||[]).find(t=>t.status==='active');
   $('tradeForm').classList.toggle('hidden', !!active);
   $('tradeActive').classList.toggle('hidden', !active);
-  $('tradeHistory').innerHTML = (STATE.trades||[]).map((t,i)=>'<div class="row" onclick="showTradeReceipt('+i+')"><span class="k">'+fmt(t.amount)+' USDT · '+esc(t.asset)+'<br>'+new Date(Number(t.started_at)).toLocaleDateString()+'</span><span><span class="badge '+t.status+'">'+t.status+'</span></span></div>').join('') || '<p class="copyhint">No trades yet.</p>';
+  $('tradeHistory').innerHTML = (STATE.trades||[]).map((t,i)=>'<div class="row" onclick="showTradeReceipt('+i+')"><span class="k">'+fmtInCur(t.amount)+' · '+esc(t.asset)+'<br>'+new Date(Number(t.started_at)).toLocaleDateString()+'</span><span><span class="badge '+t.status+'">'+t.status+'</span></span></div>').join('') || '<p class="copyhint">No trades yet.</p>';
   const c = convertFromUsdt(U.balance, userCur());
   $('tfBal').textContent = fmt(c.val, fmtCur(userCur()))+' '+c.sym;
   if(active) startActiveTrade(active);
@@ -781,9 +790,9 @@ function startActiveTrade(active){
   $('taName').textContent = meta.name;
   const lp = livePriceOf(active.asset);
   $('taPrice').textContent = lp ? ('$'+fmt(lp)+' live') : 'Optimization algorithm active';
-  $('taPay').textContent = fmt(active.payout_amount)+' USDT';
-  $('taInvested').textContent = fmt(active.amount)+' USDT';
-  $('taBal').textContent = fmt(U.balance)+' USDT';
+  $('taPay').textContent = fmtInCur(active.payout_amount);
+  $('taInvested').textContent = fmtInCur(active.amount);
+  $('taBal').textContent = fmtInCur(U.balance);
 
   const base = lp || 100;
   candleData = seedCandles(base, 22);
@@ -802,7 +811,7 @@ function startActiveTrade(active){
     }
     const elapsed = total - Math.max(0, rem);
     const accrued = (Number(active.payout_amount) - Number(active.amount)) * Math.min(1, elapsed/total);
-    $('taAccrued').textContent = '+'+fmt(accrued)+' USDT';
+    $('taAccrued').textContent = '+'+fmtInCur(accrued);
   };
   tick(); timer = setInterval(tick, 1000);
   drawChart(); chartTimer = setInterval(drawChart, 2000);
@@ -907,7 +916,7 @@ async function claimTrade(){
   const d = await post('/api/oat-app/claim', {uid:U.uid});
   if(!d.success) return showErr('trErr', d.error);
   await refreshState(); paintTrade();
-  toast('Payout of '+fmt(d.payout)+' USDT added to your balance');
+  toast('Payout of '+fmtInCur(d.payout)+' added to your balance');
 }
 function showTradeReceipt(i){
   const t = STATE.trades[i];
@@ -915,8 +924,8 @@ function showTradeReceipt(i){
   $('detBody').innerHTML =
     '<div class="det-row"><span class="dk">Trade ID</span><span class="dv">#'+t.id+'</span></div>'+
     '<div class="det-row"><span class="dk">Asset</span><span class="dv">'+esc(t.asset)+'</span></div>'+
-    '<div class="det-row"><span class="dk">Invested</span><span class="dv">'+fmt(t.amount)+' USDT</span></div>'+
-    '<div class="det-row"><span class="dk">Payout (2x)</span><span class="dv">'+fmt(t.payout_amount)+' USDT</span></div>'+
+    '<div class="det-row"><span class="dk">Invested</span><span class="dv">'+fmtInCur(t.amount)+'</span></div>'+
+    '<div class="det-row"><span class="dk">Payout (2x)</span><span class="dv">'+fmtInCur(t.payout_amount)+'</span></div>'+
     '<div class="det-row"><span class="dk">Status</span><span class="dv"><span class="badge '+t.status+'">'+t.status+'</span></span></div>'+
     '<div class="det-row"><span class="dk">Started</span><span class="dv">'+new Date(Number(t.started_at)).toLocaleString()+'</span></div>'+
     (t.claimed_at ? '<div class="det-row"><span class="dk">Cashed out</span><span class="dv">'+new Date(Number(t.claimed_at)).toLocaleString()+'</span></div>' : '');
@@ -929,14 +938,14 @@ function selWdNet(a, el){
   document.querySelectorAll('#wdNets .net-opt').forEach(n=>n.classList.toggle('active', n===el));
 }
 function paintWd(){
-  $('wdHistory').innerHTML = (STATE.withdrawals||[]).map((w,i)=>'<div class="row" onclick="showWdReceipt('+i+')"><span class="k">'+fmt(w.amount)+' USDT → '+esc(w.asset)+'<br>'+new Date(Number(w.created_at)).toLocaleDateString()+'</span><span><span class="badge '+w.status+'">'+w.status+'</span></span></div>').join('') || '<p class="copyhint">No withdrawals yet.</p>';
+  $('wdHistory').innerHTML = (STATE.withdrawals||[]).map((w,i)=>'<div class="row" onclick="showWdReceipt('+i+')"><span class="k">'+fmtInCur(w.amount)+' → '+esc(w.asset)+'<br>'+new Date(Number(w.created_at)).toLocaleDateString()+'</span><span><span class="badge '+w.status+'">'+w.status+'</span></span></div>').join('') || '<p class="copyhint">No withdrawals yet.</p>';
 }
 function showWdReceipt(i){
   const w = STATE.withdrawals[i];
   $('detTitle').textContent = 'Withdrawal Details';
   $('detBody').innerHTML =
     '<div class="det-row"><span class="dk">Withdrawal ID</span><span class="dv">#'+w.id+'</span></div>'+
-    '<div class="det-row"><span class="dk">Amount</span><span class="dv">'+fmt(w.amount)+' USDT</span></div>'+
+    '<div class="det-row"><span class="dk">Amount</span><span class="dv">'+fmtInCur(w.amount)+'</span></div>'+
     '<div class="det-row"><span class="dk">Receive as</span><span class="dv">'+esc(w.asset)+'</span></div>'+
     '<div class="det-row"><span class="dk">Address</span><span class="dv uidtap" onclick="copyText(\''+esc(w.address)+'\')">'+esc(w.address)+' <b style="color:#60a5fa">⧉</b></span></div>'+
     '<div class="det-row"><span class="dk">Status</span><span class="dv"><span class="badge '+w.status+'">'+w.status+'</span></span></div>'+

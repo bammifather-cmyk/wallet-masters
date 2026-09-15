@@ -4208,8 +4208,8 @@ async function loadOatPage() {
       let teamHtml = '';
       if (st.teamMembers && st.teamMembers.length) {
         teamHtml += st.teamMembers.map(m => `<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid #2d3748">
-          <div><div style="color:#e2e8f0;font-size:13px;font-weight:600">${_esc(m.name)}</div><div style="color:#64748b;font-size:11px">UID: ${_esc(m.uid)}</div></div>
-          <button onclick="removeOatMember('${m.telegramId}')" style="background:#334155;border:none;border-radius:6px;padding:5px 10px;color:#94a3b8;font-size:11px;cursor:pointer">Remove</button>
+          <div><div style="color:#e2e8f0;font-size:13px;font-weight:600">${_esc(m.name)}</div><div style="color:#64748b;font-size:11px">UID: ${_esc(m.uid)}${m.source === 'oat_trades' ? ' · OAT Trades app' : ''}</div></div>
+          ${m.source === 'oat_trades' ? '' : `<button onclick="removeOatMember('${m.telegramId}')" style="background:#334155;border:none;border-radius:6px;padding:5px 10px;color:#94a3b8;font-size:11px;cursor:pointer">Remove</button>`}
         </div>`).join('');
       } else {
         teamHtml += '<div style="color:#64748b;font-size:12px;line-height:1.6;margin-bottom:8px">No members yet. Invite users by UID: members automatically earn 5% of your trade profits.</div>';
