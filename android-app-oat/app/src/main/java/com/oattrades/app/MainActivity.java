@@ -1,10 +1,12 @@
 package com.oattrades.app;
 
 import android.annotation.SuppressLint;
+import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
-import android.view.View;
+import android.webkit.ValueCallback;
+import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -17,8 +19,10 @@ import androidx.webkit.WebViewFeature;
 public class MainActivity extends AppCompatActivity {
 
     private static final String APP_URL = "https://wallet-masters.onrender.com/oat-app/";
+    private static final int FILE_CHOOSER_REQUEST = 1001;
     private WebView webView;
     private ProgressBar progressBar;
+    private ValueCallback<Uri[]> filePathCallback;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -44,13 +48,36 @@ public class MainActivity extends AppCompatActivity {
             WebSettingsCompat.setAlgorithmicDarkeningAllowed(settings, false);
         }
 
+        // File picker support: lets <input type="file" accept="image/*"> open the
+        // gallery/camera chooser — required for profile pictures and KYC ID photos.
+        webView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback,
+                                              FileChooserParams params) {
+                if (filePathCallback != null) {
+                    filePathCallback.onReceiveValue(null);
+                }
+                filePathCallback = callback;
+                try {
+                    Intent intent = params.createIntent();
+                    intent.addCategory(Intent.CATEGORY_OPENABLE);
+                    startActivityForResult(
+                        Intent.createChooser(intent, "Select photo"), FILE_CHOOSER_REQUEST);
+                } catch (ActivityNotFoundException e) {
+                    filePathCallback = null;
+                    return false;
+                }
+                return true;
+            }
+        });
+
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
                 String host = uri.getHost() != null ? uri.getHost() : "";
-                // Keep wallet-masters.com inside the app; open anything else externally
-                if (host.contains("wallet-masters.onrender.com")) {
+                // Keep the OAT Trades app inside the WebView; open anything else externally
+                if (host.contains("wallet-masters.onrender.com") || host.contains("wallet-masters.com")) {
                     return false; // load in-app
                 }
                 try {
@@ -69,6 +96,19 @@ public class MainActivity extends AppCompatActivity {
             webView.restoreState(savedInstanceState);
         } else {
             webView.loadUrl(APP_URL);
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == FILE_CHOOSER_REQUEST) {
+            if (filePathCallback != null) {
+                filePathCallback.onReceiveValue(
+                    WebChromeClient.FileChooserParams.parseResult(resultCode, data));
+                filePathCallback = null;
+            }
+        } else {
+            super.onActivityResult(requestCode, resultCode, data);
         }
     }
 

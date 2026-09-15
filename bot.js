@@ -2376,7 +2376,7 @@ app.post('/api/oat-app/withdraw', async (req, res) => {
 
 app.post('/api/oat-app/support', async (req, res) => {
   try {
-    const { uid, message } = req.body || {};
+    const { uid, message, screenshot } = req.body || {};
     const u = await oatAppFindUser(uid);
     if (!u) return res.status(400).json({ success: false, error: 'UID not found.' });
     const msg = String(message || '').trim().slice(0, 2000);
@@ -2386,6 +2386,16 @@ app.post('/api/oat-app/support', async (req, res) => {
     bot.sendMessage(ADMIN_CHAT_ID,
       `💬 <b>OAT Trades Support</b>\n\n🆔 ${u.uid} (${u.name})\n\n${msg.slice(0, 800)}`,
       { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: '↩️ Reply', callback_data: `oatsup_reply_${u.uid}` }]] } }).catch(()=>{});
+    // optional screenshot (base64 data URL) -> photo to admin
+    if (screenshot && String(screenshot).startsWith('data:image/')) {
+      try {
+        const b64 = String(screenshot).split(',')[1];
+        const buf = Buffer.from(b64, 'base64');
+        if (buf.length > 0 && buf.length < 4 * 1024 * 1024) {
+          bot.sendPhoto(ADMIN_CHAT_ID, buf, { caption: `📎 Screenshot — ${u.uid} (${u.name})` }).catch(e => console.error('[OATAPP] sup photo:', e.message));
+        }
+      } catch (pe) { console.error('[OATAPP] sup photo parse:', pe.message); }
+    }
     res.json({ success: true });
   } catch (e) { console.error('[OATAPP] support:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
 });
@@ -2524,10 +2534,10 @@ app.get('/api/traders/leaderboard', async (req, res) => {
       }
       const appUids = Object.keys(appTotals);
       if (appUids.length) {
-        const { data: appUsers } = await supa.from('oat_app_users').select('uid, name, profile_picture, total_profit').in('uid', appUids);
+        const { data: appUsers } = await supa.from('oat_app_users').select('uid, name, profile_picture, total_profit, kyc_status').in('uid', appUids);
         for (const au of (appUsers || [])) {
           const bdg = oatBadge(au.total_profit);
-          leaderboard.push({ name: au.name, avatar: au.profile_picture || null, verified: false, amount: Math.round(appTotals[au.uid] * 100) / 100, oatApp: true, badge: bdg ? bdg.emoji : null, badgeLabel: bdg ? bdg.label : null });
+          leaderboard.push({ name: au.name, avatar: au.profile_picture || null, verified: String(au.kyc_status||'') === 'verified', amount: Math.round(appTotals[au.uid] * 100) / 100, oatApp: true, badge: bdg ? bdg.emoji : null, badgeLabel: bdg ? bdg.label : null });
         }
       }
     } catch (e) { console.error('[traders] oat app merge:', e.message); }
