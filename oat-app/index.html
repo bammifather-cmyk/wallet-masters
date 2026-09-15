@@ -124,6 +124,8 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue)}
 .asset-name{font-size:13px;font-weight:700;color:var(--text)}
 .asset-price{font-size:11px;color:var(--muted);margin-top:1px}
 .signal-chip{background:rgba(59,130,246,.12);border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;color:#60a5fa;margin-left:auto}
+.signal-chip.buy{background:rgba(34,197,94,.14);color:var(--green)}
+.signal-chip.sell{background:rgba(239,68,68,.14);color:var(--red)}
 .trade-chart{width:100%;height:150px;border-radius:10px;background:#0d1629;display:block}
 .live-row{display:flex;justify-content:space-between;align-items:center;background:#0d1629;border-radius:10px;padding:12px;margin-top:10px}
 .live-lbl{font-size:10px;color:var(--muted)}
@@ -327,16 +329,20 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue)}
       <div class="asset-hdr">
         <div class="asset-chip-ic" id="taIc">?</div>
         <div><div class="asset-name" id="taName"></div><div class="asset-price" id="taPrice">Loading market…</div></div>
-        <div class="signal-chip">SIGNAL</div>
+        <div class="signal-chip" id="taSignal">SIGNAL</div>
       </div>
       <canvas id="taChart" width="640" height="300" class="trade-chart"></canvas>
       <div class="live-row">
         <div><div class="live-lbl">Live Profit Accruing</div><div class="live-val" style="color:var(--green)" id="taAccrued">+0.00 USDT</div></div>
-        <div style="text-align:right"><div class="live-lbl">Payout at 24h</div><div class="live-val" id="taPay">—</div></div>
+        <div style="text-align:right"><div class="live-lbl">Live Balance</div><div class="live-val" id="taBal">—</div></div>
       </div>
       <div class="timer-big" id="taRem">--:--:--</div>
       <div class="timer-label">Time Remaining</div>
       <div class="progress-bar"><div class="progress-fill" id="taFill"></div></div>
+      <div class="live-row" style="margin-bottom:16px">
+        <div><div class="live-lbl">Invested</div><div class="stat-val" id="taInvested">—</div></div>
+        <div style="text-align:right"><div class="live-lbl">Return at 24h (2x)</div><div class="stat-val" style="color:var(--gold2)" id="taPay">—</div></div>
+      </div>
       <button class="btn-gold hidden" id="claimBtn" onclick="claimTrade()">Cash Out</button>
       <div class="trade-hint" id="taHint">Algorithm trading — following live market signals…</div>
     </div>
@@ -776,11 +782,20 @@ function startActiveTrade(active){
   const lp = livePriceOf(active.asset);
   $('taPrice').textContent = lp ? ('$'+fmt(lp)+' live') : 'Optimization algorithm active';
   $('taPay').textContent = fmt(active.payout_amount)+' USDT';
+  $('taInvested').textContent = fmt(active.amount)+' USDT';
+  $('taBal').textContent = fmt(U.balance)+' USDT';
 
   const base = lp || 100;
   chartData = [];
   let p = base * 0.97;
   for(let i=0;i<50;i++){ p += (base-p)*0.06 + (Math.random()-0.45)*base*0.012; chartData.push(p); }
+  // Directional signal: derived from the trend of the seeded price series, refreshed with the chart
+  const setSignal = () => {
+    const dir = (chartData[chartData.length-1] >= chartData[0]) ? 'buy' : 'sell';
+    const el = $('taSignal');
+    if(el){ el.className = 'signal-chip '+dir; el.textContent = dir === 'buy' ? 'BUY SIGNAL' : 'SELL SIGNAL'; }
+  };
+  setSignal();
 
   const total = Number(active.ends_at)-Number(active.started_at);
   const tick = () => {
@@ -809,27 +824,46 @@ function drawChart(){
     const first = chartData[0];
     chartData.push(last + (first-last)*0.08 + (Math.random()-0.45)*first*0.012);
     chartData.shift();
+    const sigEl = document.getElementById('taSignal');
+    if(sigEl){
+      const dir = (chartData[chartData.length-1] >= chartData[0]) ? 'buy' : 'sell';
+      sigEl.className = 'signal-chip '+dir;
+      sigEl.textContent = dir === 'buy' ? 'BUY SIGNAL' : 'SELL SIGNAL';
+    }
   }
   if(!chartData) return;
-  const min = Math.min.apply(null, chartData), max = Math.max.apply(null, chartData);
-  const pad = (max-min)*0.15 || 1;
-  const lo = min-pad, hi = max+pad;
+  // Build OHLC candles from the underlying price series (groups of 3 points per candle)
+  const groupSize = 3;
+  const candles = [];
+  for(let i=0;i<chartData.length;i+=groupSize){
+    const grp = chartData.slice(i, i+groupSize);
+    if(!grp.length) continue;
+    const o = grp[0], c = grp[grp.length-1];
+    candles.push({ o, c, hi: Math.max.apply(null, grp), lo: Math.min.apply(null, grp) });
+  }
+  const allVals = chartData;
+  const min = Math.min.apply(null, allVals), max = Math.max.apply(null, allVals);
+  const pad = (max-min)*0.18 || 1;
+  const lo = min-pad, hiv = max+pad;
   const up = chartData[chartData.length-1] >= chartData[0];
   const col = up ? '#22c55e' : '#ef4444';
   ctx.clearRect(0,0,W,H);
   ctx.strokeStyle = 'rgba(122,144,176,.12)'; ctx.lineWidth = 1;
   for(let i=1;i<4;i++){ const y=H*i/4; ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
-  ctx.beginPath();
-  chartData.forEach(function(v,i){ const x=i/(chartData.length-1)*W, y=H-((v-lo)/(hi-lo))*H; i?ctx.lineTo(x,y):ctx.moveTo(x,y); });
-  const grad = ctx.createLinearGradient(0,0,0,H);
-  grad.addColorStop(0, up?'rgba(34,197,94,.28)':'rgba(239,68,68,.28)');
-  grad.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.lineTo(W,H); ctx.lineTo(0,H); ctx.closePath();
-  ctx.fillStyle = grad; ctx.fill();
-  ctx.beginPath();
-  chartData.forEach(function(v,i){ const x=i/(chartData.length-1)*W, y=H-((v-lo)/(hi-lo))*H; i?ctx.lineTo(x,y):ctx.moveTo(x,y); });
-  ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.lineJoin='round'; ctx.stroke();
-  const ly=H-((chartData[chartData.length-1]-lo)/(hi-lo))*H;
+  const cw = W/candles.length;
+  const bodyW = Math.max(2, cw*0.55);
+  const yOf = v => H-((v-lo)/(hiv-lo))*H;
+  candles.forEach(function(cd, i){
+    const x = i*cw + cw/2;
+    const isUp = cd.c >= cd.o;
+    const ccol = isUp ? '#22c55e' : '#ef4444';
+    ctx.strokeStyle = ccol; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.moveTo(x, yOf(cd.hi)); ctx.lineTo(x, yOf(cd.lo)); ctx.stroke();
+    const yTop = yOf(Math.max(cd.o, cd.c)), yBot = yOf(Math.min(cd.o, cd.c));
+    ctx.fillStyle = ccol;
+    ctx.fillRect(x-bodyW/2, yTop, bodyW, Math.max(1.5, yBot-yTop));
+  });
+  const ly = yOf(chartData[chartData.length-1]);
   ctx.beginPath(); ctx.arc(W-6, ly, 4, 0, 7); ctx.fillStyle=col; ctx.fill();
 }
 async function startTrade(){
