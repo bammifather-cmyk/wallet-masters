@@ -8,6 +8,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
 :root{--bg:#0a0f1e;--hdr:#0e1629;--card:#131f35;--card2:#0d1629;--border:#1e2d45;--blue:#2563eb;--blue2:#1d4ed8;--gold:#f59e0b;--gold2:#fbbf24;--text:#f0f4ff;--muted:#7a90b0;--green:#22c55e;--red:#ef4444;--shadow:0 8px 40px rgba(0,0,0,.5)}
+body.light{--bg:#f4f6fb;--hdr:#ffffff;--card:#ffffff;--card2:#f0f3f9;--border:#e2e8f4;--blue:#2563eb;--blue2:#1d4ed8;--gold:#f59e0b;--gold2:#fbbf24;--text:#0f172a;--muted:#64748b;--green:#16a34a;--red:#dc2626;--shadow:0 8px 30px rgba(20,30,60,.12)}
+body{transition:background .25s,color .25s}
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:86px}
 .hidden{display:none!important}
@@ -15,6 +17,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 
 /* header */
 .topbar{display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--hdr);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:50}
+.theme-toggle{margin-left:auto;width:40px;height:40px;border-radius:12px;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text);flex-shrink:0}
 .topbar .tb-name{font-size:15px;font-weight:700;color:var(--text)}
 .topbar .tb-uid{font-size:11px;color:var(--muted);cursor:pointer}
 .avatar{width:46px;height:46px;border-radius:50%;background:#0d1629;border:2px solid rgba(245,158,11,.4);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;color:var(--gold);overflow:hidden;flex:none;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.35)}
@@ -245,6 +248,9 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue)}
     <div>
       <div class="tb-name" id="tbName"></div>
       <div class="tb-uid uidtap" id="tbUid" onclick="copyText(this.textContent)"></div>
+    </div>
+    <div class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Switch light/dark mode">
+      <svg id="themeIcon" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
     </div>
   </div>
 
@@ -502,6 +508,21 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue)}
 <div id="toast" class="toast"></div>
 
 <script>
+// Theme: persisted in localStorage, applied before anything else renders
+const SUN_ICON = '<path d="M12 3v2m0 14v2m9-9h-2M5 12H3m15.36 6.36l-1.41-1.41M7.05 7.05L5.64 5.64m12.72 0l-1.41 1.41M7.05 16.95l-1.41 1.41"/><circle cx="12" cy="12" r="4"/>';
+const MOON_ICON = '<path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>';
+function applyTheme(mode){
+  document.body.classList.toggle('light', mode === 'light');
+  const icon = document.getElementById('themeIcon');
+  if (icon) icon.innerHTML = mode === 'light' ? SUN_ICON : MOON_ICON;
+}
+function toggleTheme(){
+  const next = document.body.classList.contains('light') ? 'dark' : 'light';
+  localStorage.setItem('oat_theme', next);
+  applyTheme(next);
+}
+applyTheme(localStorage.getItem('oat_theme') || 'dark');
+
 const API = location.origin;
 let U = null, STATE = null, timer = null, chartTimer = null, chartData = null;
 let selAsset = 'BTC', selDepAsset = 'USDT', selWdAsset = 'USDT', balHidden = false;
