@@ -2437,6 +2437,11 @@ app.post('/api/oat-app/trade', async (req, res) => {
     });
     if (terr) return res.status(500).json({ success: false, error: terr.message });
     await supa.from('oat_app_users').update({ balance: Number(u.balance) - amt }).eq('uid', u.uid);
+    notifyOATUserEmail(u.uid, 'Trade started', 'Trade started', [
+      `Your <b>${String(asset || 'BTC')}</b> trade of <b>${fmtN(amt)} USDT</b> is now running.`,
+      `Expected payout: <b>${fmtN(amt * 2)} USDT</b> (2x) after 24 hours.`,
+      'You can claim your payout from the app once the countdown completes.'
+    ]).catch(()=>{});
     res.json({ success: true });
   } catch (e) { console.error('[OATAPP] trade:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
 });
@@ -2473,6 +2478,10 @@ app.post('/api/oat-app/claim', async (req, res) => {
     bot.sendMessage(ADMIN_CHAT_ID,
       `📊 <b>OAT Trades trade completed</b>\n\n🆔 ${u.uid} (${u.name})\n💰 Trade ${tr.amount} USDT → payout ${payout} USDT\n👥 Team members paid 5%: ${paidCount}`,
       { parse_mode: 'HTML' }).catch(()=>{});
+    notifyOATUserEmail(u.uid, 'Trade completed', 'Trade completed & paid out', [
+      `Your <b>${tr.asset}</b> trade of <b>${fmtN(tr.amount)} USDT</b> has completed.`,
+      `Payout credited to your balance: <b>${fmtN(payout)} USDT</b> (profit: ${fmtN(profit)} USDT).`
+    ], null, 'approved').catch(()=>{});
     res.json({ success: true, payout, profit, teamPaid: paidCount });
   } catch (e) { console.error('[OATAPP] claim:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
 });
