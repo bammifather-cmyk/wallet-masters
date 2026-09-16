@@ -2706,7 +2706,7 @@ app.get('/api/traders/leaderboard', async (req, res) => {
     });
     const computedSorted = computed.slice().sort((a, c) => c.amount - a.amount);
     const merged = manualList.concat(computedSorted).slice(0, 10).map((x, i) => {
-      const y = Object.assign({ rank: i + 1 }, x);
+      const y = Object.assign({}, x, { rank: i + 1 });
       delete y._fullName; delete y._username;
       return y;
     });
