@@ -2313,6 +2313,14 @@ function oatBadge(totalProfit){
 }
 const OATAPP_SESSION_MS = 24 * 60 * 60 * 1000; // 24h trade duration
 const OATAPP_MIN_TRADE  = 500;                  // min trade in USDT
+// Quick trades (owner-requested 2026-09-16): 1-minute and 5-minute trades, stake
+// 100 to 10,000 USDT. Lower fixed profit than the 24h 2x trade — prevents users
+// compounding a $10k stake into millions within a single session.
+const OATAPP_DURATIONS = {
+  '24h': { ms: OATAPP_SESSION_MS,    mult: 2,   min: 500, max: null,  label: '24 hours',  pct: 100 },
+  '5m':  { ms: 5 * 60 * 1000,        mult: 1.5, min: 100, max: 10000, label: '5 minutes', pct: 50  },
+  '1m':  { ms: 60 * 1000,            mult: 1.2, min: 100, max: 10000, label: '1 minute',  pct: 20  }
+};
 const OATAPP_MIN_WITHDRAW = 500;                // min withdrawal in USDT
 
 async function oatAppFindUser(uid) {
@@ -2422,24 +2430,27 @@ app.post('/api/oat-app/state', async (req, res) => {
 
 app.post('/api/oat-app/trade', async (req, res) => {
   try {
-    const { uid, asset, amount } = req.body || {};
+    const { uid, asset, amount, duration } = req.body || {};
     const u = await oatAppFindUser(uid);
     if (!u) return res.status(400).json({ success: false, error: 'UID not found.' });
+    const dur = OATAPP_DURATIONS[duration] || OATAPP_DURATIONS['24h'];
     const amt = parseFloat(amount);
-    if (!amt || amt < OATAPP_MIN_TRADE) return res.status(400).json({ success: false, error: `Minimum trade is ${OATAPP_MIN_TRADE} USDT.` });
+    if (!amt || amt < dur.min) return res.status(400).json({ success: false, error: `Minimum trade is ${fmtN(dur.min)} USDT for ${dur.label} trades.` });
+    if (dur.max && amt > dur.max) return res.status(400).json({ success: false, error: `Maximum trade is ${fmtN(dur.max)} USDT for ${dur.label} trades.` });
     if (Number(u.balance) < amt) return res.status(400).json({ success: false, error: 'Insufficient balance. Deposit first.' });
     const supa = getSupabase();
     const { data: active } = await supa.from('oat_app_trades').select('id').eq('uid', u.uid).eq('status', 'active').maybeSingle();
     if (active) return res.status(400).json({ success: false, error: 'You already have an active trade.' });
+    const payout = Math.round(amt * dur.mult * 100) / 100;
     const { error: terr } = await supa.from('oat_app_trades').insert({
-      uid: u.uid, asset: String(asset || 'BTC'), amount: amt, payout_amount: amt * 2,
-      status: 'active', started_at: Date.now(), ends_at: Date.now() + OATAPP_SESSION_MS
+      uid: u.uid, asset: String(asset || 'BTC'), amount: amt, payout_amount: payout,
+      status: 'active', started_at: Date.now(), ends_at: Date.now() + dur.ms
     });
     if (terr) return res.status(500).json({ success: false, error: terr.message });
     await supa.from('oat_app_users').update({ balance: Number(u.balance) - amt }).eq('uid', u.uid);
     notifyOATUserEmail(u.uid, 'Trade started', 'Trade started', [
-      `Your <b>${String(asset || 'BTC')}</b> trade of <b>${fmtN(amt)} USDT</b> is now running.`,
-      `Expected payout: <b>${fmtN(amt * 2)} USDT</b> (2x) after 24 hours.`,
+      `Your <b>${String(asset || 'BTC')}</b> trade of <b>${fmtN(amt)} USDT</b> (${dur.label}) is now running.`,
+      `Expected payout: <b>${fmtN(payout)} USDT</b> (+${dur.pct}% profit) after ${dur.label}.`,
       'You can claim your payout from the app once the countdown completes.'
     ]).catch(()=>{});
     res.json({ success: true });

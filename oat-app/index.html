@@ -309,21 +309,23 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue)}
     <div class="oat-hero">
       <div class="oat-hero-icon"><svg width="52" height="52" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><rect x="5" y="27" width="7" height="15" rx="1.5" fill="#2563eb"/><rect x="14" y="20" width="7" height="22" rx="1.5" fill="#3b82f6"/><rect x="23" y="12" width="7" height="30" rx="1.5" fill="#60a5fa"/><rect x="32" y="6" width="7" height="36" rx="1.5" fill="#93c5fd"/><path d="M8 24 L19 15 L30 7 L40 4" stroke="#22c55e" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M36 3 L41 4 L39.5 9" stroke="#22c55e" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
       <div class="oat-hero-title">Optimization Algorithm Trades</div>
-      <div class="oat-hero-sub">2x return · 24-hour trades · free cash out</div>
+      <div class="oat-hero-sub">2x in 24 hours · quick 1-min &amp; 5-min trades · free cash out</div>
     </div>
     <div id="trErr" class="err"></div>
 
     <div id="tradeForm" class="trade-card">
       <div class="stat-row">
         <div><div class="stat-label">Your Balance</div><div class="stat-val" id="tfBal">0.00 USDT</div></div>
-        <div><div class="stat-label">Return</div><div class="stat-val">2x in 24h</div></div>
+        <div><div class="stat-label">Return</div><div class="stat-val" id="tfReturn">2x in 24h</div></div>
       </div>
+      <div class="oat-cat-label">TRADE DURATION</div>
+      <div class="oat-chips" id="chipsDur"></div>
       <div class="oat-cat-label">CRYPTO</div>
       <div class="oat-chips" id="chipsCrypto"></div>
       <div class="oat-cat-label">STOCKS</div>
       <div class="oat-chips" id="chipsStocks"></div>
       <input id="trAmount" class="amount-input" type="number" placeholder="Enter amount to invest">
-      <div class="trade-hint" style="margin:8px 0 12px">Minimum 500 USDT · doubles in 24 hours · cash out free</div>
+      <div class="trade-hint" id="trHint" style="margin:8px 0 12px">Minimum 500 USDT · doubles in 24 hours · cash out free</div>
       <button class="btn-gold" onclick="startTrade()">Start Trading</button>
     </div>
 
@@ -547,18 +549,62 @@ applyTheme(localStorage.getItem('oat_theme') || 'dark');
 const API = location.origin;
 let U = null, STATE = null, timer = null, chartTimer = null, chartData = null, candleData = null;
 let selAsset = 'BTC', selDepAsset = 'USDT', selWdAsset = 'USDT', balHidden = false;
+const DUR_OPTIONS = [
+  {k:'24h', label:'24 Hours · 2x',    min:500,  max:null,  hint:'Minimum 500 USDT · doubles in 24 hours · cash out free', ret:'2x in 24h',      toast:'Trade started — 2x in 24 hours'},
+  {k:'5m',  label:'5 Minutes · +50%', min:100,  max:10000, hint:'Stake 100 to 10,000 USDT · +50% profit in 5 minutes',     ret:'+50% in 5 min',  toast:'Trade started — +50% in 5 minutes'},
+  {k:'1m',  label:'1 Minute · +20%',  min:100,  max:10000, hint:'Stake 100 to 10,000 USDT · +20% profit in 1 minute',     ret:'+20% in 1 min',  toast:'Trade started — +20% in 1 minute'}
+];
+let selDur = '24h';
 const $ = id => document.getElementById(id);
 const CRYPTO_ASSETS = [
-  {t:'BTC', name:'Bitcoin', color:'#f7931a'},
-  {t:'ETH', name:'Ethereum', color:'#627eea'},
-  {t:'SOL', name:'Solana', color:'#14f195'},
-  {t:'BNB', name:'BNB', color:'#f0b90b'},
-  {t:'XRP', name:'XRP', color:'#94a3b8'}
+  {t:'BTC',  name:'Bitcoin',   color:'#f7931a'},
+  {t:'ETH',  name:'Ethereum',  color:'#627eea'},
+  {t:'SOL',  name:'Solana',    color:'#14f195'},
+  {t:'BNB',  name:'BNB',       color:'#f0b90b'},
+  {t:'XRP',  name:'XRP',       color:'#94a3b8'},
+  {t:'DOGE', name:'Dogecoin',  color:'#c2a633'},
+  {t:'ADA',  name:'Cardano',   color:'#0033ad'},
+  {t:'TRX',  name:'TRON',      color:'#ef0027'},
+  {t:'DOT',  name:'Polkadot',  color:'#e6007a'},
+  {t:'MATIC',name:'Polygon',   color:'#8247e5'},
+  {t:'LTC',  name:'Litecoin',  color:'#345d9d'},
+  {t:'AVAX', name:'Avalanche', color:'#e84142'},
+  {t:'SHIB', name:'Shiba Inu', color:'#f00500'},
+  {t:'TON',  name:'Toncoin',   color:'#0098ea'}
 ];
 const STOCK_ASSETS = [
-  {t:'NVDA', name:'NVIDIA', color:'#76b900'},
-  {t:'AAPL', name:'Apple', color:'#a2aaad'},
-  {t:'TSLA', name:'Tesla', color:'#e82127'}
+  {t:'NVDA', name:'NVIDIA',     color:'#76b900'},
+  {t:'AAPL', name:'Apple',      color:'#a2aaad'},
+  {t:'TSLA', name:'Tesla',      color:'#e82127'},
+  {t:'MSFT', name:'Microsoft', color:'#00a4ef'},
+  {t:'GOOGL',name:'Alphabet',   color:'#34a853'},
+  {t:'AMZN', name:'Amazon',     color:'#ff9900'},
+  {t:'META', name:'Meta',       color:'#0668e1'},
+  {t:'NFLX', name:'Netflix',    color:'#e50914'},
+  {t:'AMD',  name:'AMD',        color:'#ed1c24'},
+  {t:'INTC', name:'Intel',      color:'#0071c5'},
+  {t:'BA',   name:'Boeing',     color:'#1d4f91'},
+  {t:'JPM',  name:'JPMorgan',    color:'#1381c8'},
+  {t:'V',    name:'Visa',       color:'#1a1f71'},
+  {t:'MA',   name:'Mastercard', color:'#eb001b'},
+  {t:'COIN', name:'Coinbase',   color:'#0052ff'},
+  {t:'UBER', name:'Uber',       color:'#c0c0c0'},
+  {t:'DIS',  name:'Disney',     color:'#113ccf'},
+  {t:'KO',   name:'Coca-Cola',  color:'#f40009'},
+  {t:'MCD',  name:'McDonalds',  color:'#daa520'},
+  {t:'WMT',  name:'Walmart',   color:'#0071ce'},
+  {t:'COST', name:'Costco',     color:'#005daa'},
+  {t:'HD',   name:'Home Depot', color:'#f96302'},
+  {t:'NKE',  name:'Nike',       color:'#ff6a00'},
+  {t:'XOM',  name:'Exxon Mobil',color:'#cd1c2e'},
+  {t:'ORCL', name:'Oracle',     color:'#f80000'},
+  {t:'CRM',  name:'Salesforce', color:'#00a1e0'},
+  {t:'PLTR', name:'Palantir',   color:'#9db4c0'},
+  {t:'SBUX', name:'Starbucks',  color:'#00704a'},
+  {t:'F',    name:'Ford',       color:'#003478'},
+  {t:'GM',   name:'General Motors', color:'#d40000'},
+  {t:'PYPL', name:'PayPal',     color:'#0070ba'},
+  {t:'ABNB', name:'Airbnb',     color:'#ff5a5f'}
 ];
 const CURRENCIES = ['USDT','USD','BTC','ETH','EUR','GBP','NGN','GHS','KES','ZAR','INR'];
 const FX_RATES = {USD:1, EUR:0.92, GBP:0.79, NGN:1650, GHS:15.3, KES:129, ZAR:18.1, INR:83.4};
@@ -786,8 +832,20 @@ function livePriceOf(t){
   const r = STATE.rates[t] || STATE.rates[String(t).toUpperCase()];
   return (r && r>0) ? r : null;
 }
+function durChipHtml(d){
+  const sel = selDur===d.k;
+  return '<button class="oat-chip'+(sel?' sel':'')+'" onclick="selDuration(\''+d.k+'\')">'+d.label+'</button>';
+}
+function selDuration(k){
+  selDur = k;
+  const d = DUR_OPTIONS.find(x=>x.k===k) || DUR_OPTIONS[0];
+  $('chipsDur').innerHTML = DUR_OPTIONS.map(durChipHtml).join('');
+  $('tfReturn').textContent = d.ret;
+  $('trHint').textContent = d.hint;
+}
 function paintTrade(){
   selTradeAsset(selAsset);
+  selDuration(selDur);
   const active = (STATE.trades||[]).find(t=>t.status==='active');
   $('tradeForm').classList.toggle('hidden', !!active);
   $('tradeActive').classList.toggle('hidden', !active);
@@ -818,7 +876,7 @@ function startActiveTrade(active){
     const now=Date.now(), rem=Number(active.ends_at)-now;
     const pct = Math.min(100, Math.max(0, (total-rem)/total*100));
     $('taFill').style.width = pct+'%';
-    if(rem<=0){ $('taRem').textContent='00:00:00'; $('claimBtn').classList.remove('hidden'); $('taHint').textContent='Session complete — cash out your 2x payout.'; }
+    if(rem<=0){ $('taRem').textContent='00:00:00'; $('claimBtn').classList.remove('hidden'); $('taHint').textContent='Session complete — cash out your payout.'; }
     else {
       const h=Math.floor(rem/3600000), m=Math.floor(rem%3600000/60000), s=Math.floor(rem%60000/1000);
       $('taRem').textContent = String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
@@ -921,10 +979,14 @@ function drawChart(){
 async function startTrade(){
   showErr('trErr','');
   const amount=parseFloat($('trAmount').value);
-  const d = await post('/api/oat-app/trade', {uid:U.uid, asset:selAsset, amount});
+  const dur = DUR_OPTIONS.find(x=>x.k===selDur) || DUR_OPTIONS[0];
+  if(!amount || amount < dur.min) return showErr('trErr','Minimum '+dur.min+' USDT for this trade duration.');
+  if(dur.max && amount > dur.max) return showErr('trErr','Maximum '+dur.max.toLocaleString()+' USDT for this trade duration.');
+  const d = await post('/api/oat-app/trade', {uid:U.uid, asset:selAsset, amount, duration:dur.k});
   if(!d.success) return showErr('trErr', d.error);
+  $('trAmount').value='';
   await refreshState(); paintTrade();
-  toast('Trade started — 2x in 24 hours');
+  toast(dur.toast);
 }
 async function claimTrade(){
   showErr('trErr','');
@@ -934,7 +996,11 @@ async function claimTrade(){
   toast('Payout of '+fmtInCur(d.payout)+' added to your balance');
 }
 /* ── Branded trade receipt (shareable image) ── */
-const RATE_BASE = {BTC:78450, ETH:2506, SOL:172.4, BNB:604.2, XRP:2.34, NVDA:118.6, AAPL:228.4, TSLA:252.7};
+const RATE_BASE = {BTC:78450, ETH:2506, SOL:172.4, BNB:604.2, XRP:2.34, DOGE:0.1249, ADA:0.4521, TRX:0.1276,
+  DOT:6.42, MATIC:0.7134, LTC:70.2, AVAX:27.9, SHIB:0.0000246, TON:5.24, NVDA:118.6, AAPL:228.4, TSLA:252.7,
+  MSFT:424.3, GOOGL:175.9, AMZN:186.4, META:563.2, NFLX:700.9, AMD:138.5, INTC:24.8, BA:178.3, JPM:210.4,
+  V:274.9, MA:445.2, COIN:168.4, UBER:62.1, DIS:101.3, KO:71.8, MCD:252.4, WMT:84.2, COST:908.7, HD:383.2,
+  NKE:75.3, XOM:117.1, ORCL:152.4, CRM:232.7, PLTR:36.2, SBUX:97.4, F:10.9, GM:55.8, PYPL:76.3, ABNB:126.5};
 function oatSeed(n){ let x=(n^0x9E3779B9)>>>0; x=Math.imul(x^x>>>15,0x85EBCA6B); x=Math.imul(x^x>>>13,0xC2B2AE35); return ((x^x>>>16)>>>0)/4294967296; }
 function tradeRates(t){
   const base = RATE_BASE[t.asset] || 100;
@@ -944,7 +1010,7 @@ function tradeRates(t){
   const close = open*(1.02 + s2*0.06);
   return {open, close};
 }
-function fmtRate(v){ const d = v<10?4:2; return Number(v).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d}); }
+function fmtRate(v){ const d = v<1?6:(v<10?4:2); return Number(v).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d}); }
 function tradeIdStr(id){ return 'OAT-TRD-'+String(id).padStart(6,'0'); }
 function sparkPoints(t, n){
   const r = tradeRates(t);
@@ -1000,7 +1066,9 @@ function renderTradeReceipt(t){
   g.fillStyle = '#f0f4ff'; g.font = '800 52px -apple-system, Roboto, sans-serif';
   g.fillText(t.asset + '/USDT', M, 238);
   g.fillStyle = '#7a90b0'; g.font = '500 26px -apple-system, Roboto, sans-serif';
-  g.fillText(meta.name + ' · Optimization Trade · 24 hours', M, 276);
+  const durMs = Number(t.ends_at)-Number(t.started_at);
+  const durLabel = durMs <= 90000 ? '1 minute' : (durMs <= 330000 ? '5 minutes' : '24 hours');
+  g.fillText(meta.name + ' · Optimization Trade · ' + durLabel, M, 276);
   // chart
   const chX=M, chY=310, chW=W-2*M, chH=250;
   const lo = Math.min.apply(null, pts), hi = Math.max.apply(null, pts), span=(hi-lo)||1;
@@ -1040,8 +1108,8 @@ function renderTradeReceipt(t){
     ['Amount', fmt(amt)+' USDT'],
     ['Open time', fmtRcptTime(t.started_at)],
     ['Close time', fmtRcptTime(t.claimed_at)],
-    ['Duration', '24 hours'],
-    ['Profitability', '+100.00%']
+    ['Duration', durLabel],
+    ['Profitability', '+'+fmt(profit/amt*100)+'%']
   ];
   let ry = chY + chH + 130;
   const rowH = 66;
@@ -1065,7 +1133,7 @@ function renderTradeReceipt(t){
   g.fillText(fmt(payout)+' USDT', W/2, ry);
   ry += 48;
   g.fillStyle='#22c55e'; g.font='700 28px -apple-system, Roboto, sans-serif';
-  g.fillText('+ '+fmt(profit)+' USDT profit (2x)', W/2, ry);
+  g.fillText('+ '+fmt(profit)+' USDT profit (+'+fmt(profit/amt*100,0)+'%)', W/2, ry);
   // footer
   g.strokeStyle='rgba(245,158,35,.30)'; g.lineWidth=1.5;
   g.beginPath(); g.moveTo(M, 1500-96); g.lineTo(W-M, 1500-96); g.stroke();
