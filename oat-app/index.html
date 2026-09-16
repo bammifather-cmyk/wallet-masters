@@ -271,8 +271,8 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue)}
       <button class="act-btn" onclick="go('withdraw')"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M12 20V4m-8 8l8-8 8 8"/></svg><span>Withdraw</span></button>
       <button class="act-btn" onclick="go('support')"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><span>Support</span></button>
     </div>
-    <h2>Announcements</h2>
-    <div id="annList" style="min-height:40px"></div>
+    <h2>My Trades</h2>
+    <div id="homeTradesList" style="min-height:40px"></div>
   </div>
 
   <!-- DEPOSIT -->
@@ -746,15 +746,15 @@ async function refreshState(){
   $('tbUid').textContent = U.uid;
   renderAvatar($('tbAvatar'), U.profilePicture, U.name);
   paintBalance();
-  renderAnnouncements();
+  renderHomeTrades();
   if(!$('page-trade').classList.contains('hidden')) paintTrade();
   if(!$('page-profile').classList.contains('hidden')) paintProfile();
 }
-async function renderAnnouncements(){
-  const d = await fetch(API+'/api/oat-app/announcements').then(r=>r.json());
-  const el = $('annList');
-  if(!d.announcements || !d.announcements.length){ el.innerHTML='<div class="ann-card"><div class="ann-msg" style="color:var(--muted)">No announcements yet.</div></div>'; return; }
-  el.innerHTML = d.announcements.slice(0,5).map(a=>'<div class="ann-card"><div class="ann-date">'+new Date(Number(a.created_at)).toLocaleDateString()+'</div><div class="ann-msg">'+esc(a.message)+'</div></div>').join('');
+function renderHomeTrades(){
+  const el = $('homeTradesList');
+  const trades = (STATE.trades||[]).slice(0,5);
+  if(!trades.length){ el.innerHTML = '<div class="ann-card"><div class="ann-msg" style="color:var(--muted)">No trades yet — head to the Trade tab to get started.</div></div>'; return; }
+  el.innerHTML = trades.map((t,i)=>'<div class="row" onclick="go(\'trade\');showTradeReceipt('+i+')"><span class="k">'+fmtInCur(t.amount)+' · '+esc(t.asset)+'<br>'+new Date(Number(t.started_at)).toLocaleDateString()+'</span><span><span class="badge '+t.status+'">'+t.status+'</span></span></div>').join('');
 }
 
 /* ── deposit ── */
@@ -1023,7 +1023,21 @@ function sparkPoints(t, n){
   }
   return pts;
 }
-function renderTradeReceipt(t){
+let _oatLogoDataUrl = null;
+async function loadOatLogoDataUrl(){
+  if(_oatLogoDataUrl) return _oatLogoDataUrl;
+  try{
+    const blob = await (await fetch('https://base44.app/api/apps/6a03aad127bf06d0acb6b6fe/files/mp/public/6a03aad127bf06d0acb6b6fe/c60fe9e63_logo_candidate.png')).blob();
+    _oatLogoDataUrl = await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(blob); });
+  }catch(e){ _oatLogoDataUrl = null; }
+  return _oatLogoDataUrl;
+}
+function loadImg(src){
+  return new Promise((res)=>{ const img=new Image(); img.onload=()=>res(img); img.onerror=()=>res(null); img.src=src; });
+}
+async function renderTradeReceipt(t){
+  const logoUrl = await loadOatLogoDataUrl();
+  const logoImg = logoUrl ? await loadImg(logoUrl) : null;
   const W=900, M=56;
   const rates = tradeRates(t);
   const pts = sparkPoints(t, 56);
@@ -1038,12 +1052,17 @@ function renderTradeReceipt(t){
   // frame
   g.strokeStyle = 'rgba(245,158,11,.38)'; g.lineWidth = 2.5;
   rr(g, 18, 18, W-36, 1500-36, 34); g.stroke();
-  // header logo (gold chart mark)
+  // header logo (real OAT Trades logo image, fallback to drawn chart mark)
   g.save();
-  rr(g, M, 78, 66, 66, 14); g.fillStyle = '#101a30'; g.fill(); g.strokeStyle = 'rgba(245,158,35,.55)'; g.lineWidth = 2; g.stroke();
-  g.beginPath(); g.moveTo(M+14, 118); g.lineTo(M+29, 98); g.lineTo(M+39, 107); g.lineTo(M+52, 88);
-  g.strokeStyle = '#f5a623'; g.lineWidth = 5; g.lineCap='round'; g.lineJoin='round'; g.stroke();
-  g.beginPath(); g.moveTo(M+46, 86); g.lineTo(M+53, 86); g.lineTo(M+53, 93); g.strokeStyle='#f5a623'; g.lineWidth=4; g.stroke();
+  if(logoImg){
+    rr(g, M, 78, 66, 66, 14); g.save(); g.clip(); g.drawImage(logoImg, M, 78, 66, 66); g.restore();
+    g.strokeStyle = 'rgba(245,158,35,.45)'; g.lineWidth = 2; g.stroke();
+  } else {
+    rr(g, M, 78, 66, 66, 14); g.fillStyle = '#101a30'; g.fill(); g.strokeStyle = 'rgba(245,158,35,.55)'; g.lineWidth = 2; g.stroke();
+    g.beginPath(); g.moveTo(M+14, 118); g.lineTo(M+29, 98); g.lineTo(M+39, 107); g.lineTo(M+52, 88);
+    g.strokeStyle = '#f5a623'; g.lineWidth = 5; g.lineCap='round'; g.lineJoin='round'; g.stroke();
+    g.beginPath(); g.moveTo(M+46, 86); g.lineTo(M+53, 86); g.lineTo(M+53, 93); g.strokeStyle='#f5a623'; g.lineWidth=4; g.stroke();
+  }
   g.restore();
   // wordmark
   const wg = g.createLinearGradient(M+84, 0, M+84+330, 0); wg.addColorStop(0,'#fbbf24'); wg.addColorStop(1,'#f59e0b');
@@ -1128,8 +1147,7 @@ function renderTradeReceipt(t){
   g.fillStyle='#7a90b0'; g.font='600 24px -apple-system, Roboto, sans-serif'; g.letterSpacing='3px';
   g.fillText('PAYOUT CREDITED', W/2, ry); g.letterSpacing='0px';
   ry += 64;
-  const pg = g.createLinearGradient(W/2-260, 0, W/2+260, 0); pg.addColorStop(0,'#fbbf24'); pg.addColorStop(1,'#f59e0b');
-  g.fillStyle = pg; g.font='800 60px -apple-system, Roboto, sans-serif';
+  g.fillStyle = '#ffffff'; g.font='800 60px -apple-system, Roboto, sans-serif';
   g.fillText(fmt(payout)+' USDT', W/2, ry);
   ry += 48;
   g.fillStyle='#22c55e'; g.font='700 28px -apple-system, Roboto, sans-serif';
@@ -1152,7 +1170,7 @@ function fmtRcptTime(ts){
   return d.toLocaleDateString('en-US',{month:'short', day:'numeric', year:'numeric'}) + ', ' +
          d.toLocaleTimeString('en-US',{hour:'numeric', minute:'2-digit'});
 }
-function showTradeReceipt(i){
+async function showTradeReceipt(i){
   const t = STATE.trades[i];
   if(t.status !== 'completed'){
     $('detTitle').textContent = 'Trade Details';
@@ -1166,18 +1184,33 @@ function showTradeReceipt(i){
     $('detModal').classList.remove('hidden');
     return;
   }
-  window._receiptUrl = renderTradeReceipt(t);
-  $('receiptImg').src = window._receiptUrl;
-  $('receiptHint').textContent = window.OATNative ? 'Your receipt is saved to your phone gallery.' :
-    'Tip: you can also press and hold the image to save it.';
+  window._receiptUrl = null;
+  $('receiptImg').removeAttribute('src');
+  $('receiptHint').textContent = 'Generating receipt…';
   $('receiptModal').classList.remove('hidden');
+  const url = await renderTradeReceipt(t);
+  window._receiptUrl = url;
+  $('receiptImg').src = url;
+  $('receiptHint').textContent = window.OATNative ? 'Tap Save to store this receipt in your phone gallery.' :
+    'Tip: open this in the OAT Trades app to save straight to your gallery.';
 }
-function saveReceiptImg(){
+async function saveReceiptImg(){
   const url = window._receiptUrl; if(!url) return;
-  if(window.OATNative && OATNative.saveReceipt){ OATNative.saveReceipt(url); toast('Saving receipt…'); return; }
+  if(window.OATNative && OATNative.saveReceipt){ OATNative.saveReceipt(url); toast('Saving…'); return; }
+  // Browser fallback (no native bridge): try the OS share sheet first, since a
+  // plain anchor download only lands in the Downloads folder, not the Photos
+  // gallery, on most Android/iOS browsers.
+  try{
+    const blob = await (await fetch(url)).blob();
+    const file = new File([blob], 'oat-trade-receipt.png', {type:'image/png'});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      await navigator.share({files:[file], title:'OAT Trades receipt'});
+      return;
+    }
+  }catch(e){}
   const a = document.createElement('a'); a.href = url; a.download = 'oat-trade-receipt.png';
   document.body.appendChild(a); a.click(); a.remove();
-  toast('Receipt saved');
+  toast('Saved to Downloads');
 }
 async function shareReceiptImg(){
   const url = window._receiptUrl; if(!url) return;
@@ -1321,7 +1354,8 @@ function paintProfile(){
   $('pfTeamEarn').textContent = fmt(te.val, fmtCur(cur))+' '+te.sym;
   $('pfCur').textContent = cur+' ›';
   const ks = U.kycStatus || 'none';
-  const statusMap = { none:'Not submitted', pending:'<span class="kyc-pending">Pending review</span>', verified:'<span class="kyc-verified">✅ Verified</span>', rejected:'<span class="kyc-rejected">Rejected — you may resubmit</span>' };
+  const CHECK_BADGE_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" style="display:inline-block;vertical-align:middle;margin-right:4px" fill="none"><circle cx="12" cy="12" r="11" fill="#22c55e"/><path d="M7 12.5l3.5 3.5 6.5-7" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const statusMap = { none:'Not submitted', pending:'<span class="kyc-pending">Pending review</span>', verified:'<span class="kyc-verified">'+CHECK_BADGE_SVG+'Verified</span>', rejected:'<span class="kyc-rejected">Rejected — you may resubmit</span>' };
   $('kycStatusLine').innerHTML = 'Status: ' + (statusMap[ks] || ks);
   $('kycForm').classList.toggle('hidden', ks === 'verified' || ks === 'pending');
 }
