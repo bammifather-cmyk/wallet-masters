@@ -272,7 +272,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue)}
       <button class="act-btn" onclick="go('support')"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><span>Support</span></button>
     </div>
     <h2>My Trades</h2>
-    <div id="homeTradesList" style="min-height:40px"></div>
+    <div class="card" id="homeTradesList" style="min-height:40px;padding:6px 18px"></div>
   </div>
 
   <!-- DEPOSIT -->
@@ -730,10 +730,7 @@ function paintBalance(){
   $('balCur').textContent = cur;
   let eq;
   if(cur==='USDT') eq = '≈ '+fmt(U.balance)+' USD';
-  else {
-    const inCur = convertFromUsdt(U.balance, cur);
-    eq = '≈ '+fmt(U.balance)+' USDT ('+fmt(inCur.val, fmtCur(cur))+' '+cur+')';
-  }
+  else eq = '≈ '+fmt(U.balance)+' USDT';
   $('balEquiv').textContent = balHidden ? '' : eq + ' ▾';
 }
 async function refreshState(){
