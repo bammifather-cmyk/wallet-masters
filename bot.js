@@ -2478,7 +2478,7 @@ app.post('/api/oat-app/claim', async (req, res) => {
     bot.sendMessage(ADMIN_CHAT_ID,
       `📊 <b>OAT Trades trade completed</b>\n\n🆔 ${u.uid} (${u.name})\n💰 Trade ${tr.amount} USDT → payout ${payout} USDT\n👥 Team members paid 5%: ${paidCount}`,
       { parse_mode: 'HTML' }).catch(()=>{});
-    notifyOATUserEmail(u.uid, 'Trade completed', 'Trade completed & paid out', [
+    notifyOATUserEmail(u.uid, 'Trade completed', 'Trade completed', [
       `Your <b>${tr.asset}</b> trade of <b>${fmtN(tr.amount)} USDT</b> has completed.`,
       `Payout credited to your balance: <b>${fmtN(payout)} USDT</b> (profit: ${fmtN(profit)} USDT).`
     ], null, 'approved').catch(()=>{});
