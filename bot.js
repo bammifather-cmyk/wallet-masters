@@ -1235,10 +1235,13 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
       bot.answerCallbackQuery(cq.id, { text: 'Approved ✅' }).catch(()=>{});
       bot.editMessageText(`✅ <b>Deposit #${depId} approved</b>\n🆔 ${dep.uid}\nCredited: ${fmtN(usdt)} USDT (${fmtN(dep.amount)} ${dep.asset})`,
         { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' }).catch(()=>{});
-      notifyOATUserEmail(dep.uid, 'Deposit approved', 'Deposit approved', [
-        (String(dep.asset).toUpperCase() === 'USDT' ? `Your deposit of <b>${fmtN(usdt)} USDT</b> has been approved and credited to your OAT Trades balance.` : `Your deposit of <b>${fmtN(dep.amount)} ${dep.asset}</b> (${fmtN(usdt)} USDT) has been approved and credited to your OAT Trades balance.`),
-        'Start a trade from the app: minimum 500 USDT, 2x payout after 24 hours.'
-      ], null, 'approved').catch(()=>{});
+      {
+        const dispAmt = await oatDisplayAmt(usdt, dep.uid);
+        notifyOATUserEmail(dep.uid, 'Deposit approved', 'Deposit approved', [
+          (String(dep.asset).toUpperCase() === 'USDT' ? `Your deposit of <b>${dispAmt}</b> has been approved and credited to your OAT Trades balance.` : `Your deposit of <b>${fmtN(dep.amount)} ${dep.asset}</b> (${dispAmt}) has been approved and credited to your OAT Trades balance.`),
+          'Start a trade from the app: minimum 500 USDT, 2x payout after 24 hours.'
+        ], null, 'approved').catch(()=>{});
+      }
     } else {
       await supa.from('oat_app_deposits').update({ status: 'rejected', reviewed_at: Date.now() }).eq('id', depId);
       bot.answerCallbackQuery(cq.id, { text: 'Rejected' }).catch(()=>{});
@@ -1261,20 +1264,26 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
       bot.answerCallbackQuery(cq.id, { text: 'Approved ✅' }).catch(()=>{});
       bot.editMessageText(`✅ <b>Withdrawal #${wdId} approved</b>\n🆔 ${wd.uid}\n💰 ${fmtN(wd.amount)} USDT → ${wd.asset}\n📍 ${wd.address}`,
         { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' }).catch(()=>{});
-      notifyOATUserEmail(wd.uid, 'Withdrawal approved', 'Withdrawal approved', [
-        `Your withdrawal of <b>${fmtN(wd.amount)} USDT</b> to ${wd.asset} has been approved and sent to:`,
-        `<b>${wd.address}</b>`
-      ], null, 'approved').catch(()=>{});
+      {
+        const dispAmt = await oatDisplayAmt(wd.amount, wd.uid);
+        notifyOATUserEmail(wd.uid, 'Withdrawal approved', 'Withdrawal approved', [
+          `Your withdrawal of <b>${dispAmt}</b> to ${wd.asset} has been approved and sent to:`,
+          `<b>${wd.address}</b>`
+        ], null, 'approved').catch(()=>{});
+      }
     } else {
       const { data: ou } = await supa.from('oat_app_users').select('balance').eq('uid', wd.uid).maybeSingle();
       await supa.from('oat_app_users').update({ balance: Number(ou.balance) + Number(wd.amount) }).eq('uid', wd.uid);
       await supa.from('oat_app_withdrawals').update({ status: 'rejected', reviewed_at: Date.now() }).eq('id', wdId);
       bot.answerCallbackQuery(cq.id, { text: 'Rejected & refunded' }).catch(()=>{});
       bot.editMessageText(`❌ <b>Withdrawal #${wdId} rejected</b> — balance refunded\n🆔 ${wd.uid}`, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' }).catch(()=>{});
-      notifyOATUserEmail(wd.uid, 'Withdrawal rejected', 'Withdrawal rejected', [
-        `Your withdrawal request of ${fmtN(wd.amount)} USDT was rejected.`,
-        'The full amount has been refunded to your OAT Trades balance.'
-      ], null, 'rejected').catch(()=>{});
+      {
+        const dispAmt = await oatDisplayAmt(wd.amount, wd.uid);
+        notifyOATUserEmail(wd.uid, 'Withdrawal rejected', 'Withdrawal rejected', [
+          `Your withdrawal request of ${dispAmt} was rejected.`,
+          'The full amount has been refunded to your OAT Trades balance.'
+        ], null, 'rejected').catch(()=>{});
+      }
     }
     return;
   }
@@ -1612,10 +1621,13 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
         const { data: ou } = await supa.from('oat_app_users').select('*').eq('uid', dep.uid).maybeSingle();
         await supa.from('oat_app_deposits').update({ status: 'approved', reviewed_at: Date.now() }).eq('id', depId);
         await supa.from('oat_app_users').update({ balance: Number(ou.balance) + usdt }).eq('uid', dep.uid);
-        notifyOATUserEmail(dep.uid, 'Deposit approved', 'Deposit approved', [
-          (String(dep.asset).toUpperCase() === 'USDT' ? `Your deposit of <b>${fmtN(usdt)} USDT</b> has been approved and credited to your OAT Trades balance.` : `Your deposit of <b>${fmtN(dep.amount)} ${dep.asset}</b> (${fmtN(usdt)} USDT) has been approved and credited to your OAT Trades balance.`),
-          'Start a trade from the app: minimum 500 USDT, 2x payout after 24 hours.'
-        ], null, 'approved').catch(()=>{});
+        {
+          const dispAmt = await oatDisplayAmt(usdt, dep.uid);
+          notifyOATUserEmail(dep.uid, 'Deposit approved', 'Deposit approved', [
+            (String(dep.asset).toUpperCase() === 'USDT' ? `Your deposit of <b>${dispAmt}</b> has been approved and credited to your OAT Trades balance.` : `Your deposit of <b>${fmtN(dep.amount)} ${dep.asset}</b> (${dispAmt}) has been approved and credited to your OAT Trades balance.`),
+            'Start a trade from the app: minimum 500 USDT, 2x payout after 24 hours.'
+          ], null, 'approved').catch(()=>{});
+        }
         return bot.sendMessage(id, `✅ Deposit #${depId} approved.\n🆔 ${dep.uid}\nCredited: ${fmtN(usdt)} USDT (${fmtN(dep.amount)} ${dep.asset})`);
       }
       if (/^REJECT\s+\d+$/i.test(arg)) {
@@ -1648,10 +1660,13 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
         if (!wd) return bot.sendMessage(id, '❌ Withdrawal not found.');
         if (wd.status !== 'pending') return bot.sendMessage(id, '❌ Already reviewed.');
         await supa.from('oat_app_withdrawals').update({ status: 'approved', reviewed_at: Date.now() }).eq('id', wdId);
-        notifyOATUserEmail(wd.uid, 'Withdrawal approved', 'Withdrawal approved', [
-          `Your withdrawal of <b>${fmtN(wd.amount)} USDT</b> to ${wd.asset} has been approved and sent to:`,
-          `<b>${wd.address}</b>`
-        ], null, 'approved').catch(()=>{});
+        {
+          const dispAmt = await oatDisplayAmt(wd.amount, wd.uid);
+          notifyOATUserEmail(wd.uid, 'Withdrawal approved', 'Withdrawal approved', [
+            `Your withdrawal of <b>${dispAmt}</b> to ${wd.asset} has been approved and sent to:`,
+            `<b>${wd.address}</b>`
+          ], null, 'approved').catch(()=>{});
+        }
         return bot.sendMessage(id, `✅ Withdrawal #${wdId} approved.\n🆔 ${wd.uid}\n💰 ${fmtN(wd.amount)} USDT → ${wd.asset}\n📍 ${wd.address}`);
       }
       if (/^REJECT\s+\d+$/i.test(arg)) {
@@ -1663,10 +1678,13 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
           await supa.from('oat_app_users').update({ balance: Number(ou.balance) + Number(wd.amount) }).eq('uid', wd.uid);
         }
         await supa.from('oat_app_withdrawals').update({ status: 'rejected', reviewed_at: Date.now() }).eq('id', wdId);
-        notifyOATUserEmail(wd.uid, 'Withdrawal rejected', 'Withdrawal rejected', [
-          `Your withdrawal request of ${fmtN(wd.amount)} USDT was rejected.`,
-          'The full amount has been refunded to your OAT Trades balance.'
-        ], null, 'rejected').catch(()=>{});
+        {
+          const dispAmt = await oatDisplayAmt(wd.amount, wd.uid);
+          notifyOATUserEmail(wd.uid, 'Withdrawal rejected', 'Withdrawal rejected', [
+            `Your withdrawal request of ${dispAmt} was rejected.`,
+            'The full amount has been refunded to your OAT Trades balance.'
+          ], null, 'rejected').catch(()=>{});
+        }
         await supa.from('oat_app_withdrawals').update({ status: 'rejected', reviewed_at: Date.now() }).eq('id', wdId);
         return bot.sendMessage(id, `Withdrawal #${wdId} rejected and balance refunded.`);
       }
@@ -2305,6 +2323,25 @@ const EARNING_TYPES = ['hourly_earning','trivia_reward','tps_earning','socialpay
 // OAT TRADES STANDALONE APP — for non-Wallet-Masters users (v10.52)
 // ═══════════════════════════════════════════════════════════════════════════
 function fmtN(n){ return Number(n||0).toLocaleString('en-US', {maximumFractionDigits:8}); }
+// Fiat rates (units per 1 USD) for OAT app display currencies that aren't crypto.
+// Crypto (BTC/ETH) goes through the existing live getCryptoRates() below.
+const OAT_FIAT_RATES = { USD: 1, EUR: 0.92, GBP: 0.79, NGN: 1580, GHS: 14.5, KES: 129, ZAR: 18.6, INR: 83.5 };
+async function oatDisplayAmt(usdtAmt, uid) {
+  try {
+    const { data: du } = await getSupabase().from('oat_app_users').select('display_currency').eq('uid', uid).maybeSingle();
+    const cur = (du && du.display_currency) ? String(du.display_currency).toUpperCase() : 'USDT';
+    if (!cur || cur === 'USDT') return fmtN(usdtAmt) + ' USDT';
+    if (OAT_FIAT_RATES[cur]) return fmtN(usdtAmt * OAT_FIAT_RATES[cur]) + ' ' + cur;
+    const rates = await getCryptoRates();
+    const usdPerToken = rates && rates[cur];
+    if (usdPerToken) {
+      const val = usdtAmt / usdPerToken;
+      const d = val < 1 ? 8 : (val < 10 ? 6 : 2);
+      return Number(val).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }) + ' ' + cur;
+    }
+    return fmtN(usdtAmt) + ' USDT';
+  } catch (e) { return fmtN(usdtAmt) + ' USDT'; }
+}
 function oatBadge(totalProfit){
   const p = Number(totalProfit || 0);
   if (p >= 1000000) return { tier: 'rank', label: 'Elite Trader', emoji: '🏆' };
@@ -2448,11 +2485,14 @@ app.post('/api/oat-app/trade', async (req, res) => {
     });
     if (terr) return res.status(500).json({ success: false, error: terr.message });
     await supa.from('oat_app_users').update({ balance: Number(u.balance) - amt }).eq('uid', u.uid);
-    notifyOATUserEmail(u.uid, 'Trade started', 'Trade started', [
-      `Your <b>${String(asset || 'BTC')}</b> trade of <b>${fmtN(amt)} USDT</b> (${dur.label}) is now running.`,
-      `Expected payout: <b>${fmtN(payout)} USDT</b> (+${dur.pct}% profit) after ${dur.label}.`,
-      'You can claim your payout from the app once the countdown completes.'
-    ]).catch(()=>{});
+    (async () => {
+      const [dispAmt, dispPayout] = await Promise.all([oatDisplayAmt(amt, u.uid), oatDisplayAmt(payout, u.uid)]);
+      notifyOATUserEmail(u.uid, 'Trade started', 'Trade started', [
+        `Your <b>${String(asset || 'BTC')}</b> trade of <b>${dispAmt}</b> (${dur.label}) is now running.`,
+        `Expected payout: <b>${dispPayout}</b> (+${dur.pct}% profit) after ${dur.label}.`,
+        'You can claim your payout from the app once the countdown completes.'
+      ]).catch(()=>{});
+    })().catch(()=>{});
     res.json({ success: true });
   } catch (e) { console.error('[OATAPP] trade:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
 });
@@ -2489,10 +2529,13 @@ app.post('/api/oat-app/claim', async (req, res) => {
     bot.sendMessage(ADMIN_CHAT_ID,
       `📊 <b>OAT Trades trade completed</b>\n\n🆔 ${u.uid} (${u.name})\n💰 Trade ${tr.amount} USDT → payout ${payout} USDT\n👥 Team members paid 5%: ${paidCount}`,
       { parse_mode: 'HTML' }).catch(()=>{});
-    notifyOATUserEmail(u.uid, 'Trade completed', 'Trade completed', [
-      `Your <b>${tr.asset}</b> trade of <b>${fmtN(tr.amount)} USDT</b> has completed.`,
-      `Payout credited to your balance: <b>${fmtN(payout)} USDT</b> (profit: ${fmtN(profit)} USDT).`
-    ], null, 'approved').catch(()=>{});
+    (async () => {
+      const [dispAmt, dispPayout, dispProfit] = await Promise.all([oatDisplayAmt(tr.amount, u.uid), oatDisplayAmt(payout, u.uid), oatDisplayAmt(profit, u.uid)]);
+      notifyOATUserEmail(u.uid, 'Trade completed', 'Trade completed', [
+        `Your <b>${tr.asset}</b> trade of <b>${dispAmt}</b> has completed.`,
+        `Payout credited to your balance: <b>${dispPayout}</b> (profit: ${dispProfit}).`
+      ], null, 'approved').catch(()=>{});
+    })().catch(()=>{});
     res.json({ success: true, payout, profit, teamPaid: paidCount });
   } catch (e) { console.error('[OATAPP] claim:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
 });

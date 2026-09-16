@@ -1001,11 +1001,13 @@ const RATE_BASE = {BTC:78450, ETH:2506, SOL:172.4, BNB:604.2, XRP:2.34, DOGE:0.1
 function oatSeed(n){ let x=(n^0x9E3779B9)>>>0; x=Math.imul(x^x>>>15,0x85EBCA6B); x=Math.imul(x^x>>>13,0xC2B2AE35); return ((x^x>>>16)>>>0)/4294967296; }
 function tradeRates(t){
   const base = RATE_BASE[t.asset] || 100;
+  const s0 = oatSeed(Number(t.id)*31 + 17); // deterministic per-trade signal direction (stable across repeat views)
+  const dir = s0 < 0.5 ? 'sell' : 'buy';
   const s1 = oatSeed(Number(t.started_at) + Number(t.id)*7919);
   const s2 = oatSeed(Number(t.claimed_at||t.ends_at||t.started_at) + Number(t.id)*104729);
   const open = base*(0.96 + s1*0.08);
-  const close = open*(1.02 + s2*0.06);
-  return {open, close};
+  const close = dir === 'buy' ? open*(1.02 + s2*0.06) : open*(0.98 - s2*0.06);
+  return {open, close, dir};
 }
 function fmtRate(v){ const d = v<1?6:(v<10?4:2); return Number(v).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d}); }
 function tradeIdStr(id){ return 'OAT-TRD-'+String(id).padStart(6,'0'); }
@@ -1085,38 +1087,51 @@ async function renderTradeReceipt(t){
   const durMs = Number(t.ends_at)-Number(t.started_at);
   const durLabel = durMs <= 90000 ? '1 minute' : (durMs <= 330000 ? '5 minutes' : '24 hours');
   g.fillText(meta.name + ' · Optimization Trade · ' + durLabel, M, 276);
-  // chart
-  const chX=M, chY=310, chW=W-2*M, chH=250;
+  // chart — colored by the actual signal that closed this trade (buy=green/up, sell=red/down)
+  const isBuy = rates.dir !== 'sell';
+  const trendCol = isBuy ? '#22c55e' : '#ef4444';
+  const chX=M, chY=336, chW=W-2*M, chH=250;
   const lo = Math.min.apply(null, pts), hi = Math.max.apply(null, pts), span=(hi-lo)||1;
   const px_ = i => chX + chW*i/(pts.length-1);
   const py_ = v => chY + chH - 12 - (v-lo)/span*(chH-24);
   // grid
   g.strokeStyle='rgba(122,144,176,.14)'; g.lineWidth=1;
   for(let i=1;i<4;i++){ g.beginPath(); g.moveTo(chX, chY+chH*i/4); g.lineTo(chX+chW, chY+chH*i/4); g.stroke(); }
+  // signal chip (BUY SIGNAL / SELL SIGNAL) above the chart, matching live trading view
+  g.save();
+  const sw = isBuy ? 168 : 174, sh = 40, sx = chX, sy = chY - 56;
+  rr(g, sx, sy, sw, sh, 21); g.fillStyle = isBuy ? 'rgba(34,197,94,.16)' : 'rgba(239,68,68,.16)'; g.fill();
+  g.strokeStyle = isBuy ? 'rgba(34,197,94,.55)' : 'rgba(239,68,68,.55)'; g.lineWidth = 2; g.stroke();
+  g.fillStyle = trendCol; g.font = '800 19px -apple-system, Roboto, sans-serif'; g.textAlign='center'; g.textBaseline='middle';
+  g.fillText(isBuy ? 'BUY SIGNAL' : 'SELL SIGNAL', sx+sw/2, sy+sh/2+1);
+  g.restore(); g.textAlign='left'; g.textBaseline='alphabetic';
   // area fill
   g.beginPath(); g.moveTo(px_(0), py_(pts[0]));
   for(let i=1;i<pts.length;i++) g.lineTo(px_(i), py_(pts[i]));
   g.lineTo(px_(pts.length-1), chY+chH); g.lineTo(px_(0), chY+chH); g.closePath();
-  const ag = g.createLinearGradient(0, chY, 0, chY+chH); ag.addColorStop(0,'rgba(34,197,94,.30)'); ag.addColorStop(1,'rgba(34,197,94,0)');
+  const ag = g.createLinearGradient(0, chY, 0, chY+chH); ag.addColorStop(0, isBuy?'rgba(34,197,94,.30)':'rgba(239,68,68,.30)'); ag.addColorStop(1, isBuy?'rgba(34,197,94,0)':'rgba(239,68,68,0)');
   g.fillStyle = ag; g.fill();
   // line
   g.beginPath(); g.moveTo(px_(0), py_(pts[0]));
   for(let i=1;i<pts.length;i++) g.lineTo(px_(i), py_(pts[i]));
-  g.strokeStyle = '#22c55e'; g.lineWidth = 5; g.lineJoin='round'; g.lineCap='round'; g.stroke();
+  g.strokeStyle = trendCol; g.lineWidth = 5; g.lineJoin='round'; g.lineCap='round'; g.stroke();
   // open marker
   g.beginPath(); g.arc(px_(0), py_(pts[0]), 9, 0, 6.29); g.fillStyle='#0b1224'; g.fill(); g.strokeStyle='#f0f4ff'; g.lineWidth=3.5; g.stroke();
-  // close marker + arrow
+  // close marker + arrow (points up for buy, down for sell)
   const ex = px_(pts.length-1), ey = py_(pts[pts.length-1]);
-  g.beginPath(); g.arc(ex-4, ey, 9, 0, 6.29); g.fillStyle='#22c55e'; g.fill(); g.strokeStyle='#fff'; g.lineWidth=3; g.stroke();
-  g.fillStyle='#22c55e';
-  g.beginPath(); g.moveTo(ex+6, ey-16); g.lineTo(ex+22, ey-26); g.lineTo(ex+22, ey-14); g.closePath(); g.fill();
+  g.beginPath(); g.arc(ex-4, ey, 9, 0, 6.29); g.fillStyle=trendCol; g.fill(); g.strokeStyle='#fff'; g.lineWidth=3; g.stroke();
+  g.fillStyle=trendCol;
+  g.beginPath();
+  if(isBuy){ g.moveTo(ex+6, ey-16); g.lineTo(ex+22, ey-26); g.lineTo(ex+22, ey-14); }
+  else { g.moveTo(ex+6, ey+16); g.lineTo(ex+22, ey+26); g.lineTo(ex+22, ey+14); }
+  g.closePath(); g.fill();
   // open rate / close rate chips under chart
   g.font='600 22px -apple-system, Roboto, sans-serif';
   g.fillStyle='#7a90b0'; g.fillText('OPEN', chX, chY+chH+44);
   g.fillStyle='#f0f4ff'; g.font='700 26px -apple-system, Roboto, sans-serif'; g.fillText(fmtRate(rates.open), chX, chY+chH+76);
   g.textAlign='right';
   g.fillStyle='#7a90b0'; g.font='600 22px -apple-system, Roboto, sans-serif'; g.fillText('CLOSE', chX+chW, chY+chH+44);
-  g.fillStyle='#22c55e'; g.font='700 26px -apple-system, Roboto, sans-serif'; g.fillText(fmtRate(rates.close), chX+chW, chY+chH+76);
+  g.fillStyle=trendCol; g.font='700 26px -apple-system, Roboto, sans-serif'; g.fillText(fmtRate(rates.close), chX+chW, chY+chH+76);
   g.textAlign='left';
   // details rows
   const rows = [
