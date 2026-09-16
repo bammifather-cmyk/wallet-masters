@@ -185,6 +185,8 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue)}
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(3px)}
 .modal{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:20px;width:100%;max-width:400px;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.6)}
 .modal h3{font-size:16px;font-weight:800;margin-bottom:14px;color:var(--text)}
+#receiptModal{align-items:flex-start}
+
 .cur-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .cur-btn{background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:11px 4px;color:var(--text);font-size:12px;font-weight:700;cursor:pointer;text-align:center}
 .cur-btn.act{background:rgba(37,99,235,.18);border-color:var(--blue);color:#60a5fa}
@@ -508,6 +510,19 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue)}
   <div class="modal">
     <h3 id="detTitle">Details</h3>
     <div id="detBody"></div>
+  </div>
+</div>
+
+
+<!-- OAT TRADE RECEIPT (branded, shareable image) -->
+<div id="receiptModal" class="modal-bg hidden" onclick="if(event.target===this)closeModal('receiptModal')" style="overflow-y:auto">
+  <div style="width:100%;max-width:400px;margin:12px auto">
+    <img id="receiptImg" alt="OAT Trades receipt" style="width:100%;display:block;border-radius:18px;box-shadow:0 14px 60px rgba(0,0,0,.65)">
+    <div style="display:flex;gap:10px;margin-top:14px">
+      <button class="btn-gold" style="flex:1" onclick="shareReceiptImg()">Share receipt</button>
+      <button class="btn" style="flex:1;margin-top:0" onclick="saveReceiptImg()">Save to phone</button>
+    </div>
+    <p id="receiptHint" class="copyhint" style="margin-top:10px"></p>
   </div>
 </div>
 
@@ -918,18 +933,196 @@ async function claimTrade(){
   await refreshState(); paintTrade();
   toast('Payout of '+fmtInCur(d.payout)+' added to your balance');
 }
+/* ── Branded trade receipt (shareable image) ── */
+const RATE_BASE = {BTC:78450, ETH:2506, SOL:172.4, BNB:604.2, XRP:2.34, NVDA:118.6, AAPL:228.4, TSLA:252.7};
+function oatSeed(n){ let x=(n^0x9E3779B9)>>>0; x=Math.imul(x^x>>>15,0x85EBCA6B); x=Math.imul(x^x>>>13,0xC2B2AE35); return ((x^x>>>16)>>>0)/4294967296; }
+function tradeRates(t){
+  const base = RATE_BASE[t.asset] || 100;
+  const s1 = oatSeed(Number(t.started_at) + Number(t.id)*7919);
+  const s2 = oatSeed(Number(t.claimed_at||t.ends_at||t.started_at) + Number(t.id)*104729);
+  const open = base*(0.96 + s1*0.08);
+  const close = open*(1.02 + s2*0.06);
+  return {open, close};
+}
+function fmtRate(v){ const d = v<10?4:2; return Number(v).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d}); }
+function tradeIdStr(id){ return 'OAT-TRD-'+String(id).padStart(6,'0'); }
+function sparkPoints(t, n){
+  const r = tradeRates(t);
+  const pts = [];
+  for(let i=0;i<n;i++){
+    const p = i/(n-1);
+    const ease = p*p*(3-2*p);
+    const w = Math.sin(p*9 + oatSeed(Number(t.id)+i)*6.28)*0.55 + Math.sin(p*17+2)*0.3;
+    pts.push(r.open + (r.close-r.open)*ease + (r.close-r.open)*w*0.10*p*(1-p)*4);
+  }
+  return pts;
+}
+function renderTradeReceipt(t){
+  const W=900, M=56;
+  const rates = tradeRates(t);
+  const pts = sparkPoints(t, 56);
+  const amt = Number(t.amount), payout = Number(t.payout_amount), profit = payout-amt;
+  const dpr = 2; const cc = document.createElement('canvas'); cc.width=W*dpr; cc.height=1500*dpr; const g = cc.getContext('2d'); g.scale(dpr,dpr);
+  // background
+  const bg = g.createLinearGradient(0,0,W,1500); bg.addColorStop(0,'#0d1629'); bg.addColorStop(1,'#080d1a');
+  g.fillStyle = bg; g.fillRect(0,0,W,1500);
+  const glow = g.createRadialGradient(W*0.5,120,40,W*0.5,120,700);
+  glow.addColorStop(0,'rgba(245,158,11,.14)'); glow.addColorStop(1,'rgba(245,158,11,0)');
+  g.fillStyle = glow; g.fillRect(0,0,W,1500);
+  // frame
+  g.strokeStyle = 'rgba(245,158,11,.38)'; g.lineWidth = 2.5;
+  rr(g, 18, 18, W-36, 1500-36, 34); g.stroke();
+  // header logo (gold chart mark)
+  g.save();
+  rr(g, M, 78, 66, 66, 14); g.fillStyle = '#101a30'; g.fill(); g.strokeStyle = 'rgba(245,158,35,.55)'; g.lineWidth = 2; g.stroke();
+  g.beginPath(); g.moveTo(M+14, 118); g.lineTo(M+29, 98); g.lineTo(M+39, 107); g.lineTo(M+52, 88);
+  g.strokeStyle = '#f5a623'; g.lineWidth = 5; g.lineCap='round'; g.lineJoin='round'; g.stroke();
+  g.beginPath(); g.moveTo(M+46, 86); g.lineTo(M+53, 86); g.lineTo(M+53, 93); g.strokeStyle='#f5a623'; g.lineWidth=4; g.stroke();
+  g.restore();
+  // wordmark
+  const wg = g.createLinearGradient(M+84, 0, M+84+330, 0); wg.addColorStop(0,'#fbbf24'); wg.addColorStop(1,'#f59e0b');
+  g.fillStyle = wg; g.font = '800 46px -apple-system, Roboto, "Segoe UI", sans-serif'; g.textAlign='left'; g.textBaseline='alphabetic';
+  g.fillText('OAT Trades', M+84, 116);
+  g.fillStyle = '#7a90b0'; g.font = '600 23px -apple-system, Roboto, sans-serif'; g.letterSpacing = '4px';
+  g.fillText('TRADE RECEIPT', M+86, 148); g.letterSpacing = '0px';
+  // completed pill (right)
+  g.save();
+  const pw = 216, ph = 54, px = W-M-pw, py = 84;
+  rr(g, px, py, pw, ph, 27); g.fillStyle = 'rgba(34,197,94,.16)'; g.fill(); g.strokeStyle = 'rgba(34,197,94,.55)'; g.lineWidth = 2; g.stroke();
+  g.fillStyle = '#22c55e'; g.font = '800 24px -apple-system, Roboto, sans-serif'; g.textAlign='center'; g.textBaseline='middle';
+  g.beginPath(); g.arc(px+40, py+ph/2, 9, 0, 6.29); g.fill();
+  g.strokeStyle = '#0b1224'; g.lineWidth = 3; g.beginPath(); g.moveTo(px+35, py+ph/2); g.lineTo(px+39, py+ph/2+4); g.lineTo(px+46, py+ph/2-4); g.stroke();
+  g.fillText('COMPLETED', px+pw/2+22, py+ph/2+1);
+  g.restore();
+  // asset block
+  const meta = CRYPTO_ASSETS.concat(STOCK_ASSETS).find(a=>a.t===t.asset) || {t:t.asset, name:t.asset, color:'#f59e0b'};
+  g.textAlign='left'; g.textBaseline='alphabetic';
+  g.fillStyle = '#f0f4ff'; g.font = '800 52px -apple-system, Roboto, sans-serif';
+  g.fillText(t.asset + '/USDT', M, 238);
+  g.fillStyle = '#7a90b0'; g.font = '500 26px -apple-system, Roboto, sans-serif';
+  g.fillText(meta.name + ' · Optimization Trade · 24 hours', M, 276);
+  // chart
+  const chX=M, chY=310, chW=W-2*M, chH=250;
+  const lo = Math.min.apply(null, pts), hi = Math.max.apply(null, pts), span=(hi-lo)||1;
+  const px_ = i => chX + chW*i/(pts.length-1);
+  const py_ = v => chY + chH - 12 - (v-lo)/span*(chH-24);
+  // grid
+  g.strokeStyle='rgba(122,144,176,.14)'; g.lineWidth=1;
+  for(let i=1;i<4;i++){ g.beginPath(); g.moveTo(chX, chY+chH*i/4); g.lineTo(chX+chW, chY+chH*i/4); g.stroke(); }
+  // area fill
+  g.beginPath(); g.moveTo(px_(0), py_(pts[0]));
+  for(let i=1;i<pts.length;i++) g.lineTo(px_(i), py_(pts[i]));
+  g.lineTo(px_(pts.length-1), chY+chH); g.lineTo(px_(0), chY+chH); g.closePath();
+  const ag = g.createLinearGradient(0, chY, 0, chY+chH); ag.addColorStop(0,'rgba(34,197,94,.30)'); ag.addColorStop(1,'rgba(34,197,94,0)');
+  g.fillStyle = ag; g.fill();
+  // line
+  g.beginPath(); g.moveTo(px_(0), py_(pts[0]));
+  for(let i=1;i<pts.length;i++) g.lineTo(px_(i), py_(pts[i]));
+  g.strokeStyle = '#22c55e'; g.lineWidth = 5; g.lineJoin='round'; g.lineCap='round'; g.stroke();
+  // open marker
+  g.beginPath(); g.arc(px_(0), py_(pts[0]), 9, 0, 6.29); g.fillStyle='#0b1224'; g.fill(); g.strokeStyle='#f0f4ff'; g.lineWidth=3.5; g.stroke();
+  // close marker + arrow
+  const ex = px_(pts.length-1), ey = py_(pts[pts.length-1]);
+  g.beginPath(); g.arc(ex-4, ey, 9, 0, 6.29); g.fillStyle='#22c55e'; g.fill(); g.strokeStyle='#fff'; g.lineWidth=3; g.stroke();
+  g.fillStyle='#22c55e';
+  g.beginPath(); g.moveTo(ex+6, ey-16); g.lineTo(ex+22, ey-26); g.lineTo(ex+22, ey-14); g.closePath(); g.fill();
+  // open rate / close rate chips under chart
+  g.font='600 22px -apple-system, Roboto, sans-serif';
+  g.fillStyle='#7a90b0'; g.fillText('OPEN', chX, chY+chH+44);
+  g.fillStyle='#f0f4ff'; g.font='700 26px -apple-system, Roboto, sans-serif'; g.fillText(fmtRate(rates.open), chX, chY+chH+76);
+  g.textAlign='right';
+  g.fillStyle='#7a90b0'; g.font='600 22px -apple-system, Roboto, sans-serif'; g.fillText('CLOSE', chX+chW, chY+chH+44);
+  g.fillStyle='#22c55e'; g.font='700 26px -apple-system, Roboto, sans-serif'; g.fillText(fmtRate(rates.close), chX+chW, chY+chH+76);
+  g.textAlign='left';
+  // details rows
+  const rows = [
+    ['Trade ID', tradeIdStr(t.id)],
+    ['Amount', fmt(amt)+' USDT'],
+    ['Open time', fmtRcptTime(t.started_at)],
+    ['Close time', fmtRcptTime(t.claimed_at)],
+    ['Duration', '24 hours'],
+    ['Profitability', '+100.00%']
+  ];
+  let ry = chY + chH + 130;
+  const rowH = 66;
+  for(const [k,v] of rows){
+    g.fillStyle='#7a90b0'; g.font='600 24px -apple-system, Roboto, sans-serif'; g.fillText(k.toUpperCase(), M, ry);
+    g.textAlign='right'; g.fillStyle = k==='Profitability' ? '#22c55e' : '#f0f4ff';
+    g.font = '700 26px -apple-system, Roboto, sans-serif'; g.fillText(String(v), W-M, ry);
+    g.textAlign='left';
+    g.strokeStyle='rgba(122,144,176,.14)'; g.lineWidth=1;
+    g.beginPath(); g.moveTo(M, ry+24); g.lineTo(W-M, ry+24); g.stroke();
+    ry += rowH;
+  }
+  // payout block
+  ry += 26;
+  g.textAlign='center';
+  g.fillStyle='#7a90b0'; g.font='600 24px -apple-system, Roboto, sans-serif'; g.letterSpacing='3px';
+  g.fillText('PAYOUT CREDITED', W/2, ry); g.letterSpacing='0px';
+  ry += 64;
+  const pg = g.createLinearGradient(W/2-260, 0, W/2+260, 0); pg.addColorStop(0,'#fbbf24'); pg.addColorStop(1,'#f59e0b');
+  g.fillStyle = pg; g.font='800 60px -apple-system, Roboto, sans-serif';
+  g.fillText(fmt(payout)+' USDT', W/2, ry);
+  ry += 48;
+  g.fillStyle='#22c55e'; g.font='700 28px -apple-system, Roboto, sans-serif';
+  g.fillText('+ '+fmt(profit)+' USDT profit (2x)', W/2, ry);
+  // footer
+  g.strokeStyle='rgba(245,158,35,.30)'; g.lineWidth=1.5;
+  g.beginPath(); g.moveTo(M, 1500-96); g.lineTo(W-M, 1500-96); g.stroke();
+  g.fillStyle='#7a90b0'; g.font='500 22px -apple-system, Roboto, sans-serif';
+  g.fillText('OAT Trades · All rights reserved ©2026', W/2, 1500-56);
+  g.textAlign='left';
+  return cc.toDataURL('image/png');
+}
+function rr(g, X, Y, Wd, H, R){
+  g.beginPath();
+  g.moveTo(X+R, Y); g.arcTo(X+Wd, Y, X+Wd, Y+H, R); g.arcTo(X+Wd, Y+H, X, Y+H, R);
+  g.arcTo(X, Y+H, X, Y, R); g.arcTo(X, Y, X+Wd, Y, R); g.closePath();
+}
+function fmtRcptTime(ts){
+  const d = new Date(Number(ts));
+  return d.toLocaleDateString('en-US',{month:'short', day:'numeric', year:'numeric'}) + ', ' +
+         d.toLocaleTimeString('en-US',{hour:'numeric', minute:'2-digit'});
+}
 function showTradeReceipt(i){
   const t = STATE.trades[i];
-  $('detTitle').textContent = 'Trade Details';
-  $('detBody').innerHTML =
-    '<div class="det-row"><span class="dk">Trade ID</span><span class="dv">#'+t.id+'</span></div>'+
-    '<div class="det-row"><span class="dk">Asset</span><span class="dv">'+esc(t.asset)+'</span></div>'+
-    '<div class="det-row"><span class="dk">Invested</span><span class="dv">'+fmtInCur(t.amount)+'</span></div>'+
-    '<div class="det-row"><span class="dk">Payout (2x)</span><span class="dv">'+fmtInCur(t.payout_amount)+'</span></div>'+
-    '<div class="det-row"><span class="dk">Status</span><span class="dv"><span class="badge '+t.status+'">'+t.status+'</span></span></div>'+
-    '<div class="det-row"><span class="dk">Started</span><span class="dv">'+new Date(Number(t.started_at)).toLocaleString()+'</span></div>'+
-    (t.claimed_at ? '<div class="det-row"><span class="dk">Cashed out</span><span class="dv">'+new Date(Number(t.claimed_at)).toLocaleString()+'</span></div>' : '');
-  $('detModal').classList.remove('hidden');
+  if(t.status !== 'completed'){
+    $('detTitle').textContent = 'Trade Details';
+    $('detBody').innerHTML =
+      '<div class="det-row"><span class="dk">Trade ID</span><span class="dv">'+tradeIdStr(t.id)+'</span></div>'+
+      '<div class="det-row"><span class="dk">Asset</span><span class="dv">'+esc(t.asset)+'</span></div>'+
+      '<div class="det-row"><span class="dk">Invested</span><span class="dv">'+fmtInCur(t.amount)+'</span></div>'+
+      '<div class="det-row"><span class="dk">Payout (2x)</span><span class="dv">'+fmtInCur(t.payout_amount)+'</span></div>'+
+      '<div class="det-row"><span class="dk">Status</span><span class="dv"><span class="badge '+t.status+'">'+t.status+'</span></span></div>'+
+      '<div class="det-row"><span class="dk">Started</span><span class="dv">'+new Date(Number(t.started_at)).toLocaleString()+'</span></div>';
+    $('detModal').classList.remove('hidden');
+    return;
+  }
+  window._receiptUrl = renderTradeReceipt(t);
+  $('receiptImg').src = window._receiptUrl;
+  $('receiptHint').textContent = window.OATNative ? 'Your receipt is saved to your phone gallery.' :
+    'Tip: you can also press and hold the image to save it.';
+  $('receiptModal').classList.remove('hidden');
+}
+function saveReceiptImg(){
+  const url = window._receiptUrl; if(!url) return;
+  if(window.OATNative && OATNative.saveReceipt){ OATNative.saveReceipt(url); toast('Saving receipt…'); return; }
+  const a = document.createElement('a'); a.href = url; a.download = 'oat-trade-receipt.png';
+  document.body.appendChild(a); a.click(); a.remove();
+  toast('Receipt saved');
+}
+async function shareReceiptImg(){
+  const url = window._receiptUrl; if(!url) return;
+  if(window.OATNative && OATNative.shareReceipt){ OATNative.shareReceipt(url); return; }
+  try{
+    const blob = await (await fetch(url)).blob();
+    const file = new File([blob], 'oat-trade-receipt.png', {type:'image/png'});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      await navigator.share({files:[file], title:'OAT Trades receipt'});
+      return;
+    }
+  }catch(e){}
+  saveReceiptImg();
 }
 
 /* ── withdraw ── */
