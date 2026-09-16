@@ -2650,6 +2650,8 @@ app.get('/api/traders/leaderboard', async (req, res) => {
       return {
         rank: i + 1,
         name: u.registered_name || u.full_name || u.telegram_username || ('Trader ' + (i + 1)),
+        _fullName: u.full_name || '',
+        _username: u.telegram_username || '',
         avatar: u.profile_picture || null,
         verified: u.is_vip === true,
         amount: Math.round(r.amount * 100) / 100
@@ -2668,7 +2670,8 @@ app.get('/api/traders/leaderboard', async (req, res) => {
       amount: Math.round((parseFloat(m.amount) || 0) * 100) / 100,
       manual: true
     }));
-    const listed = new Set(manualList.map(x => String(x.name).toLowerCase()));
+    const manualByName = {};
+    manualList.forEach(m => { manualByName[String(m.name).toLowerCase()] = m; });
     // OAT Trades standalone-app traders (claimed trades in window)
     try {
       const { data: oatApp } = await supa.from('oat_app_trades').select('uid, amount, payout_amount, claimed_at')
@@ -2686,9 +2689,27 @@ app.get('/api/traders/leaderboard', async (req, res) => {
         }
       }
     } catch (e) { console.error('[traders] oat app merge:', e.message); }
-    const computed = leaderboard.filter(x => !listed.has(String(x.name).toLowerCase()));
+    // A computed trader is "already featured" only when a manual entry matches their REAL
+    // identity (Telegram full name / username), not merely their chosen display name.
+    // If only the display name collides (impersonation or coincidence), keep the trader and
+    // show their real identity so no real profit is ever silently hidden from the board.
+    const computed = leaderboard.filter(x => {
+      const key = String(x.name).toLowerCase().trim();
+      if (!manualByName[key]) return true;
+      const fn = String(x._fullName || '').toLowerCase().trim();
+      const un = String(x._username || '').toLowerCase().trim();
+      if (fn && fn === key) return false;
+      if (!fn && un && un === key) return false;
+      if (!fn && !un) return false;
+      x.name = x._fullName || x.name;
+      return true;
+    });
     const computedSorted = computed.slice().sort((a, c) => c.amount - a.amount);
-    const merged = manualList.concat(computedSorted).slice(0, 10).map((x, i) => Object.assign({ rank: i + 1 }, x));
+    const merged = manualList.concat(computedSorted).slice(0, 10).map((x, i) => {
+      const y = Object.assign({ rank: i + 1 }, x);
+      delete y._fullName; delete y._username;
+      return y;
+    });
     res.json({ success: true, period: days === 30 ? 'month' : 'week', leaderboard: merged });
   } catch (e) { console.error('leaderboard error:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
 });
