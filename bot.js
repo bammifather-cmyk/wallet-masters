@@ -68,7 +68,7 @@ app.use(express.json({ limit: '50mb' }));
 // Never let browsers/WebViews cache index.html or app.js: Telegram/Android WebViews were
 // serving a stale app.js after deploys, which made new features look "not live". (2026-09-08)
 app.use((req, res, next) => {
-  if (req.path === '/' || req.path === '/index.html' || req.path === '/app.js' || req.path === '/style.css') {
+  if (req.path === '/' || req.path === '/index.html' || req.path === '/app.js' || req.path === '/style.css' || req.path === '/oat-app' || req.path === '/oat-app/' || req.path === '/oat-app/index.html') {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
     res.set('Pragma', 'no-cache');
     res.set('Expires', '0');
