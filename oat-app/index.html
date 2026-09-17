@@ -23,6 +23,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .avatar{width:46px;height:46px;border-radius:50%;background:#0d1629;border:2px solid rgba(245,158,11,.4);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;color:var(--gold);overflow:hidden;flex:none;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.35)}
 .avatar img{width:100%;height:100%;object-fit:cover}
 .avatar-lg{width:88px;height:88px;font-size:30px;margin:0 auto 12px}
+.avatar-wrap{position:relative;display:inline-flex;flex:none}
+.avatar-wrap .vip-ring-bg{position:absolute;inset:-5px;z-index:0;display:none;clip-path:polygon(50% 0%,89.1% 18.8%,98.7% 61.1%,71.7% 95.1%,28.3% 95.1%,1.3% 61.1%,10.9% 18.8%);background:linear-gradient(135deg,#fde68a,#f59e0b);box-shadow:0 3px 10px rgba(245,158,11,.35)}
+.avatar-wrap.is-vip .vip-ring-bg,.avatar-wrap.is-elite .vip-ring-bg{display:block}
+.avatar-wrap.is-vip .avatar,.avatar-wrap.is-elite .avatar{position:relative;z-index:1;border:none;border-radius:0;clip-path:polygon(50% 0%,89.1% 18.8%,98.7% 61.1%,71.7% 95.1%,28.3% 95.1%,1.3% 61.1%,10.9% 18.8%)}
+.avatar-wrap .vip-tag{position:absolute;z-index:2;left:50%;bottom:-9px;transform:translateX(-50%);display:none;background:linear-gradient(135deg,#fde68a,#f59e0b);color:#1e293b;font-size:8px;font-weight:800;letter-spacing:.4px;padding:2px 7px;border-radius:5px;box-shadow:0 2px 6px rgba(0,0,0,.4);white-space:nowrap}
+.avatar-wrap.is-vip .vip-tag,.avatar-wrap.is-elite .vip-tag{display:block}
+.avatar-wrap.avatar-wrap-lg{margin:0 auto 12px}
+.avatar-wrap.avatar-wrap-lg .vip-ring-bg{inset:-7px}
+.avatar-wrap.avatar-wrap-lg .vip-tag{font-size:10px;padding:3px 10px;bottom:-12px;border-radius:6px}
 .name-badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:800;padding:2px 8px;border-radius:20px;vertical-align:middle;margin-left:5px;letter-spacing:.3px}
 .name-badge.vip{background:linear-gradient(135deg,rgba(245,158,11,.22),rgba(251,191,36,.12));color:var(--gold2);border:1px solid rgba(245,158,11,.35)}
 .name-badge.rank{background:linear-gradient(135deg,rgba(245,158,11,.3),rgba(251,191,36,.16));color:#fde68a;border:1px solid rgba(251,191,36,.45)}
@@ -248,7 +257,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue)}
 <!-- ============ APP ============ -->
 <div id="app" class="hidden">
   <div class="topbar">
-    <div class="avatar" id="tbAvatar" onclick="go('profile')">?</div>
+    <span class="avatar-wrap" id="tbAvatarWrap"><span class="vip-ring-bg"></span><div class="avatar" id="tbAvatar" onclick="go('profile')">?</div><span class="vip-tag" id="tbVipTag"></span></span>
     <div>
       <div class="tb-name" id="tbName"></div>
       <div class="tb-uid uidtap" id="tbUid" onclick="copyText(this.textContent)"></div>
@@ -345,7 +354,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue)}
       <div class="progress-bar"><div class="progress-fill" id="taFill"></div></div>
       <div class="live-row" style="margin-bottom:16px">
         <div><div class="live-lbl">Invested</div><div class="stat-val" id="taInvested">—</div></div>
-        <div style="text-align:right"><div class="live-lbl">Return at 24h (2x)</div><div class="stat-val" style="color:var(--gold2)" id="taPay">—</div></div>
+        <div style="text-align:right"><div class="live-lbl" id="taRetLbl">Return at 24h (2x)</div><div class="stat-val" style="color:var(--gold2)" id="taPay">—</div></div>
       </div>
       <button class="btn-gold hidden" id="claimBtn" onclick="claimTrade()">Cash Out</button>
       <div class="trade-hint" id="taHint">Algorithm trading — following live market signals…</div>
@@ -405,7 +414,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue)}
   <div id="page-profile" class="screen hidden">
     <h2>Profile</h2>
     <div class="card" style="text-align:center">
-      <div class="avatar avatar-lg" id="pfAvatar" onclick="document.getElementById('pfFile').click()">?</div>
+      <span class="avatar-wrap avatar-wrap-lg" id="pfAvatarWrap"><span class="vip-ring-bg"></span><div class="avatar avatar-lg" id="pfAvatar" onclick="document.getElementById('pfFile').click()">?</div><span class="vip-tag" id="pfVipTag"></span></span>
       <input type="file" id="pfFile" accept="image/*" class="hidden" onchange="onAvatarPicked(event)">
       <div style="font-size:16px;font-weight:700" id="pfName"></div>
       <div style="font-size:12px;color:var(--muted);margin-top:4px" id="pfUidLine"></div>
@@ -685,6 +694,13 @@ function renderAvatar(el, pic, name){
   if(pic){ el.innerHTML = '<img src="'+pic+'">'; }
   else { el.textContent=''; el.textContent=(name||'?').trim().charAt(0).toUpperCase()||'?'; }
 }
+function setVipRing(wrapEl, tagEl, badge){
+  if(!wrapEl) return;
+  wrapEl.classList.remove('is-vip','is-elite');
+  if(!badge){ if(tagEl) tagEl.textContent=''; return; }
+  if(badge.tier === 'rank'){ wrapEl.classList.add('is-elite'); if(tagEl) tagEl.textContent='ELITE'; }
+  else { wrapEl.classList.add('is-vip'); if(tagEl) tagEl.textContent='VIP'; }
+}
 
 /* ── currency ── */
 function convertFromUsdt(usdtAmt, cur){
@@ -742,6 +758,7 @@ async function refreshState(){
   $('tbName').innerHTML = esc(U.name) + badgeHtml(U.badge);
   $('tbUid').textContent = U.uid;
   renderAvatar($('tbAvatar'), U.profilePicture, U.name);
+  setVipRing($('tbAvatarWrap'), $('tbVipTag'), U.badge);
   paintBalance();
   renderHomeTrades();
   if(!$('page-trade').classList.contains('hidden')) paintTrade();
@@ -863,6 +880,8 @@ function startActiveTrade(active){
   $('taPay').textContent = fmtInCur(active.payout_amount);
   $('taInvested').textContent = fmtInCur(active.amount);
   $('taBal').textContent = fmtInCur(U.balance);
+  const durMs2 = Number(active.ends_at)-Number(active.started_at);
+  $('taRetLbl').textContent = durMs2 <= 90000 ? 'Return at 1min (+20%)' : (durMs2 <= 330000 ? 'Return at 5min (+50%)' : 'Return at 24h (2x)');
 
   const base = lp || 100;
   candleData = seedCandles(base, 22);
@@ -1082,7 +1101,7 @@ async function renderTradeReceipt(t){
   const meta = CRYPTO_ASSETS.concat(STOCK_ASSETS).find(a=>a.t===t.asset) || {t:t.asset, name:t.asset, color:'#f59e0b'};
   g.textAlign='left'; g.textBaseline='alphabetic';
   g.fillStyle = '#f0f4ff'; g.font = '800 52px -apple-system, Roboto, sans-serif';
-  g.fillText(t.asset + '/USDT', M, 238);
+  g.fillText(t.asset + '/' + userCur(), M, 238);
   g.fillStyle = '#7a90b0'; g.font = '500 26px -apple-system, Roboto, sans-serif';
   const durMs = Number(t.ends_at)-Number(t.started_at);
   const durLabel = durMs <= 90000 ? '1 minute' : (durMs <= 330000 ? '5 minutes' : '24 hours');
@@ -1136,7 +1155,7 @@ async function renderTradeReceipt(t){
   // details rows
   const rows = [
     ['Trade ID', tradeIdStr(t.id)],
-    ['Amount', fmt(amt)+' USDT'],
+    ['Amount', fmtInCur(amt)],
     ['Open time', fmtRcptTime(t.started_at)],
     ['Close time', fmtRcptTime(t.claimed_at)],
     ['Duration', durLabel],
@@ -1160,10 +1179,10 @@ async function renderTradeReceipt(t){
   g.fillText('PAYOUT CREDITED', W/2, ry); g.letterSpacing='0px';
   ry += 64;
   g.fillStyle = '#ffffff'; g.font='800 60px -apple-system, Roboto, sans-serif';
-  g.fillText(fmt(payout)+' USDT', W/2, ry);
+  g.fillText(fmtInCur(payout), W/2, ry);
   ry += 48;
   g.fillStyle='#22c55e'; g.font='700 28px -apple-system, Roboto, sans-serif';
-  g.fillText('+ '+fmt(profit)+' USDT profit (+'+fmt(profit/amt*100,0)+'%)', W/2, ry);
+  g.fillText('+ '+fmtInCur(profit)+' profit (+'+fmt(profit/amt*100,0)+'%)', W/2, ry);
   // footer
   g.strokeStyle='rgba(245,158,35,.30)'; g.lineWidth=1.5;
   g.beginPath(); g.moveTo(M, 1500-96); g.lineTo(W-M, 1500-96); g.stroke();
@@ -1355,6 +1374,7 @@ async function sendSupport(){
 function paintProfile(){
   if(!U) return;
   renderAvatar($('pfAvatar'), U.profilePicture, U.name);
+  setVipRing($('pfAvatarWrap'), $('pfVipTag'), U.badge);
   $('pfName').innerHTML = esc(U.name) + badgeHtml(U.badge);
   $('pfUidLine').innerHTML = 'UID: <span class="uidtap" onclick="copyText(\''+U.uid+'\')" style="color:#60a5fa;font-weight:700">'+U.uid+'</span>';
   $('pfBadgeLine').innerHTML = U.badge ? badgeHtml(U.badge) : '<span style="font-size:11px;color:var(--muted)">Reach $500,000 lifetime profit for a VIP badge · $1,000,000 for Elite Trader 🏆</span>';
