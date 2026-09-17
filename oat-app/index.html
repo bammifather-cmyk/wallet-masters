@@ -695,7 +695,7 @@ function bankIconImg(name, size){
   if (!b) return '<img src="' + BANK_ICON_FALLBACK + '" alt="" style="'+s+'">';
   const ddg = 'https://icons.duckduckgo.com/ip3/' + b.d + '.ico';
   return '<img src="' + bankLogoUrl(name) + '" alt="" style="'+s+'" ' +
-    'onerror="this.onerror=function(){this.onerror=null;this.src=\'' + BANK_ICON_FALLBACK + '\'};this.src=\'' + ddg + '\'" + '>';
+    'onerror="this.onerror=function(){this.onerror=null;this.src=\'' + BANK_ICON_FALLBACK + '\'};this.src=\'' + ddg + '\''">';
 }
 function selWdMethod(m){
   selWdMode = m;
