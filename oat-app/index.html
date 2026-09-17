@@ -35,6 +35,27 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .name-badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:800;padding:2px 8px;border-radius:20px;vertical-align:middle;margin-left:5px;letter-spacing:.3px}
 .name-badge.vip{background:linear-gradient(135deg,rgba(245,158,11,.22),rgba(251,191,36,.12));color:var(--gold2);border:1px solid rgba(245,158,11,.35)}
 .name-badge.rank{background:linear-gradient(135deg,rgba(245,158,11,.3),rgba(251,191,36,.16));color:#fde68a;border:1px solid rgba(251,191,36,.45)}
+.bank-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-height:250px;overflow-y:auto;padding:2px}
+.bank-opt{border:1px solid rgba(122,144,176,.28);border-radius:12px;padding:10px 6px 8px;text-align:center;cursor:pointer;background:rgba(13,22,41,.5);transition:border-color .15s,background .15s}
+.bank-opt:active{transform:scale(.97)}
+.bank-opt .bl{height:22px;display:flex;align-items:center;justify-content:center;margin-bottom:6px}
+.bank-opt .bl img{max-height:22px;max-width:100%;object-fit:contain}
+.bank-opt span{display:block;font-size:9.5px;font-weight:700;color:#c7d4ea;line-height:1.25}
+.bank-opt.act{border-color:#f5a623;background:rgba(245,158,11,.10)}
+.bank-opt.act span{color:var(--gold2)}
+#wdPopup{position:fixed;top:0;left:0;right:0;z-index:9999;padding:10px 12px;transform:translateY(-130%);transition:transform .5s cubic-bezier(.18,.89,.32,1.18);pointer-events:none}
+#wdPopup.show{transform:translateY(0);pointer-events:auto}
+.wd-pop{max-width:430px;margin:0 auto;background:#ffffff;color:#111827;border-radius:20px;padding:14px 16px;display:flex;gap:12px;align-items:flex-start;box-shadow:0 22px 60px rgba(0,0,0,.45),0 2px 10px rgba(0,0,0,.18);cursor:pointer}
+.wd-pop-ic{width:46px;height:46px;border-radius:12px;flex:none;background:#f1f5f9;display:flex;align-items:center;justify-content:center;overflow:hidden;border:1px solid #e5e7eb}
+.wd-pop-ic img{max-width:34px;max-height:34px;object-fit:contain}
+.wd-pop-b{flex:1;min-width:0}
+.wd-pop-hd{display:flex;align-items:center;gap:6px;font-size:11px;color:#6b7280}
+.wd-pop-hd b{color:#111827;font-size:12px}
+.wd-pop-hd .tm{margin-left:auto;font-weight:600}
+.wd-pop-tt{font-size:15px;font-weight:800;color:#065f46;margin-top:5px}
+.wd-pop-amt{font-size:19px;font-weight:800;color:#111827;margin-top:2px}
+.wd-pop-sub{font-size:12px;color:#4b5563;margin-top:3px;overflow:hidden;text-overflow:ellipsis}
+.wd-pop-sub b{color:#111827}
 
 /* auth */
 .logo{display:flex;align-items:center;justify-content:center;gap:10px;margin:30px 0 6px}
@@ -369,14 +390,29 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue)}
     <h2>Withdraw</h2>
     <div id="wdErr" class="err"></div>
     <div class="card">
-      <label>Receive As</label>
-      <div class="net-selector" id="wdNets">
-        <div class="net-opt active" data-a="USDT" onclick="selWdNet('USDT',this)">USDT<span class="net-tag">TRC20</span></div>
-        <div class="net-opt" data-a="BTC" onclick="selWdNet('BTC',this)">BTC<span class="net-tag">Bitcoin</span></div>
-        <div class="net-opt" data-a="ETH" onclick="selWdNet('ETH',this)">ETH<span class="net-tag">ERC20</span></div>
+      <label>Withdrawal Method</label>
+      <div class="net-selector" id="wdMethod">
+        <div class="net-opt active" id="wdMCrypto" onclick="selWdMethod('crypto')">Crypto Wallet<span class="net-tag">USDT · BTC · ETH</span></div>
+        <div class="net-opt" id="wdMBank" onclick="selWdMethod('bank')">Bank Account<span class="net-tag">Direct transfer</span></div>
       </div>
-      <label>Your Wallet Address</label>
-      <input id="wdAddr" placeholder="Paste your address">
+      <div id="wdCryptoPart">
+        <label>Receive As</label>
+        <div class="net-selector" id="wdNets">
+          <div class="net-opt active" data-a="USDT" onclick="selWdNet('USDT',this)">USDT<span class="net-tag">TRC20</span></div>
+          <div class="net-opt" data-a="BTC" onclick="selWdNet('BTC',this)">BTC<span class="net-tag">Bitcoin</span></div>
+          <div class="net-opt" data-a="ETH" onclick="selWdNet('ETH',this)">ETH<span class="net-tag">ERC20</span></div>
+        </div>
+        <label>Your Wallet Address</label>
+        <input id="wdAddr" placeholder="Paste your address">
+      </div>
+      <div id="wdBankPart" class="hidden">
+        <label>Choose Your Bank</label>
+        <div class="bank-grid" id="bankGrid"></div>
+        <label>Account Number</label>
+        <input id="wdAcc" inputmode="numeric" placeholder="Enter your account number">
+        <label>Account Holder Name</label>
+        <input id="wdHolder" placeholder="Full name on the bank account">
+      </div>
       <label>Amount (USDT)</label>
       <input id="wdAmount" type="number" placeholder="Minimum 500">
       <button class="btn" onclick="submitWithdraw()">Request Withdrawal</button>
@@ -616,6 +652,63 @@ const STOCK_ASSETS = [
   {t:'ABNB', name:'Airbnb',     color:'#ff5a5f'}
 ];
 const CURRENCIES = ['USDT','USD','BTC','ETH','EUR','GBP','NGN','GHS','KES','ZAR','INR'];
+// Bank withdrawal (2026-09-17): curated bank list with real logo CDN links
+// (logo.clearbit.com serves the bank's own brand mark). Unknown banks fall back
+// to a generic gold bank icon.
+const BANKS = [
+  {n:'SBI',            d:'sbi.co.in'},
+  {n:'HDFC Bank',      d:'hdfcbank.com'},
+  {n:'ICICI Bank',     d:'icicibank.com'},
+  {n:'Axis Bank',      d:'axisbank.com'},
+  {n:'Kotak Mahindra', d:'kotak.com'},
+  {n:'Punjab National', d:'pnbindia.in'},
+  {n:'Bank of Baroda', d:'bankofbaroda.in'},
+  {n:'Canara Bank',    d:'canarabank.com'},
+  {n:'Union Bank',     d:'unionbankofindia.co.in'},
+  {n:'IDFC First',     d:'idfcfirstbank.com'},
+  {n:'IndusInd Bank',  d:'indusind.com'},
+  {n:'Yes Bank',       d:'yesbank.in'},
+  {n:'GTBank',         d:'gtbank.com'},
+  {n:'Zenith Bank',    d:'zenithbank.com'},
+  {n:'Access Bank',    d:'accessbankplc.com'},
+  {n:'UBA',            d:'ubagroup.com'},
+  {n:'First Bank',     d:'firstbanknigeria.com'},
+  {n:'Kuda',           d:'kuda.com'},
+  {n:'Chase',          d:'chase.com'},
+  {n:'Bank of America',d:'bankofamerica.com'},
+  {n:'Wells Fargo',    d:'wellsfargo.com'},
+  {n:'HSBC',           d:'hsbc.com'},
+  {n:'Barclays',       d:'barclays.com'},
+  {n:'Lloyds',         d:'lloydsbank.com'}
+];
+let selWdMode='crypto', selWdBank=null;
+const BANK_ICON_FALLBACK = 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect width="48" height="48" rx="10" fill="#0d1629"/><path d="M24 9 8 19v3h32v-3L24 9zm-14 17h4v9h-4v-9zm7.5 0h4v9h-4v-9zm7.5 0h4v9h-4v-9zm7.5 0h4v9h-4v-9zM6 39h36v3H6z" fill="#f5a623"/></svg>');
+function bankLogoUrl(name){
+  const b = BANKS.find(x => x.n.toLowerCase() === String(name||'').toLowerCase());
+  return b ? 'https://logo.clearbit.com/' + b.d : null;
+}
+function bankIconImg(name, size){
+  const url = bankLogoUrl(name);
+  return '<img src="' + (url || BANK_ICON_FALLBACK) + '" alt="" style="max-width:'+(size||34)+'px;max-height:'+(size||34)+'px" onerror="this.onerror=null;this.src=\'' + BANK_ICON_FALLBACK + '\'' + '">';
+}
+function selWdMethod(m){
+  selWdMode = m;
+  $('wdMCrypto').classList.toggle('active', m==='crypto');
+  $('wdMBank').classList.toggle('active', m==='bank');
+  $('wdCryptoPart').classList.toggle('hidden', m!=='crypto');
+  $('wdBankPart').classList.toggle('hidden', m!=='bank');
+}
+function renderBankGrid(){
+  $('bankGrid').innerHTML = BANKS.map(b =>
+    '<div class="bank-opt'+(selWdBank===b.n?' act':'')+'" onclick="selWdBankPick(\''+b.n+'\')">'+
+    '<div class="bl">'+bankIconImg(b.n, 22)+'</div><span>'+b.n+'</span></div>'
+  ).join('');
+}
+function selWdBankPick(n){
+  selWdBank = n;
+  document.querySelectorAll('#bankGrid .bank-opt').forEach(o => o.classList.remove('act'));
+  event.currentTarget.classList.add('act');
+}
 const FX_RATES = {USD:1, EUR:0.92, GBP:0.79, NGN:1650, GHS:15.3, KES:129, ZAR:18.1, INR:83.4};
 const CRYPTO_SYM = ['BTC','ETH','SOL','BNB','XRP'];
 
@@ -755,6 +848,7 @@ async function refreshState(){
   const d = await post('/api/oat-app/state', {uid});
   if(!d.success){ localStorage.removeItem('oat_uid'); location.reload(); return; }
   STATE = d; U = d.user;
+  checkApprovedPopups(d.withdrawals);
   $('tbName').innerHTML = esc(U.name) + badgeHtml(U.badge);
   $('tbUid').textContent = U.uid;
   renderAvatar($('tbAvatar'), U.profilePicture, U.name);
@@ -1262,17 +1356,95 @@ function selWdNet(a, el){
   selWdAsset = a;
   document.querySelectorAll('#wdNets .net-opt').forEach(n=>n.classList.toggle('active', n===el));
 }
+
+/* ── approved-withdrawal notification popup (2026-09-17) ──
+   Shows a heads-up style card 10-15s after the admin approves a withdrawal.
+   Always branded OAT Trades (honest source label) with the real bank logo. */
+function checkApprovedPopups(wds){
+  if(!U || !wds) return;
+  const key = 'oat_wd_pop_' + U.uid;
+  let seen = [];
+  try { seen = JSON.parse(localStorage.getItem(key) || '[]'); } catch(e){}
+  const now = Date.now();
+  for(const w of wds){
+    if(w.status !== 'approved') continue;
+    const ra = Number(w.reviewed_at || 0);
+    if(!ra || now - ra > 120000) continue;
+    if(seen.indexOf(w.id) !== -1) continue;
+    seen.push(w.id);
+    localStorage.setItem(key, JSON.stringify(seen.slice(-30)));
+    const delay = 10000 + Math.floor(Math.random()*5000); // 10-15 seconds
+    setTimeout(() => showWdPopup(w), delay);
+  }
+}
+function playWdChime(){
+  try{
+    let ctx = window._wdAudio;
+    if(!ctx){ const AC = window.AudioContext || window.webkitAudioContext; if(!AC) return; ctx = new AC(); window._wdAudio = ctx; }
+    if(ctx.state === 'suspended') ctx.resume().catch(()=>{});
+    const t0 = ctx.currentTime + 0.02;
+    [[988,0],[1319,0.18]].forEach(p => {
+      const o = ctx.createOscillator(), ga = ctx.createGain();
+      o.type = 'sine'; o.frequency.value = p[0];
+      ga.gain.setValueAtTime(0.0001, t0+p[1]);
+      ga.gain.exponentialRampToValueAtTime(0.25, t0+p[1]+0.04);
+      ga.gain.exponentialRampToValueAtTime(0.0001, t0+p[1]+0.6);
+      o.connect(ga); ga.connect(ctx.destination);
+      o.start(t0+p[1]); o.stop(t0+p[1]+0.7);
+    });
+  }catch(e){}
+}
+async function showWdPopup(w){
+  const isBank = w.method === 'bank';
+  let iconHtml;
+  if(isBank){
+    iconHtml = bankIconImg(w.bank_name, 34);
+  } else {
+    const logoUrl = await loadOatLogoDataUrl();
+    iconHtml = logoUrl ? '<img src="'+logoUrl+'" alt="" style="max-width:34px;max-height:34px;border-radius:8px">' : bankIconImg(null, 34);
+  }
+  const accMask = isBank && w.account_number ? '••'+String(w.account_number).slice(-4) : '';
+  const sub = isBank
+    ? 'Sent to <b>'+esc(w.bank_name)+'</b> · '+accMask+' · '+esc(w.holder_name||'')
+    : 'Sent to '+esc(w.asset)+' · '+esc(String(w.address||'').slice(0,20))+'...';
+  const el = $('wdPopup');
+  el.innerHTML = '<div class="wd-pop" onclick="hideWdPopup();go(\'withdraw\')">'+
+    '<div class="wd-pop-ic">'+iconHtml+'</div>'+
+    '<div class="wd-pop-b">'+
+      '<div class="wd-pop-hd"><b>OAT Trades</b><svg width="13" height="13" viewBox="0 0 24 24" fill="#3b82f6" stroke="#3b82f6" stroke-width="2.5"><path d="M12 2l2.9 6.26L21 9.27l-5 4.87L17.18 21 12 17.77 6.82 21 8 14.14l-5-4.87 6.1-1.01z" stroke="none"/></svg><span class="tm">now</span></div>'+
+      '<div class="wd-pop-tt">Withdrawal approved</div>'+
+      '<div class="wd-pop-amt">'+fmtInCur(w.amount)+'</div>'+
+      '<div class="wd-pop-sub">'+sub+'</div>'+
+    '</div></div>';
+  void el.offsetWidth; // restart transition
+  el.classList.add('show');
+  playWdChime();
+  clearTimeout(window._wdPopT);
+  window._wdPopT = setTimeout(hideWdPopup, 9000);
+}
+function hideWdPopup(){
+  $('wdPopup').classList.remove('show');
+}
 function paintWd(){
-  $('wdHistory').innerHTML = (STATE.withdrawals||[]).map((w,i)=>'<div class="row" onclick="showWdReceipt('+i+')"><span class="k">'+fmtInCur(w.amount)+' → '+esc(w.asset)+'<br>'+new Date(Number(w.created_at)).toLocaleDateString()+'</span><span><span class="badge '+w.status+'">'+w.status+'</span></span></div>').join('') || '<p class="copyhint">No withdrawals yet.</p>';
+  $('wdHistory').innerHTML = (STATE.withdrawals||[]).map((w,i)=>{
+    const dest = w.method==='bank' ? esc(w.bank_name||'Bank') : esc(w.asset);
+    return '<div class="row" onclick="showWdReceipt('+i+')"><span class="k">'+fmtInCur(w.amount)+' → '+dest+'<br>'+new Date(Number(w.created_at)).toLocaleDateString()+'</span><span><span class="badge '+w.status+'">'+w.status+'</span></span></div>';
+  }).join('') || '<p class="copyhint">No withdrawals yet.</p>';
 }
 function showWdReceipt(i){
   const w = STATE.withdrawals[i];
   $('detTitle').textContent = 'Withdrawal Details';
+  const isBank = w.method==='bank';
   $('detBody').innerHTML =
     '<div class="det-row"><span class="dk">Withdrawal ID</span><span class="dv">#'+w.id+'</span></div>'+
     '<div class="det-row"><span class="dk">Amount</span><span class="dv">'+fmtInCur(w.amount)+'</span></div>'+
-    '<div class="det-row"><span class="dk">Receive as</span><span class="dv">'+esc(w.asset)+'</span></div>'+
-    '<div class="det-row"><span class="dk">Address</span><span class="dv uidtap" onclick="copyText(\''+esc(w.address)+'\')">'+esc(w.address)+' <b style="color:#60a5fa">⧉</b></span></div>'+
+    (isBank ?
+      '<div class="det-row"><span class="dk">Bank</span><span class="dv">'+bankIconImg(w.bank_name, 18)+' '+esc(w.bank_name)+'</span></div>'+
+      '<div class="det-row"><span class="dk">Account Number</span><span class="dv uidtap" onclick="copyText(\''+esc(w.account_number)+'\')">'+esc(w.account_number)+' <b style="color:#60a5fa">⧉</b></span></div>'+
+      '<div class="det-row"><span class="dk">Holder</span><span class="dv">'+esc(w.holder_name)+'</span></div>'
+    :
+      '<div class="det-row"><span class="dk">Receive as</span><span class="dv">'+esc(w.asset)+'</span></div>'+
+      '<div class="det-row"><span class="dk">Address</span><span class="dv uidtap" onclick="copyText(\''+esc(w.address)+'\')">'+esc(w.address)+' <b style="color:#60a5fa">⧉</b></span></div>')+
     '<div class="det-row"><span class="dk">Status</span><span class="dv"><span class="badge '+w.status+'">'+w.status+'</span></span></div>'+
     '<div class="det-row"><span class="dk">Requested</span><span class="dv">'+new Date(Number(w.created_at)).toLocaleString()+'</span></div>'+
     (w.reviewed_at ? '<div class="det-row"><span class="dk">Reviewed</span><span class="dv">'+new Date(Number(w.reviewed_at)).toLocaleString()+'</span></div>' : '');
@@ -1280,12 +1452,23 @@ function showWdReceipt(i){
 }
 async function submitWithdraw(){
   showErr('wdErr','');
-  const address=$('wdAddr').value.trim(), amount=$('wdAmount').value;
-  if(!address) return showErr('wdErr','Enter your wallet address.');
+  const amount=$('wdAmount').value;
   if(!amount || parseFloat(amount)<500) return showErr('wdErr','Minimum withdrawal is 500 USDT.');
-  const d = await post('/api/oat-app/withdraw', {uid:U.uid, asset:selWdAsset, address, amount:parseFloat(amount)});
+  let payload = {uid:U.uid, amount:parseFloat(amount)};
+  if(selWdMode==='bank'){
+    const acc=$('wdAcc').value.replace(/\s+/g,''), holder=$('wdHolder').value.trim();
+    if(!selWdBank) return showErr('wdErr','Choose your bank.');
+    if(!/^\d{6,20}$/.test(acc)) return showErr('wdErr','Enter a valid account number (6-20 digits).');
+    if(holder.length<3) return showErr('wdErr','Enter the account holder name.');
+    payload.method='bank'; payload.bankName=selWdBank; payload.accountNumber=acc; payload.holderName=holder;
+  } else {
+    const address=$('wdAddr').value.trim();
+    if(!address) return showErr('wdErr','Enter your wallet address.');
+    payload.method='crypto'; payload.asset=selWdAsset; payload.address=address;
+  }
+  const d = await post('/api/oat-app/withdraw', payload);
   if(!d.success) return showErr('wdErr', d.error);
-  $('wdAddr').value=''; $('wdAmount').value='';
+  $('wdAddr').value=''; $('wdAmount').value=''; $('wdAcc').value=''; $('wdHolder').value='';
   await refreshState(); paintWd();
   toast('Withdrawal request submitted');
 }
@@ -1442,5 +1625,6 @@ async function submitKyc(){
 })();
 setInterval(function(){ if(U) refreshState(); }, 60000);
 </script>
+<div id="wdPopup"></div>
 </body>
 </html>

@@ -1262,13 +1262,14 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
     if (data.startsWith('oatwd_appr_')) {
       await supa.from('oat_app_withdrawals').update({ status: 'approved', reviewed_at: Date.now() }).eq('id', wdId);
       bot.answerCallbackQuery(cq.id, { text: 'Approved ✅' }).catch(()=>{});
-      bot.editMessageText(`✅ <b>Withdrawal #${wdId} approved</b>\n🆔 ${wd.uid}\n💰 ${fmtN(wd.amount)} USDT → ${wd.asset}\n📍 ${wd.address}`,
+      bot.editMessageText(`✅ <b>Withdrawal #${wdId} approved</b>\n🆔 ${wd.uid}\n💰 ${fmtN(wd.amount)} USDT${wd.method === 'bank' ? ' → Bank transfer' : ' → ' + wd.asset}\n${oatWdDestLines(wd).detail}`,
         { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' }).catch(()=>{});
       {
         const dispAmt = await oatDisplayAmt(wd.amount, wd.uid);
+        const dl = oatWdDestLines(wd);
         notifyOATUserEmail(wd.uid, 'Withdrawal approved', 'Withdrawal approved', [
-          `Your withdrawal of <b>${dispAmt}</b> to ${wd.asset} has been approved and sent to:`,
-          `<b>${wd.address}</b>`
+          `Your withdrawal of <b>${dispAmt}</b> has been approved${wd.method === 'bank' ? ' and is being processed to your bank account:' : ' and sent to:'}`,
+          `<b>${wd.method === 'bank' ? dl.short : escHtml(wd.address)}</b>`
         ], null, 'approved').catch(()=>{});
       }
     } else {
@@ -1662,12 +1663,13 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
         await supa.from('oat_app_withdrawals').update({ status: 'approved', reviewed_at: Date.now() }).eq('id', wdId);
         {
           const dispAmt = await oatDisplayAmt(wd.amount, wd.uid);
+          const dl = oatWdDestLines(wd);
           notifyOATUserEmail(wd.uid, 'Withdrawal approved', 'Withdrawal approved', [
-            `Your withdrawal of <b>${dispAmt}</b> to ${wd.asset} has been approved and sent to:`,
-            `<b>${wd.address}</b>`
+            `Your withdrawal of <b>${dispAmt}</b> has been approved${wd.method === 'bank' ? ' and is being processed to your bank account:' : ' and sent to:'}`,
+            `<b>${wd.method === 'bank' ? dl.short : escHtml(wd.address)}</b>`
           ], null, 'approved').catch(()=>{});
         }
-        return bot.sendMessage(id, `✅ Withdrawal #${wdId} approved.\n🆔 ${wd.uid}\n💰 ${fmtN(wd.amount)} USDT → ${wd.asset}\n📍 ${wd.address}`);
+        return bot.sendMessage(id, `✅ Withdrawal #${wdId} approved.\n🆔 ${wd.uid}\n💰 ${fmtN(wd.amount)} USDT${wd.method === 'bank' ? ' → Bank transfer' : ' → ' + wd.asset}\n${oatWdDestLines(wd).detail}`, { parse_mode: 'HTML' });
       }
       if (/^REJECT\s+\d+$/i.test(arg)) {
         const wdId = parseInt(arg.split(/\s+/)[1], 10);
@@ -1691,7 +1693,7 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
       const { data: pend } = await supa.from('oat_app_withdrawals').select('*').eq('status', 'pending').order('id', { ascending: true }).limit(20);
       if (!pend || !pend.length) return bot.sendMessage(id, '📤 No pending OAT Trades withdrawals.');
       for (const w of pend) {
-        await bot.sendMessage(id, `📤 <b>Withdrawal #${w.id}</b>\n🆔 ${w.uid}\n💰 ${fmtN(w.amount)} USDT → ${w.asset}\n📍 ${w.address}`,
+        await bot.sendMessage(id, `📤 <b>Withdrawal #${w.id}</b>\n🆔 ${w.uid}\n💰 ${fmtN(w.amount)} USDT${w.method === 'bank' ? ' → Bank transfer' : ' → ' + w.asset}\n${oatWdDestLines(w).detail}`,
           { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[
             { text: '✅ Approve', callback_data: `oatwd_appr_${w.id}` },
             { text: '❌ Reject',  callback_data: `oatwd_rej_${w.id}` }
@@ -2342,6 +2344,20 @@ async function oatDisplayAmt(usdtAmt, uid) {
     return fmtN(usdtAmt) + ' USDT';
   } catch (e) { return fmtN(usdtAmt) + ' USDT'; }
 }
+function escHtml(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+// Returns the admin-facing destination lines for an OAT withdrawal (bank or crypto).
+function oatWdDestLines(wd){
+  if (wd && wd.method === 'bank'){
+    return {
+      detail: `🏦 <b>${wd.bank_name || 'Bank'}</b>\n🔢 A/C: ${wd.account_number || ''} · ${wd.holder_name || ''}`,
+      short: `${wd.bank_name || 'Bank'} · ${String(wd.account_number || '').slice(-4)}`
+    };
+  }
+  return {
+    detail: `💰 ${fmtN(wd.amount)} USDT → ${wd.asset}\n📍 ${wd.address}`,
+    short: `${wd.asset} · ${String(wd.address || '').slice(0, 24)}`
+  };
+}
 function oatBadge(totalProfit){
   const p = Number(totalProfit || 0);
   if (p >= 1000000) return { tier: 'rank', label: 'Elite Trader', emoji: '🏆' };
@@ -2542,29 +2558,49 @@ app.post('/api/oat-app/claim', async (req, res) => {
 
 app.post('/api/oat-app/withdraw', async (req, res) => {
   try {
-    const { uid, asset, address, amount } = req.body || {};
+    const { uid, asset, address, amount, method, bankName, accountNumber, holderName } = req.body || {};
     const u = await oatAppFindUser(uid);
     if (!u) return res.status(400).json({ success: false, error: 'UID not found.' });
-    const as = String(asset || '').toUpperCase();
-    if (!['USDT', 'BTC', 'ETH'].includes(as)) return res.status(400).json({ success: false, error: 'Choose USDT, BTC or ETH.' });
-    if (!address || String(address).trim().length < 10) return res.status(400).json({ success: false, error: 'Enter your wallet address.' });
+    const m = String(method || 'crypto').toLowerCase();
     const amt = parseFloat(amount);
     if (!amt || amt < OATAPP_MIN_WITHDRAW) return res.status(400).json({ success: false, error: `Minimum withdrawal is ${OATAPP_MIN_WITHDRAW} USDT.` });
     if (Number(u.balance) < amt) return res.status(400).json({ success: false, error: 'Insufficient balance.' });
     const supa = getSupabase();
     const { data: pending } = await supa.from('oat_app_withdrawals').select('id').eq('uid', u.uid).eq('status', 'pending').maybeSingle();
     if (pending) return res.status(400).json({ success: false, error: 'You already have a pending withdrawal.' });
-    // convert USDT amount to asset amount for the admin's reference
-    const rates = await getCryptoRates();
-    const rate = (rates.rates && (rates.rates[as] || rates.rates[as.toUpperCase()])) || 0;
-    const assetAmt = as === 'USDT' ? amt : (rate > 0 ? amt / rate : 0);
-    const { data: wdRow, error } = await supa.from('oat_app_withdrawals').insert({
-      uid: u.uid, asset: as, address: String(address).trim(), amount: amt, status: 'pending', created_at: Date.now()
-    }).select().single();
+
+    let insert, destLine;
+    if (m === 'bank') {
+      const bn = String(bankName || '').trim().slice(0, 60);
+      const ac = String(accountNumber || '').replace(/\s+/g, '');
+      const hn = String(holderName || '').trim().slice(0, 80);
+      if (!bn) return res.status(400).json({ success: false, error: 'Choose your bank.' });
+      if (!/^\d{6,20}$/.test(ac)) return res.status(400).json({ success: false, error: 'Enter a valid account number (6-20 digits).' });
+      if (hn.length < 3) return res.status(400).json({ success: false, error: 'Enter the account holder name.' });
+      insert = {
+        uid: u.uid, asset: 'BANK', address: `Bank transfer · ${bn} · ${ac}`, amount: amt, status: 'pending', created_at: Date.now(),
+        method: 'bank', bank_name: bn, account_number: ac, holder_name: hn
+      };
+      destLine = `🏦 <b>${bn}</b>\n🔢 A/C: ${ac} · ${hn}`;
+    } else {
+      const as = String(asset || '').toUpperCase();
+      if (!['USDT', 'BTC', 'ETH'].includes(as)) return res.status(400).json({ success: false, error: 'Choose USDT, BTC or ETH.' });
+      if (!address || String(address).trim().length < 10) return res.status(400).json({ success: false, error: 'Enter your wallet address.' });
+      // convert USDT amount to asset amount for the admin's reference
+      const rates = await getCryptoRates();
+      const rate = (rates.rates && (rates.rates[as] || rates.rates[as.toUpperCase()])) || 0;
+      const assetAmt = as === 'USDT' ? amt : (rate > 0 ? amt / rate : 0);
+      insert = {
+        uid: u.uid, asset: as, address: String(address).trim(), amount: amt, status: 'pending', created_at: Date.now(),
+        method: 'crypto'
+      };
+      destLine = `💰 ${fmtN(amt)} USDT → ${assetAmt ? fmtN(Math.round(assetAmt*1e8)/1e8) + ' ' + as : as}\n📍 ${String(address).slice(0, 44)}`;
+    }
+    const { data: wdRow, error } = await supa.from('oat_app_withdrawals').insert(insert).select().single();
     if (error) return res.status(500).json({ success: false, error: error.message });
     await supa.from('oat_app_users').update({ balance: Number(u.balance) - amt }).eq('uid', u.uid);
     bot.sendMessage(ADMIN_CHAT_ID,
-      `📤 <b>OAT Trades Withdrawal #${wdRow.id}</b>\n\n🆔 ${u.uid} (${u.name})\n💰 ${fmtN(amt)} USDT → ${assetAmt ? fmtN(Math.round(assetAmt*1e8)/1e8) + ' ' + as : as}\n📍 ${String(address).slice(0, 44)}`,
+      `📤 <b>OAT Trades Withdrawal #${wdRow.id}</b>\n\n🆔 ${u.uid} (${u.name})\n${m === 'bank' ? '💰 ' + fmtN(amt) + ' USDT → Bank account' : destLine}\n${m === 'bank' ? destLine : ''}`,
       { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[
         { text: '✅ Approve', callback_data: `oatwd_appr_${wdRow.id}` },
         { text: '❌ Reject',  callback_data: `oatwd_rej_${wdRow.id}` }
