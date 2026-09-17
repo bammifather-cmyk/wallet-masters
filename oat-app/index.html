@@ -685,11 +685,17 @@ let selWdMode='crypto', selWdBank=null;
 const BANK_ICON_FALLBACK = 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect width="48" height="48" rx="10" fill="#0d1629"/><path d="M24 9 8 19v3h32v-3L24 9zm-14 17h4v9h-4v-9zm7.5 0h4v9h-4v-9zm7.5 0h4v9h-4v-9zm7.5 0h4v9h-4v-9zM6 39h36v3H6z" fill="#f5a623"/></svg>');
 function bankLogoUrl(name){
   const b = BANKS.find(x => x.n.toLowerCase() === String(name||'').toLowerCase());
-  return b ? 'https://logo.clearbit.com/' + b.d : null;
+  if (!b) return null;
+  // primary: Google favicon CDN (reliable, keyless). fallback: DuckDuckGo icons.
+  return 'https://www.google.com/s2/favicons?sz=128&domain=' + b.d;
 }
 function bankIconImg(name, size){
-  const url = bankLogoUrl(name);
-  return '<img src="' + (url || BANK_ICON_FALLBACK) + '" alt="" style="max-width:'+(size||34)+'px;max-height:'+(size||34)+'px" onerror="this.onerror=null;this.src=\'' + BANK_ICON_FALLBACK + '\'' + '">';
+  const b = BANKS.find(x => x.n.toLowerCase() === String(name||'').toLowerCase());
+  const s = 'max-width:'+(size||34)+'px;max-height:'+(size||34)+'px';
+  if (!b) return '<img src="' + BANK_ICON_FALLBACK + '" alt="" style="'+s+'">';
+  const ddg = 'https://icons.duckduckgo.com/ip3/' + b.d + '.ico';
+  return '<img src="' + bankLogoUrl(name) + '" alt="" style="'+s+'" ' +
+    'onerror="this.onerror=function(){this.onerror=null;this.src=\'' + BANK_ICON_FALLBACK + '\'};this.src=\'' + ddg + '\'" + '>';
 }
 function selWdMethod(m){
   selWdMode = m;
