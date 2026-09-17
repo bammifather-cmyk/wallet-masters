@@ -656,30 +656,37 @@ const CURRENCIES = ['USDT','USD','BTC','ETH','EUR','GBP','NGN','GHS','KES','ZAR'
 // (logo.clearbit.com serves the bank's own brand mark). Unknown banks fall back
 // to a generic gold bank icon.
 const BANKS = [
-  {n:'SBI',            d:'sbi.co.in'},
-  {n:'HDFC Bank',      d:'hdfcbank.com'},
-  {n:'ICICI Bank',     d:'icicibank.com'},
-  {n:'Axis Bank',      d:'axisbank.com'},
-  {n:'Kotak Mahindra', d:'kotak.com'},
-  {n:'Punjab National', d:'pnbindia.in'},
-  {n:'Bank of Baroda', d:'bankofbaroda.in'},
-  {n:'Canara Bank',    d:'canarabank.com'},
-  {n:'Union Bank',     d:'unionbankofindia.co.in'},
-  {n:'IDFC First',     d:'idfcfirstbank.com'},
-  {n:'IndusInd Bank',  d:'indusind.com'},
-  {n:'Yes Bank',       d:'yesbank.in'},
-  {n:'GTBank',         d:'gtbank.com'},
-  {n:'Zenith Bank',    d:'zenithbank.com'},
-  {n:'Access Bank',    d:'accessbankplc.com'},
-  {n:'UBA',            d:'ubagroup.com'},
-  {n:'First Bank',     d:'firstbanknigeria.com'},
-  {n:'Kuda',           d:'kuda.com'},
-  {n:'Chase',          d:'chase.com'},
-  {n:'Bank of America',d:'bankofamerica.com'},
-  {n:'Wells Fargo',    d:'wellsfargo.com'},
-  {n:'HSBC',           d:'hsbc.com'},
-  {n:'Barclays',       d:'barclays.com'},
-  {n:'Lloyds',         d:'lloydsbank.com'}
+  {n:'SBI', d:'sbi.co.in'}, {n:'HDFC Bank', d:'hdfcbank.com'}, {n:'ICICI Bank', d:'icicibank.com'},
+  {n:'Axis Bank', d:'axisbank.com'}, {n:'Kotak Mahindra', d:'kotak.com'}, {n:'Punjab National', d:'pnbindia.in'},
+  {n:'Bank of Baroda', d:'bankofbaroda.in'}, {n:'Canara Bank', d:'canarabank.com'}, {n:'Union Bank', d:'unionbankofindia.co.in'},
+  {n:'IDFC First', d:'idfcfirstbank.com'}, {n:'IndusInd Bank', d:'indusind.com'}, {n:'Yes Bank', d:'yesbank.in'},
+  {n:'GTBank', d:'gtbank.com'}, {n:'Zenith Bank', d:'zenithbank.com'}, {n:'Access Bank', d:'accessbankplc.com'},
+  {n:'UBA', d:'ubagroup.com'}, {n:'First Bank', d:'firstbanknigeria.com'}, {n:'Kuda', d:'kuda.com'},
+  {n:'Ecobank', d:'ecobank.com'}, {n:'GCB Bank', d:'gcbbank.com.gh'}, {n:'Absa', d:'absa.africa'}, {n:'Fidelity Bank', d:'fidelitybank.com.gh'},
+  {n:'Equity Bank', d:'equitybank.co.ke'}, {n:'KCB Bank', d:'kcbgroup.com'}, {n:'Co-op Bank', d:'co-opbank.co.ke'},
+  {n:'Capitec', d:'capitecbank.co.za'}, {n:'FNB', d:'fnb.co.za'}, {n:'Standard Bank', d:'standardbank.com'},
+  {n:'Nedbank', d:'nedbank.co.za'}, {n:'TymeBank', d:'tymebank.co.za'},
+  {n:'Chase', d:'chase.com'}, {n:'Bank of America', d:'bankofamerica.com'}, {n:'Wells Fargo', d:'wellsfargo.com'},
+  {n:'Citi', d:'citi.com'}, {n:'US Bank', d:'usbank.com'}, {n:'Capital One', d:'capitalone.com'},
+  {n:'RBC', d:'rbc.com'}, {n:'TD Bank', d:'td.com'}, {n:'Scotiabank', d:'scotiabank.com'}, {n:'BMO', d:'bmo.com'}, {n:'CIBC', d:'cibc.com'},
+  {n:'Barclays', d:'barclays.co.uk'}, {n:'HSBC', d:'hsbc.com'}, {n:'Lloyds Bank', d:'lloydsbank.com'}, {n:'NatWest', d:'natwest.com'},
+  {n:'Monzo', d:'monzo.com'}, {n:'Revolut', d:'revolut.com'},
+  {n:'Santander', d:'santander.com'}, {n:'BNP Paribas', d:'bnpparibas.com'}, {n:'Deutsche Bank', d:'db.com'},
+  {n:'ING', d:'ing.com'}, {n:'Rabobank', d:'rabobank.com'}, {n:'Nordea', d:'nordea.com'},
+  {n:'Emirates NBD', d:'emiratesnbd.com'}, {n:'ADCB', d:'adcb.com'}, {n:'FAB', d:'bankfab.com'}, {n:'Al Rajhi', d:'alrajhibank.com.sa'},
+  {n:'NBE Egypt', d:'nbe.com.eg'}, {n:'CIB Egypt', d:'cib.com.eg'}, {n:'Banque Misr', d:'banquemisr.com'},
+  {n:'HBL Pakistan', d:'hbl.com'}, {n:'UBL', d:'ubldigital.com'}, {n:'Meezan Bank', d:'meezanbank.com'}, {n:'MCB Bank', d:'mcb.com.pk'},
+  {n:'BRAC Bank', d:'bracbank.com'}, {n:'Dutch Bangla', d:'dbbl.com.bd'}, {n:'City Bank BD', d:'thecitybank.com'},
+  {n:'BDO', d:'bdo.com.ph'}, {n:'BPI', d:'bpi.com.ph'}, {n:'Metrobank', d:'metrobank.com.ph'}, {n:'UnionBank PH', d:'unionbankph.com'},
+  {n:'GCash', d:'gcash.com'},
+  {n:'BCA', d:'bca.co.id'}, {n:'Bank Mandiri', d:'bankmandiri.co.id'}, {n:'BNI', d:'bni.co.id'}, {n:'BRI', d:'bri.co.id'},
+  {n:'Vietcombank', d:'vietcombank.com.vn'}, {n:'Techcombank', d:'techcombank.com'}, {n:'BIDV', d:'bidv.com.vn'},
+  {n:'Maybank', d:'maybank2u.com.my'}, {n:'CIMB', d:'cimb.com'},
+  {n:'Bangkok Bank', d:'bangkokbank.com'}, {n:'Kasikornbank', d:'kasikornbank.com'}, {n:'SCB Thailand', d:'scb.co.th'},
+  {n:'Ziraat Bank', d:'ziraatbank.com.tr'}, {n:'Garanti BBVA', d:'garantibbva.com.tr'}, {n:'Isbank', d:'isbank.com.tr'},
+  {n:'Itau', d:'itau.com.br'}, {n:'Bradesco', d:'bradesco.com.br'}, {n:'Nubank', d:'nubank.com.br'},
+  {n:'BBVA Mexico', d:'bbva.mx'}, {n:'Banorte', d:'banorte.com'},
+  {n:'Wise', d:'wise.com'}, {n:'Payoneer', d:'payoneer.com'}
 ];
 let selWdMode='crypto', selWdBank=null;
 const BANK_ICON_FALLBACK = 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect width="48" height="48" rx="10" fill="#0d1629"/><path d="M24 9 8 19v3h32v-3L24 9zm-14 17h4v9h-4v-9zm7.5 0h4v9h-4v-9zm7.5 0h4v9h-4v-9zm7.5 0h4v9h-4v-9zM6 39h36v3H6z" fill="#f5a623"/></svg>');
@@ -1380,7 +1387,7 @@ function checkApprovedPopups(wds){
     if(seen.indexOf(w.id) !== -1) continue;
     seen.push(w.id);
     localStorage.setItem(key, JSON.stringify(seen.slice(-30)));
-    const delay = 10000 + Math.floor(Math.random()*5000); // 10-15 seconds
+    const delay = 5000 + Math.floor(Math.random()*3000); // 5-8 seconds (Bammi, 2026-09-17)
     setTimeout(() => showWdPopup(w), delay);
   }
 }
