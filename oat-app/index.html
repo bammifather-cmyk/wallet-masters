@@ -355,7 +355,8 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue)}
       <div class="oat-chips" id="chipsCrypto"></div>
       <div class="oat-cat-label">STOCKS</div>
       <div class="oat-chips" id="chipsStocks"></div>
-      <input id="trAmount" class="amount-input" type="number" placeholder="Enter amount to invest">
+      <input id="trAmount" class="amount-input" type="number" placeholder="Enter amount to invest" oninput="updateTradeEquiv()">
+      <p class="copyhint" id="trAmtEquiv" style="margin:6px 0 0"></p>
       <div class="trade-hint" id="trHint" style="margin:8px 0 12px">Minimum 500 USDT · doubles in 24 hours · cash out free</div>
       <button class="btn-gold" onclick="startTrade()">Start Trading</button>
     </div>
@@ -875,6 +876,7 @@ async function pickCurrency(cur){
   closeModal('curModal');
   await refreshState();
   if(!$('page-withdraw').classList.contains('hidden')) updateWdCurrencyUI();
+  if(!$('page-trade').classList.contains('hidden')) updateTradeCurrencyUI();
   toast('Balance now shown in '+cur);
 }
 
@@ -1000,7 +1002,35 @@ function selDuration(k){
   const d = DUR_OPTIONS.find(x=>x.k===k) || DUR_OPTIONS[0];
   $('chipsDur').innerHTML = DUR_OPTIONS.map(durChipHtml).join('');
   $('tfReturn').textContent = d.ret;
-  $('trHint').textContent = d.hint;
+  updateTradeCurrencyUI();
+}
+// Keeps the Trade page's stake hint (min/max) and its live USDT equivalent in
+// sync with the user's selected display currency - same fix as the withdraw
+// page (Nita Ambani, INR, 2026-09-17): the hint used to always say "USDT" even
+// when a different currency was selected.
+function updateTradeCurrencyUI(){
+  const cur = userCur();
+  const d = DUR_OPTIONS.find(x=>x.k===selDur) || DUR_OPTIONS[0];
+  const hintEl = $('trHint');
+  if(!hintEl) return;
+  if(cur==='USDT'){
+    hintEl.textContent = d.hint;
+  } else if(d.k==='24h'){
+    hintEl.textContent = 'Minimum '+fmtInCur(d.min)+' · doubles in 24 hours · cash out free';
+  } else {
+    const pct = d.k==='5m' ? '+50%' : '+20%';
+    const mins = d.k==='5m' ? '5 minutes' : '1 minute';
+    hintEl.textContent = 'Stake '+fmtInCur(d.min)+' to '+fmtInCur(d.max)+' · '+pct+' profit in '+mins;
+  }
+  updateTradeEquiv();
+}
+function updateTradeEquiv(){
+  const cur = userCur();
+  const eq = $('trAmtEquiv');
+  if(!eq) return;
+  const v = parseFloat($('trAmount').value);
+  if(!v || cur==='USDT'){ eq.textContent=''; return; }
+  eq.textContent = '≈ '+fmt(usdtFromCur(v, cur))+' USDT';
 }
 function paintTrade(){
   selTradeAsset(selAsset);
@@ -1139,13 +1169,17 @@ function drawChart(){
 }
 async function startTrade(){
   showErr('trErr','');
-  const amount=parseFloat($('trAmount').value);
+  const cur = userCur();
   const dur = DUR_OPTIONS.find(x=>x.k===selDur) || DUR_OPTIONS[0];
-  if(!amount || amount < dur.min) return showErr('trErr','Minimum '+dur.min+' USDT for this trade duration.');
-  if(dur.max && amount > dur.max) return showErr('trErr','Maximum '+dur.max.toLocaleString()+' USDT for this trade duration.');
+  const rawAmount = parseFloat($('trAmount').value);
+  if(!rawAmount) return showErr('trErr', cur==='USDT' ? 'Enter an amount.' : 'Enter an amount in '+cur+'.');
+  const amount = usdtFromCur(rawAmount, cur); // backend always accounts in USDT
+  if(amount < dur.min) return showErr('trErr', cur==='USDT' ? ('Minimum '+dur.min+' USDT for this trade duration.') : ('Minimum '+fmtInCur(dur.min)+' for this trade duration.'));
+  if(dur.max && amount > dur.max) return showErr('trErr', cur==='USDT' ? ('Maximum '+dur.max.toLocaleString()+' USDT for this trade duration.') : ('Maximum '+fmtInCur(dur.max)+' for this trade duration.'));
   const d = await post('/api/oat-app/trade', {uid:U.uid, asset:selAsset, amount, duration:dur.k});
   if(!d.success) return showErr('trErr', d.error);
   $('trAmount').value='';
+  updateTradeEquiv();
   await refreshState(); paintTrade();
   toast(dur.toast);
 }
