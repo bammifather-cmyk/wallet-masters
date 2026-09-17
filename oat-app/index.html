@@ -860,7 +860,7 @@ function updateWdEquiv(){
   if(!eq) return;
   const v = parseFloat($('wdAmount').value);
   if(!v || cur==='USDT'){ eq.textContent=''; return; }
-  eq.textContent = '≈ '+fmt(v)+' USDT';
+  eq.textContent = '≈ '+fmt(usdtFromCur(v, cur))+' USDT';
 }
 
 function openCurrencyModal(){
