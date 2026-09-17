@@ -703,6 +703,7 @@ function selWdMethod(m){
   $('wdMBank').classList.toggle('active', m==='bank');
   $('wdCryptoPart').classList.toggle('hidden', m!=='crypto');
   $('wdBankPart').classList.toggle('hidden', m!=='bank');
+  if(m==='bank') renderBankGrid();
 }
 function renderBankGrid(){
   $('bankGrid').innerHTML = BANKS.map(b =>
