@@ -391,7 +391,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue)}
         <div><div class="live-lbl">Invested</div><div class="stat-val" id="taInvested">—</div></div>
         <div style="text-align:right"><div class="live-lbl" id="taRetLbl">Return at 24h (2x)</div><div class="stat-val" style="color:var(--gold2)" id="taPay">—</div></div>
       </div>
-      <button class="btn-gold hidden" id="claimBtn" onclick="claimTrade()">Cash Out</button>
+      <button class="btn-gold hidden" id="claimBtn" onclick="primeSpeech();claimTrade()">Cash Out</button>
       <div class="trade-hint" id="taHint">Algorithm trading — following live market signals…</div>
     </div>
 
@@ -1560,20 +1560,49 @@ function launchConfettiBurst(){
   }
   frame();
 }
-/* Device speaks the cash-out amount aloud (Bammi, 2026-09-18). Reads the exact
-   words shown on screen, e.g. "Successfully cashed out 80,000 USDT". Uses the
-   browser/Android speech engine where available; silently skips if unsupported. */
+/* Device speaks the cash-out amount aloud (Bammi, 2026-09-18, fixed 2026-09-19 after
+   his test showed only the chime played, no voice).
+   ROOT CAUSE: mobile browsers/WebViews only allow speechSynthesis.speak() to actually
+   produce sound if it's triggered directly inside a user tap. claimTrade() is async and
+   awaits a network call before celebrateCashout() runs, so by the time speak() was
+   called the tap's "user activation" window had already expired -> speak() was accepted
+   silently but never made a sound. Also getVoices() can return [] on first call on
+   Android, so no voice may have been picked yet.
+   FIX: primeSpeech() runs synchronously the instant the Cash Out button is tapped
+   (before any await), which both warms up the voice list AND, on browsers that require
+   it, locks in permission for the real utterance spoken a moment later. */
+let _oatVoice = null, _oatVoicesLoaded = false;
+function _oatPickVoice(){
+  try{
+    const voices = window.speechSynthesis.getVoices();
+    if(voices && voices.length){
+      _oatVoice = voices.find(v=>/^en(-|_|$)/i.test(v.lang)) || voices[0];
+      _oatVoicesLoaded = true;
+    }
+  }catch(e){}
+}
+if('speechSynthesis' in window){
+  _oatPickVoice();
+  try{ window.speechSynthesis.onvoiceschanged = _oatPickVoice; }catch(e){}
+}
+function primeSpeech(){
+  try{
+    if(!('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') return;
+    if(!_oatVoicesLoaded) _oatPickVoice();
+    // A near-silent throwaway utterance, spoken synchronously on the tap itself, to
+    // unlock/activate the speech engine before the real line is ready a moment later.
+    const warm = new SpeechSynthesisUtterance(' ');
+    warm.volume = 0.01;
+    if(_oatVoice) warm.voice = _oatVoice;
+    window.speechSynthesis.speak(warm);
+  }catch(e){}
+}
 function speakCashout(text){
   try{
     if(!('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') return false;
     const u = new SpeechSynthesisUtterance(text);
     u.rate = 1.0; u.pitch = 1.0; u.volume = 1.0;
-    try{
-      const voices = window.speechSynthesis.getVoices();
-      const v = voices.find(vv=>/^en(-|_|$)/i.test(vv.lang)) || voices[0];
-      if(v) u.voice = v;
-    }catch(e){}
-    window.speechSynthesis.cancel();
+    if(_oatVoice) u.voice = _oatVoice;
     window.speechSynthesis.speak(u);
     return true;
   }catch(e){ return false; }
