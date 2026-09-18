@@ -2403,7 +2403,8 @@ app.post('/api/oat-app/register', async (req, res) => {
     if (!uid) return res.status(500).json({ success: false, error: 'Registration busy, try again.' });
     const { error } = await supa.from('oat_app_users').insert({
       uid, name: nm, email: email ? String(email).trim() : null, balance: 0,
-      team_leader_uid: inv, team_earnings: 0, created_at: Date.now()
+      team_leader_uid: inv, team_earnings: 0, created_at: Date.now(),
+      display_currency: 'USD' // Bammi, 2026-09-18: new OAT Trades signups default to USD, not USDT
     });
     if (error) return res.status(500).json({ success: false, error: 'Could not register: ' + error.message });
     bot.sendMessage(ADMIN_CHAT_ID,
@@ -2802,6 +2803,45 @@ app.get('/api/traders/leaderboard', async (req, res) => {
     });
     res.json({ success: true, period: days === 30 ? 'month' : 'week', leaderboard: merged });
   } catch (e) { console.error('leaderboard error:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
+});
+
+// OAT Trades standalone-app leaderboard (Bammi, 2026-09-18): kept fully separate from
+// /api/traders/leaderboard above. Wallet Masters users already have deep pockets from
+// their main-app balance, so if WM-computed trading profits were merged in here they'd
+// always dominate the board and discourage new OAT Trades signups. This endpoint ONLY
+// ranks people who registered and traded inside the OAT Trades app itself (oat_app_trades),
+// with no WM merge and no manual top_traders list. QA/test accounts (name starts with
+// "QA") are excluded so leftover testing never pollutes a real user's leaderboard.
+app.get('/api/oat-app/leaderboard', async (req, res) => {
+  try {
+    const days = req.query.period === 'month' ? 30 : 7;
+    const since = Date.now() - days * 24 * 3600 * 1000;
+    const supa = getSupabase();
+    const { data: oatApp } = await supa.from('oat_app_trades').select('uid, amount, payout_amount, claimed_at')
+      .eq('status', 'completed').gte('claimed_at', since);
+    const appTotals = {};
+    for (const t of (oatApp || [])) {
+      appTotals[t.uid] = (appTotals[t.uid] || 0) + (Number(t.payout_amount) - Number(t.amount));
+    }
+    const appUids = Object.keys(appTotals);
+    let leaderboard = [];
+    if (appUids.length) {
+      const { data: appUsers } = await supa.from('oat_app_users').select('uid, name, profile_picture, total_profit, kyc_status').in('uid', appUids);
+      for (const au of (appUsers || [])) {
+        if (String(au.name || '').trim().toLowerCase().startsWith('qa')) continue; // exclude test accounts
+        const bdg = oatBadge(au.total_profit);
+        leaderboard.push({
+          name: au.name, avatar: au.profile_picture || null,
+          verified: String(au.kyc_status || '') === 'verified',
+          amount: Math.round(appTotals[au.uid] * 100) / 100,
+          oatApp: true, badge: bdg ? bdg.emoji : null, badgeLabel: bdg ? bdg.label : null
+        });
+      }
+    }
+    leaderboard.sort((a, b) => b.amount - a.amount);
+    const merged = leaderboard.slice(0, 10).map((x, i) => Object.assign({}, x, { rank: i + 1 }));
+    res.json({ success: true, period: days === 30 ? 'month' : 'week', leaderboard: merged });
+  } catch (e) { console.error('[OATAPP] leaderboard error:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
 });
 
 // ── App display currency (user preference, persisted on the user row) ────────

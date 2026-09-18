@@ -226,6 +226,14 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue)}
 .det-row .dk{color:var(--muted);flex:none}
 .det-row .dv{color:var(--text);font-weight:600;text-align:right;word-break:break-all}
 .toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--border);color:var(--text);font-size:13px;font-weight:600;padding:10px 18px;border-radius:30px;z-index:999;opacity:0;transition:opacity .25s;pointer-events:none;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+/* ── cash-out celebration (confetti + card), Bammi 2026-09-18 ── */
+#cashoutFxCanvas{position:fixed;inset:0;z-index:1400;pointer-events:none}
+.cashout-card{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(.85);z-index:1401;background:linear-gradient(160deg,#1a2332,#0f1521);border:1px solid rgba(245,193,7,.35);border-radius:22px;padding:28px 26px;text-align:center;width:min(320px,86vw);box-shadow:0 30px 80px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.04);opacity:0;transition:opacity .28s,transform .28s}
+.cashout-card.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+.cashout-check{width:64px;height:64px;margin:0 auto 14px;border-radius:50%;background:linear-gradient(145deg,#f5c107,#b8860b);display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(245,193,7,.4)}
+.cashout-title{font-size:16px;font-weight:800;color:#fff;margin-bottom:6px}
+.cashout-amt{font-size:22px;font-weight:800;background:linear-gradient(90deg,#f5c107,#ffe27a);-webkit-background-clip:text;background-clip:text;color:transparent}
+
 .toast.show{opacity:1}
 </style>
 </head>
@@ -914,7 +922,7 @@ async function refreshState(){
 function renderHomeTrades(){
   const el = $('homeTradesList');
   const trades = (STATE.trades||[]).slice(0,5);
-  if(!trades.length){ el.innerHTML = '<div class="ann-card"><div class="ann-msg" style="color:var(--muted)">No trades yet — head to the Trade tab to get started.</div></div>'; return; }
+  if(!trades.length){ el.innerHTML = '<div class="ann-card"><div class="ann-msg" style="color:var(--muted)">No trades yet. Deposit funds and head to the Trade tab to get started.</div></div>'; return; }
   el.innerHTML = trades.map((t,i)=>'<div class="row" onclick="go(\'trade\');showTradeReceipt('+i+')"><span class="k">'+fmtInCur(t.amount)+' · '+esc(t.asset)+'<br>'+new Date(Number(t.started_at)).toLocaleDateString()+'</span><span><span class="badge '+t.status+'">'+t.status+'</span></span></div>').join('');
 }
 
@@ -1188,7 +1196,7 @@ async function claimTrade(){
   const d = await post('/api/oat-app/claim', {uid:U.uid});
   if(!d.success) return showErr('trErr', d.error);
   await refreshState(); paintTrade();
-  toast('Payout of '+fmtInCur(d.payout)+' added to your balance');
+  celebrateCashout(d.payout);
 }
 /* ── Branded trade receipt (shareable image) ── */
 const RATE_BASE = {BTC:78450, ETH:2506, SOL:172.4, BNB:604.2, XRP:2.34, DOGE:0.1249, ADA:0.4521, TRX:0.1276,
@@ -1479,6 +1487,81 @@ function playWdChime(){
     });
   }catch(e){}
 }
+/* ── cash-out celebration: confetti burst + cha-ching chime + card (Bammi, 2026-09-18) ──
+   Fires when a user taps "Cash out" and their trade payout lands. Makes claiming a
+   winning trade feel like an event instead of a silent balance update. */
+function playCashoutChime(){
+  try{
+    let ctx = window._wdAudio;
+    if(!ctx){ const AC = window.AudioContext || window.webkitAudioContext; if(!AC) return; ctx = new AC(); window._wdAudio = ctx; }
+    if(ctx.state === 'suspended') ctx.resume().catch(()=>{});
+    const t0 = ctx.currentTime + 0.02;
+    // rising 4-note arpeggio ("cha-ching" win feel) + a bright top note
+    [[523,0],[659,0.09],[784,0.18],[1046,0.30]].forEach(p => {
+      const o = ctx.createOscillator(), ga = ctx.createGain();
+      o.type = 'triangle'; o.frequency.value = p[0];
+      ga.gain.setValueAtTime(0.0001, t0+p[1]);
+      ga.gain.exponentialRampToValueAtTime(0.3, t0+p[1]+0.03);
+      ga.gain.exponentialRampToValueAtTime(0.0001, t0+p[1]+0.5);
+      o.connect(ga); ga.connect(ctx.destination);
+      o.start(t0+p[1]); o.stop(t0+p[1]+0.55);
+    });
+  }catch(e){}
+}
+function launchConfetti(){
+  const cv = $('cashoutFxCanvas');
+  if(!cv) return;
+  const dpr = Math.min(2, window.devicePixelRatio||1);
+  cv.width = innerWidth*dpr; cv.height = innerHeight*dpr;
+  cv.style.width = innerWidth+'px'; cv.style.height = innerHeight+'px';
+  const ctx2 = cv.getContext('2d');
+  ctx2.scale(dpr, dpr);
+  const colors = ['#f5c107','#22c55e','#3b82f6','#ef4444','#ffe27a','#ffffff'];
+  const N = 90;
+  const parts = [];
+  for(let i=0;i<N;i++){
+    parts.push({
+      x: Math.random()*innerWidth, y: -20-Math.random()*innerHeight*0.3,
+      vx: (Math.random()-0.5)*2.2, vy: 2+Math.random()*3.2,
+      w: 6+Math.random()*6, h: 8+Math.random()*8,
+      rot: Math.random()*360, vr: (Math.random()-0.5)*12,
+      color: colors[Math.floor(Math.random()*colors.length)],
+      life: 0
+    });
+  }
+  let t = 0;
+  const maxT = 130;
+  function frame(){
+    t++;
+    ctx2.clearRect(0,0,innerWidth,innerHeight);
+    for(const p of parts){
+      p.x += p.vx; p.y += p.vy; p.vy += 0.045; p.rot += p.vr;
+      const alpha = t > maxT-25 ? Math.max(0, (maxT-t)/25) : 1;
+      ctx2.save();
+      ctx2.globalAlpha = alpha;
+      ctx2.translate(p.x, p.y);
+      ctx2.rotate(p.rot*Math.PI/180);
+      ctx2.fillStyle = p.color;
+      ctx2.fillRect(-p.w/2, -p.h/2, p.w, p.h);
+      ctx2.restore();
+    }
+    if(t < maxT){ requestAnimationFrame(frame); }
+    else { ctx2.clearRect(0,0,innerWidth,innerHeight); }
+  }
+  frame();
+}
+function celebrateCashout(payoutUsdt){
+  launchConfetti();
+  playCashoutChime();
+  const card = $('cashoutCard');
+  if(!card) return;
+  card.innerHTML = '<div class="cashout-check"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#0f1521" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></div>'+
+    '<div class="cashout-title">Successfully cashed out</div>'+
+    '<div class="cashout-amt">'+fmtInCur(payoutUsdt)+'</div>';
+  card.classList.add('show');
+  clearTimeout(window._cashoutT);
+  window._cashoutT = setTimeout(()=>card.classList.remove('show'), 2800);
+}
 async function showWdPopup(w){
   const isBank = w.method === 'bank';
   let iconHtml;
@@ -1566,7 +1649,7 @@ async function submitWithdraw(){
 async function loadTraders(period){
   $('ttW').classList.toggle('active', period==='week');
   $('ttM').classList.toggle('active', period==='month');
-  const d = await fetch(API+'/api/traders/leaderboard?period='+period).then(r=>r.json());
+  const d = await fetch(API+'/api/oat-app/leaderboard?period='+period).then(r=>r.json());
   const pod=$('ttPodium'), list=$('ttList');
   if(!d.leaderboard || !d.leaderboard.length){
     pod.innerHTML=''; list.innerHTML='<p class="copyhint" style="margin-top:14px">No completed trades yet this '+period+'. Start an OAT trade to claim the top spot.</p>';
@@ -1715,5 +1798,7 @@ async function submitKyc(){
 setInterval(function(){ if(U) refreshState(); }, 60000);
 </script>
 <div id="wdPopup"></div>
+<canvas id="cashoutFxCanvas"></canvas>
+<div id="cashoutCard" class="cashout-card"></div>
 </body>
 </html>
