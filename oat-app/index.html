@@ -1599,6 +1599,14 @@ function primeSpeech(){
 }
 function speakCashout(text){
   try{
+    // 1) Inside the OAT Trades APK: Android WebView has NO speechSynthesis support at
+    //    all, so the app calls the native TextToSpeech engine via the OATNative bridge
+    //    (added v10.84). This is the only way the voice works in the APK.
+    if(window.OATNative && typeof OATNative.speak === 'function'){
+      OATNative.speak(text);
+      return true;
+    }
+    // 2) Regular browsers: use the standard web speech engine.
     if(!('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') return false;
     const u = new SpeechSynthesisUtterance(text);
     u.rate = 1.0; u.pitch = 1.0; u.volume = 1.0;

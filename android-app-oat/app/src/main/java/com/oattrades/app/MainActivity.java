@@ -11,6 +11,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.speech.tts.TextToSpeech;
 import android.provider.MediaStore;
 import android.util.Base64;
 import android.webkit.JavascriptInterface;
@@ -35,12 +36,22 @@ public class MainActivity extends AppCompatActivity {
     private WebView webView;
     private ProgressBar progressBar;
     private ValueCallback<Uri[]> filePathCallback;
+    private TextToSpeech tts; // native speech engine (cash-out voice announcement)
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        // Native text-to-speech engine. The web layer's speechSynthesis does NOT work
+        // inside Android WebView (no engine is exposed to WebView), so the webapp calls
+        // OATNative.speak(text) through the JS bridge and we speak via the OS engine.
+        tts = new TextToSpeech(this, status -> {
+            if (status == TextToSpeech.SUCCESS) {
+                try { tts.setLanguage(java.util.Locale.US); } catch (Exception ignored) {}
+            }
+        });
 
         webView = findViewById(R.id.webView);
         progressBar = findViewById(R.id.progressBar);
@@ -145,6 +156,15 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
+    protected void onDestroy() {
+        if (tts != null) {
+            try { tts.stop(); tts.shutdown(); } catch (Exception ignored) {}
+            tts = null;
+        }
+        super.onDestroy();
+    }
+
+    @Override
     protected void onSaveInstanceState(Bundle outState) {
         super.onSaveInstanceState(outState);
         webView.saveState(outState);
@@ -169,6 +189,19 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface
         public void shareReceipt(String dataUrl) {
             saveReceiptPng(dataUrl, true);
+        }
+
+        /** Speaks the cash-out line aloud, e.g. "Successfully cashed out 80,000 USDT". */
+        @JavascriptInterface
+        public void speak(final String text) {
+            if (tts == null) return;
+            try {
+                runOnUiThread(() -> {
+                    try {
+                        tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "oat_cashout");
+                    } catch (Exception ignored) {}
+                });
+            } catch (Exception ignored) {}
         }
     }
 
