@@ -335,6 +335,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue)}
         <div class="net-opt" data-a="ETH" onclick="selDepNet('ETH',this)">ETH<span class="net-tag">ERC20</span></div>
       </div>
       <div class="min-note" id="depHint">Send USDT (TRC20) to the address below</div>
+      <div class="min-note" id="depMinHint" style="color:#f5c107">Minimum deposit: 100 USDT</div>
       <div class="qrbox" id="depQr"></div>
       <div class="recv-addr" id="depAddr">Loading…</div>
       <button class="btn" style="margin-bottom:4px" onclick="copyText(document.getElementById('depAddr').textContent)">Copy Address</button>
@@ -442,10 +443,10 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue)}
         <input id="wdHolder" placeholder="Full name on the bank account">
       </div>
       <label id="wdAmtLabel">Amount (USDT)</label>
-      <input id="wdAmount" type="number" placeholder="Minimum 500" oninput="updateWdEquiv()">
+      <input id="wdAmount" type="number" placeholder="Minimum 100" oninput="updateWdEquiv()">
       <p class="copyhint" id="wdAmtEquiv" style="margin-top:6px"></p>
       <button class="btn" onclick="submitWithdraw()">Request Withdrawal</button>
-      <p class="copyhint" id="wdMinHint" style="margin-top:10px">Withdrawals are free and processed by the support team. Minimum 500 USDT.</p>
+      <p class="copyhint" id="wdMinHint" style="margin-top:10px">Withdrawals are free and processed by the support team. Minimum 100 USDT.</p>
     </div>
     <h2>My Withdrawals</h2>
     <div class="card" id="wdHistory"></div>
@@ -526,18 +527,18 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue)}
     <div class="card terms">
       <p>OAT Trades is an optimization-driven trading platform. Our algorithm studies live market conditions across the world's leading markets around the clock and executes trades on your behalf. Every session is secured by a <b>fixed, transparent payout</b>: you see exactly what you will receive before you start, so there are no surprises, no hidden fees, and no guessing.</p>
       <p><b>1. Register.</b> Create your account with your full name and the UID of the person who invited you. You instantly receive your own OAT Trades UID.</p>
-      <p><b>2. Deposit.</b> Fund your account with USDT, BTC or ETH. Attach your payment receipt when you submit: the support team verifies every deposit and credits your balance in USDT, usually within minutes.</p>
+      <p><b>2. Deposit.</b> Fund your account with USDT, BTC or ETH. Minimum deposit is <b>100 USDT</b> or the exact equivalent in your chosen asset at the live rate. Attach your payment receipt when you submit: the support team verifies every deposit and credits your balance in USDT, usually within minutes.</p>
       <p><b>3. Trade.</b> Choose from 20+ major assets, including crypto and global stocks. Pick the session that suits you: a fast <b>1 Minute</b> trade (+20%), a <b>5 Minute</b> trade (+50%), or the flagship <b>24 Hour</b> trade that returns <b>2x</b> your stake. The optimization algorithm handles the market work for you.</p>
       <p><b>4. Cash out.</b> When your session ends, your fixed payout is ready. Tap Cash Out and the full amount moves to your balance instantly, ready to trade again or withdraw.</p>
       <p><b>5. Team earnings.</b> Every person you invite with your UID automatically earns <b>5% of your trading profit</b> on every trade you complete: credited instantly to their balance. Growing your team grows everyone.</p>
-      <p><b>6. Withdraw.</b> Withdraw your funds and profits free of charge to USDT, BTC or ETH, or straight to your bank account from the Withdraw page. Minimum withdrawal is 500 USDT.</p>
+      <p><b>6. Withdraw.</b> Withdraw your funds and profits free of charge to USDT, BTC or ETH, or straight to your bank account from the Withdraw page. Minimum withdrawal is <b>100 USDT</b>.</p>
     </div>
     <h2>Terms &amp; Conditions</h2>
     <div class="card terms">
       <p>1. You must be invited by an existing member to use OAT Trades. The inviter's UID is required at registration and cannot be changed.</p>
       <p>2. One active trade at a time per account. Sessions run 1 minute (+20%), 5 minutes (+50%) or 24 hours (2x payout), as selected, and always return the fixed payout shown before you start.</p>
       <p>3. Balances are denominated in USDT. Deposits in BTC or ETH are converted to USDT at the live market rate when verified.</p>
-      <p>4. Minimum trade amount is 500 USDT for 24-hour trades and 100 USDT for Quick Trades. Minimum withdrawal is 500 USDT. Withdrawals are free of platform fees.</p>
+      <p>4. Minimum deposit is 100 USDT (or the exact equivalent in BTC/ETH at the live rate). Minimum trade amount is 500 USDT for 24-hour trades and 100 USDT for Quick Trades. Minimum withdrawal is 100 USDT. Withdrawals are free of platform fees.</p>
       <p>5. Every deposit must be submitted with a payment receipt: a screenshot or photo of your transfer. The support team reviews the receipt together with the transaction details before crediting your balance. Deposits without a valid receipt may be rejected.</p>
       <p>6. Team earnings of 5% of trading profit are paid to accounts registered under your UID automatically when you complete a trade.</p>
       <p>7. You are responsible for the accuracy of your withdrawal address or bank details. Transactions sent on the blockchain cannot be reversed.</p>
@@ -877,10 +878,10 @@ function updateWdCurrencyUI(){
   if(!lbl || !hint) return;
   if(cur==='USDT'){
     lbl.textContent = 'Amount (USDT)';
-    hint.textContent = 'Withdrawals are free and processed by the support team. Minimum 500 USDT.';
+    hint.textContent = 'Withdrawals are free and processed by the support team. Minimum 100 USDT.';
   } else {
     lbl.textContent = 'Amount ('+cur+')';
-    hint.textContent = 'Withdrawals are free and processed by the support team. Minimum '+fmtInCur(500)+'.';
+    hint.textContent = 'Withdrawals are free and processed by the support team. Minimum '+fmtInCur(100)+'.';
   }
   updateWdEquiv();
 }
@@ -969,6 +970,21 @@ function paintDepAddr(){
   const n = depNetwork();
   if(!n){ $('depAddr').textContent='Loading…'; return; }
   $('depHint').textContent = 'Send '+n.asset+' ('+n.chain+') to the address below';
+  // Live minimum deposit in the selected asset (Bammi, 2026-09-20): for BTC/ETH show
+  // the exact unit amount that equals 100 USDT at the live market rate.
+  try{
+    if(n.asset==='USDT'){
+      $('depMinHint').textContent = 'Minimum deposit: 100 USDT';
+    } else {
+      const r = STATE && STATE.rates && STATE.rates[n.asset];
+      if(r && r>0){
+        const minAsset = 100 / r;
+        $('depMinHint').textContent = 'Minimum deposit: '+minAsset.toFixed(6).replace(/0+$/,'').replace(/\.$/,'')+' '+n.asset+' (= 100 USDT)';
+      } else {
+        $('depMinHint').textContent = 'Minimum deposit: 100 USDT equivalent in '+n.asset;
+      }
+    }
+  }catch(e){}
   $('depAddr').textContent = n.address;
   const qr = $('depQr');
   qr.innerHTML = '';
@@ -1021,6 +1037,12 @@ async function submitDeposit(){
   showErr('depErr','');
   const amount=$('depAmount').value, txid=$('depTxid').value.trim();
   if(!amount || parseFloat(amount)<=0) return showErr('depErr','Enter the amount you sent.');
+  const depAmt = parseFloat(amount);
+  if(selDepAsset==='USDT' && depAmt < 100) return showErr('depErr','Minimum deposit is 100 USDT.');
+  if(selDepAsset!=='USDT'){
+    const r = STATE && STATE.rates && STATE.rates[selDepAsset];
+    if(r && r>0 && depAmt * r < 100) return showErr('depErr','Minimum deposit is '+(100/r).toFixed(6)+' '+selDepAsset+' (= 100 USDT).');
+  }
   if(!depReceiptData) return showErr('depErr','Please attach your payment receipt (screenshot or photo of your transfer).');
   const d = await post('/api/oat-app/deposit', {uid:U.uid, asset:selDepAsset, amount:parseFloat(amount), txid, receipt:depReceiptData});
   if(!d.success) return showErr('depErr', d.error);
@@ -1757,7 +1779,7 @@ async function submitWithdraw(){
   const rawAmount = parseFloat($('wdAmount').value);
   if(!rawAmount) return showErr('wdErr', cur==='USDT' ? 'Enter an amount.' : 'Enter an amount in '+cur+'.');
   const amt = usdtFromCur(rawAmount, cur); // backend always accounts in USDT
-  if(amt < 500) return showErr('wdErr', cur==='USDT' ? 'Minimum withdrawal is 500 USDT.' : 'Minimum withdrawal is '+fmtInCur(500)+' ('+cur+').');
+  if(amt < 100) return showErr('wdErr', cur==='USDT' ? 'Minimum withdrawal is 100 USDT.' : 'Minimum withdrawal is '+fmtInCur(100)+' ('+cur+').');
   let payload = {uid:U.uid, amount:amt};
   if(selWdMode==='bank'){
     const acc=$('wdAcc').value.replace(/\s+/g,''), holder=$('wdHolder').value.trim();

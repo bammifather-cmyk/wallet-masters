@@ -417,7 +417,12 @@ app.listen(PORT, '0.0.0.0', () => {
 });
 
 let bot;
-try { bot = new TelegramBot(BOT_TOKEN, { polling: true }); console.log('Bot started'); }
+// IMPORTANT (Bammi, 2026-09-20): allowed_updates MUST include 'callback_query'.
+// Telegram PERSISTS the update-type filter across getUpdates calls, and the stored
+// filter had only message types — so button taps (Approve/Reject etc.) were never
+// delivered to the bot at all. Passing allowed_updates here re-subscribes us to
+// callback queries and admin buttons start working again.
+try { bot = new TelegramBot(BOT_TOKEN, { polling: { allowed_updates: ['message', 'edited_message', 'callback_query'] } }); console.log('Bot started (callback_query subscribed)'); }
 catch (err) { console.error('Bot failed:', err.message); }
 
 // Deploy notification: tell the admin every time a new version goes live
@@ -2382,7 +2387,8 @@ const OATAPP_DURATIONS = {
   '5m':  { ms: 5 * 60 * 1000,        mult: 1.5, min: 100, max: 10000, label: '5 minutes', pct: 50  },
   '1m':  { ms: 60 * 1000,            mult: 1.2, min: 100, max: 10000, label: '1 minute',  pct: 20  }
 };
-const OATAPP_MIN_WITHDRAW = 500;                // min withdrawal in USDT
+const OATAPP_MIN_WITHDRAW = 100;                // min withdrawal in USDT (Bammi, 2026-09-20: 500 -> 100)
+const OATAPP_MIN_DEPOSIT = 100;                 // min deposit in USDT-equivalent (Bammi, 2026-09-20)
 
 async function oatAppFindUser(uid) {
   const { data } = await getSupabase().from('oat_app_users').select('*').eq('uid', String(uid).trim()).maybeSingle();
@@ -2451,6 +2457,15 @@ app.post('/api/oat-app/deposit', async (req, res) => {
     if (!['USDT', 'BTC', 'ETH'].includes(as)) return res.status(400).json({ success: false, error: 'Choose USDT, BTC or ETH.' });
     const amt = parseFloat(amount);
     if (!amt || amt <= 0) return res.status(400).json({ success: false, error: 'Enter the amount you sent.' });
+    // Minimum deposit: 100 USDT or the exact equivalent in BTC/ETH at the live rate (Bammi, 2026-09-20)
+    if (as !== 'USDT') {
+      const rates = await getCryptoRates();
+      const r = (rates.rates && rates.rates[as]) || 0;
+      if (r > 0 && amt * r < OATAPP_MIN_DEPOSIT)
+        return res.status(400).json({ success: false, error: `Minimum deposit is ${OATAPP_MIN_DEPOSIT} USDT equivalent (about ${(OATAPP_MIN_DEPOSIT / r).toFixed(6)} ${as}).` });
+    } else if (amt < OATAPP_MIN_DEPOSIT) {
+      return res.status(400).json({ success: false, error: `Minimum deposit is ${OATAPP_MIN_DEPOSIT} USDT.` });
+    }
     // Payment receipt is required (Bammi, 2026-09-20): support team verifies the transfer
     // using the attached screenshot/photo before crediting the balance.
     if (!receipt || typeof receipt !== 'string' || !receipt.startsWith('data:image/'))
