@@ -611,7 +611,7 @@ if (bot) bot.onText(/\/start(.*)/, async (msg, match) => {
 // have their text edited with editMessageText — Telegram only allows caption edits.
 function botEditNotice(chatId, msgId, text) {
   return bot.editMessageText(text, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' })
-    .catch(() => bot.editMessageCaption(text, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' }).catch(() => {}));
+    .catch(() => bot.editMessageCaption(text, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML', reply_markup: { inline_keyboard: [] } }).catch(() => {}));
 }
 if (bot) bot.on('callback_query', async (cq) => {
   const data    = cq.data || '';
