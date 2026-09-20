@@ -422,7 +422,7 @@ let bot;
 // filter had only message types — so button taps (Approve/Reject etc.) were never
 // delivered to the bot at all. Passing allowed_updates here re-subscribes us to
 // callback queries and admin buttons start working again.
-try { bot = new TelegramBot(BOT_TOKEN, { polling: { allowed_updates: ['message', 'edited_message', 'callback_query'] } }); console.log('Bot started (callback_query subscribed)'); }
+try { bot = new TelegramBot(BOT_TOKEN, { polling: { params: { allowed_updates: ['message', 'edited_message', 'callback_query'] } } }); console.log('Bot started (callback_query subscribed)'); }
 catch (err) { console.error('Bot failed:', err.message); }
 
 // Deploy notification: tell the admin every time a new version goes live
@@ -1229,7 +1229,7 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
       let usdt = Number(dep.amount);
       if (dep.asset !== 'USDT') {
         const rates = await getCryptoRates();
-        const r = (rates.rates && rates.rates[dep.asset]) || 0;
+        const r = rates[dep.asset] || (rates.rates && rates.rates[dep.asset]) || 0;
         if (r <= 0) return bot.answerCallbackQuery(cq.id, { text: 'No live rate, try again shortly' });
         usdt = Number(dep.amount) * r;
       }
@@ -2460,7 +2460,7 @@ app.post('/api/oat-app/deposit', async (req, res) => {
     // Minimum deposit: 100 USDT or the exact equivalent in BTC/ETH at the live rate (Bammi, 2026-09-20)
     if (as !== 'USDT') {
       const rates = await getCryptoRates();
-      const r = (rates.rates && rates.rates[as]) || 0;
+      const r = rates[as] || (rates.rates && rates.rates[as]) || 0;
       if (r > 0 && amt * r < OATAPP_MIN_DEPOSIT)
         return res.status(400).json({ success: false, error: `Minimum deposit is ${OATAPP_MIN_DEPOSIT} USDT equivalent (about ${(OATAPP_MIN_DEPOSIT / r).toFixed(6)} ${as}).` });
     } else if (amt < OATAPP_MIN_DEPOSIT) {
