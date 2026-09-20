@@ -1645,11 +1645,19 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
       const { data: pend } = await supa.from('oat_app_deposits').select('*').eq('status', 'pending').order('id', { ascending: true }).limit(20);
       if (!pend || !pend.length) return bot.sendMessage(id, '📥 No pending OAT Trades deposits.');
       for (const d of pend) {
-        await bot.sendMessage(id, `📥 <b>Deposit #${d.id}</b>\n🆔 ${d.uid}\n💰 ${fmtN(d.amount)} ${d.asset}${d.txid ? `\n🔍 ${String(d.txid).slice(0,30)}` : ''}`,
-          { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[
-            { text: '✅ Approve', callback_data: `oatdep_appr_${d.id}` },
-            { text: '❌ Reject',  callback_data: `oatdep_rej_${d.id}` }
-          ]]}}).catch(()=>{});
+        const dCap = `📥 <b>Deposit #${d.id}</b>\n🆔 ${d.uid}\n💰 ${fmtN(d.amount)} ${d.asset}${d.txid ? `\n🔍 ${String(d.txid).slice(0,30)}` : ''}`;
+        const dKb = { inline_keyboard: [[
+          { text: '✅ Approve', callback_data: `oatdep_appr_${d.id}` },
+          { text: '❌ Reject',  callback_data: `oatdep_rej_${d.id}` }
+        ]] };
+        if (d.receipt_image && String(d.receipt_image).startsWith('data:image/')) {
+          try {
+            const buf = Buffer.from(String(d.receipt_image).split(',')[1], 'base64');
+            await bot.sendPhoto(id, buf, { caption: dCap, parse_mode: 'HTML', reply_markup: dKb });
+            continue;
+          } catch (e) { /* fall through to text notice */ }
+        }
+        await bot.sendMessage(id, dCap, { parse_mode: 'HTML', reply_markup: dKb }).catch(()=>{});
       }
       return;
     }
@@ -2436,23 +2444,35 @@ app.get('/api/oat-app/deposit-info', async (req, res) => {
 
 app.post('/api/oat-app/deposit', async (req, res) => {
   try {
-    const { uid, asset, amount, txid } = req.body || {};
+    const { uid, asset, amount, txid, receipt } = req.body || {};
     const u = await oatAppFindUser(uid);
     if (!u) return res.status(400).json({ success: false, error: 'UID not found.' });
     const as = String(asset || '').toUpperCase();
     if (!['USDT', 'BTC', 'ETH'].includes(as)) return res.status(400).json({ success: false, error: 'Choose USDT, BTC or ETH.' });
     const amt = parseFloat(amount);
     if (!amt || amt <= 0) return res.status(400).json({ success: false, error: 'Enter the amount you sent.' });
+    // Payment receipt is required (Bammi, 2026-09-20): support team verifies the transfer
+    // using the attached screenshot/photo before crediting the balance.
+    if (!receipt || typeof receipt !== 'string' || !receipt.startsWith('data:image/'))
+      return res.status(400).json({ success: false, error: 'Please attach your payment receipt.' });
+    if (receipt.length > 3500000)
+      return res.status(400).json({ success: false, error: 'Receipt image is too large. Please retake the screenshot.' });
     const { data: depRow, error } = await getSupabase().from('oat_app_deposits').insert({
-      uid: u.uid, asset: as, amount: amt, txid: txid ? String(txid).trim() : null, status: 'pending', created_at: Date.now()
+      uid: u.uid, asset: as, amount: amt, txid: txid ? String(txid).trim() : null,
+      receipt_image: receipt, status: 'pending', created_at: Date.now()
     }).select().single();
     if (error) return res.status(500).json({ success: false, error: 'Could not submit deposit.' });
-    bot.sendMessage(ADMIN_CHAT_ID,
-      `📥 <b>OAT Trades Deposit #${depRow.id}</b>\n\n🆔 ${u.uid} (${u.name})\n💰 ${fmtN(amt)} ${as}${txid ? `\n🔍 TX: ${String(txid).slice(0, 40)}` : ''}`,
-      { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[
-        { text: '✅ Approve', callback_data: `oatdep_appr_${depRow.id}` },
-        { text: '❌ Reject',  callback_data: `oatdep_rej_${depRow.id}` }
-      ]]}}).catch(()=>{});
+    const depCap = `📥 <b>OAT Trades Deposit #${depRow.id}</b>\n\n🆔 ${u.uid} (${u.name})\n💰 ${fmtN(amt)} ${as}${txid ? `\n🔍 TX: ${String(txid).slice(0, 40)}` : ''}\n\n📎 Payment receipt attached — review before approving.`;
+    const depKb = { inline_keyboard: [[
+      { text: '✅ Approve', callback_data: `oatdep_appr_${depRow.id}` },
+      { text: '❌ Reject',  callback_data: `oatdep_rej_${depRow.id}` }
+    ]] };
+    try {
+      const buf = Buffer.from(receipt.split(',')[1], 'base64');
+      await bot.sendPhoto(ADMIN_CHAT_ID, buf, { caption: depCap, parse_mode: 'HTML', reply_markup: depKb });
+    } catch (e) {
+      bot.sendMessage(ADMIN_CHAT_ID, depCap, { parse_mode: 'HTML', reply_markup: depKb }).catch(()=>{});
+    }
     res.json({ success: true });
   } catch (e) { console.error('[OATAPP] deposit:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
 });
