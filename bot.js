@@ -1619,7 +1619,7 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
         let usdt = Number(dep.amount);
         if (dep.asset !== 'USDT') {
           const rates = await getCryptoRates();
-          const r = (rates.rates && rates.rates[dep.asset]) || 0;
+          const r = rates[dep.asset] || (rates.rates && rates.rates[dep.asset]) || 0;
           if (r <= 0) return bot.sendMessage(id, '❌ No live rate for ' + dep.asset + ' — try again shortly.');
           usdt = Number(dep.amount) * r;
         }
@@ -2624,7 +2624,7 @@ app.post('/api/oat-app/withdraw', async (req, res) => {
       if (!address || String(address).trim().length < 10) return res.status(400).json({ success: false, error: 'Enter your wallet address.' });
       // convert USDT amount to asset amount for the admin's reference
       const rates = await getCryptoRates();
-      const rate = (rates.rates && (rates.rates[as] || rates.rates[as.toUpperCase()])) || 0;
+      const rate = rates[as] || rates[as.toUpperCase()] || (rates.rates && (rates.rates[as] || rates.rates[as.toUpperCase()])) || 0;
       const assetAmt = as === 'USDT' ? amt : (rate > 0 ? amt / rate : 0);
       insert = {
         uid: u.uid, asset: as, address: String(address).trim(), amount: amt, status: 'pending', created_at: Date.now(),
