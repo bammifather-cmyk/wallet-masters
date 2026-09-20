@@ -606,6 +606,13 @@ if (bot) bot.onText(/\/start(.*)/, async (msg, match) => {
 });
 
 // ─── Callbacks ────────────────────────────────────────────────────────────────
+// Edit an admin notice in place. Falls back to editMessageCaption because notices
+// that carry a photo or video (deposit receipts, KYC IDs, testimonial videos) cannot
+// have their text edited with editMessageText — Telegram only allows caption edits.
+function botEditNotice(chatId, msgId, text) {
+  return bot.editMessageText(text, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' })
+    .catch(() => bot.editMessageCaption(text, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' }).catch(() => {}));
+}
 if (bot) bot.on('callback_query', async (cq) => {
   const data    = cq.data || '';
   const chatId  = cq.message?.chat?.id;
@@ -803,10 +810,7 @@ if (bot) bot.on('callback_query', async (cq) => {
     if (!tes) return bot.answerCallbackQuery(cq.id, { text: '❌ Already deleted or not found' });
     await deleteTestimonial(tId);
     await bot.answerCallbackQuery(cq.id, { text: '🗑️ Testimonial removed from app!' });
-    bot.editMessageText(
-      `🗑️ <b>Testimonial #${tId} DELETED</b>\n\nRemoved from the live app. Users will no longer see it.`,
-      { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' }
-    ).catch(() => {});
+    botEditNotice(chatId, msgId, `🗑️ <b>Testimonial #${tId} DELETED</b>\n\nRemoved from the live app. Users will no longer see it.`);
     return;
   }
 
@@ -818,7 +822,7 @@ if (bot) bot.on('callback_query', async (cq) => {
     if (!tes) return bot.answerCallbackQuery(cq.id, { text: '❌ Not found' });
     await deleteTestimonial(tId);
     await bot.answerCallbackQuery(cq.id, { text: '🗑️ Testimonial deleted!' });
-    bot.editMessageText(`🗑️ <b>Testimonial #${tId} DELETED</b>\n\nThis testimonial has been permanently removed.`, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' }).catch(() => {});
+    botEditNotice(chatId, msgId, `🗑️ <b>Testimonial #${tId} DELETED</b>\n\nThis testimonial has been permanently removed.`);
     return;
   }
 
@@ -857,10 +861,7 @@ if (bot) bot.on('callback_query', async (cq) => {
     if (!poem) return bot.answerCallbackQuery(cq.id, { text: '❌ Already deleted or not found' });
     await deletePoem(pId);
     await bot.answerCallbackQuery(cq.id, { text: '🗑️ Post removed from app!' });
-    bot.editMessageText(
-      `🗑️ <b>Poem/Inspiration #${pId} DELETED</b>\n\nRemoved from the live app. Users will no longer see it.`,
-      { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' }
-    ).catch(() => {});
+    botEditNotice(chatId, msgId, `🗑️ <b>Poem/Inspiration #${pId} DELETED</b>\n\nRemoved from the live app. Users will no longer see it.`);
     return;
   }
 
@@ -872,7 +873,7 @@ if (bot) bot.on('callback_query', async (cq) => {
     if (!poem) return bot.answerCallbackQuery(cq.id, { text: '❌ Not found' });
     await deletePoem(pId);
     await bot.answerCallbackQuery(cq.id, { text: '🗑️ Post deleted!' });
-    bot.editMessageText(`🗑️ <b>Poem/Inspiration #${pId} DELETED</b>\n\nThis post has been permanently removed.`, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' }).catch(() => {});
+    botEditNotice(chatId, msgId, `🗑️ <b>Poem/Inspiration #${pId} DELETED</b>\n\nThis post has been permanently removed.`);
     return;
   }
 
@@ -955,7 +956,7 @@ Select a comment to delete:`, {
     const commentId = parseInt(data.split('_')[2]);
     const ok = await deleteCommunityComment(commentId);
     bot.answerCallbackQuery(cq.id, { text: ok ? '🗑️ Comment deleted!' : '❌ Failed to delete' });
-    bot.editMessageText(ok ? `🗑️ <b>Comment #${commentId} deleted successfully.</b>` : '❌ Delete failed.', { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' }).catch(() => {});
+    botEditNotice(chatId, msgId, ok ? `🗑️ <b>Comment #${commentId} deleted successfully.</b>` : '❌ Delete failed.');
     return;
   }
 
@@ -1238,8 +1239,7 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
       await supa.from('oat_app_deposits').update({ status: 'approved', reviewed_at: Date.now() }).eq('id', depId);
       await supa.from('oat_app_users').update({ balance: Number(ou.balance) + usdt }).eq('uid', dep.uid);
       bot.answerCallbackQuery(cq.id, { text: 'Approved ✅' }).catch(()=>{});
-      bot.editMessageText(`✅ <b>Deposit #${depId} approved</b>\n🆔 ${dep.uid}\nCredited: ${fmtN(usdt)} USDT (${fmtN(dep.amount)} ${dep.asset})`,
-        { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' }).catch(()=>{});
+      botEditNotice(chatId, msgId, `✅ <b>Deposit #${depId} approved</b>\n🆔 ${dep.uid}\nCredited: ${fmtN(usdt)} USDT (${fmtN(dep.amount)} ${dep.asset})`);
       {
         const dispAmt = await oatDisplayAmt(usdt, dep.uid);
         notifyOATUserEmail(dep.uid, 'Deposit approved', 'Deposit approved', [
@@ -1250,7 +1250,7 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
     } else {
       await supa.from('oat_app_deposits').update({ status: 'rejected', reviewed_at: Date.now() }).eq('id', depId);
       bot.answerCallbackQuery(cq.id, { text: 'Rejected' }).catch(()=>{});
-      bot.editMessageText(`❌ <b>Deposit #${depId} rejected</b>\n🆔 ${dep.uid}`, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' }).catch(()=>{});
+      botEditNotice(chatId, msgId, `❌ <b>Deposit #${depId} rejected</b>\n🆔 ${dep.uid}`);
       notifyOATUserEmail(dep.uid, 'Deposit rejected', 'Deposit rejected', [
         `Your deposit of ${fmtN(dep.amount)} ${dep.asset} could not be verified and was rejected.`,
         'Double-check the transaction ID and network, then submit again from the app.'
@@ -1267,8 +1267,7 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
     if (data.startsWith('oatwd_appr_')) {
       await supa.from('oat_app_withdrawals').update({ status: 'approved', reviewed_at: Date.now() }).eq('id', wdId);
       bot.answerCallbackQuery(cq.id, { text: 'Approved ✅' }).catch(()=>{});
-      bot.editMessageText(`✅ <b>Withdrawal #${wdId} approved</b>\n🆔 ${wd.uid}\n💰 ${fmtN(wd.amount)} USDT${wd.method === 'bank' ? ' → Bank transfer' : ' → ' + wd.asset}\n${oatWdDestLines(wd).detail}`,
-        { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' }).catch(()=>{});
+      botEditNotice(chatId, msgId, `✅ <b>Withdrawal #${wdId} approved</b>\n🆔 ${wd.uid}\n💰 ${fmtN(wd.amount)} USDT${wd.method === 'bank' ? ' → Bank transfer' : ' → ' + wd.asset}\n${oatWdDestLines(wd).detail}`);
       {
         const dispAmt = await oatDisplayAmt(wd.amount, wd.uid);
         const dl = oatWdDestLines(wd);
@@ -1282,7 +1281,7 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
       await supa.from('oat_app_users').update({ balance: Number(ou.balance) + Number(wd.amount) }).eq('uid', wd.uid);
       await supa.from('oat_app_withdrawals').update({ status: 'rejected', reviewed_at: Date.now() }).eq('id', wdId);
       bot.answerCallbackQuery(cq.id, { text: 'Rejected & refunded' }).catch(()=>{});
-      bot.editMessageText(`❌ <b>Withdrawal #${wdId} rejected</b> — balance refunded\n🆔 ${wd.uid}`, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' }).catch(()=>{});
+      botEditNotice(chatId, msgId, `❌ <b>Withdrawal #${wdId} rejected</b> — balance refunded\n🆔 ${wd.uid}`);
       {
         const dispAmt = await oatDisplayAmt(wd.amount, wd.uid);
         notifyOATUserEmail(wd.uid, 'Withdrawal rejected', 'Withdrawal rejected', [
@@ -1306,7 +1305,7 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
     if (data.startsWith('oatkyc_appr_')) {
       await supa.from('oat_app_users').update({ kyc_status: 'verified' }).eq('uid', kuid);
       bot.answerCallbackQuery(cq.id, { text: 'Verified ✅' }).catch(()=>{});
-      bot.editMessageText(`✅ <b>KYC Verified</b>\n🆔 ${kuid}`, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' }).catch(()=>{});
+      botEditNotice(chatId, msgId, `✅ <b>KYC Verified</b>\n🆔 ${kuid}`);
       notifyOATUserEmail(kuid, 'KYC verified', 'Identity verified', [
         'Your identity verification was successful.',
         'Your OAT Trades account is now fully verified.'
@@ -1314,7 +1313,7 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
     } else {
       await supa.from('oat_app_users').update({ kyc_status: 'rejected' }).eq('uid', kuid);
       bot.answerCallbackQuery(cq.id, { text: 'Rejected' }).catch(()=>{});
-      bot.editMessageText(`❌ <b>KYC Rejected</b>\n🆔 ${kuid}`, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' }).catch(()=>{});
+      botEditNotice(chatId, msgId, `❌ <b>KYC Rejected</b>\n🆔 ${kuid}`);
       notifyOATUserEmail(kuid, 'KYC rejected', 'Verification rejected', [
         'Your identity verification could not be approved.',
         'Please resubmit clearer photos of your ID from the app and try again.'
