@@ -425,6 +425,36 @@ let bot;
 try { bot = new TelegramBot(BOT_TOKEN, { polling: { params: { allowed_updates: ['message', 'edited_message', 'callback_query'] } } }); console.log('Bot started (callback_query subscribed)'); }
 catch (err) { console.error('Bot failed:', err.message); }
 
+// (Bammi, 2026-09-22) PERMANENT FIX for dead Approve/Reject buttons.
+// Root cause found by testing: node-telegram-bot-api's polling does NOT
+// reliably deliver allowed_updates to Telegram (raw API tests proved the
+// server-side update filter was never rewritten by the bot's own polls, and
+// button taps stopped being delivered). Telegram keeps a PERSISTED update-type
+// filter on getUpdates: when it lacks 'callback_query', the bot receives no
+// button taps at all, no matter what the polling options say. We therefore pin
+// the filter explicitly with a raw HTTPS call (properly JSON-encoded, the
+// format Telegram requires), at startup and every 15 minutes. The call passes
+// NO offset, so it never skips or consumes pending updates. 409 conflicts with
+// the poller are harmless and the filter still gets rewritten.
+function pinTelegramFilter() {
+  try {
+    const https = require('https');
+    const payload = JSON.stringify({ timeout: 1, allowed_updates: ['message', 'edited_message', 'callback_query'] });
+    const req = https.request({
+      hostname: 'api.telegram.org', path: '/bot' + BOT_TOKEN + '/getUpdates', method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
+      timeout: 4000
+    }, (res) => { res.resume(); });
+    req.on('error', () => {});
+    req.on('timeout', () => req.destroy());
+    req.end(payload);
+  } catch (e) { console.error('pinTelegramFilter error:', e.message); }
+}
+if (bot) {
+  setTimeout(pinTelegramFilter, 3000);
+  setInterval(pinTelegramFilter, 15 * 60 * 1000);
+}
+
 // Deploy notification: tell the admin every time a new version goes live
 const APP_VERSION = '10.59';
 if (bot) {
@@ -2858,11 +2888,26 @@ app.get('/api/oat-app/leaderboard', async (req, res) => {
       appTotals[t.uid] = (appTotals[t.uid] || 0) + (Number(t.payout_amount) - Number(t.amount));
     }
     const appUids = Object.keys(appTotals);
+    // Wallet Masters identities to exclude from the OAT Trades app leaderboard (Bammi,
+    // 2026-09-22): WM users must NEVER appear on the standalone OAT Trades leaderboard,
+    // even if a WM person separately registered an OA- account under their real name
+    // (this happened with "Leena Gandhi Tewari": WM uid WME4A0LXBT0 + a distinct OA-
+    // account under the same name). We block by name match against the WM users table.
+    const wmNames = new Set();
+    try {
+      const { data: wmUsers } = await supa.from('users').select('registered_name, full_name');
+      (wmUsers || []).forEach(u => {
+        if (u.registered_name) wmNames.add(String(u.registered_name).trim().toLowerCase());
+        if (u.full_name) wmNames.add(String(u.full_name).trim().toLowerCase());
+      });
+    } catch (e) { console.error('[OATAPP] leaderboard wmNames error:', e.message); }
     let leaderboard = [];
     if (appUids.length) {
       const { data: appUsers } = await supa.from('oat_app_users').select('uid, name, profile_picture, total_profit, kyc_status').in('uid', appUids);
       for (const au of (appUsers || [])) {
-        if (String(au.name || '').trim().toLowerCase().startsWith('qa')) continue; // exclude test accounts
+        const nameKey = String(au.name || '').trim().toLowerCase();
+        if (nameKey.startsWith('qa')) continue; // exclude test accounts
+        if (wmNames.has(nameKey)) continue; // exclude Wallet Masters users
         const bdg = oatBadge(au.total_profit);
         leaderboard.push({
           name: au.name, avatar: au.profile_picture || null,
