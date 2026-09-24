@@ -759,6 +759,15 @@ const FX_RATES = {USD:1, EUR:0.92, GBP:0.79, NGN:1650, GHS:15.3, KES:129, ZAR:18
 const CRYPTO_SYM = ['BTC','ETH','SOL','BNB','XRP'];
 
 const fmt = (n, dec) => { const d = dec!=null ? dec : 2; return Number(n||0).toLocaleString('en-US', {minimumFractionDigits: d, maximumFractionDigits: d}); };
+/* Compact rank-list amounts (Bammi, 2026-09-24): $375M / $3.75B so wide numbers never
+   take too much space on the Top Traders board. */
+const fmtRank = (n) => {
+  const v = Number(n) || 0;
+  if (v >= 1e9) { const b = Math.round(v / 1e8) / 10; return '$' + (b % 1 === 0 ? b.toFixed(0) : b) + 'B'; }
+  if (v >= 1e6) { const m = Math.round(v / 1e5) / 10; return '$' + (m % 1 === 0 ? m.toFixed(0) : m) + 'M'; }
+  if (v >= 1e3) { return '$' + Math.round(v / 1e3) + 'K'; }
+  return '$' + Math.round(v);
+};
 const fmtCur = cur => (cur==='BTC' ? 8 : (cur==='ETH' ? 6 : 2));
 function esc(s){ return String(s||'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function showErr(id, msg){ const e=$(id); e.textContent=msg; e.style.display=msg?'block':'none'; }
@@ -1825,7 +1834,7 @@ async function loadTraders(period){
       '<div class="tt-ava">'+avaHTML(t)+'</div>'+
       '<div class="tt-name">'+esc(t.name)+'</div>'+
       '<span class="tt-badge">'+vBadge(t)+nBadge(t)+'</span>'+
-      '<div class="tt-amt">$'+fmt(t.amount)+'</div>'+
+      '<div class="tt-amt">$'+fmtRank(t.amount)+'</div>'+
       '<div class="tt-rank">#'+t.rank+(period==='week'?' this week':' this month')+'</div></div>';
   }).join('');
   const rest = d.leaderboard.slice(3);
@@ -1833,7 +1842,7 @@ async function loadTraders(period){
     return '<div class="tt-row"><div class="tt-ava">'+avaHTML(t)+'</div>'+
     '<div style="flex:1;min-width:0"><div class="tt-name" style="font-size:13px">'+esc(t.name)+' '+vBadge(t)+nBadge(t)+'</div>'+
     '<div style="font-size:11px;color:var(--muted);margin-top:2px">#'+t.rank+'</div></div>'+
-    '<div class="tt-amt" style="margin:0">$'+fmt(t.amount)+'</div></div>';
+    '<div class="tt-amt" style="margin:0">$'+fmtRank(t.amount)+'</div></div>';
   }).join('');
 }
 

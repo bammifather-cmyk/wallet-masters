@@ -2815,12 +2815,12 @@ app.get('/api/traders/leaderboard', async (req, res) => {
     // Manual curated Top Traders (admin-managed) come first, then OAT traders not already listed
     let manual = [];
     try {
-      const { data: mrows } = await supa.from('top_traders').select('name, amount').order('id', { ascending: true });
+      const { data: mrows } = await supa.from('top_traders').select('name, amount, photo').order('id', { ascending: true });
       manual = mrows || [];
     } catch (e) { console.error('top_traders read error:', e.message); }
     const manualList = manual.map(m => ({
       name: m.name,
-      avatar: null,
+      avatar: m.photo || null,
       verified: true,
       amount: Math.round((parseFloat(m.amount) || 0) * 100) / 100,
       manual: true
@@ -2918,7 +2918,15 @@ app.get('/api/oat-app/leaderboard', async (req, res) => {
       }
     }
     leaderboard.sort((a, b) => b.amount - a.amount);
-    const merged = leaderboard.slice(0, 10).map((x, i) => Object.assign({}, x, { rank: i + 1 }));
+    // Curated global Top Traders (Bammi, 2026-09-24): world-famous investors, traders and
+    // crypto pioneers with profile photos, managed in the top_traders table (TTADD:/TTDEL:).
+    // Manual entries show first (insertion order = descending profit), then real traders.
+    let manualList = [];
+    try {
+      const { data: mrows } = await supa.from('top_traders').select('name, amount, photo').order('id', { ascending: true });
+      manualList = (mrows || []).map(m => ({ name: m.name, avatar: m.photo || null, verified: true, amount: Math.round((parseFloat(m.amount) || 0) * 100) / 100, manual: true }));
+    } catch (e) { console.error('[OATAPP] manual merge error:', e.message); }
+    const merged = manualList.concat(leaderboard).slice(0, 60).map((x, i) => Object.assign({}, x, { rank: i + 1 }));
     res.json({ success: true, period: days === 30 ? 'month' : 'week', leaderboard: merged });
   } catch (e) { console.error('[OATAPP] leaderboard error:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
 });

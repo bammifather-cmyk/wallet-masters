@@ -65,6 +65,14 @@ function formatUSD(n, decimals) {
   const num = parseFloat(n) || 0;
   return num.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
+// Compact rank-list amounts (Bammi, 2026-09-24): $300M style so wide numbers never take too much space.
+function fmtRankAmt(n) {
+  const v = parseFloat(n) || 0;
+  if (v >= 1e9) { const b = Math.round(v / 1e8) / 10; return '$' + (b % 1 === 0 ? b.toFixed(0) : b) + 'B'; }
+  if (v >= 1e6) { const m = Math.round(v / 1e5) / 10; return '$' + (m % 1 === 0 ? m.toFixed(0) : m) + 'M'; }
+  if (v >= 1e3) { return '$' + Math.round(v / 1e3) + 'K'; }
+  return '$' + Math.round(v);
+}
 // ── App Display Currency ──────────────────────────────────────────────────────
 // All visible amounts render in the user's chosen currency/token (USDT default).
 // Huge numbers auto-abbreviate compactly (691.21M, 1.09T) so they never
@@ -654,7 +662,7 @@ async function loadTopTraders(period) {
         '<div class="tt-ava">' + avaHTML(t) + '</div>' +
         '<div class="tt-name">' + escName(t.name) + '</div>' +
         badge(t.verified) +
-        '<div class="tt-amt">$' + formatUSD(t.amount) + '</div>' +
+        '<div class="tt-amt">$' + fmtRankAmt(t.amount) + '</div>' +
         '<div class="tt-rank">#' + t.rank + (period === 'week' ? ' this week' : ' this month') + '</div>' +
         '</div>';
     }).join('');
@@ -663,7 +671,7 @@ async function loadTopTraders(period) {
       '<div class="tt-row"><div class="tt-ava">' + avaHTML(t) + '</div>' +
       '<div style="flex:1;min-width:0"><div class="tt-name" style="font-size:13px">' + escName(t.name) + '</div>' +
       '<div style="display:flex;align-items:center;gap:4px;margin-top:2px">' + (t.verified ? checkBadge('#3b82f6', 12) : '') + '<span style="font-size:11px;color:#7a90b0">#' + t.rank + '</span></div></div>' +
-      '<div class="tt-amt" style="margin:0">$' + formatUSD(t.amount) + '</div></div>').join('');
+      '<div class="tt-amt" style="margin:0">$' + fmtRankAmt(t.amount) + '</div></div>').join('');
   } catch (e) {
     podium.innerHTML = '<div style="text-align:center;color:#ef4444;font-size:13px;padding:30px 0">Could not load leaderboard. Please try again.</div>';
   }
