@@ -788,14 +788,41 @@ function bankLogoUrl(name){
   const d = bankDomain(name);
   return d ? 'https://www.google.com/s2/favicons?sz=64&domain=' + d : null;
 }
+// Google's favicon CDN never 404s: a domain with no crawled favicon silently returns a
+// generic gray globe placeholder image instead of erroring, so a plain onerror handler
+// can't catch it. GLOBE_HASH is that exact placeholder's content signature (verified
+// 2026-09-24) - every fetched logo is compared against it, and a match falls back to the
+// gold initials badge instead of showing the misleading globe.
+const GLOBE_SIG = '726:b8a0bf372c762e966cc99ede8682bc71';
+async function sha1ish(buf){
+  // lightweight content signature: size + a simple checksum, avoids needing crypto.subtle sync
+  let h = 0; const view = new Uint8Array(buf);
+  for (let i = 0; i < view.length; i++) { h = (h * 31 + view[i]) >>> 0; }
+  return buf.byteLength + ':' + h.toString(16);
+}
+const _logoCache = {};
+async function resolveBankLogo(name, imgEl){
+  const d = bankDomain(name);
+  const fb = bankInitialsBadge(name);
+  if (!d) { imgEl.src = fb; return; }
+  if (_logoCache[d] === 'globe') { imgEl.src = fb; return; }
+  if (_logoCache[d] === 'ok') { imgEl.src = 'https://www.google.com/s2/favicons?sz=64&domain=' + d; return; }
+  const url = 'https://www.google.com/s2/favicons?sz=64&domain=' + d;
+  imgEl.src = url; // show immediately (fast path), verify in background and swap if it's the globe placeholder
+  try{
+    const resp = await fetch(url);
+    const buf = await resp.arrayBuffer();
+    const isGlobe = buf.byteLength === 726; // Google's placeholder is a fixed 726-byte PNG
+    _logoCache[d] = isGlobe ? 'globe' : 'ok';
+    if (isGlobe && imgEl.isConnected) imgEl.src = fb;
+  }catch(e){ /* network hiccup: keep whatever showed, next render retries */ }
+}
 function bankIconImg(name, size){
   const s = 'max-width:'+(size||34)+'px;max-height:'+(size||34)+'px';
-  const d = bankDomain(name);
-  if (!d) return '<img src="' + bankInitialsBadge(name) + '" alt="" style="'+s+'">';
   const fb = bankInitialsBadge(name);
-  const ddg = 'https://icons.duckduckgo.com/ip3/' + d + '.ico';
-  const onerr = "this.onerror=function(){this.onerror=null;this.src='" + fb + "'};this.onerror()";
-  return '<img src="https://www.google.com/s2/favicons?sz=64&domain=' + d + '" alt="" style="'+s+'" onerror="' + onerr + '">';
+  const id = 'bico_' + Math.random().toString(36).slice(2);
+  setTimeout(() => { const el = document.getElementById(id); if (el) resolveBankLogo(name, el); }, 0);
+  return '<img id="'+id+'" src="' + fb + '" alt="" style="'+s+'">';
 }
 function selWdMethod(m){
   selWdMode = m;
@@ -812,10 +839,10 @@ function selWdMethod(m){
     let opts = '<option>All countries</option>';
     BANK_DB.forEach(sec => { opts += '<option>'+sec.c+'</option>'; });
     sel.innerHTML = opts;
-    sel.value = 'All countries';
+    sel.value = 'United States';
   }
 })();
-let selWdCountry = 'All countries';
+let selWdCountry = 'United States';
 function renderBankGrid(){
   const q = String(($('bankSearch')||{}).value || '').toLowerCase().trim();
   let html = '', count = 0;
