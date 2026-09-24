@@ -68,9 +68,10 @@ function formatUSD(n, decimals) {
 // Compact rank-list amounts (Bammi, 2026-09-24): $300M style so wide numbers never take too much space.
 function fmtRankAmt(n) {
   const v = parseFloat(n) || 0;
-  if (v >= 1e9) { const b = Math.round(v / 1e8) / 10; return '$' + (b % 1 === 0 ? b.toFixed(0) : b) + 'B'; }
-  if (v >= 1e6) { const m = Math.round(v / 1e5) / 10; return '$' + (m % 1 === 0 ? m.toFixed(0) : m) + 'M'; }
-  if (v >= 1e3) { return '$' + Math.round(v / 1e3) + 'K'; }
+  const tr = (x) => x.toFixed(2).replace(/\.?0+$/, '');
+  if (v >= 1e9) return '$' + tr(Math.round(v / 1e7) / 100) + 'B';
+  if (v >= 1e6) return '$' + tr(Math.round(v / 1e4) / 100) + 'M';
+  if (v >= 1e3) return '$' + Math.round(v / 1e3) + 'K';
   return '$' + Math.round(v);
 }
 // ── App Display Currency ──────────────────────────────────────────────────────
