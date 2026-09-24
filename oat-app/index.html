@@ -183,20 +183,6 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue)}
 .tt-row{display:flex;align-items:center;gap:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:10px 14px;margin:10px 16px 0}
 .tt-row .tt-ava{width:34px;height:34px;margin:0;border-color:rgba(255,255,255,.12)}
 .tt-row .tt-ava span{font-size:13px}
-/* Live Platform Activity card (home) */
-.live-card{margin-top:16px;padding:16px 18px;border-color:rgba(245,158,11,.18)}
-.lp-head{display:flex;align-items:center;gap:8px;margin-bottom:12px}
-.lp-dot{width:8px;height:8px;border-radius:50%;background:var(--green);position:relative;flex:none}
-.lp-dot::after{content:'';position:absolute;inset:-4px;border-radius:50%;background:var(--green);opacity:.6;animation:lpPulse 1.6s ease-out infinite}
-@keyframes lpPulse{0%{transform:scale(.5);opacity:.7}100%{transform:scale(2.4);opacity:0}}
-.lp-title{font-size:11px;font-weight:800;letter-spacing:1.2px;color:var(--text)}
-.lp-row{display:flex;justify-content:space-between;align-items:center;gap:10px}
-.lp-label{font-size:10px;color:var(--text);opacity:.75;text-transform:uppercase;letter-spacing:.5px;font-weight:600;margin-bottom:4px}
-.lp-val{font-size:20px;font-weight:800;transition:transform .2s}
-.lp-green{color:var(--green)}
-.lp-gold{color:var(--gold2)}
-.lp-flash{animation:lpFlash .9s ease-out}
-@keyframes lpFlash{0%{text-shadow:0 0 16px currentColor;transform:scale(1.07)}100%{text-shadow:none;transform:scale(1)}}
 .tt-note{margin:16px 16px 0;background:rgba(59,130,246,.06);border:1px solid rgba(59,130,246,.18);border-radius:12px;padding:12px 14px;font-size:11px;color:var(--muted);line-height:1.6}
 
 /* support (WM style) */
@@ -334,19 +320,6 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue)}
       <button class="act-btn act-primary" onclick="go('trade')"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg><span>Trade</span></button>
       <button class="act-btn" onclick="go('withdraw')"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M12 20V4m-8 8l8-8 8 8"/></svg><span>Withdraw</span></button>
       <button class="act-btn" onclick="go('support')"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><span>Support</span></button>
-    </div>
-    <div class="card live-card">
-      <div class="lp-head"><span class="lp-dot"></span><span class="lp-title">LIVE PLATFORM ACTIVITY</span></div>
-      <div class="lp-row">
-        <div>
-          <div class="lp-label">Total Profit · All Traders</div>
-          <div class="lp-val lp-green" id="lpProfit">$0</div>
-        </div>
-        <div style="text-align:right">
-          <div class="lp-label">Total Payout · Processed</div>
-          <div class="lp-val lp-gold" id="lpPayout">$0</div>
-        </div>
-      </div>
     </div>
     <h2>My Trades</h2>
     <div class="card" id="homeTradesList" style="min-height:40px;padding:6px 18px"></div>
@@ -619,7 +592,6 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue)}
   </div>
 </div>
 
-
 <!-- OAT TRADE RECEIPT (branded, shareable image) -->
 <div id="receiptModal" class="modal-bg hidden" onclick="if(event.target===this)closeModal('receiptModal')" style="overflow-y:auto">
   <div style="width:100%;max-width:400px;margin:12px auto">
@@ -843,7 +815,7 @@ function enterApp(){
   $('authScreen').classList.add('hidden');
   $('app').classList.remove('hidden');
   $('tabbar').classList.remove('hidden');
-  go('home'); refreshState(); startLiveStats();
+  go('home'); refreshState();
 }
 function go(p){
   document.querySelectorAll('#app .screen').forEach(s=>s.classList.add('hidden'));
@@ -1838,52 +1810,7 @@ async function submitWithdraw(){
 }
 
 /* ── traders (WM podium style) ── */
-// ── Live Platform Activity (Bammi, 2026-09-24): real all-time profit & payout counters
-// on the HOME page. They count up smoothly on load, tick upward continuously as platform
-// activity streams in (each tick mirrors into payout at the fixed 90/82.5 ratio), and
-// re-sync to the true server totals every 60 seconds.
-let lpProfit = 0, lpPayout = 0, lpAnim = null;
-function lpRender(flash){
-  const elP = $('lpProfit'), elY = $('lpPayout');
-  elP.textContent = fmtRank(lpProfit);
-  elY.textContent = fmtRank(lpPayout);
-  if(flash){
-    [elP, elY].forEach(el => { el.classList.remove('lp-flash'); void el.offsetWidth; el.classList.add('lp-flash'); });
-  }
-}
-function lpAnimateTo(tp, pay){
-  const sp = lpProfit, sy = lpPayout, t0 = performance.now(), dur = 1600;
-  cancelAnimationFrame(lpAnim);
-  const step = (now) => {
-    const k = Math.min(1, (now - t0) / dur);
-    const e = 1 - Math.pow(1 - k, 3);
-    lpProfit = sp + (tp - sp) * e;
-    lpPayout = sy + (pay - sy) * e;
-    lpRender(false);
-    if (k < 1) lpAnim = requestAnimationFrame(step);
-    else { lpProfit = tp; lpPayout = pay; lpRender(false); }
-  };
-  lpAnim = requestAnimationFrame(step);
-}
-async function syncLiveStats(){
-  try{
-    const d = await fetch(API+'/api/oat-app/platform-stats').then(r=>r.json());
-    if(d && d.success) lpAnimateTo(d.totalProfit, d.totalPayout);
-  }catch(e){ /* stats re-sync is best-effort; ticking continues */ }
-}
-function lpTick(){
-  const inc = 250 + Math.random() * 4750;   // $250 - $5,000 landing per tick
-  lpProfit += inc;
-  lpPayout  += inc / 0.90 * 0.825;          // keep payout at 82.5% of the same volume
-  lpRender(true);
-  setTimeout(lpTick, 2200 + Math.random() * 5200);
-}
-function startLiveStats(){
-  if (window._lpStarted) return; window._lpStarted = true;
-  syncLiveStats();
-  setTimeout(lpTick, 2500);
-  setInterval(syncLiveStats, 60000);
-}
+
 async function loadTraders(period){
   $('ttW').classList.toggle('active', period==='week');
   $('ttM').classList.toggle('active', period==='month');
