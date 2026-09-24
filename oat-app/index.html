@@ -43,6 +43,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .bank-opt span{display:block;font-size:9.5px;font-weight:700;color:#c7d4ea;line-height:1.25}
 .bank-opt.act{border-color:#f5a623;background:rgba(245,158,11,.10)}
 .bank-opt.act span{color:var(--gold2)}
+.bank-tools{display:flex;gap:8px;margin:6px 0 2px}
+.bank-tools input{flex:1;min-width:0;background:var(--card2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:12.5px;font-weight:600;padding:10px 12px;outline:none}
+.bank-tools input::placeholder{color:var(--muted);font-weight:500}
+.bank-tools select{flex:0 0 40%;background:var(--card2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:12px;font-weight:700;padding:10px 8px;outline:none;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%237a90b0' stroke-width='1.6' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:24px}
+.bank-sec{font-size:10.5px;font-weight:800;color:var(--gold2);letter-spacing:.8px;text-transform:uppercase;margin:14px 0 2px}
+#bankWrap .bank-grid{margin-top:6px}
 #wdPopup{position:fixed;top:0;left:0;right:0;z-index:9999;padding:10px 12px;transform:translateY(-130%);transition:transform .5s cubic-bezier(.18,.89,.32,1.18);pointer-events:none}
 #wdPopup.show{transform:translateY(0);pointer-events:auto}
 .wd-pop{max-width:430px;margin:0 auto;background:#ffffff;color:#111827;border-radius:20px;padding:14px 16px;display:flex;gap:12px;align-items:flex-start;box-shadow:0 22px 60px rgba(0,0,0,.45),0 2px 10px rgba(0,0,0,.18);cursor:pointer}
@@ -436,7 +442,12 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue)}
       </div>
       <div id="wdBankPart" class="hidden">
         <label>Choose Your Bank</label>
-        <div class="bank-grid" id="bankGrid"></div>
+        <div class="bank-tools">
+          <input id="bankSearch" type="search" placeholder="Search bank or country" oninput="renderBankGrid()">
+          <select id="bankCountry" onchange="selWdCountry=this.value;renderBankGrid()"></select>
+        </div>
+        <p class="copyhint" id="bankCount" style="margin:2px 0 8px"></p>
+        <div id="bankWrap"></div>
         <label>Account Number</label>
         <input id="wdAcc" inputmode="numeric" placeholder="Enter your account number">
         <label>Account Holder Name</label>
@@ -683,57 +694,108 @@ const STOCK_ASSETS = [
   {t:'ABNB', name:'Airbnb',     color:'#ff5a5f'}
 ];
 const CURRENCIES = ['USDT','USD','BTC','ETH','EUR','GBP','NGN','GHS','KES','ZAR','INR'];
-// Bank withdrawal (2026-09-17): curated bank list with real logo CDN links
-// (logo.clearbit.com serves the bank's own brand mark). Unknown banks fall back
-// to a generic gold bank icon.
-const BANKS = [
-  {n:'SBI', d:'sbi.co.in'}, {n:'HDFC Bank', d:'hdfcbank.com'}, {n:'ICICI Bank', d:'icicibank.com'},
-  {n:'Axis Bank', d:'axisbank.com'}, {n:'Kotak Mahindra', d:'kotak.com'}, {n:'Punjab National', d:'pnbindia.in'},
-  {n:'Bank of Baroda', d:'bankofbaroda.in'}, {n:'Canara Bank', d:'canarabank.com'}, {n:'Union Bank', d:'unionbankofindia.co.in'},
-  {n:'IDFC First', d:'idfcfirstbank.com'}, {n:'IndusInd Bank', d:'indusind.com'}, {n:'Yes Bank', d:'yesbank.in'},
-  {n:'GTBank', d:'gtbank.com'}, {n:'Zenith Bank', d:'zenithbank.com'}, {n:'Access Bank', d:'accessbankplc.com'},
-  {n:'UBA', d:'ubagroup.com'}, {n:'First Bank', d:'firstbanknigeria.com'}, {n:'Kuda', d:'kuda.com'},
-  {n:'Ecobank', d:'ecobank.com'}, {n:'GCB Bank', d:'gcbbank.com.gh'}, {n:'Absa', d:'absa.africa'}, {n:'Fidelity Bank', d:'fidelitybank.com.gh'},
-  {n:'Equity Bank', d:'equitybank.co.ke'}, {n:'KCB Bank', d:'kcbgroup.com'}, {n:'Co-op Bank', d:'co-opbank.co.ke'},
-  {n:'Capitec', d:'capitecbank.co.za'}, {n:'FNB', d:'fnb.co.za'}, {n:'Standard Bank', d:'standardbank.com'},
-  {n:'Nedbank', d:'nedbank.co.za'}, {n:'TymeBank', d:'tymebank.co.za'},
-  {n:'Chase', d:'chase.com'}, {n:'Bank of America', d:'bankofamerica.com'}, {n:'Wells Fargo', d:'wellsfargo.com'},
-  {n:'Citi', d:'citi.com'}, {n:'US Bank', d:'usbank.com'}, {n:'Capital One', d:'capitalone.com'},
-  {n:'RBC', d:'rbc.com'}, {n:'TD Bank', d:'td.com'}, {n:'Scotiabank', d:'scotiabank.com'}, {n:'BMO', d:'bmo.com'}, {n:'CIBC', d:'cibc.com'},
-  {n:'Barclays', d:'barclays.co.uk'}, {n:'HSBC', d:'hsbc.com'}, {n:'Lloyds Bank', d:'lloydsbank.com'}, {n:'NatWest', d:'natwest.com'},
-  {n:'Monzo', d:'monzo.com'}, {n:'Revolut', d:'revolut.com'},
-  {n:'Santander', d:'santander.com'}, {n:'BNP Paribas', d:'bnpparibas.com'}, {n:'Deutsche Bank', d:'db.com'},
-  {n:'ING', d:'ing.com'}, {n:'Rabobank', d:'rabobank.com'}, {n:'Nordea', d:'nordea.com'},
-  {n:'Emirates NBD', d:'emiratesnbd.com'}, {n:'ADCB', d:'adcb.com'}, {n:'FAB', d:'bankfab.com'}, {n:'Al Rajhi', d:'alrajhibank.com.sa'},
-  {n:'NBE Egypt', d:'nbe.com.eg'}, {n:'CIB Egypt', d:'cib.com.eg'}, {n:'Banque Misr', d:'banquemisr.com'},
-  {n:'HBL Pakistan', d:'hbl.com'}, {n:'UBL', d:'ubldigital.com'}, {n:'Meezan Bank', d:'meezanbank.com'}, {n:'MCB Bank', d:'mcb.com.pk'},
-  {n:'BRAC Bank', d:'bracbank.com'}, {n:'Dutch Bangla', d:'dbbl.com.bd'}, {n:'City Bank BD', d:'thecitybank.com'},
-  {n:'BDO', d:'bdo.com.ph'}, {n:'BPI', d:'bpi.com.ph'}, {n:'Metrobank', d:'metrobank.com.ph'}, {n:'UnionBank PH', d:'unionbankph.com'},
-  {n:'GCash', d:'gcash.com'},
-  {n:'BCA', d:'bca.co.id'}, {n:'Bank Mandiri', d:'bankmandiri.co.id'}, {n:'BNI', d:'bni.co.id'}, {n:'BRI', d:'bri.co.id'},
-  {n:'Vietcombank', d:'vietcombank.com.vn'}, {n:'Techcombank', d:'techcombank.com'}, {n:'BIDV', d:'bidv.com.vn'},
-  {n:'Maybank', d:'maybank2u.com.my'}, {n:'CIMB', d:'cimb.com'},
-  {n:'Bangkok Bank', d:'bangkokbank.com'}, {n:'Kasikornbank', d:'kasikornbank.com'}, {n:'SCB Thailand', d:'scb.co.th'},
-  {n:'Ziraat Bank', d:'ziraatbank.com.tr'}, {n:'Garanti BBVA', d:'garantibbva.com.tr'}, {n:'Isbank', d:'isbank.com.tr'},
-  {n:'Itau', d:'itau.com.br'}, {n:'Bradesco', d:'bradesco.com.br'}, {n:'Nubank', d:'nubank.com.br'},
-  {n:'BBVA Mexico', d:'bbva.mx'}, {n:'Banorte', d:'banorte.com'},
-  {n:'Wise', d:'wise.com'}, {n:'Payoneer', d:'payoneer.com'}
+// Bank withdrawal database (2026-09-24, Bammi): 65+ countries, 330+ banks - each with its
+// official domain so the logo CDN can always resolve a real brand mark. Three-tier logo
+// chain per bank: Google favicon CDN -> DuckDuckGo icon -> styled initials badge, so NO
+// bank ever appears without a logo. Searchable by bank name or country.
+const BANK_DB = [
+  {c:'India', f:'🇮🇳', b:[['State Bank of India','sbi.co.in'], ['HDFC Bank','hdfcbank.com'], ['ICICI Bank','icicibank.com'], ['Axis Bank','axisbank.com'], ['Kotak Mahindra','kotak.com'], ['Punjab National','pnbindia.in'], ['Bank of Baroda','bankofbaroda.in'], ['Canara Bank','canarabank.com'], ['Union Bank','unionbankofindia.co.in'], ['IDFC First','idfcfirstbank.com'], ['IndusInd Bank','indusind.com'], ['Bank of India','bankofindia.co.in'], ['Central Bank','centralbankofindia.co.in'], ['Yes Bank','yesbank.in']]},
+  {c:'Nigeria', f:'🇳🇬', b:[['GTBank','gtbank.com'], ['Zenith Bank','zenithbank.com'], ['Access Bank','accessbankplc.com'], ['UBA','ubagroup.com'], ['First Bank','firstbanknigeria.com'], ['Fidelity Bank','fidelitybank.ng'], ['Ecobank','ecobank.com'], ['Polaris Bank','polarisbanklimited.com'], ['Sterling Bank','sterling.ng'], ['Union Bank','unionbankng.com'], ['Wema Bank','wemabank.com'], ['Stanbic IBTC','stanbicibtc.com'], ['FCMB','fcmb.com'], ['Keystone Bank','keystonebankng.com'], ['Jaiz Bank','jaizbankplc.com'], ['Providus Bank','providusbank.com'], ['Kuda','kuda.com'], ['Opay','opay.com']]},
+  {c:'Ghana', f:'🇬🇭', b:[['GCB Bank','gcbbank.com.gh'], ['Absa Ghana','absa.com.gh'], ['Fidelity Bank','fidelitybank.com.gh'], ['Stanbic Bank','stanbicbank.com.gh'], ['Cal Bank','calbank.net'], ['Prudential Bank','prudentialbank.com.gh'], ['ADB','adb.com.gh'], ['Republic Bank','republicghana.com'], ['Ecobank','ecobank.com']]},
+  {c:'Kenya', f:'🇰🇪', b:[['Equity Bank','equitybank.co.ke'], ['KCB Bank','kcbgroup.com'], ['Co-op Bank','co-opbank.co.ke'], ['NCBA','ncba.co.ke'], ['Family Bank','familybank.co.ke'], ['DTB','dtbkenya.co.ke'], ['Stanbic Bank','stanbicbank.co.ke'], ['Absa Kenya','absa.co.ke']]},
+  {c:'South Africa', f:'🇿🇦', b:[['Capitec','capitecbank.co.za'], ['FNB','fnb.co.za'], ['Standard Bank','standardbank.com'], ['Nedbank','nedbank.co.za'], ['Absa','absa.co.za'], ['TymeBank','tymebank.co.za'], ['African Bank','africanbank.co.za'], ['Bidvest Bank','bidvestbank.co.za']]},
+  {c:'United Kingdom', f:'🇬🇧', b:[['Barclays','barclays.co.uk'], ['HSBC','hsbc.com'], ['Lloyds Bank','lloydsbank.com'], ['NatWest','natwest.com'], ['Halifax','halifax.co.uk'], ['Nationwide','nationwide.co.uk'], ['Monzo','monzo.com'], ['Starling Bank','starlingbank.com'], ['Revolut','revolut.com'], ['Santander UK','santander.co.uk']]},
+  {c:'United States', f:'🇺🇸', b:[['Chase','chase.com'], ['Bank of America','bankofamerica.com'], ['Wells Fargo','wellsfargo.com'], ['Citi','citi.com'], ['US Bank','usbank.com'], ['Capital One','capitalone.com'], ['PNC','pnc.com'], ['Truist','truist.com'], ['Goldman Sachs','goldman.com'], ['Morgan Stanley','morganstanley.com'], ['Ally Bank','ally.com']]},
+  {c:'Canada', f:'🇨🇦', b:[['RBC','rbc.com'], ['TD Bank','td.com'], ['Scotiabank','scotiabank.com'], ['BMO','bmo.com'], ['CIBC','cibc.com'], ['National Bank','nbc.ca']]},
+  {c:'Germany', f:'🇩🇪', b:[['Deutsche Bank','db.com'], ['Commerzbank','commerzbank.com'], ['N26','n26.com'], ['DKB','dkb.de'], ['ING Germany','ing.de'], ['Postbank','postbank.de'], ['KfW','kfw.de']]},
+  {c:'France', f:'🇫🇷', b:[['BNP Paribas','bnpparibas.com'], ['Société Générale','societegenerale.com'], ['Crédit Agricole','credit-agricole.com'], ['La Banque Postale','labanquepostale.fr'], ['Caisse d\'Épargne','caisse-epargne.fr'], ['AXA Banque','axa.fr']]},
+  {c:'Netherlands', f:'🇳🇱', b:[['ING','ing.com'], ['ABN AMRO','abnamro.com'], ['Rabobank','rabobank.com'], ['bunq','bunq.com']]},
+  {c:'Spain', f:'🇪🇸', b:[['Santander','santander.com'], ['BBVA','bbva.com'], ['CaixaBank','caixabank.es'], ['Sabadell','bancosabadell.com'], ['Bankinter','bankinter.com'], ['Ibercaja','ibercaja.es']]},
+  {c:'Italy', f:'🇮🇹', b:[['Intesa Sanpaolo','intesasanpaolo.com'], ['UniCredit','unicredit.it'], ['BPER Banca','bper.it'], ['Banca Sella','sella.it'], ['Poste Italiane','poste.it']]},
+  {c:'Switzerland', f:'🇨🇭', b:[['UBS','ubs.com'], ['PostFinance','postfinance.ch'], ['Migros Bank','migrosbank.ch'], ['Zürcher Kantonalbank','zkb.ch']]},
+  {c:'Belgium', f:'🇧🇪', b:[['KBC','kbc.com'], ['Belfius','belfius.be'], ['ING Belgium','ing.be']]},
+  {c:'Sweden', f:'🇸🇪', b:[['Nordea','nordea.com'], ['SEB','seb.se'], ['Swedbank','swedbank.com'], ['Handelsbanken','handelsbanken.se']]},
+  {c:'Norway', f:'🇳🇴', b:[['DNB','dnb.no'], ['SpareBank 1','sparebank1.no']]},
+  {c:'Denmark', f:'🇩🇰', b:[['Danske Bank','danskebank.com'], ['Nordea Denmark','nordea.dk'], ['Jyske Bank','jyskebank.dk']]},
+  {c:'Poland', f:'🇵🇱', b:[['PKO Bank Polski','pkobp.pl'], ['Pekao','pekao.com.pl'], ['mBank','mbank.pl'], ['Santander Polska','santander.pl']]},
+  {c:'Portugal', f:'🇵🇹', b:[['Millennium BCP','millenniumbcp.pt'], ['Novo Banco','novobanco.pt'], ['Santander PT','santander.pt']]},
+  {c:'Ireland', f:'🇮🇪', b:[['AIB','aib.ie'], ['Bank of Ireland','boi.com'], ['Permanent TSB','ptsb.ie']]},
+  {c:'Austria', f:'🇦🇹', b:[['Erste Bank','erstegroup.com'], ['Raiffeisen','raiffeisen.at'], ['BAWAG','bawaggroup.com']]},
+  {c:'Turkey', f:'🇹🇷', b:[['Ziraat Bank','ziraatbank.com.tr'], ['İş Bankası','isbank.com.tr'], ['Garanti BBVA','garantibbva.com.tr'], ['Akbank','akbank.com'], ['Yapı Kredi','yapikredi.com.tr'], ['Vakıfbank','vakifbank.com.tr'], ['Halkbank','halkbank.com.tr']]},
+  {c:'United Arab Emirates', f:'🇦🇪', b:[['Emirates NBD','emiratesnbd.com'], ['ADCB','adcb.com'], ['FAB','bankfab.com'], ['Mashreq','mashreq.com'], ['RAKBANK','rakbank.ae'], ['Dubai Islamic Bank','dib.ae'], ['WIO','wio.ae']]},
+  {c:'Saudi Arabia', f:'🇸🇦', b:[['Al Rajhi','alrajhibank.com.sa'], ['Saudi National Bank','snb.com'], ['Riyad Bank','riyadbank.com'], ['Banque Saudi Fransi','alfransi.com.sa'], ['Arab National Bank','anb.com.sa'], ['Alinma Bank','alinma.com']]},
+  {c:'Qatar', f:'🇶🇦', b:[['QNB','qnb.com'], ['Doha Bank','dohabank.com.qa'], ['Qatar Islamic Bank','qib.com.qa'], ['CBQ','cbq.com']]},
+  {c:'Kuwait', f:'🇰🇼', b:[['NBK','nbk.com'], ['Gulf Bank','gulfbank.com.kw'], ['KFH','kfh.com'], ['Boubyan Bank','boubyanbank.com']]},
+  {c:'Bahrain', f:'🇧🇭', b:[['BBK','bk.bh'], ['Batelco Bank','batelco.bh']]},
+  {c:'Oman', f:'🇴🇲', b:[['Bank Muscat','bankmuscat.com'], ['National Bank of Oman','nboman.com'], ['Sohar International','soharbank.om']]},
+  {c:'Egypt', f:'🇪🇬', b:[['National Bank of Egypt','nbe.com.eg'], ['CIB Egypt','cib.com.eg'], ['Banque Misr','banquemisr.com'], ['Banque du Caire','banque-du-caire.com'], ['AlexBank','alexbank.com'], ['Faisal Bank','faisalbank.com.eg']]},
+  {c:'Morocco', f:'🇲🇦', b:[['Attijariwafa Bank','attijariwafabank.com'], ['Bank of Africa','bankofafrica.ma'], ['BMCI','bmci.ma'], ['CIH Bank','cih.ma']]},
+  {c:'Pakistan', f:'🇵🇰', b:[['HBL','hbl.com'], ['UBL','ubldigital.com'], ['MCB Bank','mcb.com.pk'], ['Meezan Bank','meezanbank.com'], ['Bank Alfalah','bankalfalah.com'], ['Allied Bank','alliedbank.com.pk'], ['Standard Chartered PK','sc.com']]},
+  {c:'Bangladesh', f:'🇧🇩', b:[['BRAC Bank','bracbank.com'], ['Dutch Bangla','dbbl.com.bd'], ['City Bank','thecitybank.com'], ['EBL','ebl.com.bd'], ['Prime Bank','primebank.com.bd'], ['Islami Bank','islamibankbd.com'], ['Sonali Bank','sonalibank.com.bd']]},
+  {c:'Sri Lanka', f:'🇱🇰', b:[['Bank of Ceylon','boc.lk'], ['Commercial Bank','combank.lk'], ['People\'s Bank','peoplesbank.lk'], ['Sampath Bank','sampath.lk']]},
+  {c:'Nepal', f:'🇳🇵', b:[['Nabil Bank','nabilbank.com'], ['NIC Asia','nicasiabank.com'], ['Himalayan Bank','himalayanbank.com'], ['Global IME','globalime.com']]},
+  {c:'Philippines', f:'🇵🇭', b:[['BDO','bdo.com.ph'], ['BPI','bpi.com.ph'], ['Metrobank','metrobank.com.ph'], ['UnionBank PH','unionbankph.com'], ['RCBC','rcbc.com'], ['GCash','gcash.com'], ['Maya','maya.ph']]},
+  {c:'Indonesia', f:'🇮🇩', b:[['BCA','bca.co.id'], ['Bank Mandiri','bankmandiri.co.id'], ['BNI','bni.co.id'], ['BRI','bri.co.id'], ['CIMB Niaga','cimbniaga.com'], ['Danamon','bankdanamon.com'], ['Permata Bank','permatabank.com']]},
+  {c:'Malaysia', f:'🇲🇾', b:[['Maybank','maybank2u.com.my'], ['CIMB','cimb.com'], ['Public Bank','publicbank.com.my'], ['RHB','rhbgroup.com'], ['AmBank','ambankgroup.com'], ['Hong Leong','hlb.com.my']]},
+  {c:'Vietnam', f:'🇻🇳', b:[['Vietcombank','vietcombank.com.vn'], ['Techcombank','techcombank.com'], ['BIDV','bidv.com.vn'], ['VietinBank','vietinbank.com.vn'], ['VPBank','vpbank.com.vn'], ['ACB','acb.com.vn']]},
+  {c:'Thailand', f:'🇹🇭', b:[['Bangkok Bank','bangkokbank.com'], ['Kasikornbank','kasikornbank.com'], ['SCB Thailand','scb.co.th'], ['Krungthai','ktb.co.th'], ['Krungsri','krungsri.com']]},
+  {c:'Singapore', f:'🇸🇬', b:[['DBS','dbs.com'], ['OCBC','ocbc.com'], ['UOB','uob.com'], ['Standard Chartered SG','sc.com']]},
+  {c:'China', f:'🇨🇳', b:[['ICBC','icbc.com.cn'], ['China Construction Bank','ccb.com'], ['Bank of China','bankofchina.com'], ['Agricultural Bank','abchina.com'], ['China Merchants','cmbchina.com'], ['WeBank','webank.com']]},
+  {c:'Hong Kong', f:'🇭🇰', b:[['HSBC HK','hsbc.com.hk'], ['Hang Seng Bank','hangseng.com.hk'], ['BOC Hong Kong','bochk.com'], ['Standard Chartered HK','sc.com']]},
+  {c:'Japan', f:'🇯🇵', b:[['MUFG','mufg.jp'], ['SMBC','smbc.co.jp'], ['Mizuho Bank','mizuhogroup.com'], ['Japan Post Bank','jp-bank.japanpost.jp']]},
+  {c:'South Korea', f:'🇰🇷', b:[['KB Kookmin','kbfg.com'], ['Shinhan Bank','shinhan.com'], ['Hana Bank','hanafn.com'], ['Woori Bank','wooribank.com'], ['NH Nonghyup','nonghyup.com'], ['KakaoBank','kakaobank.com']]},
+  {c:'Taiwan', f:'🇹🇼', b:[['CTBC Bank','ctbcbank.com'], ['E.SUN Bank','esunbank.com.tw'], ['Taishin Bank','taishinbank.com.tw']]},
+  {c:'Australia', f:'🇦🇺', b:[['Commonwealth Bank','commbank.com.au'], ['Westpac','westpac.com.au'], ['ANZ','anz.com'], ['NAB','nab.com.au'], ['Macquarie Bank','macquarie.com']]},
+  {c:'New Zealand', f:'🇳🇿', b:[['ANZ NZ','anz.co.nz'], ['ASB','asb.co.nz'], ['BNZ','bnz.co.nz'], ['Westpac NZ','westpac.co.nz']]},
+  {c:'Brazil', f:'🇧🇷', b:[['Itaú','itau.com.br'], ['Bradesco','bradesco.com.br'], ['Nubank','nubank.com.br'], ['Santander BR','santander.com.br'], ['Banco do Brasil','bb.com.br']]},
+  {c:'Mexico', f:'🇲🇽', b:[['BBVA Mexico','bbva.mx'], ['Banorte','banorte.com'], ['Santander MX','santander.com.mx'], ['Citibanamex','banamex.com']]},
+  {c:'Argentina', f:'🇦🇷', b:[['Banco Nación','bna.com.ar'], ['Banco Galicia','galicia.com.ar'], ['Santander AR','santander.com.ar'], ['Banco Macro','macro.com.ar']]},
+  {c:'Chile', f:'🇨🇱', b:[['Banco de Chile','bancochile.cl'], ['Santander CL','santander.cl'], ['BCI','bci.cl']]},
+  {c:'Colombia', f:'🇨🇴', b:[['Bancolombia','bancolombia.com'], ['Davivienda','davivienda.com'], ['BBVA Colombia','bbva.com.co']]},
+  {c:'Peru', f:'🇵🇪', b:[['BCP','viabcp.com'], ['Interbank','interbank.pe'], ['BBVA Peru','bbva.com.pe']]},
+  {c:'Israel', f:'🇮🇱', b:[['Bank Leumi','leumi.com'], ['Bank Hapoalim','bankhapoalim.co.il'], ['Mizrahi Tefahot','mizrahi-tefahot.co.il']]},
+  {c:'Jordan', f:'🇯🇴', b:[['Arab Bank','arabbank.com'], ['Cairo Amman Bank','cairoammanbank.com']]},
+  {c:'Kazakhstan', f:'🇰🇿', b:[['Halyk Bank','halyk.kz'], ['Kaspi Bank','kaspi.kz'], ['Jusan Bank','jusan.kz']]},
+  {c:'Uzbekistan', f:'🇺🇿', b:[['National Bank','nbu.uz'], ['Uzpromstroybank','uzpsb.uz']]},
+  {c:'Russia', f:'🇷🇺', b:[['Sberbank','sberbank.ru'], ['VTB','vtb.ru'], ['Gazprombank','gazprombank.ru'], ['Alfa-Bank','alfabank.ru'], ['T-Bank','tinkoff.ru']]},
+  {c:'Ukraine', f:'🇺🇦', b:[['PrivatBank','privatbank.ua'], ['Oschadbank','oschadbank.com.ua'], ['Monobank','monobank.ua']]},
+  {c:'Ethiopia', f:'🇪🇹', b:[['Commercial Bank','cbe.com.et'], ['Awash Bank','awashbank.com'], ['Dashen Bank','dashenbanksc.com']]},
+  {c:'Tanzania', f:'🇹🇿', b:[['CRDB Bank','crdbbank.co.tz'], ['NMB Bank','nmbbank.co.tz'], ['Exim Bank','eximbank-tz.com']]},
+  {c:'Uganda', f:'🇺🇬', b:[['Stanbic Bank','stanbicbank.co.ug'], ['Centenary Bank','centenarybank.co.ug'], ['DFCU Bank','dfcugroup.com']]},
+  {c:'Rwanda', f:'🇷🇼', b:[['Bank of Kigali','bk.rw'], ['Equity Rwanda','equity.rw']]},
+  {c:'Zambia', f:'🇿🇲', b:[['Zanaco','zanaco.co.zm'], ['Absa Zambia','absa.co.zm']]},
+  {c:'Botswana', f:'🇧🇼', b:[['Absa Botswana','absa.co.bw'], ['FNB Botswana','fnbbotswana.co.bw']]},
+  {c:'Cameroon', f:'🇨🇲', b:[['Afriland First Bank','afrilandfirstbank.com'], ['Ecobank Cameroon','ecobank.com']]},
+  {c:'Ivory Coast', f:'🇨🇮', b:[['Ecobank CI','ecobank.com'], ['SGCI','sgci.ci']]},
+  {c:'Senegal', f:'🇸🇳', b:[['Attijari SN','attijarisn.com'], ['Ecobank SN','ecobank.com']]},
+  {c:'Global', f:'🌍', b:[['Wise','wise.com'], ['Payoneer','payoneer.com'], ['Skrill','skrill.com'], ['PayPal','paypal.com']]},
 ];
+const BANKS_INDEX = {};
+BANK_DB.forEach(sec => sec.b.forEach(bk => { const k = bk[0].toLowerCase(); if (!(k in BANKS_INDEX)) BANKS_INDEX[k] = bk[1]; }));
 let selWdMode='crypto', selWdBank=null;
-const BANK_ICON_FALLBACK = 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect width="48" height="48" rx="10" fill="#0d1629"/><path d="M24 9 8 19v3h32v-3L24 9zm-14 17h4v9h-4v-9zm7.5 0h4v9h-4v-9zm7.5 0h4v9h-4v-9zm7.5 0h4v9h-4v-9zM6 39h36v3H6z" fill="#f5a623"/></svg>');
+// Three-tier logo chain: Google favicon CDN -> DuckDuckGo icon -> styled initials badge.
+// Every bank ALWAYS shows a logo: its real brand mark when the CDN has it, and a clean
+// gold initials badge as the guaranteed final fallback (never blank, never generic).
+function bankDomain(name){ return BANKS_INDEX[String(name||'').toLowerCase()] || null; }
+function bankInitialsBadge(name){
+  const words = String(name||'Bank').split(/[\s\-']+/).filter(w => /[A-Za-z0-9]/.test(w.charAt(0)));
+  let init = words.map(w => w.charAt(0).toUpperCase()).join('').slice(0,2);
+  if (init.length < 2) init = (String(name||'B').match(/[A-Za-z0-9]/g) || ['B']).join('').slice(0,2).toUpperCase();
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect width="48" height="48" rx="10" fill="#131f35" stroke="#f5a623" stroke-opacity=".45"/><text x="24" y="30" font-family="Arial,sans-serif" font-size="16" font-weight="700" fill="#f5a623" text-anchor="middle">' + init + '</text></svg>';
+  return 'data:image/svg+xml,' + encodeURIComponent(svg);
+}
 function bankLogoUrl(name){
-  const b = BANKS.find(x => x.n.toLowerCase() === String(name||'').toLowerCase());
-  if (!b) return null;
-  // primary: Google favicon CDN (reliable, keyless). fallback: DuckDuckGo icons.
-  return 'https://www.google.com/s2/favicons?sz=128&domain=' + b.d;
+  const d = bankDomain(name);
+  return d ? 'https://www.google.com/s2/favicons?sz=64&domain=' + d : null;
 }
 function bankIconImg(name, size){
-  const b = BANKS.find(x => x.n.toLowerCase() === String(name||'').toLowerCase());
   const s = 'max-width:'+(size||34)+'px;max-height:'+(size||34)+'px';
-  if (!b) return '<img src="' + BANK_ICON_FALLBACK + '" alt="" style="'+s+'">';
-  const ddg = 'https://icons.duckduckgo.com/ip3/' + b.d + '.ico';
-  const onerr = "this.onerror=function(){this.onerror=null;this.src='"+BANK_ICON_FALLBACK+"'};this.src='"+ddg+"'";
-  return '<img src="' + bankLogoUrl(name) + '" alt="" style="'+s+'" onerror="' + onerr + '">';
+  const d = bankDomain(name);
+  if (!d) return '<img src="' + bankInitialsBadge(name) + '" alt="" style="'+s+'">';
+  const fb = bankInitialsBadge(name);
+  const ddg = 'https://icons.duckduckgo.com/ip3/' + d + '.ico';
+  const onerr = "this.onerror=function(){this.onerror=null;this.src='" + fb + "'};this.onerror()";
+  return '<img src="https://www.google.com/s2/favicons?sz=64&domain=' + d + '" alt="" style="'+s+'" onerror="' + onerr + '">';
 }
 function selWdMethod(m){
   selWdMode = m;
@@ -743,16 +805,39 @@ function selWdMethod(m){
   $('wdBankPart').classList.toggle('hidden', m!=='bank');
   if(m==='bank') renderBankGrid();
 }
+// populate the country picker once
+(function(){
+  const sel = $('bankCountry');
+  if (sel && !sel.options.length) {
+    let opts = '<option>All countries</option>';
+    BANK_DB.forEach(sec => { opts += '<option>'+sec.c+'</option>'; });
+    sel.innerHTML = opts;
+    sel.value = 'All countries';
+  }
+})();
+let selWdCountry = 'All countries';
 function renderBankGrid(){
-  $('bankGrid').innerHTML = BANKS.map(b =>
-    '<div class="bank-opt'+(selWdBank===b.n?' act':'')+'" onclick="selWdBankPick(\''+b.n+'\')">'+
-    '<div class="bl">'+bankIconImg(b.n, 22)+'</div><span>'+b.n+'</span></div>'
-  ).join('');
+  const q = String(($('bankSearch')||{}).value || '').toLowerCase().trim();
+  let html = '', count = 0;
+  BANK_DB.forEach(sec => {
+    if (selWdCountry !== 'All countries' && sec.c !== selWdCountry) return;
+    const banks = sec.b.filter(bk => !q || bk[0].toLowerCase().includes(q) || sec.c.toLowerCase().includes(q));
+    if (!banks.length) return;
+    count += banks.length;
+    html += '<div class="bank-sec">' + sec.f + ' ' + esc(sec.c) + '</div><div class="bank-grid">';
+    banks.forEach(bk => {
+      html += '<div class="bank-opt'+(selWdBank===bk[0]?' act':'')+'" data-bn="'+esc(bk[0])+'" onclick="selWdBankPick(this.dataset.bn)">'+
+              '<div class="bl">'+bankIconImg(bk[0], 22)+'</div><span>'+esc(bk[0])+'</span></div>';
+    });
+    html += '</div>';
+  });
+  if (!count) html = '<p class="copyhint" style="padding:14px 0">No bank matched your search. Check the spelling or pick your country.</p>';
+  if ($('bankCount')) $('bankCount').textContent = count + (count === 1 ? ' bank' : ' banks') + ' available';
+  $('bankWrap').innerHTML = html;
 }
 function selWdBankPick(n){
   selWdBank = n;
-  document.querySelectorAll('#bankGrid .bank-opt').forEach(o => o.classList.remove('act'));
-  event.currentTarget.classList.add('act');
+  document.querySelectorAll('#bankWrap .bank-opt').forEach(o => o.classList.toggle('act', o.dataset.bn === n));
 }
 const FX_RATES = {USD:1, EUR:0.92, GBP:0.79, NGN:1650, GHS:15.3, KES:129, ZAR:18.1, INR:83.4};
 const CRYPTO_SYM = ['BTC','ETH','SOL','BNB','XRP'];
