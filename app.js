@@ -662,7 +662,7 @@ async function loadTopTraders(period) {
         '<div class="tt-ava">' + avaHTML(t) + '</div>' +
         '<div class="tt-name">' + escName(t.name) + '</div>' +
         badge(t.verified) +
-        '<div class="tt-amt">$' + fmtRankAmt(t.amount) + '</div>' +
+        '<div class="tt-amt">' + fmtRankAmt(t.amount) + '</div>' +
         '<div class="tt-rank">#' + t.rank + (period === 'week' ? ' this week' : ' this month') + '</div>' +
         '</div>';
     }).join('');
@@ -671,7 +671,7 @@ async function loadTopTraders(period) {
       '<div class="tt-row"><div class="tt-ava">' + avaHTML(t) + '</div>' +
       '<div style="flex:1;min-width:0"><div class="tt-name" style="font-size:13px">' + escName(t.name) + '</div>' +
       '<div style="display:flex;align-items:center;gap:4px;margin-top:2px">' + (t.verified ? checkBadge('#3b82f6', 12) : '') + '<span style="font-size:11px;color:#7a90b0">#' + t.rank + '</span></div></div>' +
-      '<div class="tt-amt" style="margin:0">$' + fmtRankAmt(t.amount) + '</div></div>').join('');
+      '<div class="tt-amt" style="margin:0">' + fmtRankAmt(t.amount) + '</div></div>').join('');
   } catch (e) {
     podium.innerHTML = '<div style="text-align:center;color:#ef4444;font-size:13px;padding:30px 0">Could not load leaderboard. Please try again.</div>';
   }

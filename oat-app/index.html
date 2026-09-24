@@ -456,6 +456,12 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue)}
   <div id="page-traders" class="screen hidden">
     <h2>Top Traders</h2>
     <div class="traders-toggle"><button id="ttW" class="tt-btn active" onclick="loadTraders('week')">This Week</button><button id="ttM" class="tt-btn" onclick="loadTraders('month')">This Month</button></div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="stat-row" style="margin-bottom:0">
+        <div><div class="stat-label">Total Profit (All Time)</div><div class="stat-val" id="ttTotalProfit" style="color:var(--gold2);font-size:17px">—</div></div>
+        <div style="text-align:right"><div class="stat-label">Total Payout (All Time)</div><div class="stat-val" id="ttTotalPayout" style="font-size:17px">—</div></div>
+      </div>
+    </div>
     <div id="ttPodium" class="tt-podium"></div>
     <div id="ttList"></div>
     <div class="tt-note">Leaderboard ranks OAT trading profits. Top traders are announced every week and every month.</div>
@@ -1810,7 +1816,17 @@ async function submitWithdraw(){
 }
 
 /* ── traders (WM podium style) ── */
+async function loadPlatformStats(){
+  try{
+    const d = await fetch(API+'/api/oat-app/platform-stats').then(r=>r.json());
+    if(d && d.success){
+      $('ttTotalProfit').textContent = fmtRank(d.totalProfit);
+      $('ttTotalPayout').textContent = fmtRank(d.totalPayout);
+    }
+  }catch(e){ /* stats are a nice-to-have; leaderboard still loads if this fails */ }
+}
 async function loadTraders(period){
+  loadPlatformStats();
   $('ttW').classList.toggle('active', period==='week');
   $('ttM').classList.toggle('active', period==='month');
   const d = await fetch(API+'/api/oat-app/leaderboard?period='+period).then(r=>r.json());
@@ -1834,7 +1850,7 @@ async function loadTraders(period){
       '<div class="tt-ava">'+avaHTML(t)+'</div>'+
       '<div class="tt-name">'+esc(t.name)+'</div>'+
       '<span class="tt-badge">'+vBadge(t)+nBadge(t)+'</span>'+
-      '<div class="tt-amt">$'+fmtRank(t.amount)+'</div>'+
+      '<div class="tt-amt">'+fmtRank(t.amount)+'</div>'+
       '<div class="tt-rank">#'+t.rank+(period==='week'?' this week':' this month')+'</div></div>';
   }).join('');
   const rest = d.leaderboard.slice(3);
@@ -1842,7 +1858,7 @@ async function loadTraders(period){
     return '<div class="tt-row"><div class="tt-ava">'+avaHTML(t)+'</div>'+
     '<div style="flex:1;min-width:0"><div class="tt-name" style="font-size:13px">'+esc(t.name)+' '+vBadge(t)+nBadge(t)+'</div>'+
     '<div style="font-size:11px;color:var(--muted);margin-top:2px">#'+t.rank+'</div></div>'+
-    '<div class="tt-amt" style="margin:0">$'+fmtRank(t.amount)+'</div></div>';
+    '<div class="tt-amt" style="margin:0">'+fmtRank(t.amount)+'</div></div>';
   }).join('');
 }
 

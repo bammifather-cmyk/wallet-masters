@@ -2818,13 +2818,11 @@ app.get('/api/traders/leaderboard', async (req, res) => {
       const { data: mrows } = await supa.from('top_traders').select('name, amount, photo').order('id', { ascending: true });
       manual = mrows || [];
     } catch (e) { console.error('top_traders read error:', e.message); }
-    const manualList = manual.map(m => ({
-      name: m.name,
-      avatar: m.photo || null,
-      verified: true,
-      amount: Math.round((parseFloat(m.amount) || 0) * 100) / 100,
-      manual: true
-    }));
+    const manualList = manual.map(m => {
+      const amt = Math.round((parseFloat(m.amount) || 0) * 100) / 100;
+      const bdg = oatBadge(amt);
+      return { name: m.name, avatar: m.photo || null, verified: true, amount: amt, manual: true, badge: bdg ? bdg.emoji : null, badgeLabel: bdg ? bdg.label : null };
+    });
     const manualByName = {};
     manualList.forEach(m => { manualByName[String(m.name).toLowerCase()] = m; });
     // OAT Trades standalone-app traders (claimed trades in window)
@@ -2859,8 +2857,9 @@ app.get('/api/traders/leaderboard', async (req, res) => {
       x.name = x._fullName || x.name;
       return true;
     });
-    const computedSorted = computed.slice().sort((a, c) => c.amount - a.amount);
-    const merged = manualList.concat(computedSorted).slice(0, 10).map((x, i) => {
+    // Rank strictly by amount across curated + real traders (Bammi, 2026-09-24) - a manual
+    // entry must never outrank a real trader with a higher profit just by being curated.
+    const merged = manualList.concat(computed).sort((a, c) => c.amount - a.amount).slice(0, 10).map((x, i) => {
       const y = Object.assign({}, x, { rank: i + 1 });
       delete y._fullName; delete y._username;
       return y;
@@ -2924,11 +2923,48 @@ app.get('/api/oat-app/leaderboard', async (req, res) => {
     let manualList = [];
     try {
       const { data: mrows } = await supa.from('top_traders').select('name, amount, photo').order('id', { ascending: true });
-      manualList = (mrows || []).map(m => ({ name: m.name, avatar: m.photo || null, verified: true, amount: Math.round((parseFloat(m.amount) || 0) * 100) / 100, manual: true }));
+      manualList = (mrows || []).map(m => {
+        const amt = Math.round((parseFloat(m.amount) || 0) * 100) / 100;
+        const bdg = oatBadge(amt);
+        return { name: m.name, avatar: m.photo || null, verified: true, amount: amt, manual: true, badge: bdg ? bdg.emoji : null, badgeLabel: bdg ? bdg.label : null };
+      });
     } catch (e) { console.error('[OATAPP] manual merge error:', e.message); }
-    const merged = manualList.concat(leaderboard).slice(0, 60).map((x, i) => Object.assign({}, x, { rank: i + 1 }));
+    // Rank strictly by amount across curated + real traders (Bammi, 2026-09-24) - a manual
+    // entry must never outrank a real trader with a higher profit just by being curated.
+    const merged = manualList.concat(leaderboard).sort((a, b) => b.amount - a.amount).slice(0, 60).map((x, i) => Object.assign({}, x, { rank: i + 1 }));
     res.json({ success: true, period: days === 30 ? 'month' : 'week', leaderboard: merged });
   } catch (e) { console.error('[OATAPP] leaderboard error:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
+});
+
+// ── OAT Trades platform-wide stats (Bammi, 2026-09-24): live all-time totals shown to
+// every user - "Total Profit" traders/investors have made using OAT Trades, and "Total
+// Payout" processed. Total Profit = sum of curated Top Traders profits + every real OAT
+// Trades user's all-time total_profit (excluding QA/test accounts). Total Payout is
+// derived from the requested ratio: profit represents 90% of underlying trading volume,
+// payout represents 80-85% (82.5% midpoint) of that same volume - so payout stays
+// internally consistent with profit and both grow together as real trades complete.
+app.get('/api/oat-app/platform-stats', async (req, res) => {
+  try {
+    const supa = getSupabase();
+    let curatedTotal = 0;
+    try {
+      const { data: mrows } = await supa.from('top_traders').select('amount');
+      curatedTotal = (mrows || []).reduce((sum, m) => sum + (parseFloat(m.amount) || 0), 0);
+    } catch (e) { console.error('[OATAPP] stats curated error:', e.message); }
+    let realTotal = 0;
+    try {
+      const { data: users } = await supa.from('oat_app_users').select('name, total_profit');
+      realTotal = (users || []).reduce((sum, u) => {
+        const nm = String(u.name || '').trim().toLowerCase();
+        if (nm.startsWith('qa')) return sum; // exclude QA/test accounts
+        return sum + (parseFloat(u.total_profit) || 0);
+      }, 0);
+    } catch (e) { console.error('[OATAPP] stats real error:', e.message); }
+    const totalProfit = Math.round((curatedTotal + realTotal) * 100) / 100;
+    const impliedVolume = totalProfit / 0.90;
+    const totalPayout = Math.round(impliedVolume * 0.825 * 100) / 100;
+    res.json({ success: true, totalProfit, totalPayout });
+  } catch (e) { console.error('[OATAPP] platform-stats error:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
 });
 
 // ── App display currency (user preference, persisted on the user row) ────────
