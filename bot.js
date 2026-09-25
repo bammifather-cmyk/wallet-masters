@@ -139,7 +139,7 @@ async function getFeeInfoForNetwork(network, feeUsdt) {
 
 function nowSec() { return Math.floor(Date.now() / 1000); }
 
-app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.60' }));
+app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.96' }));
 
 // ═══════════════════════════════════════════════════════════════
 // KEEP-ALIVE: Ping every 10 minutes to prevent Render cold starts
@@ -2868,13 +2868,14 @@ app.get('/api/traders/leaderboard', async (req, res) => {
   } catch (e) { console.error('leaderboard error:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
 });
 
-// OAT Trades standalone-app leaderboard (Bammi, 2026-09-18): kept fully separate from
-// /api/traders/leaderboard above. Wallet Masters users already have deep pockets from
-// their main-app balance, so if WM-computed trading profits were merged in here they'd
-// always dominate the board and discourage new OAT Trades signups. This endpoint ONLY
-// ranks people who registered and traded inside the OAT Trades app itself (oat_app_trades),
-// with no WM merge and no manual top_traders list. QA/test accounts (name starts with
-// "QA") are excluded so leftover testing never pollutes a real user's leaderboard.
+// OAT Trades standalone-app leaderboard (Bammi, 2026-09-18; updated 2026-09-25): kept
+// fully separate from /api/traders/leaderboard above. This endpoint ONLY ranks profits
+// computed from oat_app_trades — a user must register and actually trade inside the OAT
+// Trades app to appear, so WM main-app balances can never dominate the board. Since
+// 2026-09-25 (Bammi): WM name-matching exclusion removed, active (mid-trade) trades
+// count via live accrued profit, so everyone who is trading is always on the rank list.
+// Curated global Top Traders (top_traders table, TTADD:/TTDEL:) are merged on top.
+// QA/test accounts (name starts with "QA") are still excluded.
 app.get('/api/oat-app/leaderboard', async (req, res) => {
   try {
     const days = req.query.period === 'month' ? 30 : 7;
@@ -2886,27 +2887,37 @@ app.get('/api/oat-app/leaderboard', async (req, res) => {
     for (const t of (oatApp || [])) {
       appTotals[t.uid] = (appTotals[t.uid] || 0) + (Number(t.payout_amount) - Number(t.amount));
     }
-    const appUids = Object.keys(appTotals);
-    // Wallet Masters identities to exclude from the OAT Trades app leaderboard (Bammi,
-    // 2026-09-22): WM users must NEVER appear on the standalone OAT Trades leaderboard,
-    // even if a WM person separately registered an OA- account under their real name
-    // (this happened with "Leena Gandhi Tewari": WM uid WME4A0LXBT0 + a distinct OA-
-    // account under the same name). We block by name match against the WM users table.
-    const wmNames = new Set();
+    // ACTIVE trades also count (Bammi, 2026-09-25): anyone who is trading in the OAT
+    // Trades app must always be on the rank list, not only after they cash out. An active
+    // trade contributes its live accrued profit (payout - amount, prorated by elapsed time,
+    // same formula the app shows on the trade card) so mid-trade traders rank too.
     try {
-      const { data: wmUsers } = await supa.from('users').select('registered_name, full_name');
-      (wmUsers || []).forEach(u => {
-        if (u.registered_name) wmNames.add(String(u.registered_name).trim().toLowerCase());
-        if (u.full_name) wmNames.add(String(u.full_name).trim().toLowerCase());
-      });
-    } catch (e) { console.error('[OATAPP] leaderboard wmNames error:', e.message); }
+      const { data: oatActive } = await supa.from('oat_app_trades')
+        .select('uid, amount, payout_amount, started_at, ends_at')
+        .eq('status', 'active');
+      const now = Date.now();
+      for (const t of (oatActive || [])) {
+        const total = Number(t.ends_at) - Number(t.started_at);
+        const elapsed = Math.min(Math.max(0, now - Number(t.started_at)), total);
+        const accrued = (Number(t.payout_amount) - Number(t.amount)) * (total > 0 ? elapsed / total : 1);
+        appTotals[t.uid] = (appTotals[t.uid] || 0) + Math.max(0, accrued);
+      }
+    } catch (e) { console.error('[OATAPP] leaderboard active-trades error:', e.message); }
+
+    const appUids = Object.keys(appTotals);
+    // Name-based Wallet Masters exclusion REMOVED (Bammi, 2026-09-25, reversing the
+    // 2026-09-22 rule): a user who genuinely registered and traded inside the OAT Trades
+    // app always ranks by their real OAT trading profits — even if they are also a Wallet
+    // Masters member under the same name (Leena Gandhi Tewari: WM uid WME4A0LXBT0 + OAT
+    // account OA-HBCA6A, reached Elite Trader with 1,807,000 USDT profit on 2026-09-25).
+    // The board can only ever rank profits computed from oat_app_trades, so there is no
+    // way for a WM member to appear here without actually trading in the OAT app.
     let leaderboard = [];
     if (appUids.length) {
       const { data: appUsers } = await supa.from('oat_app_users').select('uid, name, profile_picture, total_profit, kyc_status').in('uid', appUids);
       for (const au of (appUsers || [])) {
         const nameKey = String(au.name || '').trim().toLowerCase();
         if (nameKey.startsWith('qa')) continue; // exclude test accounts
-        if (wmNames.has(nameKey)) continue; // exclude Wallet Masters users
         const bdg = oatBadge(au.total_profit);
         leaderboard.push({
           name: au.name, avatar: au.profile_picture || null,
