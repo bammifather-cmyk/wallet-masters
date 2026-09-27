@@ -139,7 +139,7 @@ async function getFeeInfoForNetwork(network, feeUsdt) {
 
 function nowSec() { return Math.floor(Date.now() / 1000); }
 
-app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.96' }));
+app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.97' }));
 
 // ═══════════════════════════════════════════════════════════════
 // KEEP-ALIVE: Ping every 10 minutes to prevent Render cold starts
@@ -2630,7 +2630,17 @@ app.post('/api/oat-app/withdraw', async (req, res) => {
     const amt = parseFloat(amount);
     if (!amt || amt < OATAPP_MIN_WITHDRAW) return res.status(400).json({ success: false, error: `Minimum withdrawal is ${OATAPP_MIN_WITHDRAW} USDT.` });
     if (Number(u.balance) < amt) return res.status(400).json({ success: false, error: 'Insufficient balance.' });
+    // Withdrawal policies (Bammi, 2026-09-27): users who have not completed KYC
+    // verification cannot withdraw, and users who have never made an approved
+    // deposit cannot withdraw. Both checks run before any request reaches the admin.
+    if (String(u.kyc_status || '') !== 'verified') {
+      return res.status(400).json({ success: false, error: 'KYC verification required. Complete your KYC in Settings before withdrawing.' });
+    }
     const supa = getSupabase();
+    const { data: hasDep } = await supa.from('oat_app_deposits').select('id').eq('uid', u.uid).eq('status', 'approved').limit(1).maybeSingle();
+    if (!hasDep) {
+      return res.status(400).json({ success: false, error: 'A verified deposit is required before withdrawing. Make your first deposit to unlock withdrawals.' });
+    }
     const { data: pending } = await supa.from('oat_app_withdrawals').select('id').eq('uid', u.uid).eq('status', 'pending').maybeSingle();
     if (pending) return res.status(400).json({ success: false, error: 'You already have a pending withdrawal.' });
 
