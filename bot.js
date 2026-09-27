@@ -139,7 +139,7 @@ async function getFeeInfoForNetwork(network, feeUsdt) {
 
 function nowSec() { return Math.floor(Date.now() / 1000); }
 
-app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.97' }));
+app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.98' }));
 
 // ═══════════════════════════════════════════════════════════════
 // KEEP-ALIVE: Ping every 10 minutes to prevent Render cold starts
@@ -2620,6 +2620,21 @@ app.post('/api/oat-app/claim', async (req, res) => {
     res.json({ success: true, payout, profit, teamPaid: paidCount });
   } catch (e) { console.error('[OATAPP] claim:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
 });
+
+// ── Android wrapper auto-update (Bammi, 2026-09-27) ──────────────────────────
+// The OAT Trades Android wrapper checks this endpoint on every launch/resume and,
+// when latestCode is higher than its own BuildConfig.VERSION_CODE, pops a native
+// "Update available" dialog that downloads the new APK in-app and installs it.
+// RELEASE PROCEDURE: on every APK release, bump versionCode/versionName in
+// android-app-oat/app/build.gradle AND OAT_APK_LATEST here in the SAME commit.
+const OAT_APK_LATEST = { code: 8, name: '10.98' };
+app.get('/api/oat-app/app-version', (_, res) => res.json({
+  success: true,
+  latestCode: OAT_APK_LATEST.code,
+  latestName: OAT_APK_LATEST.name,
+  apkUrl: 'https://github.com/bammifather-cmyk/wallet-masters/releases/download/oat-latest/app-release.apk',
+  force: true
+}));
 
 app.post('/api/oat-app/withdraw', async (req, res) => {
   try {

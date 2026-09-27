@@ -2,6 +2,9 @@ package com.oattrades.app;
 
 import android.annotation.SuppressLint;
 import android.app.DownloadManager;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.IntentFilter;
 import android.content.ActivityNotFoundException;
 import android.content.ContentValues;
 import android.content.Intent;
@@ -25,6 +28,7 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.ProgressBar;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 import androidx.webkit.WebSettingsCompat;
 import androidx.webkit.WebViewFeature;
@@ -37,6 +41,12 @@ public class MainActivity extends AppCompatActivity {
     private ProgressBar progressBar;
     private ValueCallback<Uri[]> filePathCallback;
     private TextToSpeech tts; // native speech engine (cash-out voice announcement)
+    private static final String VERSION_URL = "https://wallet-masters.onrender.com/api/oat-app/app-version";
+    private static final String APK_MIME = "application/vnd.android.package-archive";
+    private static final long VERSION_CHECK_INTERVAL_MS = 10 * 60 * 1000L;
+    private long lastVersionCheck = 0L;
+    private long updateDownloadId = -1L;
+    private boolean installPending = false;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -135,10 +145,142 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        // In-app auto-update (Bammi, 2026-09-27): listen for the APK download to
+        // finish so we can fire the installer, and check for a new version now.
+        ContextCompat.registerReceiver(this, new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                long id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1);
+                if (id == updateDownloadId && updateDownloadId != -1) launchApkInstall();
+            }
+        }, new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), ContextCompat.RECEIVER_NOT_EXPORTED);
+        checkForUpdate();
+
         if (savedInstanceState != null) {
             webView.restoreState(savedInstanceState);
         } else {
             webView.loadUrl(APP_URL);
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // User came back from the "install unknown apps" toggle with the APK ready:
+        // continue the update automatically. Otherwise run the version check.
+        if (installPending && canInstallPackages() && updateApkFile().exists()) {
+            installPending = false;
+            launchApkInstall();
+        } else {
+            checkForUpdate();
+        }
+    }
+
+    /** Asks the server for the latest wrapper versionCode and pops the update dialog if newer. */
+    private void checkForUpdate() {
+        final long now = System.currentTimeMillis();
+        if (now - lastVersionCheck < VERSION_CHECK_INTERVAL_MS) return;
+        lastVersionCheck = now;
+        new Thread(() -> {
+            try {
+                java.net.URL url = new java.net.URL(VERSION_URL);
+                javax.net.ssl.HttpsURLConnection con =
+                    (javax.net.ssl.HttpsURLConnection) url.openConnection();
+                con.setConnectTimeout(8000);
+                con.setReadTimeout(8000);
+                java.util.Scanner sc = new java.util.Scanner(con.getInputStream())
+                    .useDelimiter("\\A");
+                String body = sc.hasNext() ? sc.next() : "";
+                sc.close();
+                con.disconnect();
+                org.json.JSONObject o = new org.json.JSONObject(body);
+                int latestCode = o.getInt("latestCode");
+                String latestName = o.optString("latestName", "");
+                String apkUrl = o.optString("apkUrl", "");
+                if (latestCode > installedVersionCode() && !apkUrl.isEmpty()) {
+                    runOnUiThread(() -> showUpdateDialog(latestName, apkUrl));
+                }
+            } catch (Exception ignored) {}
+        }).start();
+    }
+
+    /** Non-cancelable "new version available" dialog — the user can never miss an update. */
+    private void showUpdateDialog(String versionName, String apkUrl) {
+        androidx.appcompat.app.AlertDialog.Builder b = new androidx.appcompat.app.AlertDialog.Builder(this);
+        b.setCancelable(false);
+        b.setTitle("Update Available");
+        b.setMessage("A new version of OAT Trades" + (versionName.isEmpty() ? "" : " (v" + versionName + ")")
+            + " is available.\n\nTap Update Now to download the new version, install it and the app will"
+            + " reopen automatically.");
+        b.setPositiveButton("Update Now", (d, w) -> startApkDownload(apkUrl));
+        b.show();
+    }
+
+    /** Downloads the new APK inside the app (no browser, no file manager). */
+    private void startApkDownload(String apkUrl) {
+        try {
+            DownloadManager.Request req = new DownloadManager.Request(Uri.parse(apkUrl));
+            req.setTitle("OAT Trades update");
+            req.setDescription("Downloading new version…");
+            req.setMimeType(APK_MIME);
+            req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+            req.setDestinationInExternalFilesDir(this, "Updates", "oat-update.apk");
+            DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+            if (dm == null) throw new Exception("no DownloadManager");
+            updateDownloadId = dm.enqueue(req);
+            Toast.makeText(this, "Downloading update…", Toast.LENGTH_SHORT).show();
+        } catch (Exception e) {
+            // Fallback: open the APK link in the browser so the user can still update
+            try {
+                startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(apkUrl)));
+            } catch (Exception ignored) {}
+        }
+    }
+
+    /** The versionCode of THIS installed wrapper (from the OS package manager). */
+    private int installedVersionCode() {
+        try {
+            return getPackageManager().getPackageInfo(getPackageName(), 0).versionCode;
+        } catch (Exception e) {
+            return Integer.MAX_VALUE; // never prompt if we can't read our own version
+        }
+    }
+
+    /** Where the downloaded update APK lands (app-private, no storage permission needed). */
+    private java.io.File updateApkFile() {
+        java.io.File dir = getExternalFilesDir("Updates");
+        return new java.io.File(dir != null ? dir : getFilesDir(), "oat-update.apk");
+    }
+
+    private boolean canInstallPackages() {
+        return Build.VERSION.SDK_INT < 26 || getPackageManager().canRequestPackageInstalls();
+    }
+
+    /** Fires the Android installer on the downloaded APK. */
+    private void launchApkInstall() {
+        try {
+            if (!canInstallPackages()) {
+                // One-time Android security toggle: let this app install updates itself.
+                installPending = true;
+                Toast.makeText(this,
+                    "Tap \"Allow from this source\", then the update continues automatically",
+                    Toast.LENGTH_LONG).show();
+                startActivity(new Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                    Uri.parse("package:" + getPackageName())));
+                return;
+            }
+            java.io.File apk = updateApkFile();
+            if (!apk.exists()) return;
+            Uri uri = FileProvider.getUriForFile(this, "com.oattrades.app.fileprovider", apk);
+            Intent i = new Intent(Intent.ACTION_VIEW);
+            i.setDataAndType(uri, APK_MIME);
+            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(i);
+        } catch (Exception e) {
+            try {
+                startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(
+                    "https://github.com/bammifather-cmyk/wallet-masters/releases/download/oat-latest/app-release.apk")));
+            } catch (Exception ignored) {}
         }
     }
 
