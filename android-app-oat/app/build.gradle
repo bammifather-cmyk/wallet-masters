@@ -10,8 +10,8 @@ android {
         applicationId "com.oattrades.app"
         minSdk 24
         targetSdk 34
-        versionCode 8
-        versionName "10.98"
+        versionCode 9
+        versionName "10.99"
     }
 
     signingConfigs {

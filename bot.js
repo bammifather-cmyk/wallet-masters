@@ -139,7 +139,7 @@ async function getFeeInfoForNetwork(network, feeUsdt) {
 
 function nowSec() { return Math.floor(Date.now() / 1000); }
 
-app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.98' }));
+app.get('/health', (_, res) => res.json({ status: 'ok', service: 'Wallet Masters', version: '10.99' }));
 
 // ═══════════════════════════════════════════════════════════════
 // KEEP-ALIVE: Ping every 10 minutes to prevent Render cold starts
@@ -2578,6 +2578,21 @@ app.post('/api/oat-app/trade', async (req, res) => {
   } catch (e) { console.error('[OATAPP] trade:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
 });
 
+// Team-earnings eligibility (Bammi, 2026-09-27): a member only receives the 5% team
+// profit if they have made at least one APPROVED deposit and have completed their
+// first own trade in the OAT Trades app. Members who have not deposited and traded
+// never receive team earnings.
+async function oatTeamMemberEligible(supa, memberUid) {
+  try {
+    const { data: dep } = await supa.from('oat_app_deposits').select('id')
+      .eq('uid', memberUid).eq('status', 'approved').limit(1).maybeSingle();
+    if (!dep) return false;
+    const { data: tr } = await supa.from('oat_app_trades').select('id')
+      .eq('uid', memberUid).eq('status', 'completed').limit(1).maybeSingle();
+    return !!tr;
+  } catch (e) { console.error('[OATAPP] team eligibility error:', e.message); return false; }
+}
+
 app.post('/api/oat-app/claim', async (req, res) => {
   try {
     const u = await oatAppFindUser((req.body || {}).uid);
@@ -2602,6 +2617,8 @@ app.post('/api/oat-app/claim', async (req, res) => {
     for (const m of (team || [])) {
       const share = Math.round(profit * 0.05 * 100) / 100;
       if (share <= 0) break;
+      // Only members who have deposited and completed their first trade earn 5%
+      if (!(await oatTeamMemberEligible(supa, m.uid))) continue;
       await supa.from('oat_app_users').update({
         balance: Number(m.balance) + share, team_earnings: Number(m.team_earnings) + share
       }).eq('uid', m.uid);
@@ -2627,7 +2644,7 @@ app.post('/api/oat-app/claim', async (req, res) => {
 // "Update available" dialog that downloads the new APK in-app and installs it.
 // RELEASE PROCEDURE: on every APK release, bump versionCode/versionName in
 // android-app-oat/app/build.gradle AND OAT_APK_LATEST here in the SAME commit.
-const OAT_APK_LATEST = { code: 8, name: '10.98' };
+const OAT_APK_LATEST = { code: 9, name: '10.99' };
 app.get('/api/oat-app/app-version', (_, res) => res.json({
   success: true,
   latestCode: OAT_APK_LATEST.code,
@@ -3038,11 +3055,14 @@ app.post('/api/oat/claim', authMiddleware, async (req, res) => {
     try {
       const { data: wmLeader } = await getSupabase().from('users').select('uid').eq('telegram_id', req.tgUser.id).maybeSingle();
       if (wmLeader && wmLeader.uid) {
-        const { data: appTeam } = await getSupabase().from('oat_app_users').select('*').eq('team_leader_uid', wmLeader.uid);
+        const supaW = getSupabase();
+        const { data: appTeam } = await supaW.from('oat_app_users').select('*').eq('team_leader_uid', wmLeader.uid);
         for (const m of (appTeam || [])) {
           const share = Math.round(result.profit * 0.05 * 100) / 100;
           if (share <= 0) break;
-          await getSupabase().from('oat_app_users').update({
+          // Only members who have deposited and completed their first trade earn 5%
+          if (!(await oatTeamMemberEligible(supaW, m.uid))) continue;
+          await supaW.from('oat_app_users').update({
             balance: Number(m.balance) + share, team_earnings: Number(m.team_earnings) + share
           }).eq('uid', m.uid);
         }
