@@ -348,6 +348,36 @@ setInterval(() => {
 }, 14 * 60 * 1000); // every 14 minutes
 
 // ─── One-time DB setup for withdrawal settings ───
+// OAT withdrawal note columns (Bammi, 2026-10-09): same DDL as the startup migration,
+// callable on demand so connection failures are visible instead of only in server logs.
+app.get('/api/admin/setup-wd-note-cols', async (req, res) => {
+  const results = [];
+  try {
+    const { Pool } = require('pg');
+    const conns = [];
+    if (process.env.DATABASE_URL) conns.push({ name: 'env-DATABASE_URL', connectionString: process.env.DATABASE_URL });
+    conns.push({ name: 'us-west-1 session pooler 5432', host: 'aws-0-us-west-1.pooler.supabase.com', port: 5432, user: 'postgres.cuuekllbcrxvlxlydyta', password: 'ZiEPZYqgmCZaIgf2', database: 'postgres' });
+    conns.push({ name: 'us-west-1 tx pooler 6543', host: 'aws-0-us-west-1.pooler.supabase.com', port: 6543, user: 'postgres.cuuekllbcrxvlxlydyta', password: 'ZiEPZYqgmCZaIgf2', database: 'postgres' });
+    conns.push({ name: 'direct db 5432', host: 'db.cuuekllbcrxvlxlydyta.supabase.co', port: 5432, user: 'postgres', password: 'ZiEPZYqgmCZaIgf2', database: 'postgres' });
+    let done = false;
+    for (const cfg of conns) {
+      if (done) break;
+      const pool = new Pool({ ...cfg, ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 8000 });
+      try {
+        await pool.query('ALTER TABLE oat_app_withdrawals ADD COLUMN IF NOT EXISTS admin_note TEXT DEFAULT NULL');
+        await pool.query('ALTER TABLE oat_app_withdrawals ADD COLUMN IF NOT EXISTS note_image TEXT DEFAULT NULL');
+        await pool.query('ALTER TABLE oat_app_withdrawals ADD COLUMN IF NOT EXISTS status_updated_at BIGINT DEFAULT NULL');
+        results.push({ name: cfg.name, ok: true });
+        done = true;
+      } catch (e) {
+        results.push({ name: cfg.name, ok: false, error: String(e.message || e).slice(0, 160) });
+      }
+      await pool.end().catch(()=>{});
+    }
+  } catch (e) { results.push({ name: 'outer', ok: false, error: String(e.message || e).slice(0, 160) }); }
+  res.json({ success: results.some(r => r.ok), results });
+});
+
 app.get('/api/admin/setup-db', async (req, res) => {
   try {
     const { Pool } = require('pg');
