@@ -348,46 +348,6 @@ setInterval(() => {
 }, 14 * 60 * 1000); // every 14 minutes
 
 // ─── One-time DB setup for withdrawal settings ───
-// OAT withdrawal note columns (Bammi, 2026-10-09): same DDL as the startup migration,
-// callable on demand so connection failures are visible instead of only in server logs.
-// OAT withdrawal note columns (Bammi, 2026-10-09): same DDL as the startup migration,
-// callable on demand so connection failures are visible instead of only in server logs.
-app.get('/api/admin/setup-wd-note-cols', async (req, res) => {
-  const results = [];
-  const PWS = ['ZiEPZYqgmCZaIgf2', 'WalletMasters2025!', 'WalletMasters2025'];
-  const REF = 'cuuekllbcrxvlxlydyta';
-  try {
-    const { Pool } = require('pg');
-    const conns = [];
-    for (const pooler of ['aws-1-us-west-1', 'aws-0-us-west-1']) {
-      for (const port of [5432, 6543]) {
-        for (const pw of PWS) {
-          conns.push({ name: pooler + ':' + port + ' pw#' + PWS.indexOf(pw), host: pooler + '.pooler.supabase.com', port, user: 'postgres.' + REF, password: pw, database: 'postgres' });
-        }
-      }
-    }
-    let done = false, auths = 0;
-    for (const cfg of conns) {
-      if (done || auths >= 4) break;
-      const pool = new Pool({ ...cfg, ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 8000 });
-      try {
-        await pool.query('ALTER TABLE oat_app_withdrawals ADD COLUMN IF NOT EXISTS admin_note TEXT DEFAULT NULL');
-        await pool.query('ALTER TABLE oat_app_withdrawals ADD COLUMN IF NOT EXISTS note_image TEXT DEFAULT NULL');
-        await pool.query('ALTER TABLE oat_app_withdrawals ADD COLUMN IF NOT EXISTS status_updated_at BIGINT DEFAULT NULL');
-        results.push({ name: cfg.name, ok: true });
-        done = true;
-      } catch (e) {
-        const m = String(e.message || e);
-        if (/password authentication/i.test(m)) auths++;
-        results.push({ name: cfg.name, ok: false, error: m.slice(0, 90) });
-        if (/ENOTFOUND|tenant/i.test(m)) { /* wrong host, skip other pws on it */ }
-      }
-      await pool.end().catch(()=>{});
-    }
-  } catch (e) { results.push({ name: 'outer', ok: false, error: String(e.message || e).slice(0, 120) }); }
-  res.json({ success: results.some(r => r.ok), results });
-});
-
 app.get('/api/admin/setup-db', async (req, res) => {
   try {
     const { Pool } = require('pg');
