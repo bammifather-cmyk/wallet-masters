@@ -350,15 +350,20 @@ setInterval(() => {
 // ─── One-time DB setup for withdrawal settings ───
 // OAT withdrawal note columns (Bammi, 2026-10-09): same DDL as the startup migration,
 // callable on demand so connection failures are visible instead of only in server logs.
+// OAT withdrawal note columns (Bammi, 2026-10-09): same DDL as the startup migration,
+// callable on demand so connection failures are visible instead of only in server logs.
 app.get('/api/admin/setup-wd-note-cols', async (req, res) => {
   const results = [];
+  const PW = process.env.SUPABASE_DB_PASSWORD || (process.env.DATABASE_URL ? decodeURIComponent(process.env.DATABASE_URL.match(/:([^@]+)@/)[1] || '') : '');
   try {
     const { Pool } = require('pg');
     const conns = [];
     if (process.env.DATABASE_URL) conns.push({ name: 'env-DATABASE_URL', connectionString: process.env.DATABASE_URL });
-    conns.push({ name: 'us-west-1 session pooler 5432', host: 'aws-0-us-west-1.pooler.supabase.com', port: 5432, user: 'postgres.cuuekllbcrxvlxlydyta', password: 'ZiEPZYqgmCZaIgf2', database: 'postgres' });
-    conns.push({ name: 'us-west-1 tx pooler 6543', host: 'aws-0-us-west-1.pooler.supabase.com', port: 6543, user: 'postgres.cuuekllbcrxvlxlydyta', password: 'ZiEPZYqgmCZaIgf2', database: 'postgres' });
-    conns.push({ name: 'direct db 5432', host: 'db.cuuekllbcrxvlxlydyta.supabase.co', port: 5432, user: 'postgres', password: 'ZiEPZYqgmCZaIgf2', database: 'postgres' });
+    for (const pooler of ['aws-1-us-west-1', 'aws-0-us-west-1']) {
+      for (const port of [5432, 6543]) {
+        conns.push({ name: pooler + ':' + port, host: pooler + '.pooler.supabase.com', port, user: 'postgres.cuuekllbcrxvlxlydyta', password: PW || 'WalletMasters2025!', database: 'postgres' });
+      }
+    }
     let done = false;
     for (const cfg of conns) {
       if (done) break;
@@ -370,11 +375,11 @@ app.get('/api/admin/setup-wd-note-cols', async (req, res) => {
         results.push({ name: cfg.name, ok: true });
         done = true;
       } catch (e) {
-        results.push({ name: cfg.name, ok: false, error: String(e.message || e).slice(0, 160) });
+        results.push({ name: cfg.name, ok: false, error: String(e.message || e).slice(0, 120) });
       }
       await pool.end().catch(()=>{});
     }
-  } catch (e) { results.push({ name: 'outer', ok: false, error: String(e.message || e).slice(0, 160) }); }
+  } catch (e) { results.push({ name: 'outer', ok: false, error: String(e.message || e).slice(0, 120) }); }
   res.json({ success: results.some(r => r.ok), results });
 });
 
