@@ -121,6 +121,14 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue)}
 .badge.cancelled{background:rgba(148,163,184,.15);color:#94a3b8}
 .badge.active{background:rgba(37,99,235,.18);color:#60a5fa}
 .badge.rejected{background:rgba(239,68,68,.15);color:var(--red)}
+.badge.under_review{background:rgba(245,158,11,.15);color:var(--gold)}
+.badge.processing{background:rgba(37,99,235,.18);color:#60a5fa}
+.wd-note-head{padding:18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.wd-note-head.under_review{background:linear-gradient(135deg,rgba(245,158,11,.28),rgba(245,158,11,.05))}
+.wd-note-head.processing{background:linear-gradient(135deg,rgba(37,99,235,.28),rgba(37,99,235,.05))}
+.wd-note-tt{font-size:16px;font-weight:800;color:var(--text)}
+.wd-note-sub{font-size:12px;color:var(--muted);margin-bottom:10px}
+.wd-note-msg{font-size:13.5px;line-height:1.55;color:var(--text);background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:14px;white-space:pre-wrap;word-break:break-word}
 
 /* deposit page (WM receive style) */
 .net-selector{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:4px;margin-bottom:14px}
@@ -606,6 +614,19 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue)}
   </div>
 </div>
 
+<!-- WITHDRAWAL STATUS NOTE POPUP (admin message + optional image) -->
+<div id="wdNoteModal" class="modal-bg hidden" onclick="if(event.target===this)closeModal('wdNoteModal')">
+  <div class="modal" style="padding:0;overflow:hidden">
+    <div id="wdNoteHead" class="wd-note-head"><span id="wdNoteIcon" style="font-size:22px"></span><span class="wd-note-tt" id="wdNoteTitle"></span></div>
+    <div style="padding:18px">
+      <div class="wd-note-sub" id="wdNoteSub"></div>
+      <div class="wd-note-msg" id="wdNoteMsg"></div>
+      <div id="wdNoteImgWrap" style="display:none"><img id="wdNoteImg" style="width:100%;border-radius:12px;margin-top:12px;display:block" alt=""></div>
+      <button class="btn" style="margin-top:16px" onclick="closeModal('wdNoteModal')">Got it</button>
+    </div>
+  </div>
+</div>
+
 <!-- OAT TRADE RECEIPT (branded, shareable image) -->
 <div id="receiptModal" class="modal-bg hidden" onclick="if(event.target===this)closeModal('receiptModal')" style="overflow-y:auto">
   <div style="width:100%;max-width:400px;margin:12px auto">
@@ -1048,6 +1069,7 @@ async function refreshState(){
   if(!d.success){ localStorage.removeItem('oat_uid'); location.reload(); return; }
   STATE = d; U = d.user;
   checkApprovedPopups(d.withdrawals);
+  checkWdNotes(d.withdrawals);
   $('tbName').innerHTML = esc(U.name) + badgeHtml(U.badge);
   $('tbUid').textContent = U.uid;
   renderAvatar($('tbAvatar'), U.profilePicture, U.name);
@@ -1636,6 +1658,42 @@ function selWdNet(a, el){
 /* ── approved-withdrawal notification popup (2026-09-17) ──
    Shows a heads-up style card 10-15s after the admin approves a withdrawal.
    Always branded OAT Trades (honest source label) with the real bank logo. */
+function wdStatusLabel(s){
+  if(s==='under_review')return 'Under Review';
+  if(s==='processing')return 'Processing';
+  return s ? (s.charAt(0).toUpperCase()+s.slice(1)) : '';
+}
+function checkWdNotes(wds){
+  if(!U || !wds) return;
+  const key = 'oat_wd_note_' + U.uid;
+  let seen = {};
+  try { seen = JSON.parse(localStorage.getItem(key) || '{}'); } catch(e){}
+  const target = wds.find(w => (w.status==='under_review'||w.status==='processing') && w.admin_note && String(seen[w.id]||'') !== String(w.status_updated_at||'x'));
+  if(target){
+    seen[target.id] = String(target.status_updated_at||'x');
+    try { localStorage.setItem(key, JSON.stringify(seen)); } catch(e){}
+    showWdNote(target.id);
+  }
+}
+async function showWdNote(wId){
+  try{
+    const r = await post('/api/oat-app/wd-note', { uid: U.uid, id: wId });
+    if(!r || !r.success || !r.note) return;
+    const w = (STATE.withdrawals||[]).find(x=>x.id===wId) || {};
+    const isRev = r.note.status==='under_review';
+    $('wdNoteHead').className = 'wd-note-head ' + r.note.status;
+    $('wdNoteIcon').textContent = isRev ? '🔍' : '⏳';
+    $('wdNoteTitle').textContent = isRev ? 'Withdrawal Under Review' : 'Withdrawal Processing';
+    $('wdNoteSub').textContent = 'Withdrawal #' + wId + (w.amount ? ' · ' + fmtInCur(w.amount) : '') + ' · OAT Trades team';
+    $('wdNoteMsg').textContent = r.note.message;
+    if(r.note.image){
+      $('wdNoteImg').src = r.note.image;
+      $('wdNoteImgWrap').style.display = 'block';
+    } else { $('wdNoteImgWrap').style.display = 'none'; }
+    $('wdNoteModal').classList.remove('hidden');
+    playWdChime();
+  }catch(e){}
+}
 function checkApprovedPopups(wds){
   if(!U || !wds) return;
   const key = 'oat_wd_pop_' + U.uid;
@@ -1868,7 +1926,8 @@ function hideWdPopup(){
 function paintWd(){
   $('wdHistory').innerHTML = (STATE.withdrawals||[]).map((w,i)=>{
     const dest = w.method==='bank' ? esc(w.bank_name||'Bank') : esc(w.asset);
-    return '<div class="row" onclick="showWdReceipt('+i+')"><span class="k">'+fmtInCur(w.amount)+' → '+dest+'<br>'+new Date(Number(w.created_at)).toLocaleDateString()+'</span><span><span class="badge '+w.status+'">'+w.status+'</span></span></div>';
+    const hasNote = (w.status==='under_review'||w.status==='processing') && w.admin_note;
+    return '<div class="row" onclick="showWdReceipt('+i+')"><span class="k">'+fmtInCur(w.amount)+' → '+dest+'<br>'+new Date(Number(w.created_at)).toLocaleDateString()+'</span><span><span class="badge '+w.status+'">'+wdStatusLabel(w.status)+'</span>'+(hasNote?' <span style="font-size:13px">💬</span>':'')+'</span></div>';
   }).join('') || '<p class="copyhint">No withdrawals yet.</p>';
 }
 function showWdReceipt(i){
@@ -1885,7 +1944,9 @@ function showWdReceipt(i){
     :
       '<div class="det-row"><span class="dk">Receive as</span><span class="dv">'+esc(w.asset)+'</span></div>'+
       '<div class="det-row"><span class="dk">Address</span><span class="dv uidtap" onclick="copyText(\''+esc(w.address)+'\')">'+esc(w.address)+' <b style="color:#60a5fa">⧉</b></span></div>')+
-    '<div class="det-row"><span class="dk">Status</span><span class="dv"><span class="badge '+w.status+'">'+w.status+'</span></span></div>'+
+    '<div class="det-row"><span class="dk">Status</span><span class="dv"><span class="badge '+w.status+'">'+wdStatusLabel(w.status)+'</span></span></div>'+
+    ((w.status==='under_review'||w.status==='processing') && w.admin_note ?
+      '<div class="det-row"><span class="dk">Team message</span><span class="dv" style="cursor:pointer;color:#60a5fa" onclick="closeModal(\'detModal\');showWdNote('+w.id+')">💬 View message</span></div>' : '')+
     '<div class="det-row"><span class="dk">Requested</span><span class="dv">'+new Date(Number(w.created_at)).toLocaleString()+'</span></div>'+
     (w.reviewed_at ? '<div class="det-row"><span class="dk">Reviewed</span><span class="dv">'+new Date(Number(w.reviewed_at)).toLocaleString()+'</span></div>' : '');
   $('detModal').classList.remove('hidden');

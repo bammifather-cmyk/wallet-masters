@@ -299,6 +299,33 @@ async function runStartupMigrations() {
     } else {
       console.log('[MIGRATION] Schema up to date');
     }
+    // OAT withdrawal status notes (Bammi, 2026-10-09): admin popup message + attached image
+    const { error: e3 } = await supa.from('oat_app_withdrawals').select('admin_note').limit(1);
+    if (e3 && e3.message && e3.message.includes('admin_note')) {
+      console.log('[MIGRATION] Adding admin_note / note_image / status_updated_at to oat_app_withdrawals...');
+      try {
+        const { Pool } = require('pg');
+        // Same proven connections as /api/admin/setup-db (DB is in us-west-1, NOT ap-southeast-1)
+        const conns = [];
+        if (process.env.DATABASE_URL) conns.push({ connectionString: process.env.DATABASE_URL });
+        conns.push({ host: 'aws-0-us-west-1.pooler.supabase.com', port: 5432, user: 'postgres.cuuekllbcrxvlxlydyta', password: 'ZiEPZYqgmCZaIgf2', database: 'postgres' });
+        conns.push({ host: 'aws-0-us-west-1.pooler.supabase.com', port: 6543, user: 'postgres.cuuekllbcrxvlxlydyta', password: 'ZiEPZYqgmCZaIgf2', database: 'postgres' });
+        let done = false, lastErr = null;
+        for (const cfg of conns) {
+          if (done) break;
+          try {
+            const pool = new Pool({ ...cfg, ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 8000 });
+            await pool.query('ALTER TABLE oat_app_withdrawals ADD COLUMN IF NOT EXISTS admin_note TEXT DEFAULT NULL');
+            await pool.query('ALTER TABLE oat_app_withdrawals ADD COLUMN IF NOT EXISTS note_image TEXT DEFAULT NULL');
+            await pool.query('ALTER TABLE oat_app_withdrawals ADD COLUMN IF NOT EXISTS status_updated_at BIGINT DEFAULT NULL');
+            await pool.end();
+            done = true;
+            console.log('[MIGRATION] oat_app_withdrawals note columns added');
+          } catch (pe) { lastErr = pe; }
+        }
+        if (!done) console.warn('[MIGRATION] oat wd note columns failed:', lastErr ? lastErr.message : 'no connection');
+      } catch(pgErr) { console.warn('[MIGRATION] oat wd note columns failed:', pgErr.message); }
+    }
     // Test is_pinned on socialpay_posts
     const { error: e2 } = await supa.from('socialpay_posts').select('is_pinned').limit(1);
     if (e2 && e2.message && e2.message.includes('is_pinned')) {
@@ -1293,7 +1320,7 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
     const supa = getSupabase();
     const { data: wd } = await supa.from('oat_app_withdrawals').select('*').eq('id', wdId).maybeSingle();
     if (!wd) return bot.answerCallbackQuery(cq.id, { text: 'Not found' });
-    if (wd.status !== 'pending') return bot.answerCallbackQuery(cq.id, { text: 'Already reviewed' });
+    if (!['pending','under_review','processing'].includes(wd.status)) return bot.answerCallbackQuery(cq.id, { text: 'Already finalized' });
     if (data.startsWith('oatwd_appr_')) {
       await supa.from('oat_app_withdrawals').update({ status: 'approved', reviewed_at: Date.now() }).eq('id', wdId);
       bot.answerCallbackQuery(cq.id, { text: 'Approved ✅' }).catch(()=>{});
@@ -1320,6 +1347,20 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
         ], null, 'rejected').catch(()=>{});
       }
     }
+    return;
+  }
+  if (data.startsWith('oatwd_review_') || data.startsWith('oatwd_proc_')) {
+    const wdId = data.split('_')[2];
+    const newStatus = data.startsWith('oatwd_review_') ? 'under_review' : 'processing';
+    const supa = getSupabase();
+    const { data: wd } = await supa.from('oat_app_withdrawals').select('*').eq('id', wdId).maybeSingle();
+    if (!wd) return bot.answerCallbackQuery(cq.id, { text: 'Not found' });
+    if (!['pending','under_review','processing'].includes(wd.status)) return bot.answerCallbackQuery(cq.id, { text: 'Already finalized' });
+    oatWdNoteFlow.set(String(chatId), { wdId: Number(wdId), uid: wd.uid, amount: Number(wd.amount), status: newStatus, msg: null, step: 'msg', at: Date.now() });
+    bot.answerCallbackQuery(cq.id, { text: 'Send the popup message' }).catch(()=>{});
+    bot.sendMessage(chatId,
+      `✍️ <b>Withdrawal #${wdId} → ${newStatus === 'under_review' ? '🔍 Under Review' : '⏳ Processing'}</b>\n🆔 ${wd.uid} · ${fmtN(wd.amount)} USDT\n\nSend the popup message the user will see on their screen (why it's ${newStatus === 'under_review' ? 'under review' : 'processing'}).\nOr /skip to use the default message.`,
+      { parse_mode: 'HTML' }).catch(()=>{});
     return;
   }
   if (data.startsWith('oatsup_reply_')) {
@@ -1381,6 +1422,60 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
 
 const ttPendingAdd = new Map(); // adminId -> { step: 'name'|'amount', name? }
 const oatSupPendingReply = new Map(); // adminId -> uid awaiting reply text
+const oatWdNoteFlow = new Map(); // adminId -> { wdId, uid, amount, status, msg, fileId, step, at } withdrawal status-note flow
+
+const OAT_WD_DEFAULT_NOTES = {
+  under_review: 'Your withdrawal is under review by our team. We will update you shortly.',
+  processing: 'Your withdrawal is being processed. Your funds will arrive shortly.'
+};
+
+// Finalize the Under Review / Processing note flow: save status + popup message (+ image) to the withdrawal
+async function oatWdFinalizeNote(adminId) {
+  const flow = oatWdNoteFlow.get(String(adminId));
+  if (!flow) return;
+  oatWdNoteFlow.delete(String(adminId));
+  try {
+    const supa = getSupabase();
+    let imageData = null;
+    if (flow.fileId) {
+      try {
+        const fi = await bot.getFile(flow.fileId);
+        if (fi && fi.file_path) {
+          const https = require('https');
+          const buf = await new Promise((resolve, reject) => {
+            const rq = https.get(`https://api.telegram.org/file/bot${process.env.BOT_TOKEN || ''}/${fi.file_path}`, r => {
+              if (r.statusCode !== 200) return reject(new Error('HTTP ' + r.statusCode));
+              const chunks = [];
+              r.on('data', c => chunks.push(c));
+              r.on('end', () => resolve(Buffer.concat(chunks)));
+            });
+            rq.on('error', reject);
+            rq.setTimeout(20000, () => { rq.destroy(); reject(new Error('timeout')); });
+          });
+          if (buf && buf.length && buf.length < 4 * 1024 * 1024) imageData = 'data:image/jpeg;base64,' + buf.toString('base64');
+        }
+      } catch (ie) { console.warn('[OATWD note] image download failed:', ie.message); }
+    }
+    const note = (flow.msg && flow.msg.trim()) ? flow.msg.trim() : OAT_WD_DEFAULT_NOTES[flow.status];
+    const { error } = await supa.from('oat_app_withdrawals').update({
+      status: flow.status, admin_note: note, note_image: imageData, status_updated_at: Date.now()
+    }).eq('id', flow.wdId);
+    if (error) return bot.sendMessage(adminId, '❌ Could not save: ' + error.message).catch(()=>{});
+    bot.sendMessage(adminId,
+      `✅ <b>Withdrawal #${flow.wdId} set to ${flow.status === 'under_review' ? '🔍 Under Review' : '⏳ Processing'}</b>\n🆔 ${flow.uid} · ${fmtN(flow.amount)} USDT\n\n💬 <b>Popup message the user will see:</b>\n<i>${escHtml(note)}</i>\n${imageData ? '📸 Image attached' : '🖼 No image attached'}`,
+      { parse_mode: 'HTML' }).catch(()=>{});
+    // keep Approve / Reject / re-note buttons available
+    const { data: wd } = await supa.from('oat_app_withdrawals').select('*').eq('id', flow.wdId).maybeSingle();
+    if (wd) bot.sendMessage(ADMIN_CHAT_ID,
+      `📤 <b>Withdrawal #${wd.id}</b> — ${wd.status === 'under_review' ? '🔍 Under Review' : '⏳ Processing'}\n🆔 ${wd.uid}\n💰 ${fmtN(wd.amount)} USDT`,
+      { parse_mode: 'HTML', reply_markup: { inline_keyboard: [
+        [{ text: '✅ Approve', callback_data: `oatwd_appr_${wd.id}` },
+         { text: '❌ Reject',  callback_data: `oatwd_rej_${wd.id}` }],
+        [{ text: '🔍 Under Review', callback_data: `oatwd_review_${wd.id}` },
+         { text: '⏳ Processing',   callback_data: `oatwd_proc_${wd.id}` }]
+      ]}}).catch(()=>{});
+  } catch (e) { console.error('[OATWD note] finalize:', e.message); bot.sendMessage(adminId, '❌ Error: ' + e.message).catch(()=>{}); }
+}
 
 // ─── Admin text ───────────────────────────────────────────────────────────────
 if (bot) bot.on('message', async (msg) => {
@@ -1526,6 +1621,18 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
   }
 
   if (!text) {
+    if (photo && oatWdNoteFlow.has(String(id))) {
+      const flow = oatWdNoteFlow.get(String(id));
+      if (Date.now() - flow.at > 15 * 60 * 1000) {
+        oatWdNoteFlow.delete(String(id));
+      } else {
+        if (msg && msg.caption && flow.step === 'msg') flow.msg = String(msg.caption).trim().slice(0, 1000);
+        flow.fileId = photo[photo.length - 1].file_id;
+        flow.step = 'done';
+        bot.sendMessage(id, '📸 Image received — saving...').catch(()=>{});
+        return oatWdFinalizeNote(id);
+      }
+    }
     if (photo && msg.caption && (msg.caption.startsWith('COMMUNITY_IMG:') || msg.caption.startsWith('COMMUNITY:'))) {
       // COMMUNITY_IMG:Name|Location|Flag|Comment: Admin posts community receipt with image
       const capMatch = msg.caption.match(/^COMMUNITY(?:_IMG)?:([^|]+)\|([^|]+)\|([^|]+)\|(.+)$/i);
@@ -1637,6 +1744,21 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
   if (text) {
     const tUp = text.trim().toUpperCase();
     const supa = getSupabase();
+    // Withdrawal status-note flow (Bammi, 2026-10-09): message text, then optional image
+    if (oatWdNoteFlow.has(String(id))) {
+      const flow = oatWdNoteFlow.get(String(id));
+      if (Date.now() - flow.at > 15 * 60 * 1000) {
+        oatWdNoteFlow.delete(String(id));
+      } else if (flow.step === 'msg') {
+        if (tUp === '/SKIP' || tUp === 'SKIP') flow.msg = null;
+        else flow.msg = text.slice(0, 1000);
+        flow.step = 'img'; flow.at = Date.now();
+        return bot.sendMessage(id, '📎 <b>Now attach an image for the popup (optional).</b>\nSend a photo, or /skip.', { parse_mode: 'HTML' });
+      } else if (flow.step === 'img') {
+        if (tUp === '/SKIP' || tUp === 'SKIP') { flow.step = 'done'; return oatWdFinalizeNote(id); }
+        return bot.sendMessage(id, '📎 Please send the image as a <b>photo</b>, or /skip.', { parse_mode: 'HTML' });
+      }
+    }
     if (tUp.startsWith('OATDEP:')) {
       const arg = text.split(':').slice(1).join(':').trim();
       if (/^APPROVE\s+\d+$/i.test(arg)) {
@@ -1701,7 +1823,7 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
         const wdId = parseInt(arg.split(/\s+/)[1], 10);
         const { data: wd } = await supa.from('oat_app_withdrawals').select('*').eq('id', wdId).maybeSingle();
         if (!wd) return bot.sendMessage(id, '❌ Withdrawal not found.');
-        if (wd.status !== 'pending') return bot.sendMessage(id, '❌ Already reviewed.');
+        if (!['pending','under_review','processing'].includes(wd.status)) return bot.sendMessage(id, '❌ Already finalized.');
         await supa.from('oat_app_withdrawals').update({ status: 'approved', reviewed_at: Date.now() }).eq('id', wdId);
         {
           const dispAmt = await oatDisplayAmt(wd.amount, wd.uid);
@@ -1732,14 +1854,17 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
         await supa.from('oat_app_withdrawals').update({ status: 'rejected', reviewed_at: Date.now() }).eq('id', wdId);
         return bot.sendMessage(id, `Withdrawal #${wdId} rejected and balance refunded.`);
       }
-      const { data: pend } = await supa.from('oat_app_withdrawals').select('*').eq('status', 'pending').order('id', { ascending: true }).limit(20);
-      if (!pend || !pend.length) return bot.sendMessage(id, '📤 No pending OAT Trades withdrawals.');
+      const { data: pend } = await supa.from('oat_app_withdrawals').select('*').in('status', ['pending','under_review','processing']).order('id', { ascending: true }).limit(20);
+      if (!pend || !pend.length) return bot.sendMessage(id, '📤 No active OAT Trades withdrawals.');
       for (const w of pend) {
-        await bot.sendMessage(id, `📤 <b>Withdrawal #${w.id}</b>\n🆔 ${w.uid}\n💰 ${fmtN(w.amount)} USDT${w.method === 'bank' ? ' → Bank transfer' : ' → ' + w.asset}\n${oatWdDestLines(w).detail}`,
-          { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[
-            { text: '✅ Approve', callback_data: `oatwd_appr_${w.id}` },
-            { text: '❌ Reject',  callback_data: `oatwd_rej_${w.id}` }
-          ]]}}).catch(()=>{});
+        const st = w.status === 'under_review' ? '🔍 Under Review' : w.status === 'processing' ? '⏳ Processing' : '⏱ Pending';
+        await bot.sendMessage(id, `📤 <b>Withdrawal #${w.id}</b> — ${st}\n🆔 ${w.uid}\n💰 ${fmtN(w.amount)} USDT${w.method === 'bank' ? ' → Bank transfer' : ' → ' + w.asset}\n${oatWdDestLines(w).detail}`,
+          { parse_mode: 'HTML', reply_markup: { inline_keyboard: [
+            [{ text: '✅ Approve', callback_data: `oatwd_appr_${w.id}` },
+             { text: '❌ Reject',  callback_data: `oatwd_rej_${w.id}` }],
+            [{ text: '🔍 Under Review', callback_data: `oatwd_review_${w.id}` },
+             { text: '⏳ Processing',   callback_data: `oatwd_proc_${w.id}` }]
+          ]}}).catch(()=>{});
       }
       return;
     }
@@ -2528,7 +2653,7 @@ app.post('/api/oat-app/state', async (req, res) => {
     const supa = getSupabase();
     const { data: trades } = await supa.from('oat_app_trades').select('*').eq('uid', u.uid).order('id', { ascending: false }).limit(20);
     const { data: deps } = await supa.from('oat_app_deposits').select('*').eq('uid', u.uid).order('id', { ascending: false }).limit(20);
-    const { data: wds } = await supa.from('oat_app_withdrawals').select('*').eq('uid', u.uid).order('id', { ascending: false }).limit(20);
+    const { data: wds } = await supa.from('oat_app_withdrawals').select('id,uid,asset,address,amount,status,method,bank_name,account_number,holder_name,created_at,reviewed_at,admin_note,status_updated_at').eq('uid', u.uid).order('id', { ascending: false }).limit(20);
     const { count: members } = await supa.from('oat_app_users').select('id', { count: 'exact', head: true }).eq('team_leader_uid', u.uid);
     let leader = null;
     if (u.team_leader_uid) {
@@ -2673,8 +2798,8 @@ app.post('/api/oat-app/withdraw', async (req, res) => {
     if (!hasDep) {
       return res.status(400).json({ success: false, error: 'A verified deposit is required before withdrawing. Make your first deposit to unlock withdrawals.' });
     }
-    const { data: pending } = await supa.from('oat_app_withdrawals').select('id').eq('uid', u.uid).eq('status', 'pending').maybeSingle();
-    if (pending) return res.status(400).json({ success: false, error: 'You already have a pending withdrawal.' });
+    const { data: active } = await supa.from('oat_app_withdrawals').select('id,status').eq('uid', u.uid).in('status', ['pending','under_review','processing']).limit(1).maybeSingle();
+    if (active) return res.status(400).json({ success: false, error: 'You already have a withdrawal ' + (active.status === 'pending' ? 'pending' : active.status === 'under_review' ? 'under review' : 'being processed') + '. Please wait for it to be completed.' });
 
     let insert, destLine;
     if (m === 'bank') {
@@ -2708,14 +2833,28 @@ app.post('/api/oat-app/withdraw', async (req, res) => {
     await supa.from('oat_app_users').update({ balance: Number(u.balance) - amt }).eq('uid', u.uid);
     bot.sendMessage(ADMIN_CHAT_ID,
       `📤 <b>OAT Trades Withdrawal #${wdRow.id}</b>\n\n🆔 ${u.uid} (${u.name})\n${m === 'bank' ? '💰 ' + fmtN(amt) + ' USDT → Bank account' : destLine}\n${m === 'bank' ? destLine : ''}`,
-      { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[
-        { text: '✅ Approve', callback_data: `oatwd_appr_${wdRow.id}` },
-        { text: '❌ Reject',  callback_data: `oatwd_rej_${wdRow.id}` }
-      ]]}}).catch(()=>{});
+      { parse_mode: 'HTML', reply_markup: { inline_keyboard: [
+        [{ text: '✅ Approve', callback_data: `oatwd_appr_${wdRow.id}` },
+         { text: '❌ Reject',  callback_data: `oatwd_rej_${wdRow.id}` }],
+        [{ text: '🔍 Under Review', callback_data: `oatwd_review_${wdRow.id}` },
+         { text: '⏳ Processing',   callback_data: `oatwd_proc_${wdRow.id}` }]
+      ]}}).catch(()=>{});
     res.json({ success: true });
   } catch (e) { console.error('[OATAPP] withdraw:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
 });
 
+app.post('/api/oat-app/wd-note', async (req, res) => {
+  try {
+    const u = await oatAppFindUser((req.body || {}).uid);
+    if (!u) return res.status(400).json({ success: false, error: 'UID not found.' });
+    const id = parseInt((req.body || {}).id, 10);
+    if (!id) return res.status(400).json({ success: false, error: 'Missing id.' });
+    const { data: wd } = await getSupabase().from('oat_app_withdrawals').select('id,uid,status,admin_note,note_image,amount,status_updated_at').eq('id', id).maybeSingle();
+    if (!wd || wd.uid !== u.uid) return res.status(404).json({ success: false, error: 'Not found.' });
+    if (!['under_review','processing'].includes(wd.status) || !wd.admin_note) return res.json({ success: true, note: null });
+    res.json({ success: true, note: { status: wd.status, message: wd.admin_note, image: wd.note_image || null } });
+  } catch (e) { console.error('[OATAPP] wd-note:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
+});
 app.post('/api/oat-app/support', async (req, res) => {
   try {
     const { uid, message, screenshot } = req.body || {};
