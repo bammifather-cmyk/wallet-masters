@@ -2688,7 +2688,12 @@ app.post('/api/oat-app/state', async (req, res) => {
     const supa = getSupabase();
     const { data: trades } = await supa.from('oat_app_trades').select('*').eq('uid', u.uid).order('id', { ascending: false }).limit(20);
     const { data: deps } = await supa.from('oat_app_deposits').select('*').eq('uid', u.uid).order('id', { ascending: false }).limit(20);
-    const { data: wds } = await supa.from('oat_app_withdrawals').select('id,uid,asset,address,amount,status,method,bank_name,account_number,holder_name,created_at,reviewed_at,admin_note,status_updated_at').eq('uid', u.uid).order('id', { ascending: false }).limit(20);
+    // light column list (excludes note_image base64). Falls back to * while the
+    // admin_note columns have not been created yet, so history never goes blank.
+    const WD_COLS = 'id,uid,asset,address,amount,status,method,bank_name,account_number,holder_name,created_at,reviewed_at,admin_note,status_updated_at';
+    let wdRes = await supa.from('oat_app_withdrawals').select(WD_COLS).eq('uid', u.uid).order('id', { ascending: false }).limit(20);
+    if (wdRes.error) wdRes = await supa.from('oat_app_withdrawals').select('*').eq('uid', u.uid).order('id', { ascending: false }).limit(20);
+    const wds = wdRes.data || [];
     const { count: members } = await supa.from('oat_app_users').select('id', { count: 'exact', head: true }).eq('team_leader_uid', u.uid);
     let leader = null;
     if (u.team_leader_uid) {
