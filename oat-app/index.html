@@ -1959,6 +1959,18 @@ function paintWd(){
     return '<div class="row" onclick="showWdReceipt('+i+')"><span class="k">'+fmtInCur(w.amount)+' → '+dest+'<br>'+new Date(Number(w.created_at)).toLocaleDateString()+'</span><span><span class="badge '+w.status+'">'+wdStatusLabel(w.status)+'</span>'+(hasNote?' <span style="font-size:13px">💬</span>':'')+'</span></div>';
   }).join('') || '<p class="copyhint">No withdrawals yet.</p>';
 }
+function maskAcc(a){
+  a = String(a||'');
+  if (a.length <= 5) return a;                       // too short to mask meaningfully
+  return a.slice(0,2) + 'x'.repeat(a.length-5) + a.slice(-3);
+}
+function toggleAcc(el){
+  const full = el.dataset.full;
+  const shown = el.dataset.shown === '1';
+  el.dataset.shown = shown ? '0' : '1';
+  el.querySelector('.accv').textContent = shown ? maskAcc(full) : full;
+  el.querySelector('.acch').textContent = shown ? 'tap to show' : 'tap to hide';
+}
 function showWdReceipt(i){
   const w = STATE.withdrawals[i];
   $('detTitle').textContent = 'Withdrawal Details';
@@ -1968,7 +1980,7 @@ function showWdReceipt(i){
     '<div class="det-row"><span class="dk">Amount</span><span class="dv">'+fmtInCur(w.amount)+'</span></div>'+
     (isBank ?
       '<div class="det-row"><span class="dk">Bank</span><span class="dv">'+bankIconImg(w.bank_name, 18)+' '+esc(w.bank_name)+'</span></div>'+
-      '<div class="det-row"><span class="dk">Account Number</span><span class="dv uidtap" onclick="copyText(\''+esc(w.account_number)+'\')">'+esc(w.account_number)+' <b style="color:#60a5fa">⧉</b></span></div>'+
+      '<div class="det-row"><span class="dk">Account Number</span><span class="dv" style="text-align:right"><span class="uidtap" data-full="'+esc(w.account_number)+'" data-shown="0" onclick="toggleAcc(this)"><span class="accv">'+esc(maskAcc(w.account_number))+'</span><br><span class="acch" style="font-size:11px;color:#60a5fa;font-weight:500">tap to show</span></span> <b style="color:#60a5fa;cursor:pointer;margin-left:6px" onclick="copyText(this.parentNode.querySelector(\'.uidtap\').dataset.full)">⧉</b></span></div>'+
       '<div class="det-row"><span class="dk">Holder</span><span class="dv">'+esc(w.holder_name)+'</span></div>'
     :
       '<div class="det-row"><span class="dk">Receive as</span><span class="dv">'+esc(w.asset)+'</span></div>'+
