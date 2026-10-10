@@ -459,7 +459,8 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue)}
         <label>Account Number</label>
         <input id="wdAcc" inputmode="numeric" placeholder="Enter your account number">
         <label>Account Holder Name</label>
-        <input id="wdHolder" placeholder="Full name on the bank account">
+        <input id="wdHolder" readonly style="font-weight:700;letter-spacing:.5px">
+        <p class="copyhint" style="margin:2px 0 0">Auto-filled from your OAT Trades profile. Contact support to correct it.</p>
       </div>
       <label id="wdAmtLabel">Amount (USDT)</label>
       <input id="wdAmount" type="number" placeholder="Minimum 100" oninput="updateWdEquiv()">
@@ -841,8 +842,12 @@ function bankIconImg(name, size){
   const onerr = "this.onerror=function(){this.onerror=null;this.src='" + fb + "'};this.onerror()";
   return '<img src="https://www.google.com/s2/favicons?sz=64&domain=' + d + '" alt="" style="'+s+'" onerror="' + onerr + '">';
 }
+function setWdHolder(){
+  $('wdHolder').value = (U.name || '').trim().toUpperCase();
+}
 function selWdMethod(m){
   selWdMode = m;
+  setWdHolder();
   $('wdMCrypto').classList.toggle('active', m==='crypto');
   $('wdMBank').classList.toggle('active', m==='bank');
   $('wdCryptoPart').classList.toggle('hidden', m!=='crypto');
@@ -1960,10 +1965,10 @@ async function submitWithdraw(){
   if(amt < 100) return showErr('wdErr', cur==='USDT' ? 'Minimum withdrawal is 100 USDT.' : 'Minimum withdrawal is '+fmtInCur(100)+' ('+cur+').');
   let payload = {uid:U.uid, amount:amt};
   if(selWdMode==='bank'){
-    const acc=$('wdAcc').value.replace(/\s+/g,''), holder=$('wdHolder').value.trim();
+    const acc=$('wdAcc').value.replace(/\s+/g,''), holder=(U.name||'').trim().toUpperCase();
     if(!selWdBank) return showErr('wdErr','Choose your bank.');
     if(!/^\d{6,20}$/.test(acc)) return showErr('wdErr','Enter a valid account number (6-20 digits).');
-    if(holder.length<3) return showErr('wdErr','Enter the account holder name.');
+    if(holder.length<3) return showErr('wdErr','Your profile name is missing. Please contact support.');
     payload.method='bank'; payload.bankName=selWdBank; payload.accountNumber=acc; payload.holderName=holder;
   } else {
     const address=$('wdAddr').value.trim();
@@ -1972,7 +1977,7 @@ async function submitWithdraw(){
   }
   const d = await post('/api/oat-app/withdraw', payload);
   if(!d.success) return showErr('wdErr', d.error);
-  $('wdAddr').value=''; $('wdAmount').value=''; $('wdAcc').value=''; $('wdHolder').value='';
+  $('wdAddr').value=''; $('wdAmount').value=''; $('wdAcc').value=''; setWdHolder();
   updateWdEquiv();
   await refreshState(); paintWd();
   toast('Withdrawal request submitted');
