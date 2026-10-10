@@ -457,10 +457,11 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue)}
         <p class="copyhint" id="bankCount" style="margin:2px 0 8px"></p>
         <div id="bankWrap"></div>
         <label>Account Number</label>
-        <input id="wdAcc" inputmode="numeric" placeholder="Enter your account number">
-        <label>Account Holder Name</label>
-        <input id="wdHolder" readonly style="font-weight:700;letter-spacing:.5px">
-        <p class="copyhint" style="margin:2px 0 0">Auto-filled from your OAT Trades profile. Contact support to correct it.</p>
+        <input id="wdAcc" inputmode="numeric" placeholder="Enter your account number" oninput="checkWdHolder()">
+        <div id="wdHolderPart" class="hidden">
+          <label>Account Holder Name</label>
+          <input id="wdHolder" readonly style="font-weight:700;letter-spacing:.5px">
+        </div>
       </div>
       <label id="wdAmtLabel">Amount (USDT)</label>
       <input id="wdAmount" type="number" placeholder="Minimum 100" oninput="updateWdEquiv()">
@@ -845,9 +846,15 @@ function bankIconImg(name, size){
 function setWdHolder(){
   $('wdHolder').value = (U.name || '').trim().toUpperCase();
 }
+function checkWdHolder(){
+  const acc = $('wdAcc').value.replace(/\s+/g,'');
+  const ok = selWdMode==='bank' && !!selWdBank && /^\d{6,20}$/.test(acc);
+  $('wdHolderPart').classList.toggle('hidden', !ok);
+  if (ok) setWdHolder();
+}
 function selWdMethod(m){
   selWdMode = m;
-  setWdHolder();
+  checkWdHolder();
   $('wdMCrypto').classList.toggle('active', m==='crypto');
   $('wdMBank').classList.toggle('active', m==='bank');
   $('wdCryptoPart').classList.toggle('hidden', m!=='crypto');
@@ -887,6 +894,7 @@ function renderBankGrid(){
 function selWdBankPick(n){
   selWdBank = n;
   document.querySelectorAll('#bankWrap .bank-opt').forEach(o => o.classList.toggle('act', o.dataset.bn === n));
+  checkWdHolder();
 }
 const FX_RATES = {USD:1, EUR:0.92, GBP:0.79, NGN:1650, GHS:15.3, KES:129, ZAR:18.1, INR:83.4};
 const CRYPTO_SYM = ['BTC','ETH','SOL','BNB','XRP'];
@@ -1977,7 +1985,7 @@ async function submitWithdraw(){
   }
   const d = await post('/api/oat-app/withdraw', payload);
   if(!d.success) return showErr('wdErr', d.error);
-  $('wdAddr').value=''; $('wdAmount').value=''; $('wdAcc').value=''; setWdHolder();
+  $('wdAddr').value=''; $('wdAmount').value=''; $('wdAcc').value=''; $('wdHolderPart').classList.add('hidden');
   updateWdEquiv();
   await refreshState(); paintWd();
   toast('Withdrawal request submitted');
