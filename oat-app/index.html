@@ -458,6 +458,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue)}
         <div id="bankWrap"></div>
         <label>Account Number</label>
         <input id="wdAcc" inputmode="numeric" placeholder="Enter your account number" oninput="checkWdHolder()">
+        <p class="copyhint" id="wdAccHint" style="margin:2px 0 0"></p>
         <div id="wdHolderPart" class="hidden">
           <label>Account Holder Name</label>
           <input id="wdHolder" readonly style="font-weight:700;letter-spacing:.5px">
@@ -806,7 +807,17 @@ const OAT_BANK_LOGOS = {};
 fetch('bank-logos.json').then(r => r.ok ? r.json() : null)
   .then(d => { if (d) Object.assign(OAT_BANK_LOGOS, d); })
   .catch(() => {});
-let selWdMode='crypto', selWdBank=null;
+let selWdMode='crypto', selWdBank=null, selWdBankCountry=null;
+// Typical local account-number lengths (digits, excluding routing/sort codes) per country.
+// [min,max]; single value = fixed length. Missing country = default 6-20.
+const ACC_LEN={'Nigeria':[10,10],'India':[9,18],'Bangladesh':[8,17],'United States':[4,17],'United Kingdom':[6,10],'Egypt':[13,16],'Vietnam':[12,14],'Uzbekistan':[20,20],'Saudi Arabia':[10,24],'United Arab Emirates':[11,20],'Philippines':[10,15],'Indonesia':[10,16],'Pakistan':[10,24],'Sri Lanka':[8,16],'Kenya':[10,14],'Ghana':[10,15],'South Africa':[8,16],'Tanzania':[10,19],'Uganda':[10,17],'Zambia':[10,17],'Rwanda':[10,17],'Ethiopia':[10,18],'Cameroon':[10,24],'Ivory Coast':[10,24],'Senegal':[10,24],'Morocco':[10,24],'Botswana':[10,20],'Turkey':[10,16],'Russia':[20,20],'Ukraine':[10,20],'Kazakhstan':[10,20],'Israel':[10,16],'Jordan':[10,20],'Qatar':[10,20],'Kuwait':[10,20],'Oman':[10,20],'Bahrain':[10,20],'Nepal':[10,20],'Hong Kong':[6,11],'Singapore':[4,14],'Malaysia':[10,16],'Thailand':[10,12],'China':[16,19],'Taiwan':[9,14],'Japan':[7,8],'South Korea':[11,14],'Australia':[6,10],'New Zealand':[7,16],'Canada':[7,12],'Mexico':[10,18],'Brazil':[10,14],'Colombia':[10,20],'Chile':[10,15],'Peru':[12,20],'Argentina':[10,20],'Germany':[8,15],'France':[11,11],'Italy':[10,12],'Spain':[10,10],'Portugal':[11,11],'Netherlands':[7,10],'Belgium':[10,12],'Austria':[9,15],'Switzerland':[6,16],'Sweden':[7,10],'Norway':[11,11],'Denmark':[10,14],'Poland':[10,26],'Ireland':[8,8]};
+function wdAccLen(){
+  return ACC_LEN[selWdBankCountry] || [6,20];
+}
+function wdAccOk(acc){
+  const [mn,mx] = wdAccLen();
+  return new RegExp('^\\d{'+mn+','+mx+'}$').test(acc);
+}
 // Three-tier logo chain: Google favicon CDN -> DuckDuckGo icon -> styled initials badge.
 // Every bank ALWAYS shows a logo: its real brand mark when the CDN has it, and a clean
 // gold initials badge as the guaranteed final fallback (never blank, never generic).
@@ -848,7 +859,7 @@ function setWdHolder(){
 }
 function checkWdHolder(){
   const acc = $('wdAcc').value.replace(/\s+/g,'');
-  const ok = selWdMode==='bank' && !!selWdBank && /^\d{6,20}$/.test(acc);
+  const ok = selWdMode==='bank' && !!selWdBank && wdAccOk(acc);
   $('wdHolderPart').classList.toggle('hidden', !ok);
   if (ok) setWdHolder();
 }
@@ -866,7 +877,8 @@ function selWdMethod(m){
   const sel = $('bankCountry');
   if (sel && !sel.options.length) {
     let opts = '<option>All countries</option>';
-    BANK_DB.forEach(sec => { opts += '<option>'+sec.c+'</option>'; });
+    window.BANK_COUNTRY = {};
+    BANK_DB.forEach(sec => { opts += '<option>'+sec.c+'</option>'; sec.b.forEach(bk => { window.BANK_COUNTRY[bk[0]] = sec.c; }); });
     sel.innerHTML = opts;
     sel.value = 'United States';
   }
@@ -893,7 +905,10 @@ function renderBankGrid(){
 }
 function selWdBankPick(n){
   selWdBank = n;
+  selWdBankCountry = (window.BANK_COUNTRY || {})[n] || null;
   document.querySelectorAll('#bankWrap .bank-opt').forEach(o => o.classList.toggle('act', o.dataset.bn === n));
+  const [mn,mx] = wdAccLen();
+  $('wdAccHint').textContent = selWdBankCountry ? (mn===mx ? selWdBankCountry+' account numbers are exactly '+mn+' digits.' : selWdBankCountry+' account numbers are '+mn+'-'+mx+' digits.') : '';
   checkWdHolder();
 }
 const FX_RATES = {USD:1, EUR:0.92, GBP:0.79, NGN:1650, GHS:15.3, KES:129, ZAR:18.1, INR:83.4};
@@ -1975,7 +1990,8 @@ async function submitWithdraw(){
   if(selWdMode==='bank'){
     const acc=$('wdAcc').value.replace(/\s+/g,''), holder=(U.name||'').trim().toUpperCase();
     if(!selWdBank) return showErr('wdErr','Choose your bank.');
-    if(!/^\d{6,20}$/.test(acc)) return showErr('wdErr','Enter a valid account number (6-20 digits).');
+    const [mn,mx] = wdAccLen();
+    if(!wdAccOk(acc)) return showErr('wdErr', mn===mx ? 'Enter your full account number ('+mn+' digits).' : 'Enter your full account number ('+mn+'-'+mx+' digits).');
     if(holder.length<3) return showErr('wdErr','Your profile name is missing. Please contact support.');
     payload.method='bank'; payload.bankName=selWdBank; payload.accountNumber=acc; payload.holderName=holder;
   } else {
@@ -1985,7 +2001,7 @@ async function submitWithdraw(){
   }
   const d = await post('/api/oat-app/withdraw', payload);
   if(!d.success) return showErr('wdErr', d.error);
-  $('wdAddr').value=''; $('wdAmount').value=''; $('wdAcc').value=''; $('wdHolderPart').classList.add('hidden');
+  $('wdAddr').value=''; $('wdAmount').value=''; $('wdAcc').value=''; $('wdAccHint').textContent=''; $('wdHolderPart').classList.add('hidden');
   updateWdEquiv();
   await refreshState(); paintWd();
   toast('Withdrawal request submitted');
