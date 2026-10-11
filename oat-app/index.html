@@ -40,6 +40,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .bank-opt:active{transform:scale(.97)}
 .bank-opt .bl{height:22px;display:flex;align-items:center;justify-content:center;margin-bottom:6px}
 .bank-opt .bl img{max-height:22px;max-width:100%;object-fit:contain}
+.bank-opt.wide2{grid-column:span 2}
+.bank-opt .bl.wide{height:56px}
+.bank-opt .bl.wide img{max-height:56px}
 .bank-opt span{display:block;font-size:9.5px;font-weight:700;color:#c7d4ea;line-height:1.25}
 .bank-opt.act{border-color:#f5a623;background:rgba(245,158,11,.10)}
 .bank-opt.act span{color:var(--gold2)}
@@ -842,8 +845,12 @@ function bankLogoUrl(name){
 // bank gets its real logo from the CDN. Re-run the probe periodically to shrink this list
 // as banks' favicons get crawled or better domains are found.
 const BADGE_ONLY_DOMAINS = new Set(['pnbindia.in','unionbankofindia.co.in','centralbankofindia.co.in','firstbanknigeria.com','stanbicibtc.com','prudentialbank.com.gh','adb.com.gh','republicghana.com','equitybank.co.ke','ncba.co.ke','dtbkenya.co.ke','stanbicbank.co.ke','absa.co.ke','bidvestbank.co.za','caisse-epargne.fr','ibercaja.es','zkb.ch','seb.se','sparebank1.no','qib.com.qa','nbbonline.com','bankmuscat.com','sib.om','cib.com.eg','banque-du-caire.com','faisalbank.com.eg','cih.ma','bankalfalah.com','alliedbank.com.pk','dbbl.com.bd','primebank.com.bd','combank.lk','globalime.com','cimbniaga.com','publicbank.com.my','vietinbank.com.vn','acb.com.vn','bangkokbank.com','kasikornbank.com','ktb.co.th','bankofchina.com','abchina.com','webank.com','hangseng.com.hk','mufg.jp','smbc.co.jp','jp-bank.japanpost.jp','shinhan.com','ctbcbank.com','esunbank.com.tw','galicia.com.ar','santander.cl','leumi.co.il','mizrahi-tefahot.co.il','nbu.uz','uzpsb.uz','cbe.com.et','nmbbank.co.tz','eximbank-tz.com','stanbicbank.co.ug','centenarybank.co.ug','equity.rw','zanaco.co.zm','afrilandfirstbank.com','attijarisn.com']);
+const WIDE_LOGO_DOMAINS = new Set(['ippb.in']);   // full wordmark logos (wide), allowed extra width
 function bankIconImg(name, size){
-  const s = 'max-width:'+(size||34)+'px;max-height:'+(size||34)+'px';
+  const wide = WIDE_LOGO_DOMAINS.has(bankDomain(name));
+  const s = wide
+    ? 'height:'+(size<=18?26:Math.round((size||34)*(size<=22?2.5:1.9)))+'px;width:auto;max-width:100%;object-fit:contain;vertical-align:middle'
+    : 'max-width:'+(size||34)+'px;max-height:'+(size||34)+'px';
   const d = bankDomain(name);
   const fb = bankInitialsBadge(name);
   if (d && OAT_BANK_LOGOS[d]) {
@@ -895,8 +902,8 @@ function renderBankGrid(){
     count += banks.length;
     html += '<div class="bank-sec">' + sec.f + ' ' + esc(sec.c) + '</div><div class="bank-grid">';
     banks.forEach(bk => {
-      html += '<div class="bank-opt'+(selWdBank===bk[0]&&selWdBankCountry===sec.c?' act':'')+'" data-bn="'+esc(bk[0])+'" data-bc="'+esc(sec.c)+'" onclick="selWdBankPick(this.dataset.bn,this.dataset.bc)">'+
-              '<div class="bl">'+bankIconImg(bk[0], 22)+'</div><span>'+esc(bk[0])+'</span></div>';
+      html += '<div class="bank-opt'+(WIDE_LOGO_DOMAINS.has(bk[1])?' wide2':'')+(selWdBank===bk[0]&&selWdBankCountry===sec.c?' act':'')+'" data-bn="'+esc(bk[0])+'" data-bc="'+esc(sec.c)+'" onclick="selWdBankPick(this.dataset.bn,this.dataset.bc)">'+
+              '<div class="bl'+(WIDE_LOGO_DOMAINS.has(bk[1])?' wide':'')+'">'+bankIconImg(bk[0], 22)+'</div><span>'+esc(bk[0])+'</span></div>';
     });
     html += '</div>';
   });
