@@ -1318,7 +1318,7 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
       await supa.from('oat_app_deposits').update({ status: 'approved', reviewed_at: Date.now() }).eq('id', depId);
       await supa.from('oat_app_users').update({ balance: Number(ou.balance) + usdt }).eq('uid', dep.uid);
       bot.answerCallbackQuery(cq.id, { text: 'Approved ✅' }).catch(()=>{});
-      botEditNotice(chatId, msgId, `✅ <b>Deposit #${depId} approved</b>\n🆔 ${dep.uid}\nCredited: ${fmtN(usdt)} USDT (${fmtN(dep.amount)} ${dep.asset})`);
+      botEditNotice(chatId, msgId, `✅ <b>Deposit #${depId} approved</b>\n🆔 <code>${dep.uid}</code>\nCredited: ${fmtN(usdt)} USDT (${fmtN(dep.amount)} ${dep.asset})`);
       {
         const dispAmt = await oatDisplayAmt(usdt, dep.uid);
         notifyOATUserEmail(dep.uid, 'Deposit approved', 'Deposit approved', [
@@ -1329,7 +1329,7 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
     } else {
       await supa.from('oat_app_deposits').update({ status: 'rejected', reviewed_at: Date.now() }).eq('id', depId);
       bot.answerCallbackQuery(cq.id, { text: 'Rejected' }).catch(()=>{});
-      botEditNotice(chatId, msgId, `❌ <b>Deposit #${depId} rejected</b>\n🆔 ${dep.uid}`);
+      botEditNotice(chatId, msgId, `❌ <b>Deposit #${depId} rejected</b>\n🆔 <code>${dep.uid}</code>`);
       notifyOATUserEmail(dep.uid, 'Deposit rejected', 'Deposit rejected', [
         `Your deposit of ${fmtN(dep.amount)} ${dep.asset} could not be verified and was rejected.`,
         'Double-check the transaction ID and network, then submit again from the app.'
@@ -1346,7 +1346,7 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
     if (data.startsWith('oatwd_appr_')) {
       await supa.from('oat_app_withdrawals').update({ status: 'approved', reviewed_at: Date.now() }).eq('id', wdId);
       bot.answerCallbackQuery(cq.id, { text: 'Approved ✅' }).catch(()=>{});
-      botEditNotice(chatId, msgId, `✅ <b>Withdrawal #${wdId} approved</b>\n🆔 ${wd.uid}\n💰 ${fmtN(wd.amount)} USDT${wd.method === 'bank' ? ' → Bank transfer' : ' → ' + wd.asset}\n${oatWdDestLines(wd).detail}`);
+      botEditNotice(chatId, msgId, `✅ <b>Withdrawal #${wdId} approved</b>\n🆔 <code>${wd.uid}</code>\n💰 ${fmtN(wd.amount)} USDT${wd.method === 'bank' ? ' → Bank transfer' : ' → ' + wd.asset}\n${oatWdDestLines(wd).detail}`);
       {
         const dispAmt = await oatDisplayAmt(wd.amount, wd.uid);
         const dl = oatWdDestLines(wd);
@@ -1360,7 +1360,7 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
       await supa.from('oat_app_users').update({ balance: Number(ou.balance) + Number(wd.amount) }).eq('uid', wd.uid);
       await supa.from('oat_app_withdrawals').update({ status: 'rejected', reviewed_at: Date.now() }).eq('id', wdId);
       bot.answerCallbackQuery(cq.id, { text: 'Rejected & refunded' }).catch(()=>{});
-      botEditNotice(chatId, msgId, `❌ <b>Withdrawal #${wdId} rejected</b> — balance refunded\n🆔 ${wd.uid}`);
+      botEditNotice(chatId, msgId, `❌ <b>Withdrawal #${wdId} rejected</b> — balance refunded\n🆔 <code>${wd.uid}</code>`);
       {
         const dispAmt = await oatDisplayAmt(wd.amount, wd.uid);
         notifyOATUserEmail(wd.uid, 'Withdrawal rejected', 'Withdrawal rejected', [
@@ -1381,7 +1381,7 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
     oatWdNoteFlow.set(String(chatId), { wdId: Number(wdId), uid: wd.uid, amount: Number(wd.amount), status: newStatus, msg: null, step: 'msg', at: Date.now() });
     bot.answerCallbackQuery(cq.id, { text: 'Send the popup message' }).catch(()=>{});
     bot.sendMessage(chatId,
-      `✍️ <b>Withdrawal #${wdId} → ${newStatus === 'under_review' ? '🔍 Under Review' : '⏳ Processing'}</b>\n🆔 ${wd.uid} · ${fmtN(wd.amount)} USDT\n\nSend the popup message the user will see on their screen (why it's ${newStatus === 'under_review' ? 'under review' : 'processing'}).\nOr /skip to use the default message.`,
+      `✍️ <b>Withdrawal #${wdId} → ${newStatus === 'under_review' ? '🔍 Under Review' : '⏳ Processing'}</b>\n🆔 <code>${wd.uid}</code> · ${fmtN(wd.amount)} USDT\n\nSend the popup message the user will see on their screen (why it's ${newStatus === 'under_review' ? 'under review' : 'processing'}).\nOr /skip to use the default message.`,
       { parse_mode: 'HTML' }).catch(()=>{});
     return;
   }
@@ -1398,7 +1398,7 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
     if (data.startsWith('oatkyc_appr_')) {
       await supa.from('oat_app_users').update({ kyc_status: 'verified' }).eq('uid', kuid);
       bot.answerCallbackQuery(cq.id, { text: 'Verified ✅' }).catch(()=>{});
-      botEditNotice(chatId, msgId, `✅ <b>KYC Verified</b>\n🆔 ${kuid}`);
+      botEditNotice(chatId, msgId, `✅ <b>KYC Verified</b>\n🆔 <code>${kuid}</code>`);
       notifyOATUserEmail(kuid, 'KYC verified', 'Identity verified', [
         'Your identity verification was successful.',
         'Your OAT Trades account is now fully verified.'
@@ -1406,7 +1406,7 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
     } else {
       await supa.from('oat_app_users').update({ kyc_status: 'rejected' }).eq('uid', kuid);
       bot.answerCallbackQuery(cq.id, { text: 'Rejected' }).catch(()=>{});
-      botEditNotice(chatId, msgId, `❌ <b>KYC Rejected</b>\n🆔 ${kuid}`);
+      botEditNotice(chatId, msgId, `❌ <b>KYC Rejected</b>\n🆔 <code>${kuid}</code>`);
       notifyOATUserEmail(kuid, 'KYC rejected', 'Verification rejected', [
         'Your identity verification could not be approved.',
         'Please resubmit clearer photos of your ID from the app and try again.'
@@ -1484,12 +1484,12 @@ async function oatWdFinalizeNote(adminId) {
     }).eq('id', flow.wdId);
     if (error) return bot.sendMessage(adminId, '❌ Could not save: ' + error.message).catch(()=>{});
     bot.sendMessage(adminId,
-      `✅ <b>Withdrawal #${flow.wdId} set to ${flow.status === 'under_review' ? '🔍 Under Review' : '⏳ Processing'}</b>\n🆔 ${flow.uid} · ${fmtN(flow.amount)} USDT\n\n💬 <b>Popup message the user will see:</b>\n<i>${escHtml(note)}</i>\n${imageData ? '📸 Image attached' : '🖼 No image attached'}`,
+      `✅ <b>Withdrawal #${flow.wdId} set to ${flow.status === 'under_review' ? '🔍 Under Review' : '⏳ Processing'}</b>\n🆔 <code>${flow.uid}</code> · ${fmtN(flow.amount)} USDT\n\n💬 <b>Popup message the user will see:</b>\n<i>${escHtml(note)}</i>\n${imageData ? '📸 Image attached' : '🖼 No image attached'}`,
       { parse_mode: 'HTML' }).catch(()=>{});
     // keep Approve / Reject / re-note buttons available
     const { data: wd } = await supa.from('oat_app_withdrawals').select('*').eq('id', flow.wdId).maybeSingle();
     if (wd) bot.sendMessage(ADMIN_CHAT_ID,
-      `📤 <b>Withdrawal #${wd.id}</b> — ${wd.status === 'under_review' ? '🔍 Under Review' : '⏳ Processing'}\n🆔 ${wd.uid}\n💰 ${fmtN(wd.amount)} USDT`,
+      `📤 <b>Withdrawal #${wd.id}</b> — ${wd.status === 'under_review' ? '🔍 Under Review' : '⏳ Processing'}\n🆔 <code>${wd.uid}</code>\n💰 ${fmtN(wd.amount)} USDT`,
       { parse_mode: 'HTML', reply_markup: { inline_keyboard: [
         [{ text: '✅ Approve', callback_data: `oatwd_appr_${wd.id}` },
          { text: '❌ Reject',  callback_data: `oatwd_rej_${wd.id}` }],
@@ -1807,7 +1807,7 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
             'Start a trade from the app: minimum 500 USDT, 2x payout after 24 hours.'
           ], null, 'approved').catch(()=>{});
         }
-        return bot.sendMessage(id, `✅ Deposit #${depId} approved.\n🆔 ${dep.uid}\nCredited: ${fmtN(usdt)} USDT (${fmtN(dep.amount)} ${dep.asset})`);
+        return bot.sendMessage(id, `✅ Deposit #${depId} approved.\n🆔 <code>${dep.uid}</code>\nCredited: ${fmtN(usdt)} USDT (${fmtN(dep.amount)} ${dep.asset})`);
       }
       if (/^REJECT\s+\d+$/i.test(arg)) {
         const depId = parseInt(arg.split(/\s+/)[1], 10);
@@ -1823,7 +1823,7 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
       const { data: pend } = await supa.from('oat_app_deposits').select('*').eq('status', 'pending').order('id', { ascending: true }).limit(20);
       if (!pend || !pend.length) return bot.sendMessage(id, '📥 No pending OAT Trades deposits.');
       for (const d of pend) {
-        const dCap = `📥 <b>Deposit #${d.id}</b>\n🆔 ${d.uid}\n💰 ${fmtN(d.amount)} ${d.asset}${d.txid ? `\n🔍 ${String(d.txid).slice(0,30)}` : ''}`;
+        const dCap = `📥 <b>Deposit #${d.id}</b>\n🆔 <code>${d.uid}</code>\n💰 ${fmtN(d.amount)} ${d.asset}${d.txid ? `\n🔍 ${String(d.txid).slice(0,30)}` : ''}`;
         const dKb = { inline_keyboard: [[
           { text: '✅ Approve', callback_data: `oatdep_appr_${d.id}` },
           { text: '❌ Reject',  callback_data: `oatdep_rej_${d.id}` }
@@ -1930,7 +1930,7 @@ Per user: <code>OATUSERMIN:UID:W:500</code> / <code>OATUSERMIN:UID:D:500</code>`
             `<b>${wd.method === 'bank' ? dl.short : escHtml(wd.address)}</b>`
           ], null, 'approved').catch(()=>{});
         }
-        return bot.sendMessage(id, `✅ Withdrawal #${wdId} approved.\n🆔 ${wd.uid}\n💰 ${fmtN(wd.amount)} USDT${wd.method === 'bank' ? ' → Bank transfer' : ' → ' + wd.asset}\n${oatWdDestLines(wd).detail}`, { parse_mode: 'HTML' });
+        return bot.sendMessage(id, `✅ Withdrawal #${wdId} approved.\n🆔 <code>${wd.uid}</code>\n💰 ${fmtN(wd.amount)} USDT${wd.method === 'bank' ? ' → Bank transfer' : ' → ' + wd.asset}\n${oatWdDestLines(wd).detail}`, { parse_mode: 'HTML' });
       }
       if (/^REJECT\s+\d+$/i.test(arg)) {
         const wdId = parseInt(arg.split(/\s+/)[1], 10);
@@ -1955,7 +1955,7 @@ Per user: <code>OATUSERMIN:UID:W:500</code> / <code>OATUSERMIN:UID:D:500</code>`
       if (!pend || !pend.length) return bot.sendMessage(id, '📤 No active OAT Trades withdrawals.');
       for (const w of pend) {
         const st = w.status === 'under_review' ? '🔍 Under Review' : w.status === 'processing' ? '⏳ Processing' : '⏱ Pending';
-        await bot.sendMessage(id, `📤 <b>Withdrawal #${w.id}</b> — ${st}\n🆔 ${w.uid}\n💰 ${fmtN(w.amount)} USDT${w.method === 'bank' ? ' → Bank transfer' : ' → ' + w.asset}\n${oatWdDestLines(w).detail}`,
+        await bot.sendMessage(id, `📤 <b>Withdrawal #${w.id}</b> — ${st}\n🆔 <code>${w.uid}</code>\n💰 ${fmtN(w.amount)} USDT${w.method === 'bank' ? ' → Bank transfer' : ' → ' + w.asset}\n${oatWdDestLines(w).detail}`,
           { parse_mode: 'HTML', reply_markup: { inline_keyboard: [
             [{ text: '✅ Approve', callback_data: `oatwd_appr_${w.id}` },
              { text: '❌ Reject',  callback_data: `oatwd_rej_${w.id}` }],
@@ -1976,12 +1976,12 @@ Per user: <code>OATUSERMIN:UID:W:500</code> / <code>OATUSERMIN:UID:D:500</code>`
         `<b>${smsg}</b>`,
         'You can continue the conversation in the app under Support.'
       ]).catch(()=>{});
-      return bot.sendMessage(id, error ? '❌ ' + error.message : `✅ Reply sent to ${suid}.`);
+      return bot.sendMessage(id, error ? '❌ ' + error.message : `✅ Reply sent to <code>${suid}</code>.`, { parse_mode: 'HTML' });
     }
     if (tUp.startsWith('OATSUP:')) {
       const { data: msgs } = await supa.from('oat_app_support').select('*').order('id', { ascending: false }).limit(30);
       if (!msgs || !msgs.length) return bot.sendMessage(id, '💬 No OAT Trades support messages.');
-      const lines = msgs.map(m => `${m.from_admin ? '↩️' : '➡️'} ${m.uid} (${new Date(Number(m.created_at)).toISOString().slice(5, 16).replace('T', ' ')}): ${m.message.slice(0, 80)}`).join('\n');
+      const lines = msgs.map(m => `${m.from_admin ? '↩️' : '➡️'} <code>${m.uid}</code> (${new Date(Number(m.created_at)).toISOString().slice(5, 16).replace('T', ' ')}): ${m.message.slice(0, 80)}`).join('\n');
       return bot.sendMessage(id, `💬 <b>OAT Trades support:</b>\n\n${lines}\n\nReply: <code>OATSUP:REPLY:UID:message</code>`, { parse_mode: 'HTML' });
     }
     if (tUp.startsWith('OATBC:')) {
@@ -1994,7 +1994,7 @@ Per user: <code>OATUSERMIN:UID:W:500</code> / <code>OATUSERMIN:UID:D:500</code>`
     if (tUp.startsWith('OATUSERS:')) {
       const { data: ous } = await supa.from('oat_app_users').select('uid, name, balance, team_leader_uid, created_at').order('id', { ascending: false }).limit(30);
       if (!ous || !ous.length) return bot.sendMessage(id, 'No OAT Trades users yet.');
-      const lines = ous.map(o => `${o.uid} ${o.name}: ${Number(o.balance).toLocaleString('en-US')} USDT (leader ${o.team_leader_uid})`).join('\n');
+      const lines = ous.map(o => `<code>${o.uid}</code> ${oatEsc(o.name)}: ${Number(o.balance).toLocaleString('en-US')} USDT (leader ${o.team_leader_uid})`).join('\n');
       return bot.sendMessage(id, `📱 <b>OAT Trades users:</b>\n\n${lines}`, { parse_mode: 'HTML' });
     }
   }
@@ -2008,7 +2008,7 @@ Per user: <code>OATUSERMIN:UID:W:500</code> / <code>OATUSERMIN:UID:D:500</code>`
       `<b>${text.trim()}</b>`,
       'You can continue the conversation in the app under Support.'
     ]).catch(()=>{});
-    bot.sendMessage(id, error ? '❌ ' + error.message : `✅ Reply sent to ${suid}.`).catch(()=>{});
+    bot.sendMessage(id, error ? '❌ ' + error.message : `✅ Reply sent to <code>${suid}</code>.`, { parse_mode: 'HTML' }).catch(()=>{});
     return;
   }
   // ── Manual Top Traders: guided add flow (via Add Trader button) ───────
@@ -2750,7 +2750,7 @@ app.post('/api/oat-app/deposit', async (req, res) => {
       receipt_image: receipt, status: 'pending', created_at: Date.now()
     }).select().single();
     if (error) return res.status(500).json({ success: false, error: 'Could not submit deposit.' });
-    const depCap = `📥 <b>OAT Trades Deposit #${depRow.id}</b>\n\n🆔 ${u.uid} (${u.name})\n💰 ${fmtN(amt)} ${as}${txid ? `\n🔍 TX: ${String(txid).slice(0, 40)}` : ''}\n\n📎 Payment receipt attached — review before approving.`;
+    const depCap = `📥 <b>OAT Trades Deposit #${depRow.id}</b>\n\n🆔 <code>${u.uid}</code> (${oatEsc(u.name)})\n💰 ${fmtN(amt)} ${as}${txid ? `\n🔍 TX: ${String(txid).slice(0, 40)}` : ''}\n\n📎 Payment receipt attached — review before approving.`;
     const depKb = { inline_keyboard: [[
       { text: '✅ Approve', callback_data: `oatdep_appr_${depRow.id}` },
       { text: '❌ Reject',  callback_data: `oatdep_rej_${depRow.id}` }
@@ -2875,7 +2875,7 @@ app.post('/api/oat-app/claim', async (req, res) => {
       paidCount++;
     }
     bot.sendMessage(ADMIN_CHAT_ID,
-      `📊 <b>OAT Trades trade completed</b>\n\n🆔 ${u.uid} (${u.name})\n💰 Trade ${tr.amount} USDT → payout ${payout} USDT\n👥 Team members paid 5%: ${paidCount}`,
+      `📊 <b>OAT Trades trade completed</b>\n\n🆔 <code>${u.uid}</code> (${oatEsc(u.name)})\n💰 Trade ${tr.amount} USDT → payout ${payout} USDT\n👥 Team members paid 5%: ${paidCount}`,
       { parse_mode: 'HTML' }).catch(()=>{});
     (async () => {
       const [dispAmt, dispPayout, dispProfit] = await Promise.all([oatDisplayAmt(tr.amount, u.uid), oatDisplayAmt(payout, u.uid), oatDisplayAmt(profit, u.uid)]);
@@ -2958,7 +2958,7 @@ app.post('/api/oat-app/withdraw', async (req, res) => {
     if (error) return res.status(500).json({ success: false, error: error.message });
     await supa.from('oat_app_users').update({ balance: Number(u.balance) - amt }).eq('uid', u.uid);
     bot.sendMessage(ADMIN_CHAT_ID,
-      `📤 <b>OAT Trades Withdrawal #${wdRow.id}</b>\n\n🆔 ${u.uid} (${u.name})\n${m === 'bank' ? '💰 ' + fmtN(amt) + ' USDT → Bank account' : destLine}\n${m === 'bank' ? destLine : ''}`,
+      `📤 <b>OAT Trades Withdrawal #${wdRow.id}</b>\n\n🆔 <code>${u.uid}</code> (${oatEsc(u.name)})\n${m === 'bank' ? '💰 ' + fmtN(amt) + ' USDT → Bank account' : destLine}\n${m === 'bank' ? destLine : ''}`,
       { parse_mode: 'HTML', reply_markup: { inline_keyboard: [
         [{ text: '✅ Approve', callback_data: `oatwd_appr_${wdRow.id}` },
          { text: '❌ Reject',  callback_data: `oatwd_rej_${wdRow.id}` }],
@@ -2991,7 +2991,7 @@ app.post('/api/oat-app/support', async (req, res) => {
     const { error } = await getSupabase().from('oat_app_support').insert({ uid: u.uid, message: msg, from_admin: false, created_at: Date.now() });
     if (error) return res.status(500).json({ success: false, error: 'Could not send.' });
     bot.sendMessage(ADMIN_CHAT_ID,
-      `💬 <b>OAT Trades Support</b>\n\n🆔 ${u.uid} (${u.name})\n\n${msg.slice(0, 800)}`,
+      `💬 <b>OAT Trades Support</b>\n\n🆔 <code>${u.uid}</code> (${oatEsc(u.name)})\n\n${msg.slice(0, 800)}`,
       { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: '↩️ Reply', callback_data: `oatsup_reply_${u.uid}` }]] } }).catch(()=>{});
     // optional screenshot (base64 data URL) -> photo to admin
     if (screenshot && String(screenshot).startsWith('data:image/')) {
@@ -3048,7 +3048,7 @@ app.post('/api/oat-app/kyc', async (req, res) => {
       kyc_id_number: String(idNumber).trim(), kyc_dob: String(dob).trim(), kyc_submitted_at: Date.now()
     }).eq('uid', u.uid);
     bot.sendMessage(ADMIN_CHAT_ID,
-      `🪪 <b>OAT Trades KYC Submitted</b>\n\n🆔 ${u.uid} (${u.name})\n👤 ${fullName}\n📄 ${idType}: ${idNumber}\n🎂 ${dob}\n\nA verification photo follows if uploaded.`,
+      `🪪 <b>OAT Trades KYC Submitted</b>\n\n🆔 <code>${u.uid}</code> (${oatEsc(u.name)})\n👤 ${fullName}\n📄 ${idType}: ${idNumber}\n🎂 ${dob}\n\nA verification photo follows if uploaded.`,
       { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[
         { text: '✅ Verify', callback_data: `oatkyc_appr_${u.uid}` },
         { text: '❌ Reject', callback_data: `oatkyc_rej_${u.uid}` }
