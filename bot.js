@@ -1817,6 +1817,50 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
       }
       return;
     }
+    if (tUp.startsWith('OATUSERMIN:')) {
+      const parts = text.split(':').slice(1).map(p => p.trim());
+      const uid = (parts[0] || '').toUpperCase();
+      if (!uid) return bot.sendMessage(id, '❌ Format: OATUSERMIN:UID:W:500 or OATUSERMIN:UID:D:500');
+      const usr = await oatAppFindUser(uid);
+      if (!usr) return bot.sendMessage(id, `❌ User ${uid} not found`);
+      const mode = (parts[1] || '').toUpperCase();
+      const amt = parseFloat(parts[2]);
+      try{
+        if (!mode) {
+          const l = await getOatLimits(uid);
+          return bot.sendMessage(id, `👤 <b>${oatEsc(usr.name)} (${uid})</b>
+
+📉 Min deposit: ${fmtN(l.minDeposit)} USDT ${l.userDepositOverride!=null ? '(personal)' : '(global)'}
+🏧 Min withdrawal: ${fmtN(l.minWithdraw)} USDT ${l.userWithdrawOverride!=null ? '(personal)' : '(global)'}
+
+Set: <code>OATUSERMIN:${uid}:W:500</code> or <code>OATUSERMIN:${uid}:D:500</code>
+Reset: <code>OATUSERMIN:${uid}:RESET</code>`, { parse_mode: 'HTML' });
+        }
+        if (mode === 'RESET') {
+          await getSupabase().from('app_settings').delete().in('key', ['oat_min_wd_'+uid, 'oat_min_dep_'+uid]);
+          const l = await getOatLimits(uid);
+          return bot.sendMessage(id, `✅ Limits reset to global defaults.
+
+👤 ${oatEsc(usr.name)} (${uid})
+📉 Min deposit: ${fmtN(l.minDeposit)} USDT
+🏧 Min withdrawal: ${fmtN(l.minWithdraw)} USDT`, { parse_mode: 'HTML' });
+        }
+        if ((mode === 'W' || mode === 'WD' || mode === 'D' || mode === 'DEP') && amt >= 1) {
+          const key = (mode === 'W' || mode === 'WD') ? 'oat_min_wd_'+uid : 'oat_min_dep_'+uid;
+          const which = (mode === 'W' || mode === 'WD') ? 'withdrawal' : 'deposit';
+          await getSupabase().from('app_settings').upsert({ key, value: String(amt) }, { onConflict: 'key' }).eq('key', key);
+          const l = await getOatLimits(uid);
+          return bot.sendMessage(id, `✅ Personal minimum ${which} set.
+
+👤 ${oatEsc(usr.name)} (${uid})
+📉 Min deposit: ${fmtN(l.minDeposit)} USDT ${l.userDepositOverride!=null ? '(personal)' : '(global)'}
+🏧 Min withdrawal: ${fmtN(l.minWithdraw)} USDT ${l.userWithdrawOverride!=null ? '(personal)' : '(global)'}
+
+Applies instantly to this user only.`, { parse_mode: 'HTML' });
+        }
+        return bot.sendMessage(id, '❌ Format: OATUSERMIN:UID:W:500 (withdrawal) or OATUSERMIN:UID:D:500 (deposit)');
+      }catch(e){ return bot.sendMessage(id, '❌ '+e.message); }
+    }
     if (tUp.startsWith('OATMIN')) {
       const arg = text.split(':').slice(1).join(':').trim();
       try{
@@ -1843,7 +1887,9 @@ Change again anytime with OATMIN:D <amount> or OATMIN:W <amount>.`);
 
 To change:
 <code>OATMIN:D 250</code> — set min deposit
-<code>OATMIN:W 250</code> — set min withdrawal`, { parse_mode: 'HTML' });
+<code>OATMIN:W 250</code> — set min withdrawal
+
+Per user: <code>OATUSERMIN:UID:W:500</code> / <code>OATUSERMIN:UID:D:500</code>`, { parse_mode: 'HTML' });
       }catch(e){ return bot.sendMessage(id, '❌ '+e.message); }
     }
     if (tUp.startsWith('OATWD:')) {
@@ -2574,17 +2620,26 @@ const OATAPP_MIN_WITHDRAW = 100;                // default min withdrawal in USD
 const OATAPP_MIN_DEPOSIT = 100;                 // default min deposit in USDT-equivalent (Bammi, 2026-09-20)
 // Admin-configurable limits (Bammi, 2026-10-15): OATMIN:W / OATMIN:D bot commands store
 // overrides in app_settings and every deposit/withdraw request validates against them.
-async function getOatLimits(){
+async function getOatLimits(uid){
   try{
-    const { data } = await getSupabase().from('app_settings').select('key,value').in('key', ['oat_min_withdraw','oat_min_deposit']);
+    const keys = ['oat_min_withdraw','oat_min_deposit'];
+    if (uid) keys.push('oat_min_wd_'+uid, 'oat_min_dep_'+uid);
+    const { data } = await getSupabase().from('app_settings').select('key,value').in('key', keys);
     const m = {}; (data||[]).forEach(r => m[r.key] = r.value);
+    const gW = parseFloat(m['oat_min_withdraw']) || OATAPP_MIN_WITHDRAW;
+    const gD = parseFloat(m['oat_min_deposit']) || OATAPP_MIN_DEPOSIT;
+    const uW = uid ? (parseFloat(m['oat_min_wd_'+uid]) || null) : null;
+    const uD = uid ? (parseFloat(m['oat_min_dep_'+uid]) || null) : null;
     return {
-      minWithdraw: parseFloat(m.oat_min_withdraw) || OATAPP_MIN_WITHDRAW,
-      minDeposit: parseFloat(m.oat_min_deposit) || OATAPP_MIN_DEPOSIT
+      minWithdraw: uW || gW,              // per-user override wins over the global value
+      minDeposit: uD || gD,
+      globalMinWithdraw: gW, globalMinDeposit: gD,
+      userWithdrawOverride: uW, userDepositOverride: uD
     };
-  }catch(e){ return { minWithdraw: OATAPP_MIN_WITHDRAW, minDeposit: OATAPP_MIN_DEPOSIT }; }
+  }catch(e){ return { minWithdraw: OATAPP_MIN_WITHDRAW, minDeposit: OATAPP_MIN_DEPOSIT, globalMinWithdraw: OATAPP_MIN_WITHDRAW, globalMinDeposit: OATAPP_MIN_DEPOSIT, userWithdrawOverride: null, userDepositOverride: null }; }
 }
 
+function oatEsc(t){ return String(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 async function oatAppFindUser(uid) {
   const { data } = await getSupabase().from('oat_app_users').select('*').eq('uid', String(uid).trim()).maybeSingle();
   return data || null;
@@ -2652,8 +2707,8 @@ app.post('/api/oat-app/deposit', async (req, res) => {
     if (!['USDT', 'BTC', 'ETH'].includes(as)) return res.status(400).json({ success: false, error: 'Choose USDT, BTC or ETH.' });
     const amt = parseFloat(amount);
     if (!amt || amt <= 0) return res.status(400).json({ success: false, error: 'Enter the amount you sent.' });
-    // Minimum deposit: admin-configurable via OATMIN:D (default 100 USDT or exact BTC/ETH equivalent)
-    const limits = await getOatLimits();
+    // Minimum deposit: admin-configurable via OATMIN:D (global) / OATUSERMIN:UID:D (per user)
+    const limits = await getOatLimits(u.uid);
     if (as !== 'USDT') {
       const rates = await getCryptoRates();
       const r = rates[as] || (rates.rates && rates.rates[as]) || 0;
@@ -2709,7 +2764,7 @@ app.post('/api/oat-app/state', async (req, res) => {
       leader = wl ? wl.full_name : (ol ? ol.name : null);
     }
     const rates = await getCryptoRates();
-    const limits = await getOatLimits();
+    const limits = await getOatLimits(u.uid);
     res.json({ success: true, user: {
       uid: u.uid, name: u.name, balance: Number(u.balance), teamEarnings: Number(u.team_earnings),
       teamMembers: members || 0, leaderName: leader, leaderUid: u.team_leader_uid,
@@ -2833,7 +2888,7 @@ app.post('/api/oat-app/withdraw', async (req, res) => {
     if (!u) return res.status(400).json({ success: false, error: 'UID not found.' });
     const m = String(method || 'crypto').toLowerCase();
     const amt = parseFloat(amount);
-    const limits = await getOatLimits();
+    const limits = await getOatLimits(u.uid);
     if (!amt || amt < limits.minWithdraw) return res.status(400).json({ success: false, error: `Minimum withdrawal is ${limits.minWithdraw} USDT.` });
     if (Number(u.balance) < amt) return res.status(400).json({ success: false, error: 'Insufficient balance.' });
     // Withdrawal policies (Bammi, 2026-09-27): users who have not completed KYC
