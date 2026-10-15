@@ -549,7 +549,7 @@ const ADMIN_KEYBOARD = {
     [{ text: '💬 Community Post',    callback_data: 'admin_community_post'     }, { text: '💰 Resolve Balance',   callback_data: 'admin_resolve_balance'    }],
     [{ text: '🗑️ Delete Testimonials', callback_data: 'admin_del_testimonials' }, { text: '🗑️ Delete Poems',      callback_data: 'admin_del_poems'          }],
     [{ text: '🗑️ Delete Comments',    callback_data: 'admin_del_comments'       }, { text: '📺 Post YT Testimonial', callback_data: 'admin_post_yt_test'      }],
-    [{ text: '⚙️ Withdrawal Settings', callback_data: 'admin_wd_settings'            }]
+    [{ text: '⚙️ Withdrawal Settings', callback_data: 'admin_wd_settings'            }, { text: '📉 OAT Limits', callback_data: 'admin_oat_limits' }]
   ]
 };
 
@@ -678,6 +678,28 @@ if (bot) bot.on('callback_query', async (cq) => {
 
   // Withdrawal approve/reject
   // ─── Admin: Withdrawal Settings ───
+    if (data === 'admin_oat_limits') {
+      try {
+        const l = await getOatLimits();
+        await bot.sendMessage(chatId,
+          `📉 <b>OAT Trades Limits</b>\n\n` +
+          `<b>Current (all users):</b>\n` +
+          `📥 Min deposit: ${fmtN(l.minDeposit)} USDT\n` +
+          `🏧 Min withdrawal: ${fmtN(l.minWithdraw)} USDT\n\n` +
+          `<b>Global commands:</b>\n` +
+          `<code>OATMIN:D 500</code>: set min deposit\n` +
+          `<code>OATMIN:W 500</code>: set min withdrawal\n\n` +
+          `<b>Per-user commands:</b>\n` +
+          `<code>OATUSERMIN:UID:W:500</code>: user's min withdrawal\n` +
+          `<code>OATUSERMIN:UID:D:500</code>: user's min deposit\n` +
+          `<code>OATUSERMIN:UID</code>: show user's limits\n` +
+          `<code>OATUSERMIN:UID:RESET</code>: back to global`,
+          { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD }
+        );
+      } catch(e) {
+        await bot.sendMessage(chatId, `❌ Error loading OAT limits: ${e.message}`, { reply_markup: ADMIN_KEYBOARD });
+      }
+    }
     if (data === 'admin_wd_settings') {
       try {
         const settings = await getWithdrawalSettings();
