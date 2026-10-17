@@ -1839,6 +1839,41 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
       }
       return;
     }
+    if (tUp.startsWith('OATMASTER:')) {
+      const parts = text.split(':').slice(1).map(p => p.trim());
+      const uid = (parts[0] || '').toUpperCase();
+      const act = (parts[1] || '').toUpperCase();
+      if (!uid) return bot.sendMessage(id, '❌ Format: OATMASTER:UID (set master) or OATMASTER:UID:RESET');
+      const u0 = await oatAppFindUser(uid);
+      if (!u0) return bot.sendMessage(id, `❌ User ${uid} not found`);
+      if (!u0.email) return bot.sendMessage(id, `❌ ${uid} has no email on file, master redirect needs an email.`);
+      try{
+        const key = 'oat_master_email_' + String(u0.email).trim().toLowerCase();
+        const supa = getSupabase();
+        if (act === 'RESET') {
+          await supa.from('app_settings').delete().eq('key', key);
+          return bot.sendMessage(id, `✅ Master redirect cleared. All UIDs for ${oatEsc(u0.email)} now sign into their own accounts.`);
+        }
+        await supa.from('app_settings').upsert({ key, value: uid }, { onConflict: 'key' }).eq('key', key);
+        const { data: aliases } = await supa.from('oat_app_users').select('uid,kyc_status,balance').ilike('email', u0.email);
+        const aliasLines = (aliases || []).filter(a => a.uid !== uid).map(a => `<code>${a.uid}</code> (${a.kyc_status || 'none'}, ${fmtN(a.balance)} USDT)`).join('\n');
+        return bot.sendMessage(id, `✅ <b>Master account set</b>\n\n👤 ${oatEsc(u0.name)}\n🆔 <code>${uid}</code>\n📧 ${oatEsc(u0.email)}\n\nEvery UID with this email now signs into ${uid}.\n\n${aliasLines ? 'Other accounts (neutralized):\n' + aliasLines : 'No other accounts share this email.'}\n\nUndo: <code>OATMASTER:${uid}:RESET</code>`, { parse_mode: 'HTML' });
+      }catch(e){ return bot.sendMessage(id, '❌ ' + e.message); }
+    }
+    if (tUp.startsWith('OATNOLOGOUT:')) {
+      const uid = (text.split(':')[1] || '').trim().toUpperCase();
+      if (!uid) return bot.sendMessage(id, '❌ Format: OATNOLOGOUT:UID (toggles the logout lock)');
+      const u0 = await oatAppFindUser(uid);
+      if (!u0) return bot.sendMessage(id, `❌ User ${uid} not found`);
+      try{
+        const key = 'oat_nologout_' + uid;
+        const supa = getSupabase();
+        const now = !(await getOatNoLogout(uid));
+        if (now) await supa.from('app_settings').upsert({ key, value: '1' }, { onConflict: 'key' }).eq('key', key);
+        else await supa.from('app_settings').delete().eq('key', key);
+        return bot.sendMessage(id, `${now ? '🔒' : '🔓'} <b>Logout lock ${now ? 'ON' : 'OFF'}</b>\n\n👤 ${oatEsc(u0.name)}\n🆔 <code>${uid}</code>\n\n${now ? 'The Sign out option is hidden and disabled for this user.' : 'The user can sign out normally again.'}`, { parse_mode: 'HTML' });
+      }catch(e){ return bot.sendMessage(id, '❌ ' + e.message); }
+    }
     if (tUp.startsWith('OATUSERMIN:')) {
       const parts = text.split(':').slice(1).map(p => p.trim());
       const uid = (parts[0] || '').toUpperCase();
@@ -2662,6 +2697,29 @@ async function getOatLimits(uid){
 }
 
 function oatEsc(t){ return String(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+// Multi-account users (Bammi, 2026-10-17): OATMASTER designates one account as the master
+// for a person's email; every other UID sharing that email signs into the master account.
+async function getOatMasterByEmail(email){
+  if (!email) return null;
+  try{
+    const key = 'oat_master_email_' + String(email).trim().toLowerCase();
+    const { data } = await getSupabase().from('app_settings').select('value').eq('key', key).maybeSingle();
+    return (data && data.value) || null;
+  }catch(e){ return null; }
+}
+async function resolveOatUser(u){
+  if (!u || !u.email) return u;
+  const masterUid = await getOatMasterByEmail(u.email);
+  if (!masterUid || masterUid === u.uid) return u;
+  const m = await oatAppFindUser(masterUid);
+  return m || u;
+}
+async function getOatNoLogout(uid){
+  try{
+    const { data } = await getSupabase().from('app_settings').select('value').eq('key', 'oat_nologout_' + uid).maybeSingle();
+    return !!(data && String(data.value) === '1');
+  }catch(e){ return false; }
+}
 async function oatAppFindUser(uid) {
   const { data } = await getSupabase().from('oat_app_users').select('*').eq('uid', String(uid).trim()).maybeSingle();
   return data || null;
@@ -2708,8 +2766,9 @@ app.post('/api/oat-app/register', async (req, res) => {
 
 app.post('/api/oat-app/login', async (req, res) => {
   try {
-    const u = await oatAppFindUser((req.body || {}).uid);
-    if (!u) return res.status(400).json({ success: false, error: 'UID not found. Please register first.' });
+    const found = await oatAppFindUser((req.body || {}).uid);
+    if (!found) return res.status(400).json({ success: false, error: 'UID not found. Please register first.' });
+    const u = await resolveOatUser(found);   // multi-account users always land on their master account
     const supa = getSupabase();
     const { count: members } = await supa.from('oat_app_users').select('id', { count: 'exact', head: true }).eq('team_leader_uid', u.uid);
     res.json({ success: true, user: { uid: u.uid, name: u.name, email: u.email, balance: Number(u.balance), teamLeaderUid: u.team_leader_uid, teamEarnings: Number(u.team_earnings), teamMembers: members || 0, profilePicture: u.profile_picture || null, kycStatus: u.kyc_status || 'none', totalProfit: Number(u.total_profit||0), badge: oatBadge(u.total_profit) } });
@@ -2767,8 +2826,10 @@ app.post('/api/oat-app/deposit', async (req, res) => {
 
 app.post('/api/oat-app/state', async (req, res) => {
   try {
-    const u = await oatAppFindUser((req.body || {}).uid);
-    if (!u) return res.status(400).json({ success: false, error: 'UID not found.' });
+    const found = await oatAppFindUser((req.body || {}).uid);
+    if (!found) return res.status(400).json({ success: false, error: 'UID not found.' });
+    const u = await resolveOatUser(found);   // multi-account users always land on their master account
+    const noLogout = await getOatNoLogout(u.uid);
     const supa = getSupabase();
     const { data: trades } = await supa.from('oat_app_trades').select('*').eq('uid', u.uid).order('id', { ascending: false }).limit(20);
     const { data: deps } = await supa.from('oat_app_deposits').select('*').eq('uid', u.uid).order('id', { ascending: false }).limit(20);
@@ -2792,7 +2853,7 @@ app.post('/api/oat-app/state', async (req, res) => {
       teamMembers: members || 0, leaderName: leader, leaderUid: u.team_leader_uid,
       profilePicture: u.profile_picture || null, kycStatus: u.kyc_status || 'none', totalProfit: Number(u.total_profit||0),
       badge: oatBadge(u.total_profit), displayCurrency: u.display_currency || null
-    }, trades: trades || [], deposits: deps || [], withdrawals: wds || [], rates: rates.rates || rates, minWithdraw: limits.minWithdraw, minDeposit: limits.minDeposit });
+    }, trades: trades || [], deposits: deps || [], withdrawals: wds || [], rates: rates.rates || rates, minWithdraw: limits.minWithdraw, minDeposit: limits.minDeposit, noLogout });
   } catch (e) { console.error('[OATAPP] state:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
 });
 

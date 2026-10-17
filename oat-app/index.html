@@ -516,7 +516,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue)}
       <div class="settings-item"><span class="sl">Team earnings</span><span class="sv" id="pfTeamEarn"></span></div>
       <div class="settings-item" onclick="openCurrencyModal()"><span class="sl">Display currency</span><span class="sv" id="pfCur">USDT ›</span></div>
       <div class="settings-item" onclick="go('terms')"><span class="sl">Terms &amp; Conditions</span><span class="sv">View ›</span></div>
-      <div class="settings-item" onclick="signOut()"><span class="sl" style="color:#f87171">Sign out</span><span class="sv"></span></div>
+      <div class="settings-item" id="signOutRow" onclick="signOut()"><span class="sl" style="color:#f87171">Sign out</span><span class="sv"></span></div>
     </div>
 
     <h2>Verification (KYC)</h2>
@@ -974,10 +974,13 @@ async function login(){
   if(!uid) return showErr('logErr','Enter your UID.');
   const d = await post('/api/oat-app/login', {uid});
   if(!d.success) return showErr('logErr', d.error||'Sign in failed.');
-  localStorage.setItem('oat_uid', uid); enterApp();
+  localStorage.setItem('oat_uid', (d.user && d.user.uid) || uid); enterApp();
 }
 function loginWithNew(){ enterApp(); }
-function signOut(){ localStorage.removeItem('oat_uid'); location.reload(); }
+function signOut(){
+  if (STATE && STATE.noLogout) return toast('Your account stays signed in. Need help? Contact the support team.');
+  localStorage.removeItem('oat_uid'); location.reload();
+}
 
 function enterApp(){
   $('authScreen').classList.add('hidden');
@@ -1107,6 +1110,7 @@ async function refreshState(){
   const d = await post('/api/oat-app/state', {uid});
   if(!d.success){ localStorage.removeItem('oat_uid'); location.reload(); return; }
   STATE = d; U = d.user;
+  const sor = $('signOutRow'); if (sor) sor.style.display = STATE.noLogout ? 'none' : '';
   applyLimits();
   checkApprovedPopups(d.withdrawals);
   checkWdNotes(d.withdrawals);
@@ -2177,7 +2181,7 @@ async function submitKyc(){
   const uid = localStorage.getItem('oat_uid');
   if(uid){
     const d = await post('/api/oat-app/login', {uid});
-    if(d.success){ enterApp(); return; }
+    if(d.success){ if(d.user && d.user.uid && d.user.uid !== uid) localStorage.setItem('oat_uid', d.user.uid); enterApp(); return; }
     localStorage.removeItem('oat_uid');
   }
   $('authScreen').classList.remove('hidden');
