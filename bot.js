@@ -3881,10 +3881,24 @@ let _cryptoRateLastError = null;
 // static last-resort so the UI never blanks). Symbols mirror FX_RATES in app.js.
 const CG_IDS = { bitcoin:'BTC', ethereum:'ETH', binancecoin:'BNB', solana:'SOL', ripple:'XRP',
   'the-open-network':'TON', cardano:'ADA', dogecoin:'DOGE', tron:'TRX', polkadot:'DOT',
-  polygon:'MATIC', litecoin:'LTC', 'avalanche-2':'AVAX', 'shiba-inu':'SHIB',
-  'usd-coin':'USDC', dai:'DAI' };
-const CG_STATIC = { BTC: 60000, ETH: 2500, BNB: 550, SOL: 140, XRP: 0.55, TON: 5.2, ADA: 0.45,
-  DOGE: 0.12, TRX: 0.12, DOT: 6.5, MATIC: 0.7, LTC: 70, AVAX: 28, SHIB: 0.0000154, USDC: 1, DAI: 1 };
+  'matic-network':'MATIC', litecoin:'LTC', 'avalanche-2':'AVAX', 'shiba-inu':'SHIB',
+  'usd-coin':'USDC', dai:'DAI',
+  chainlink:'LINK', near:'NEAR', cosmos:'ATOM', uniswap:'UNI', stellar:'XLM',
+  'ethereum-classic':'ETC', filecoin:'FIL', aptos:'APT', arbitrum:'ARB', optimism:'OP',
+  'injective-protocol':'INJ', sui:'SUI', pepe:'PEPE', 'internet-computer':'ICP',
+  'hedera-hashgraph':'HBAR', vechain:'VET', algorand:'ALGO', aave:'AAVE',
+  'the-graph':'GRT', 'immutable-x':'IMX', thorchain:'RUNE', maker:'MKR', 'lido-dao':'LDO',
+  'curve-dao-token':'CRV', 'the-sandbox':'SAND', decentraland:'MANA', 'axie-infinity':'AXS',
+  'elrond-erd-2':'EGLD', eos:'EOS', tezos:'XTZ', chiliz:'CHZ', monero:'XMR', zcash:'ZEC',
+  celestia:'TIA', 'sei-network':'SEI', kaspa:'KAS', 'ethereum-name-service':'ENS',
+  bonk:'BONK', 'render-token':'RNDR' };
+const CG_STATIC = { BTC: 60000, ETH: 2500, BNB: 550, SOL: 140, XRP: 1.3, TON: 1.2, ADA: 0.45,
+  DOGE: 0.08, TRX: 0.32, DOT: 1, MATIC: 0.13, LTC: 56, AVAX: 9, SHIB: 0.0000048, USDC: 1, DAI: 1,
+  LINK: 11, NEAR: 4.4, ATOM: 1.6, UNI: 7, XLM: 0.17, ETC: 7.5, FIL: 0.9, APT: 0.68, ARB: 0.17,
+  OP: 0.11, INJ: 7.7, SUI: 0.9, PEPE: 0.0000043, ICP: 2.6, HBAR: 0.076, VET: 0.0064, ALGO: 0.1,
+  AAVE: 130, GRT: 0.02, IMX: 0.14, RUNE: 0.62, MKR: 1480, LDO: 0.36, CRV: 0.33, SAND: 0.05,
+  MANA: 0.077, AXS: 0.94, EGLD: 3.2, EOS: 0.09, XTZ: 0.28, CHZ: 0.013, XMR: 596, ZEC: 1215,
+  TIA: 0.53, SEI: 0.05, KAS: 0.035, ENS: 5.1, BONK: 0.000003, RNDR: 1.7 };
 async function getCryptoRates() {
   if (_cryptoRateCache.data && (Date.now() - _cryptoRateCache.ts) < 90000) return _cryptoRateCache.data;
   // Primary: CoinGecko: one call, every token

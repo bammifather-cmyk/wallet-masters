@@ -4115,6 +4115,27 @@ function oatAssetChips(assets, cat) {
       <span class="oat-dot" style="background:${a.color}"></span>${a.t}
     </button>`).join('');
 }
+function oatAssetMatches(a, q) {
+  if (!q) return true;
+  q = q.toLowerCase();
+  return ((a.t || '') + ' ' + (a.name || '') + ' ' + (a.ex || '')).toLowerCase().includes(q);
+}
+function oatChipsHtml(assets, q, cat, ex) {
+  return assets.filter(a => a.cat === cat && (!ex || a.ex === ex) && oatAssetMatches(a, q)).map(a =>
+    `<button class="oat-chip${_oatSelectedAsset === a.t ? ' sel' : ''}" title="${_esc(a.name)}" onclick="selectOatAsset('${a.t}')" style="${_oatSelectedAsset === a.t ? `border-color:${a.color}` : ''}">
+      <span class="oat-dot" style="background:${a.color}"></span>${a.t}${ex ? `<span style="font-size:8px;font-weight:800;color:#7d8ba1;margin-left:2px">${ex}</span>` : ''}
+    </button>`).join('');
+}
+function oatSearchAssets() {
+  const st = _oatStatusCache; if (!st || !st.assets) return;
+  const box = document.getElementById('oatAssetSearch');
+  const q = box ? box.value.trim() : '';
+  const put = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
+  put('oatChipsCrypto', oatChipsHtml(st.assets, q, 'Crypto'));
+  put('oatChipsIndices', oatChipsHtml(st.assets, q, 'Indices'));
+  put('oatChipsNyse', oatChipsHtml(st.assets, q, 'Stocks', 'NYSE'));
+  put('oatChipsNasdaq', oatChipsHtml(st.assets, q, 'Stocks', 'NASDAQ'));
+}
 
 function selectOatAsset(t) {
   _oatSelectedAsset = t;
@@ -4197,10 +4218,15 @@ async function loadOatPage() {
             <div><div class="mining-stat-label">Your Balance</div><div class="mining-stat-val">${fmtD(st.balance)} ${fmtDCur()}</div></div>
             <div><div class="mining-stat-label">Return</div><div class="mining-stat-val mining-stat-gold">2x in 24h</div></div>
           </div>
-          <div class="oat-cat-label">CRYPTO</div>
-          <div class="oat-chips" id="oatChipsCrypto">${oatAssetChips(assets, 'Crypto')}</div>
-          <div class="oat-cat-label">STOCKS</div>
-          <div class="oat-chips" id="oatChipsStocks">${oatAssetChips(assets, 'Stocks')}</div>
+          <input id="oatAssetSearch" class="mining-input" type="text" placeholder="Search assets: Bitcoin, NYSE, JPM..." oninput="oatSearchAssets()" style="margin-top:8px;text-align:left;font-weight:500" />
+          <div class="oat-cat-label" style="margin-top:12px">CRYPTO</div>
+          <div class="oat-chips" id="oatChipsCrypto" style="flex-wrap:wrap;max-height:170px;overflow-y:auto;row-gap:8px">${oatChipsHtml(assets, '', 'Crypto')}</div>
+          <div class="oat-cat-label" style="margin-top:12px">INDICES</div>
+          <div class="oat-chips" id="oatChipsIndices" style="flex-wrap:wrap;overflow-y:auto;row-gap:8px">${oatChipsHtml(assets, '', 'Indices')}</div>
+          <div class="oat-cat-label" style="margin-top:12px">STOCKS · NYSE</div>
+          <div class="oat-chips" id="oatChipsNyse" style="flex-wrap:wrap;max-height:170px;overflow-y:auto;row-gap:8px">${oatChipsHtml(assets, '', 'Stocks', 'NYSE')}</div>
+          <div class="oat-cat-label" style="margin-top:12px">STOCKS · NASDAQ</div>
+          <div class="oat-chips" id="oatChipsNasdaq" style="flex-wrap:wrap;max-height:170px;overflow-y:auto;row-gap:8px">${oatChipsHtml(assets, '', 'Stocks', 'NASDAQ')}</div>
           <input id="oatAmountInput" class="mining-input" type="number" placeholder="Enter amount to invest" style="margin-top:8px" />
           <div class="mining-hint" style="margin-bottom:10px">Minimum 500 USDT · doubles in 24 hours · cash out free</div>
           <button class="mining-buy-btn" id="oatInvestBtn" onclick="investOat()">Start Trading</button>`);
