@@ -3244,6 +3244,35 @@ app.get('/api/traders/leaderboard', async (req, res) => {
 // count via live accrued profit, so everyone who is trading is always on the rank list.
 // Curated global Top Traders (top_traders table, TTADD:/TTDEL:) are merged on top.
 // QA/test accounts (name starts with "QA") are still excluded.
+// Leaderboard photos as real cached images (Bammi, 2026-10-27): the Ranks list used to embed
+// every trader's photo as base64 inside the JSON (51 photos = ~630 KB), so on mobile data the
+// list took very long or never appeared. The list now carries a short URL per trader and the
+// phone fetches each photo separately (browser-cached for a day), so names/amounts show at once.
+// kind: 'u' = oat_app_users.uid, 't' = top_traders.id. Read-only; nothing is modified.
+app.get('/api/oat-app/lb-photo/:kind/:key', async (req, res) => {
+  try {
+    const kind = req.params.kind, key = String(req.params.key || '');
+    const supa = getSupabase();
+    let dataUrl = null;
+    if (kind === 'u') {
+      const { data } = await supa.from('oat_app_users').select('profile_picture').eq('uid', key).maybeSingle();
+      dataUrl = data && data.profile_picture;
+    } else if (kind === 't') {
+      const { data } = await supa.from('top_traders').select('photo').eq('id', parseInt(key, 10) || 0).maybeSingle();
+      dataUrl = data && data.photo;
+    }
+    if (!dataUrl) return res.status(404).end();
+    const m = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.*)$/s.exec(dataUrl);
+    if (m) {
+      res.set('Content-Type', m[1]);
+      res.set('Cache-Control', 'public, max-age=86400');
+      return res.send(Buffer.from(m[2], 'base64'));
+    }
+    if (/^https?:\/\//.test(dataUrl)) return res.redirect(302, dataUrl);   // already a normal link
+    res.status(404).end();
+  } catch (e) { res.status(500).end(); }
+});
+
 app.get('/api/oat-app/leaderboard', async (req, res) => {
   try {
     const days = req.query.period === 'month' ? 30 : 7;
@@ -3288,7 +3317,7 @@ app.get('/api/oat-app/leaderboard', async (req, res) => {
         if (nameKey.startsWith('qa')) continue; // exclude test accounts
         const bdg = oatBadge(au.total_profit);
         leaderboard.push({
-          name: au.name, avatar: au.profile_picture || null,
+          name: au.name, avatar: au.profile_picture ? ('/api/oat-app/lb-photo/u/' + encodeURIComponent(au.uid) + '?v=' + String(au.profile_picture).length) : null,
           verified: String(au.kyc_status || '') === 'verified',
           amount: Math.round(appTotals[au.uid] * 100) / 100,
           oatApp: true, badge: bdg ? bdg.emoji : null, badgeLabel: bdg ? bdg.label : null
@@ -3301,11 +3330,11 @@ app.get('/api/oat-app/leaderboard', async (req, res) => {
     // Manual entries show first (insertion order = descending profit), then real traders.
     let manualList = [];
     try {
-      const { data: mrows } = await supa.from('top_traders').select('name, amount, photo').order('id', { ascending: true });
+      const { data: mrows } = await supa.from('top_traders').select('id, name, amount, photo').order('id', { ascending: true });
       manualList = (mrows || []).map(m => {
         const amt = Math.round((parseFloat(m.amount) || 0) * 100) / 100;
         const bdg = oatBadge(amt);
-        return { name: m.name, avatar: m.photo || null, verified: true, amount: amt, manual: true, badge: bdg ? bdg.emoji : null, badgeLabel: bdg ? bdg.label : null };
+        return { name: m.name, avatar: m.photo ? ('/api/oat-app/lb-photo/t/' + m.id + '?v=' + String(m.photo).length) : null, verified: true, amount: amt, manual: true, badge: bdg ? bdg.emoji : null, badgeLabel: bdg ? bdg.label : null };
       });
     } catch (e) { console.error('[OATAPP] manual merge error:', e.message); }
     // Rank strictly by amount across curated + real traders (Bammi, 2026-09-24) - a manual

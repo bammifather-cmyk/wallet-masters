@@ -2205,8 +2205,17 @@ async function submitWithdraw(){
 async function loadTraders(period){
   $('ttW').classList.toggle('active', period==='week');
   $('ttM').classList.toggle('active', period==='month');
-  const d = await fetch(API+'/api/oat-app/leaderboard?period='+period).then(r=>r.json());
   const pod=$('ttPodium'), list=$('ttList');
+  pod.innerHTML=''; list.innerHTML='<p class="copyhint" style="margin-top:14px">Loading top traders...</p>';
+  let d;
+  try{
+    const ctl = new AbortController(); const to = setTimeout(function(){ ctl.abort(); }, 25000);
+    d = await fetch(API+'/api/oat-app/leaderboard?period='+period, {signal: ctl.signal}).then(function(r){ return r.json(); });
+    clearTimeout(to);
+  }catch(e){
+    list.innerHTML='<p class="copyhint" style="margin-top:14px">Could not load the rank list. Check your connection and <a href="#" onclick="loadTraders(\''+period+'\');return false" style="color:var(--gold2)">tap to retry</a>.</p>';
+    return;
+  }
   if(!d.leaderboard || !d.leaderboard.length){
     pod.innerHTML=''; list.innerHTML='<p class="copyhint" style="margin-top:14px">No completed trades yet this '+period+'. Start an OAT trade to claim the top spot.</p>';
     return;
@@ -2215,7 +2224,7 @@ async function loadTraders(period){
   const vBadge = function(t){ return t.verified ? '<svg width="12" height="12" viewBox="0 0 24 24" style="vertical-align:-2px"><circle cx="12" cy="12" r="11" fill="#1d4ed8"/><path d="M7 12.5l3.5 3.5L17 9.5" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>' : ''; };
   const nBadge = function(t){ return t.badge ? '<span class="name-badge '+(t.badge==='🏆'?'rank':'vip')+'">'+esc(t.badge)+'</span>' : ''; };
   const avaHTML = function(t){ return t.avatar
-    ? '<img src="'+t.avatar+'" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover" onerror="this.remove()">'
+    ? '<img src="'+(String(t.avatar).charAt(0)==='/' ? API+t.avatar : t.avatar)+'" alt="" loading="lazy" decoding="async" style="width:100%;height:100%;border-radius:50%;object-fit:cover" onerror="this.remove()">'
     : '<span style="font-weight:800;color:#f0f4ff;font-size:16px">'+esc((t.name||'T').charAt(0).toUpperCase())+'</span>'; };
   const top = d.leaderboard.slice(0,3);
   const order = top.length>=3 ? [top[1],top[0],top[2]] : top;
