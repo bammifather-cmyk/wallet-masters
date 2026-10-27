@@ -4220,13 +4220,13 @@ async function loadOatPage() {
           </div>
           <input id="oatAssetSearch" class="mining-input" type="text" placeholder="Search assets: Bitcoin, NYSE, JPM..." oninput="oatSearchAssets()" style="margin-top:8px;text-align:left;font-weight:500" />
           <div class="oat-cat-label" style="margin-top:12px">CRYPTO</div>
-          <div class="oat-chips" id="oatChipsCrypto" style="flex-wrap:wrap;max-height:170px;overflow-y:auto;row-gap:8px">${oatChipsHtml(assets, '', 'Crypto')}</div>
+          <div class="oat-chips" id="oatChipsCrypto" >${oatChipsHtml(assets, '', 'Crypto')}</div>
           <div class="oat-cat-label" style="margin-top:12px">INDICES</div>
-          <div class="oat-chips" id="oatChipsIndices" style="flex-wrap:wrap;overflow-y:auto;row-gap:8px">${oatChipsHtml(assets, '', 'Indices')}</div>
+          <div class="oat-chips" id="oatChipsIndices" >${oatChipsHtml(assets, '', 'Indices')}</div>
           <div class="oat-cat-label" style="margin-top:12px">STOCKS · NYSE</div>
-          <div class="oat-chips" id="oatChipsNyse" style="flex-wrap:wrap;max-height:170px;overflow-y:auto;row-gap:8px">${oatChipsHtml(assets, '', 'Stocks', 'NYSE')}</div>
+          <div class="oat-chips" id="oatChipsNyse" >${oatChipsHtml(assets, '', 'Stocks', 'NYSE')}</div>
           <div class="oat-cat-label" style="margin-top:12px">STOCKS · NASDAQ</div>
-          <div class="oat-chips" id="oatChipsNasdaq" style="flex-wrap:wrap;max-height:170px;overflow-y:auto;row-gap:8px">${oatChipsHtml(assets, '', 'Stocks', 'NASDAQ')}</div>
+          <div class="oat-chips" id="oatChipsNasdaq" >${oatChipsHtml(assets, '', 'Stocks', 'NASDAQ')}</div>
           <input id="oatAmountInput" class="mining-input" type="number" placeholder="Enter amount to invest" style="margin-top:8px" />
           <div class="mining-hint" style="margin-bottom:10px">Minimum 500 USDT · doubles in 24 hours · cash out free</div>
           <button class="mining-buy-btn" id="oatInvestBtn" onclick="investOat()">Start Trading</button>`);
