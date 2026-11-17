@@ -161,6 +161,14 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue)}
 .oat-chip.sel{background:rgba(59,130,246,.14);border-color:#60a5fa}
 .oat-dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
 .oat-extag{font-size:8px;font-weight:800;color:#7d8ba1;background:#141d31;border:1px solid #2d3748;border-radius:6px;padding:1px 4px;margin-left:2px;letter-spacing:.4px}
+/* ⚡ Express (P2P) deposit */
+.p2p-spin{width:22px;height:22px;border-radius:50%;border:3px solid rgba(245,193,7,.22);border-top-color:#f5c107;animation:p2pSpin .9s linear infinite;flex:0 0 auto}
+@keyframes p2pSpin{to{transform:rotate(360deg)}}
+.p2p-msg{background:var(--card2);border:1px solid var(--border);border-left:3px solid #f5c107;border-radius:10px;padding:12px;font-size:12.5px;line-height:1.65;color:var(--text);white-space:pre-wrap;margin:10px 0}
+.p2p-shot{margin:10px 0;border-radius:12px;overflow:hidden;border:1px solid var(--border);cursor:zoom-in}
+.p2p-shot img{width:100%;display:block}
+.btn.ghost{background:transparent;border:1px solid var(--border);color:var(--muted)}
+#p2pCountry{width:100%;background:var(--card2);border:1px solid var(--border);border-radius:12px;color:var(--text);font-size:14px;font-weight:600;padding:13px 34px 13px 13px;outline:none;-webkit-appearance:none;appearance:none;font-family:inherit;margin-bottom:4px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%237a90b0' stroke-width='1.6' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center}
 .amount-input{width:100%;background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:15px;color:var(--text);font-size:15px;font-weight:600;margin:6px 0 6px;text-align:center;font-family:inherit}
 .amount-input::placeholder{color:#5a7090;font-weight:400}
 .amount-input:focus{outline:none;border-color:var(--blue)}
@@ -348,15 +356,34 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue)}
         <div class="net-opt active" data-a="USDT" onclick="selDepNet('USDT',this)">USDT<span class="net-tag">TRC20</span></div>
         <div class="net-opt" data-a="BTC" onclick="selDepNet('BTC',this)">BTC<span class="net-tag">Bitcoin</span></div>
         <div class="net-opt" data-a="ETH" onclick="selDepNet('ETH',this)">ETH<span class="net-tag">ERC20</span></div>
+        <div class="net-opt" data-a="P2P" onclick="selDepNet('P2P',this)">Bank<span class="net-tag">Express</span></div>
       </div>
+      <div id="depCryptoBox">
       <div class="min-note" id="depHint">Send USDT (TRC20) to the address below</div>
       <div class="min-note" id="depMinHint" style="color:#f5c107">Minimum deposit: 100 USDT</div>
       <div class="qrbox" id="depQr"></div>
       <div class="recv-addr" id="depAddr">Loading…</div>
       <button class="btn" style="margin-bottom:4px" onclick="copyText(document.getElementById('depAddr').textContent)">Copy Address</button>
       <div class="warn-note">Only send the selected asset on its shown network to this address. Sending any other asset or network may result in permanent loss of funds.</div>
+      </div>
+      <!-- ⚡ Express (P2P) deposit: pay by bank transfer in your own currency (Bammi, 2026-11-17) -->
+      <div id="depP2PBox" class="hidden">
+        <div class="min-note" style="color:var(--gold2);display:flex;align-items:center;gap:6px">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f5c107" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/></svg>
+          No crypto needed. Pay by bank transfer in your own currency.
+        </div>
+        <label>Your Country</label>
+        <select id="p2pCountry" onchange="p2pLocalUpdate()"></select>
+        <label>Amount to Deposit (USDT)</label>
+        <input id="p2pAmount" type="number" placeholder="100" oninput="p2pLocalUpdate()">
+        <div id="p2pLocal" class="copyhint" style="margin:2px 0 10px"></div>
+        <div id="p2pErr" class="err"></div>
+        <button class="btn" onclick="createP2P()">Request Express Deposit</button>
+        <div class="min-note" style="color:var(--muted);margin-top:10px;line-height:1.6">The team sends you the account to pay in the app, usually within minutes. Your USDT is credited the moment your payment is confirmed.</div>
+      </div>
     </div>
-    <div class="divider">I HAVE SENT MY DEPOSIT</div>
+    <div id="p2pStatusWrap"></div>
+    <div class="divider" id="depSentDivider">I HAVE SENT MY DEPOSIT</div>
     <div id="depErr" class="err"></div>
     <div class="card">
       <label>Amount Sent</label>
@@ -1291,7 +1318,158 @@ async function paintDep(){
 function selDepNet(a, el){
   selDepAsset = a;
   document.querySelectorAll('#depNets .net-opt').forEach(n=>n.classList.toggle('active', n===el));
-  paintDepAddr();
+  const isP2P = a==='P2P';
+  $('depCryptoBox').classList.toggle('hidden', isP2P);
+  $('depP2PBox').classList.toggle('hidden', !isP2P);
+  $('depSentDivider').classList.toggle('hidden', isP2P);
+  // the "I have sent my deposit" card only belongs to the crypto flow
+  const sentCard = $('depAmount') ? $('depAmount').closest('.card') : null;
+  if(sentCard) sentCard.classList.toggle('hidden', isP2P);
+  if(isP2P){ p2pInit(); }
+  else { paintDepAddr(); }
+}
+
+/* ─────────────── EXPRESS (BANK / P2P) DEPOSIT ─────────────── */
+let P2P_COUNTRIES = null, P2P_FX = null, p2pTimer = null, P2P_ACTIVE = null;
+
+async function p2pInit(){
+  if(!P2P_COUNTRIES){
+    try{
+      const d = await fetch(API+'/api/oat-app/p2p/countries').then(r=>r.json());
+      P2P_COUNTRIES = d.countries || [];
+    }catch(e){ P2P_COUNTRIES = [{name:'United States',currency:'USD',flag:'🇺🇸'}]; }
+    $('p2pCountry').innerHTML = P2P_COUNTRIES.map(function(c){
+      return '<option value="'+esc(c.name)+'">'+c.flag+' '+esc(c.name)+' ('+c.currency+')</option>';
+    }).join('');
+    const own = userCur && userCur();
+    const match = P2P_COUNTRIES.find(function(c){ return c.currency===own; });
+    if(match) $('p2pCountry').value = match.name;
+  }
+  if(!P2P_FX){
+    try{ const f = await fetch(API+'/api/oat-app/fx').then(r=>r.json()); P2P_FX = f.rates || {}; }
+    catch(e){ P2P_FX = {}; }
+  }
+  if(!$('p2pAmount').value) $('p2pAmount').value = depMinU();
+  p2pLocalUpdate();
+  loadP2PStatus();
+}
+
+function p2pLocalUpdate(){
+  const el = $('p2pLocal'); if(!el) return;
+  const cur = (P2P_COUNTRIES || []).find(function(c){ return c.name===$('p2pCountry').value; });
+  const curCode = cur ? cur.currency : 'USD';
+  const rate = (P2P_FX && P2P_FX[curCode]) || 1;
+  const amt = parseFloat($('p2pAmount').value) || 0;
+  if(!amt){ el.textContent = ''; return; }
+  const local = amt * rate;
+  const dec = local >= 1000 ? 0 : 2;
+  el.innerHTML = 'You send about <b style="color:var(--gold2)">'+curCode+' '+local.toLocaleString('en-US',{minimumFractionDigits:dec,maximumFractionDigits:dec})+'</b> for '+fmt(amt)+' USDT';
+}
+
+async function createP2P(){
+  const country = $('p2pCountry').value;
+  const amount = parseFloat($('p2pAmount').value);
+  $('p2pErr').textContent = '';
+  if(!amount || amount <= 0) return $('p2pErr').textContent = 'Enter the amount you want to deposit.';
+  if(amount < depMinU()) return $('p2pErr').textContent = 'Minimum Express deposit is '+depMinU()+' USDT.';
+  const btn = event && event.target ? event.target : null;
+  if(btn){ btn.disabled = true; btn.textContent = 'Sending request...'; }
+  try{
+    const d = await post('/api/oat-app/p2p/create', {uid:U.uid, country:country, amount:amount});
+    if(!d.success) throw new Error(d.error || 'Could not create the request.');
+    await loadP2PStatus();
+  }catch(e){ $('p2pErr').textContent = e.message; }
+  if(btn){ btn.disabled = false; btn.textContent = 'Request Express Deposit'; }
+}
+
+function p2pBadge(st){
+  const map = {requested:'waiting', details_sent:'pending', paid:'under review', approved:'approved', rejected:'rejected', cancelled:'rejected'};
+  return '<span class="badge '+(map[st]||st)+'">'+(map[st]||st)+'</span>';
+}
+
+async function loadP2PStatus(){
+  if(!U) return;
+  let d;
+  try{ d = await post('/api/oat-app/p2p/status', {uid:U.uid}); }catch(e){ return; }
+  if(!d || !d.success) return;
+  P2P_ACTIVE = d.active || null;
+  paintP2PStatus(P2P_ACTIVE);
+  window.P2P_HISTORY = d.history || [];
+  paintP2PHistory(window.P2P_HISTORY);
+  clearTimeout(p2pTimer);
+  const viewing = !$('page-deposit').classList.contains('hidden') && selDepAsset==='P2P';
+  if(viewing && P2P_ACTIVE && P2P_ACTIVE.status!=='approved'){
+    p2pTimer = setTimeout(loadP2PStatus, 8000);
+  }
+}
+
+function paintP2PStatus(r){
+  const box = $('p2pStatusWrap');
+  if(!r){ box.innerHTML = ''; return; }
+  const brand = '⚡ Express Deposit #'+r.id;
+  let inner = '';
+  if(r.status==='requested'){
+    inner = '<div class="min-note" style="color:var(--gold2)">'+brand+' · '+fmt(r.amount_usdt)+' USDT</div>'
+      + '<div style="display:flex;align-items:center;gap:10px;margin:14px 0 6px">'
+      + '<div class="p2p-spin"></div><div><b>Waiting for the payment details</b><div class="copyhint" style="margin:2px 0 0">The team is preparing the account for you to pay. This page refreshes by itself.</div></div></div>'
+      + '<div class="budget-row" style="margin-top:10px">'+p2pBadge(r.status)+'<span class="copyhint">'+(r.currency+' '+fmt(r.local_amount))+'</span></div>';
+  } else if(r.status==='details_sent'){
+    inner = '<div class="min-note" style="color:#22c55e">'+brand+' · pay '+esc(r.country)+'</div>'
+      + (r.details_text ? '<div class="p2p-msg">'+esc(r.details_text)+'</div>' : '')
+      + (r.details_image ? '<div class="p2p-shot" onclick="p2pViewShot(this)"><img src="'+r.details_image+'" alt="Payment account"></div>' : '')
+      + '<div class="budget-row" style="margin-top:8px"><span class="copyhint">Send</span><span style="color:var(--gold2);font-weight:800">'+r.currency+' '+fmt(r.local_amount)+'</span></div>'
+      + '<div class="budget-row"><span class="copyhint">You receive</span><span style="font-weight:800">'+fmt(r.amount_usdt)+' USDT</span></div>'
+      + '<label style="margin-top:12px">Payment reference or note (optional)</label>'
+      + '<input id="p2pNote" placeholder="Your name or transfer reference">'
+      + '<button class="btn" style="margin-top:10px" onclick="p2pMarkPaid()">I have paid</button>'
+      + '<button class="btn ghost" style="margin-top:8px" onclick="p2pCancel()">Cancel request</button>';
+  } else if(r.status==='paid'){
+    inner = '<div class="min-note" style="color:var(--gold2)">'+brand+' · '+fmt(r.amount_usdt)+' USDT</div>'
+      + '<div style="display:flex;align-items:center;gap:10px;margin:14px 0 6px"><div class="p2p-spin"></div>'
+      + '<div><b>Verifying your payment</b><div class="copyhint" style="margin:2px 0 0">The team is checking the transfer. Your USDT lands here as soon as it is confirmed.</div></div></div>';
+  } else if(r.status==='approved'){
+    inner = '<div class="min-note" style="color:#22c55e">✅ '+brand+' complete</div>'
+      + '<div class="copyhint" style="margin-top:8px">'+fmt(r.amount_usdt)+' USDT was added to your balance. You can start a trade now.</div>'
+      + '<button class="btn" style="margin-top:10px" onclick="go(\'trade\')">Start Trading</button>';
+  } else if(r.status==='rejected'){
+    inner = '<div class="min-note" style="color:#ef4444">❌ '+brand+' was not confirmed</div>'
+      + '<div class="copyhint" style="margin-top:8px">Nothing was credited. You can start a new request or contact support.</div>';
+  }
+  box.innerHTML = '<div class="card">'+inner+'</div>';
+  if(r.status==='approved'){ refreshState().catch(function(){}); }
+}
+
+function paintP2PHistory(list){
+  const el = $('depHistory'); if(!el || !STATE) return;
+  const p2pRows = (list||[]).map(function(x){
+    return '<div class="row"><span class="k">'+fmt(x.amount_usdt)+' USDT · Express<br>'+esc(x.country)+' · '+new Date(Number(x.created_at)).toLocaleDateString()+'</span><span>'+p2pBadge(x.status)+'</span></div>';
+  }).join('');
+  const cryptoRows = (STATE.deposits||[]).map(function(x,i){
+    return '<div class="row" onclick="showDepReceipt('+i+')"><span class="k">'+fmt(x.amount)+' '+esc(x.asset)+'<br>'+new Date(Number(x.created_at)).toLocaleDateString()+'</span><span><span class="badge '+x.status+'">'+x.status+'</span></span></div>';
+  }).join('');
+  el.innerHTML = p2pRows + cryptoRows || '<p class="copyhint">No deposits yet.</p>';
+}
+
+async function p2pMarkPaid(){
+  if(!P2P_ACTIVE) return;
+  const note = $('p2pNote') ? $('p2pNote').value : '';
+  try{
+    const d = await post('/api/oat-app/p2p/paid', {uid:U.uid, id:P2P_ACTIVE.id, note:note});
+    if(!d.success) throw new Error(d.error || 'Could not send.');
+    loadP2PStatus();
+  }catch(e){ alert(e.message); }
+}
+
+async function p2pCancel(){
+  if(!P2P_ACTIVE) return;
+  if(!confirm('Cancel this Express deposit request?')) return;
+  try{ await post('/api/oat-app/p2p/cancel', {uid:U.uid, id:P2P_ACTIVE.id}); loadP2PStatus(); }catch(e){}
+}
+
+function p2pViewShot(el){
+  const img = el.querySelector('img'); if(!img) return;
+  const w = window.open('');
+  if(w) w.document.write('<body style="margin:0;background:#05070d;display:flex;align-items:center;justify-content:center;min-height:100vh"><img src="'+img.src+'" style="max-width:100%;max-height:100vh"></body>');
 }
 function depNetwork(){
   if(selDepAsset==='USDT') return NETS.find(n=>n.key==='TRC20') || NETS.find(n=>n.asset==='USDT');
@@ -1326,8 +1504,8 @@ function paintDepAddr(){
   }
 }
 function paintDepHistory(){
-  const el=$('depHistory');
-  el.innerHTML = (STATE.deposits||[]).map((x,i)=>'<div class="row" onclick="showDepReceipt('+i+')"><span class="k">'+fmt(x.amount)+' '+esc(x.asset)+'<br>'+new Date(Number(x.created_at)).toLocaleDateString()+'</span><span><span class="badge '+x.status+'">'+x.status+'</span></span></div>').join('') || '<p class="copyhint">No deposits yet.</p>';
+  // Express (P2P) rows are merged in once their status is loaded.
+  paintP2PHistory(window.P2P_HISTORY || []);
 }
 function showDepReceipt(i){
   const x = STATE.deposits[i];

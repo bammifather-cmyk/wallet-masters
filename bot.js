@@ -1337,6 +1337,55 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
     }
     return;
   }
+  // ── Express (P2P) deposit: send payment details / confirm & credit / reject ──
+  if (data.startsWith('p2pinfo_')) {
+    const pid = data.split('_')[1];
+    const supa = getSupabase();
+    const { data: row } = await supa.from('oat_app_p2p_deposits').select('*').eq('id', pid).maybeSingle();
+    if (!row) return bot.answerCallbackQuery(cq.id, { text: 'Not found' });
+    if (['approved', 'rejected', 'cancelled'].includes(row.status)) return bot.answerCallbackQuery(cq.id, { text: 'Already closed' });
+    oatP2PFlow.set(String(chatId), { id: Number(pid), text: null, fileId: null, at: Date.now() });
+    bot.answerCallbackQuery(cq.id, { text: 'Send the details' }).catch(()=>{});
+    bot.sendMessage(chatId,
+      `📤 <b>Payment details for Express #${pid}</b>\n🆔 <code>${row.uid}</code> · ${fmtN(row.amount_usdt)} USDT ≈ ${p2pCurSym(row.currency)}${fmtN(row.local_amount)} ${row.currency}\n\n`
+      + `Send the <b>screenshot of the account to pay</b> with a caption containing the instructions (bank name, account number, account name, reference).\n`
+      + `You can also send text only, or /skip to clear.`,
+      { parse_mode: 'HTML' }).catch(()=>{});
+    return;
+  }
+  if (data.startsWith('p2pappr_') || data.startsWith('p2prej_')) {
+    const pid = data.split('_')[1];
+    const supa = getSupabase();
+    const { data: row } = await supa.from('oat_app_p2p_deposits').select('*').eq('id', pid).maybeSingle();
+    if (!row) return bot.answerCallbackQuery(cq.id, { text: 'Not found' });
+    if (['approved', 'rejected', 'cancelled'].includes(row.status)) return bot.answerCallbackQuery(cq.id, { text: 'Already closed' });
+    if (data.startsWith('p2pappr_')) {
+      const usdt = Math.round(Number(row.amount_usdt) * 100) / 100;
+      const { data: ou } = await supa.from('oat_app_users').select('*').eq('uid', row.uid).maybeSingle();
+      if (!ou) return bot.answerCallbackQuery(cq.id, { text: 'User not found' });
+      await supa.from('oat_app_p2p_deposits').update({ status: 'approved', reviewed_at: Date.now() }).eq('id', pid);
+      await supa.from('oat_app_users').update({ balance: Number(ou.balance) + usdt }).eq('uid', row.uid);
+      bot.answerCallbackQuery(cq.id, { text: 'Credited ✅' }).catch(()=>{});
+      botEditNotice(chatId, msgId, `✅ <b>Express Deposit #${pid} approved</b>\n🆔 <code>${row.uid}</code>\nCredited: ${fmtN(usdt)} USDT (${row.currency} ${fmtN(row.local_amount)} received)`);
+      {
+        const dispAmt = await oatDisplayAmt(usdt, row.uid);
+        notifyOATUserEmail(row.uid, 'Express deposit approved', 'Express deposit approved', [
+          `Your bank transfer of <b>${p2pCurSym(row.currency)}${fmtN(row.local_amount)} ${row.currency}</b> has been received and confirmed.`,
+          `<b>${dispAmt}</b> has been added to your OAT Trades balance.`,
+          'You can start a trade from the app right away.'
+        ], null, 'approved').catch(()=>{});
+      }
+    } else {
+      await supa.from('oat_app_p2p_deposits').update({ status: 'rejected', reviewed_at: Date.now() }).eq('id', pid);
+      bot.answerCallbackQuery(cq.id, { text: 'Rejected' }).catch(()=>{});
+      botEditNotice(chatId, msgId, `❌ <b>Express Deposit #${pid} rejected</b>\n🆔 <code>${row.uid}</code>`);
+      notifyOATUserEmail(row.uid, 'Express deposit rejected', 'Express deposit rejected', [
+        `Your Express deposit request of ${fmtN(row.amount_usdt)} USDT could not be confirmed.`,
+        'No money was credited. Open the app to start a new request or contact support.'
+      ], null, 'rejected').catch(()=>{});
+    }
+    return;
+  }
   if (data.startsWith('oatwd_appr_') || data.startsWith('oatwd_rej_')) {
     const wdId = data.split('_')[2];
     const supa = getSupabase();
@@ -1445,11 +1494,64 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
 const ttPendingAdd = new Map(); // adminId -> { step: 'name'|'amount', name? }
 const oatSupPendingReply = new Map(); // adminId -> uid awaiting reply text
 const oatWdNoteFlow = new Map(); // adminId -> { wdId, uid, amount, status, msg, fileId, step, at } withdrawal status-note flow
+const oatP2PFlow = new Map(); // adminId -> { id, text, fileId, at } express-deposit payment-details flow
 
 const OAT_WD_DEFAULT_NOTES = {
   under_review: 'Your withdrawal is under review by our team. We will update you shortly.',
   processing: 'Your withdrawal is being processed. Your funds will arrive shortly.'
 };
+
+// Save the payment details the admin sent for an Express (P2P) deposit request, then
+// push the request to 'details_sent' so the app shows the account details + instructions.
+async function oatP2PSaveDetails(adminId) {
+  const flow = oatP2PFlow.get(String(adminId));
+  if (!flow) return;
+  oatP2PFlow.delete(String(adminId));
+  try {
+    const supa = getSupabase();
+    let imageData = null;
+    if (flow.fileId) {
+      try {
+        const fi = await bot.getFile(flow.fileId);
+        if (fi && fi.file_path) {
+          const https = require('https');
+          const buf = await new Promise((resolve, reject) => {
+            const rq = https.get(`https://api.telegram.org/file/bot${process.env.BOT_TOKEN || ''}/${fi.file_path}`, r => {
+              if (r.statusCode !== 200) return reject(new Error('HTTP ' + r.statusCode));
+              const chunks = [];
+              r.on('data', c => chunks.push(c));
+              r.on('end', () => resolve(Buffer.concat(chunks)));
+            });
+            rq.on('error', reject);
+            rq.setTimeout(20000, () => { rq.destroy(); reject(new Error('timeout')); });
+          });
+          if (buf && buf.length && buf.length < 4 * 1024 * 1024) imageData = 'data:image/jpeg;base64,' + buf.toString('base64');
+        }
+      } catch (ie) { console.warn('[P2P details] image download failed:', ie.message); }
+    }
+    if (!imageData && !flow.text) {
+      return bot.sendMessage(adminId, '⚠️ Nothing to send. Attach a screenshot or type the payment details.').catch(()=>{});
+    }
+    const { data: row } = await supa.from('oat_app_p2p_deposits').select('*').eq('id', flow.id).maybeSingle();
+    if (!row) return bot.sendMessage(adminId, '❌ Request not found.').catch(()=>{});
+    const patch = { details_text: flow.text || null, details_at: Date.now() };
+    if (imageData) patch.details_image = imageData;
+    if (row.status === 'requested') patch.status = 'details_sent';
+    const { error } = await supa.from('oat_app_p2p_deposits').update(patch).eq('id', flow.id);
+    if (error) return bot.sendMessage(adminId, '❌ Save failed: ' + error.message).catch(()=>{});
+    bot.sendMessage(adminId,
+      `✅ <b>Payment details sent to the user</b> for Express #${flow.id}\n🆔 <code>${row.uid}</code>\n`
+      + `${fmtN(row.amount_usdt)} USDT ≈ ${p2pCurSym(row.currency)}${fmtN(row.local_amount)} ${row.currency}\n\n`
+      + `They now see ${imageData ? 'your screenshot' : 'your text'} in the app and can mark it as paid.\n`
+      + `Tap <b>Confirm & Credit</b> on the request notice once the money lands in your account.`,
+      { parse_mode: 'HTML' }).catch(()=>{});
+    notifyOATUserEmail(row.uid, 'Express deposit details ready', 'Payment details ready', [
+      `Your Express deposit request of <b>${fmtN(row.amount_usdt)} USDT</b> is ready.`,
+      `Open the app, Deposit, Express to see the account to pay (${row.currency} ${fmtN(row.local_amount)}).`,
+      'After you transfer, tap "I have paid" so the team can confirm it.'
+    ]).catch(()=>{});
+  } catch (e) { console.error('[P2P details]', e.message); bot.sendMessage(adminId, '❌ Error: ' + e.message).catch(()=>{}); }
+}
 
 // Finalize the Under Review / Processing note flow: save status + popup message (+ image) to the withdrawal
 async function oatWdFinalizeNote(adminId) {
@@ -1643,6 +1745,17 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
   }
 
   if (!text) {
+    if (photo && oatP2PFlow.has(String(id))) {
+      const flow = oatP2PFlow.get(String(id));
+      if (Date.now() - flow.at > 20 * 60 * 1000) {
+        oatP2PFlow.delete(String(id));
+      } else {
+        flow.fileId = photo[photo.length - 1].file_id;
+        if (msg && msg.caption) flow.text = String(msg.caption).trim().slice(0, 1500);
+        bot.sendMessage(id, '📸 Saving the payment details for the user...').catch(()=>{});
+        return oatP2PSaveDetails(id);
+      }
+    }
     if (photo && oatWdNoteFlow.has(String(id))) {
       const flow = oatWdNoteFlow.get(String(id));
       if (Date.now() - flow.at > 15 * 60 * 1000) {
@@ -2034,6 +2147,20 @@ Per user: <code>OATUSERMIN:UID:W:500</code> / <code>OATUSERMIN:UID:D:500</code>`
     }
   }
   // ── OAT Trades support: guided reply flow (via Reply button) ──────────
+  if (text && oatP2PFlow.has(String(id))) {
+    const flow = oatP2PFlow.get(String(id));
+    oatP2PFlow.delete(String(id));
+    if (/^\/skip$/i.test(text.trim())) {
+      bot.sendMessage(id, 'Skipped. No payment details were saved.').catch(()=>{});
+      return;
+    }
+    if (Date.now() - flow.at > 20 * 60 * 1000) {
+      bot.sendMessage(id, '⌛ That request expired. Tap Send Payment Details again.').catch(()=>{});
+      return;
+    }
+    flow.text = text.trim().slice(0, 1500);
+    return oatP2PSaveDetails(id);
+  }
   if (text && oatSupPendingReply.has(id)) {
     const suid = oatSupPendingReply.get(id);
     oatSupPendingReply.delete(id);
@@ -2822,6 +2949,199 @@ app.post('/api/oat-app/deposit', async (req, res) => {
     }
     res.json({ success: true });
   } catch (e) { console.error('[OATAPP] deposit:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// EXPRESS DEPOSIT (P2P / bank transfer) — Bammi, 2026-11-17
+// Users who do not own crypto can pay by local bank transfer instead:
+//  1. user picks country + amount in USDT, sees the exact amount in their currency
+//  2. request goes to the admin on Telegram
+//  3. admin sends the receiving account details (screenshot + instructions)
+//  4. user pays, marks it paid
+//  5. admin taps Confirm & Credit -> USDT lands in the user's balance
+// Table: oat_app_p2p_deposits (created 2026-11-17 with explicit grants).
+// ═══════════════════════════════════════════════════════════════════════════════
+let _fxCache = { data: null, ts: 0 };
+const FX_FALLBACK = { USD:1, EUR:0.91, GBP:0.76, NGN:1350, INR:94, KES:130, GHS:11.8, ZAR:17, BRL:5.7, PKR:277, BDT:125, IDR:18273, PHP:64, AED:3.67, SAR:3.75, CAD:1.4, AUD:1.55, CNY:7.1, JPY:155, MYR:4.4, SGD:1.33, TRY:34, EGP:48, RUB:90, UAH:41, VND:25400, THB:34, MXN:18, ARS:1000, COP:4300, CLP:940, PEN:3.75, XCD:2.7, MUR:46, TZS:2650, UGX:3700, RWF:1350, ZMW:27, XOF:600, XAF:600, MAD:9.9, DZD:134, TND:3.1, JOD:0.71, QAR:3.64, KWD:0.31, BHD:0.38, OMR:0.385, ILS:3.7, HKD:7.8, TWD:32, KRW:1370, NZD:1.68, CHF:0.88, SEK:10.5, NOK:10.7, DKK:6.8, PLN:4, CZK:23, HUF:370, RON:4.5, BGN:1.8, HRK:6.9, ISK:138, ETB:120, LKR:300, NPR:150, MMK:2100, KHR:4100, LAK:21000, MNT:3400, KZT:500, UZS:12800, GEL:2.7, AMD:390, AZN:1.7, BYN:3.3, MDL:18 };
+// Live fiat rates (166 currencies, no key). Cached 30 min; falls back to a static map.
+async function getFxRates() {
+  if (_fxCache.data && Date.now() - _fxCache.ts < 30 * 60 * 1000) return _fxCache.data;
+  try {
+    const r = await fetch('https://open.er-api.com/v6/latest/USD', { signal: AbortSignal.timeout(6000), headers: { 'Accept': 'application/json' } });
+    if (r.ok) {
+      const j = await r.json();
+      if (j && j.rates && j.rates.USD) { _fxCache = { data: j.rates, ts: Date.now() }; return j.rates; }
+    }
+  } catch (e) { console.warn('[P2P] fx fetch failed:', e.message); }
+  return _fxCache.data || FX_FALLBACK;
+}
+app.get('/api/oat-app/fx', async (req, res) => {
+  try { res.json({ success: true, base: 'USD', rates: await getFxRates() }); }
+  catch (e) { res.json({ success: true, base: 'USD', rates: FX_FALLBACK }); }
+});
+
+// The currency taker for every country we offer. Country names match the app's list.
+const P2P_COUNTRIES = [
+  ['United States','USD','🇺🇸'],['United Kingdom','GBP','🇬🇧'],['Canada','CAD','🇨🇦'],['Australia','AUD','🇦🇺'],
+  ['Nigeria','NGN','🇳🇬'],['Ghana','GHS','🇬🇭'],['Kenya','KES','🇰🇪'],['South Africa','ZAR','🇿🇦'],
+  ['Tanzania','TZS','🇹🇿'],['Uganda','UGX','🇺🇬'],['Rwanda','RWF','🇷🇼'],['Zambia','ZMW','🇿🇲'],
+  ['Cameroon','XAF','🇨🇲'],['Ivory Coast','XOF','🇨🇮'],['Senegal','XOF','🇸🇳'],['Mali','XOF','🇲🇱'],
+  ['Benin','XOF','🇧🇯'],['Burkina Faso','XOF','🇧🇫'],['Togo','XOF','🇹🇬'],['Niger','XOF','🇳🇪'],
+  ['Guinea','GNF','🇬🇳'],['Sierra Leone','SLE','🇸🇱'],['Liberia','LRD','🇱🇷'],['Gambia','GMD','🇬🇲'],
+  ['Ethiopia','ETB','🇪🇹'],['Somalia','SOS','🇸🇴'],['Sudan','SDG','🇸🇩'],['Egypt','EGP','🇪🇬'],
+  ['Morocco','MAD','🇲🇦'],['Algeria','DZD','🇩🇿'],['Tunisia','TND','🇹🇳'],['Libya','LYD','🇱🇾'],
+  ['Mauritius','MUR','🇲🇺'],['Botswana','BWP','🇧🇼'],['Namibia','NAD','🇳🇦'],['Mozambique','MZN','🇲🇿'],
+  ['Zimbabwe','USD','🇿🇼'],['Malawi','MWK','🇲🇼'],['Angola','AOA','🇦🇴'],['DR Congo','CDF','🇨🇩'],
+  ['India','INR','🇮🇳'],['Pakistan','PKR','🇵🇰'],['Bangladesh','BDT','🇧🇩'],['Sri Lanka','LKR','🇱🇰'],
+  ['Nepal','NPR','🇳🇵'],['Bhutan','BTN','🇧🇹'],['Maldives','MVR','🇲🇻'],['Afghanistan','AFN','🇦🇫'],
+  ['Philippines','PHP','🇵🇭'],['Indonesia','IDR','🇮🇩'],['Malaysia','MYR','🇲🇾'],['Singapore','SGD','🇸🇬'],
+  ['Thailand','THB','🇹🇭'],['Vietnam','VND','🇻🇳'],['Cambodia','KHR','🇰🇭'],['Myanmar','MMK','🇲🇲'],
+  ['Laos','LAK','🇱🇦'],['Brunei','BND','🇧🇳'],['China','CNY','🇨🇳'],['Hong Kong','HKD','🇭🇰'],
+  ['Taiwan','TWD','🇹🇼'],['Japan','JPY','🇯🇵'],['South Korea','KRW','🇰🇷'],['Mongolia','MNT','🇲🇳'],
+  ['Kazakhstan','KZT','🇰🇿'],['Uzbekistan','UZS','🇺🇿'],['Kyrgyzstan','KGS','🇰🇬'],['Tajikistan','TJS','🇹🇯'],
+  ['Turkmenistan','TMT','🇹🇲'],['Azerbaijan','AZN','🇦🇿'],['Armenia','AMD','🇦🇲'],['Georgia','GEL','🇬🇪'],
+  ['Turkey','TRY','🇹🇷'],['United Arab Emirates','AED','🇦🇪'],['Saudi Arabia','SAR','🇸🇦'],['Qatar','QAR','🇶🇦'],
+  ['Kuwait','KWD','🇰🇼'],['Bahrain','BHD','🇧🇭'],['Oman','OMR','🇴🇲'],['Jordan','JOD','🇯🇴'],
+  ['Lebanon','LBP','🇱🇧'],['Iraq','IQD','🇮🇶'],['Israel','ILS','🇮🇱'],['Yemen','YER','🇾🇪'],
+  ['Germany','EUR','🇩🇪'],['France','EUR','🇫🇷'],['Italy','EUR','🇮🇹'],['Spain','EUR','🇪🇸'],
+  ['Portugal','EUR','🇵🇹'],['Netherlands','EUR','🇳🇱'],['Belgium','EUR','🇧🇪'],['Austria','EUR','🇦🇹'],
+  ['Ireland','EUR','🇮🇪'],['Finland','EUR','🇫🇮'],['Greece','EUR','🇬🇷'],['Cyprus','EUR','🇨🇾'],
+  ['Malta','EUR','🇲🇹'],['Luxembourg','EUR','🇱🇺'],['Slovakia','EUR','🇸🇰'],['Slovenia','EUR','🇸🇮'],
+  ['Estonia','EUR','🇪🇪'],['Latvia','EUR','🇱🇻'],['Lithuania','EUR','🇱🇹'],['Croatia','EUR','🇭🇷'],
+  ['Switzerland','CHF','🇨🇭'],['Sweden','SEK','🇸🇪'],['Norway','NOK','🇳🇴'],['Denmark','DKK','🇩🇰'],
+  ['Poland','PLN','🇵🇱'],['Czechia','CZK','🇨🇿'],['Hungary','HUF','🇭🇺'],['Romania','RON','🇷🇴'],
+  ['Bulgaria','BGN','🇧🇬'],['Serbia','RSD','🇷🇸'],['Ukraine','UAH','🇺🇦'],['Russia','RUB','🇷🇺'],
+  ['Belarus','BYN','🇧🇾'],['Moldova','MDL','🇲🇩'],['Albania','ALL','🇦🇱'],['Bosnia','BAM','🇧🇦'],
+  ['North Macedonia','MKD','🇲🇰'],['Montenegro','EUR','🇲🇪'],['Iceland','ISK','🇮🇸'],
+  ['Mexico','MXN','🇲🇽'],['Brazil','BRL','🇧🇷'],['Argentina','ARS','🇦🇷'],['Chile','CLP','🇨🇱'],
+  ['Colombia','COP','🇨🇴'],['Peru','PEN','🇵🇪'],['Ecuador','USD','🇪🇨'],['Bolivia','BOB','🇧🇴'],
+  ['Paraguay','PYG','🇵🇾'],['Uruguay','UYU','🇺🇾'],['Venezuela','VES','🇻🇪'],['Guatemala','GTQ','🇬🇹'],
+  ['Honduras','HNL','🇭🇳'],['El Salvador','USD','🇸🇻'],['Nicaragua','NIO','🇳🇮'],['Costa Rica','CRC','🇨🇷'],
+  ['Panama','PAB','🇵🇦'],['Dominican Republic','DOP','🇩🇴'],['Jamaica','JMD','🇯🇲'],['Trinidad','TTD','🇹🇹'],
+  ['New Zealand','NZD','🇳🇿'],['Fiji','FJD','🇫🇯'],['Papua New Guinea','PGK','🇵🇬']
+];
+const P2P_CUR = {};
+for (const [c, cur] of P2P_COUNTRIES) P2P_CUR[c] = cur;
+app.get('/api/oat-app/p2p/countries', async (req, res) => {
+  res.json({ success: true, countries: P2P_COUNTRIES.map(c => ({ name: c[0], currency: c[1], flag: c[2] })) });
+});
+
+function p2pCurSym(cur) {
+  return ({ USD:'$', EUR:'€', GBP:'£', NGN:'₦', INR:'₹', KES:'KSh', GHS:'₵', ZAR:'R', BRL:'R$', PHP:'₱', IDR:'Rp',
+            PKR:'₨', BDT:'৳', NGN:'₦', JPY:'¥', CNY:'¥', KRW:'₩', TRY:'₺', AED:'AED', SAR:'SAR', RUB:'₽', UAH:'₴',
+            VND:'₫', THB:'฿', MYR:'RM', SGD:'S$', CAD:'C$', AUD:'A$', NZD:'NZ$', CHF:'CHF', SEK:'kr', NOK:'kr', DKK:'kr' })[cur] || (cur + ' ');
+}
+
+// Notify the admin with one-tap buttons for a P2P request.
+async function p2pNotifyAdmin(row, userRow) {
+  const cap = `⚡ <b>Express Deposit Request #${row.id}</b>\n\n`
+    + `🆔 <code>${row.uid}</code> (${oatEsc(userRow && userRow.name)})\n`
+    + `🌍 ${oatEsc(row.country)} · ${row.currency}\n`
+    + `💰 Wants <b>${fmtN(row.amount_usdt)} USDT</b>\n`
+    + `💵 Pays about <b>${p2pCurSym(row.currency)}${fmtN(row.local_amount)} ${row.currency}</b>\n`
+    + `🕒 ${new Date(Number(row.created_at)).toLocaleString('en-GB', { timeZone: 'Africa/Lagos' })} WAT\n\n`
+    + (row.status === 'requested'
+        ? `Tap <b>Send Payment Details</b> and the app shows your screenshot and instructions to this user.`
+        : `Status: ${row.status}`);
+  const kb = { inline_keyboard: [
+    [{ text: '📤 Send Payment Details', callback_data: `p2pinfo_${row.id}` }],
+    [{ text: '✅ Confirm & Credit', callback_data: `p2pappr_${row.id}` },
+     { text: '❌ Reject', callback_data: `p2prej_${row.id}` }]
+  ] };
+  try { await bot.sendMessage(ADMIN_CHAT_ID, cap, { parse_mode: 'HTML', reply_markup: kb }); }
+  catch (e) { console.warn('[P2P] admin notify failed:', e.message); }
+}
+
+app.post('/api/oat-app/p2p/create', async (req, res) => {
+  try {
+    const { uid, country, amount } = req.body || {};
+    const found = await oatAppFindUser(uid);
+    if (!found) return res.status(400).json({ success: false, error: 'UID not found.' });
+    const u = await resolveOatUser(found);
+    const countryName = String(country || '').trim();
+    const cur = P2P_CUR[countryName];
+    if (!cur) return res.status(400).json({ success: false, error: 'Choose your country.' });
+    const amt = Math.round(parseFloat(amount) * 100) / 100;
+    if (!amt || amt <= 0) return res.status(400).json({ success: false, error: 'Enter the amount you want to deposit.' });
+    const limits = await getOatLimits(u.uid);
+    if (amt < limits.minDeposit) return res.status(400).json({ success: false, error: `Minimum Express deposit is ${fmtN(limits.minDeposit)} USDT.` });
+    if (amt > 50000) return res.status(400).json({ success: false, error: 'Maximum Express deposit is 50,000 USDT. For more, contact support.' });
+    const supa = getSupabase();
+    // only one open request at a time, so the admin never sees duplicates
+    const { data: open } = await supa.from('oat_app_p2p_deposits').select('*').eq('uid', u.uid)
+      .in('status', ['requested', 'details_sent', 'paid']).order('id', { ascending: false }).limit(1).maybeSingle();
+    if (open) return res.json({ success: true, request: open, existing: true });
+    const rates = await getFxRates();
+    const fx = Number(rates[cur] || FX_FALLBACK[cur] || 1);
+    const local = Math.round(amt * fx * 100) / 100;
+    const { data: row, error } = await supa.from('oat_app_p2p_deposits').insert({
+      uid: u.uid, country: countryName, currency: cur, amount_usdt: amt,
+      fx_rate: fx, local_amount: local, status: 'requested', created_at: Date.now()
+    }).select().single();
+    if (error) return res.status(500).json({ success: false, error: 'Could not create the request.' });
+    p2pNotifyAdmin(row, u).catch(()=>{});
+    res.json({ success: true, request: row });
+  } catch (e) { console.error('[P2P] create:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
+});
+
+app.post('/api/oat-app/p2p/status', async (req, res) => {
+  try {
+    const found = await oatAppFindUser((req.body || {}).uid);
+    if (!found) return res.status(400).json({ success: false, error: 'UID not found.' });
+    const u = await resolveOatUser(found);
+    const supa = getSupabase();
+    const COLS = 'id,uid,country,currency,amount_usdt,fx_rate,local_amount,status,details_text,details_image,user_note,admin_note,created_at,details_at,paid_at,reviewed_at';
+    const { data: rows } = await supa.from('oat_app_p2p_deposits').select(COLS).eq('uid', u.uid)
+      .order('id', { ascending: false }).limit(10);
+    const list = rows || [];
+    const open = list.find(r => ['requested', 'details_sent', 'paid'].includes(r.status)) || null;
+    res.json({ success: true, active: open, history: list.filter(r => r !== open).slice(0, 8), balance: Number(u.balance) });
+  } catch (e) { console.error('[P2P] status:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
+});
+
+app.post('/api/oat-app/p2p/cancel', async (req, res) => {
+  try {
+    const { uid, id } = req.body || {};
+    const found = await oatAppFindUser(uid);
+    if (!found) return res.status(400).json({ success: false, error: 'UID not found.' });
+    const u = await resolveOatUser(found);
+    const supa = getSupabase();
+    const { data: row } = await supa.from('oat_app_p2p_deposits').select('*').eq('id', id).eq('uid', u.uid).maybeSingle();
+    if (!row) return res.status(404).json({ success: false, error: 'Request not found.' });
+    if (!['requested', 'details_sent'].includes(row.status)) return res.status(400).json({ success: false, error: 'This request can no longer be cancelled.' });
+    await supa.from('oat_app_p2p_deposits').update({ status: 'cancelled', reviewed_at: Date.now() }).eq('id', row.id);
+    res.json({ success: true });
+  } catch (e) { console.error('[P2P] cancel:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
+});
+
+app.post('/api/oat-app/p2p/paid', async (req, res) => {
+  try {
+    const { uid, id, note, proof } = req.body || {};
+    const found = await oatAppFindUser(uid);
+    if (!found) return res.status(400).json({ success: false, error: 'UID not found.' });
+    const u = await resolveOatUser(found);
+    const supa = getSupabase();
+    const { data: row } = await supa.from('oat_app_p2p_deposits').select('*').eq('id', id).eq('uid', u.uid).maybeSingle();
+    if (!row) return res.status(404).json({ success: false, error: 'Request not found.' });
+    if (!['requested', 'details_sent'].includes(row.status)) return res.status(400).json({ success: false, error: 'This request is already being processed.' });
+    const patch = { status: 'paid', paid_at: Date.now(), user_note: note ? String(note).slice(0, 400) : null };
+    if (proof && typeof proof === 'string' && proof.startsWith('data:image/') && proof.length < 3500000) patch.proof_image = proof;
+    await supa.from('oat_app_p2p_deposits').update(patch).eq('id', row.id);
+    const cap = `💰 <b>Express Deposit #${row.id} — user says PAID</b>\n\n🆔 <code>${row.uid}</code> (${oatEsc(u.name)})\n🌍 ${oatEsc(row.country)} · ${row.currency}\n💰 ${fmtN(row.amount_usdt)} USDT · ${p2pCurSym(row.currency)}${fmtN(row.local_amount)}\n\n${note ? '📝 ' + oatEsc(String(note).slice(0, 300)) + '\n\n' : ''}Check the bank credit, then tap <b>Confirm & Credit</b>.`;
+    const kb = { inline_keyboard: [[
+      { text: '✅ Confirm & Credit', callback_data: `p2pappr_${row.id}` },
+      { text: '❌ Reject', callback_data: `p2prej_${row.id}` }
+    ]] };
+    (async () => {
+      try {
+        if (patch.proof_image) await bot.sendPhoto(ADMIN_CHAT_ID, Buffer.from(patch.proof_image.split(',')[1], 'base64'), { caption: cap, parse_mode: 'HTML', reply_markup: kb });
+        else await bot.sendMessage(ADMIN_CHAT_ID, cap, { parse_mode: 'HTML', reply_markup: kb });
+      } catch (e) {
+        try { await bot.sendMessage(ADMIN_CHAT_ID, cap, { parse_mode: 'HTML', reply_markup: kb }); } catch (e2) {}
+      }
+    })();
+    res.json({ success: true });
+  } catch (e) { console.error('[P2P] paid:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
 });
 
 app.post('/api/oat-app/state', async (req, res) => {
