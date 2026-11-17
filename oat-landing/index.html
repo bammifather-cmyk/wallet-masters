@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>OAT Trades · Download the App</title>
+<meta name="description" content="OAT Trades puts crypto, NYSE, NASDAQ and global indices in one clean app. Trade from $100, 24/7 markets, instant deposits, fast withdrawals. Download for Android or open in your browser.">
+<meta property="og:title" content="OAT Trades · Download the App">
+<meta property="og:description" content="Crypto, NYSE, NASDAQ and global indices in one clean app. Trade from $100, 24/7 markets, instant deposits, fast withdrawals.">
+<meta property="og:type" content="website">
+<link rel="icon" href="/oat-landing/img/logo.jpg">
+<style>
+  :root{
+    --bg:#05070d; --bg2:#0a1020; --card:#0e1626; --card2:#111c30;
+    --line:#1e2b42; --gold:#f5c107; --gold2:#ffd964; --text:#eef2f9; --muted:#93a3bc;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.6;overflow-x:hidden}
+  .wrap{max-width:1060px;margin:0 auto;padding:0 20px}
+  a{color:inherit;text-decoration:none}
+
+  /* ---------- top bar ---------- */
+  .top{position:sticky;top:0;z-index:50;background:rgba(5,7,13,.86);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+  .top .wrap{display:flex;align-items:center;justify-content:space-between;height:64px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:.3px}
+  .brand img{width:34px;height:34px;border-radius:50%;border:1.5px solid var(--gold)}
+  .top .dl{background:var(--gold);color:#0a0f1a;font-weight:800;font-size:13px;padding:9px 16px;border-radius:10px}
+
+  /* ---------- hero ---------- */
+  .hero{position:relative;padding:56px 0 44px;overflow:hidden}
+  .hero::before{content:"";position:absolute;inset:-30% 20% auto;height:520px;background:radial-gradient(ellipse at center,rgba(245,193,7,.16),transparent 66%);filter:blur(10px);pointer-events:none}
+  .hero-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:40px;align-items:center;position:relative}
+  .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:11px;font-weight:800;letter-spacing:2px;color:var(--gold);text-transform:uppercase;border:1px solid rgba(245,193,7,.35);border-radius:999px;padding:6px 13px;margin-bottom:18px}
+  h1{font-size:clamp(32px,5.2vw,54px);line-height:1.08;font-weight:900;letter-spacing:-1px}
+  h1 span{color:var(--gold2)}
+  .lede{color:var(--muted);font-size:16.5px;margin:18px 0 26px;max-width:52ch}
+  .cta{display:flex;flex-wrap:wrap;gap:12px}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;font-weight:800;font-size:15px;padding:15px 24px;border-radius:13px;border:1px solid transparent;cursor:pointer;transition:transform .16s,box-shadow .16s}
+  .btn:active{transform:scale(.985)}
+  .btn-gold{background:linear-gradient(180deg,#ffd964,#f5c107);color:#0a0f1a;box-shadow:0 8px 26px rgba(245,193,7,.28)}
+  .btn-ghost{background:transparent;border-color:var(--line);color:var(--text)}
+  .small{font-size:12.5px;color:var(--muted);margin-top:14px}
+  .phone{position:relative;display:flex;justify-content:center}
+  .phone img{width:100%;max-width:300px;border-radius:26px;border:1px solid #24314a;box-shadow:0 30px 70px rgba(0,0,0,.66)}
+
+  /* ---------- stats ---------- */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:8px 0 8px}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 12px;text-align:center}
+  .stat b{display:block;font-size:21px;color:var(--gold2);font-weight:900}
+  .stat span{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px}
+
+  /* ---------- sections ---------- */
+  section{padding:52px 0}
+  .sec-head{text-align:center;margin-bottom:34px}
+  .sec-head .k{font-size:11px;font-weight:800;letter-spacing:2.4px;color:var(--gold);text-transform:uppercase}
+  .sec-head h2{font-size:clamp(24px,3.6vw,34px);font-weight:900;margin-top:10px;letter-spacing:-.6px}
+  .sec-head p{color:var(--muted);margin-top:10px;font-size:15px;max-width:60ch;margin-left:auto;margin-right:auto}
+
+  .steps{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .step{background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--line);border-radius:16px;padding:20px 16px;position:relative}
+  .step i{font-style:normal;display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:rgba(245,193,7,.13);border:1px solid rgba(245,193,7,.4);color:var(--gold2);font-weight:900;font-size:13px;margin-bottom:12px}
+  .step h3{font-size:15px;font-weight:800;margin-bottom:6px}
+  .step p{font-size:13.5px;color:var(--muted)}
+
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:24px}
+  .card h3{font-size:17px;font-weight:800;margin-bottom:10px;display:flex;align-items:center;gap:9px}
+  .card h3 .dot{width:8px;height:8px;border-radius:50%;background:var(--gold)}
+  .card p{color:var(--muted);font-size:14px}
+  .tick{list-style:none;margin-top:14px}
+  .tick li{position:relative;padding-left:26px;margin-bottom:9px;font-size:14px;color:#cdd8e8}
+  .tick li::before{content:"✓";position:absolute;left:0;top:0;color:var(--gold);font-weight:900}
+
+  .markets{display:flex;flex-wrap:wrap;gap:9px;justify-content:center}
+  .chip{background:var(--card2);border:1px solid var(--line);border-radius:999px;padding:8px 14px;font-size:12.5px;font-weight:700;color:#cdd8e8}
+  .chip b{color:var(--gold2)}
+
+  .shots{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .shots figure{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+  .shots img{width:100%;display:block}
+  .shots figcaption{font-size:12px;color:var(--muted);text-align:center;padding:10px 6px}
+
+  .install{counter-reset:ins}
+  .install li{list-style:none;position:relative;padding:16px 0 16px 52px;border-bottom:1px solid var(--line)}
+  .install li:last-child{border-bottom:0}
+  .install li::before{counter-increment:ins;content:counter(ins);position:absolute;left:0;top:14px;width:34px;height:34px;border-radius:50%;background:rgba(245,193,7,.12);border:1px solid rgba(245,193,7,.42);color:var(--gold2);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:14px}
+  .install b{display:block;font-size:14.5px;margin-bottom:3px}
+  .install span{font-size:13.5px;color:var(--muted)}
+
+  details{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-bottom:10px}
+  details summary{cursor:pointer;font-weight:800;font-size:14.5px;list-style:none;display:flex;justify-content:space-between;gap:12px}
+  details summary::-webkit-details-marker{display:none}
+  details summary::after{content:"+";color:var(--gold);font-weight:900}
+  details[open] summary::after{content:"–"}
+  details p{color:var(--muted);font-size:13.5px;margin-top:10px}
+
+  .final{text-align:center;background:linear-gradient(180deg,rgba(245,193,7,.09),transparent);border:1px solid rgba(245,193,7,.22);border-radius:22px;padding:44px 22px}
+  .final h2{font-size:clamp(23px,3.4vw,32px);font-weight:900;margin-bottom:10px}
+  .final p{color:var(--muted);margin-bottom:24px;font-size:15px}
+  footer{border-top:1px solid var(--line);padding:30px 0 46px;text-align:center;color:#6d7d95;font-size:12.5px}
+  footer .fbrand{display:flex;align-items:center;justify-content:center;gap:9px;margin-bottom:12px;color:var(--text);font-weight:800}
+  footer .fbrand img{width:26px;height:26px;border-radius:50%;border:1px solid var(--gold)}
+  .fine{max-width:70ch;margin:12px auto 0;font-size:11.5px;color:#5b6a80;line-height:1.65}
+
+  @media(max-width:860px){
+    .hero-grid{grid-template-columns:1fr;gap:26px}
+    .phone{order:-1}
+    .phone img{max-width:250px}
+    .stats{grid-template-columns:repeat(2,1fr)}
+    .steps{grid-template-columns:1fr 1fr}
+    .split{grid-template-columns:1fr}
+    .shots{grid-template-columns:1fr 1fr}
+    section{padding:42px 0}
+    .hero{padding:36px 0 30px}
+    .top .dl{display:none}
+  }
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="wrap">
+    <div class="brand"><img src="/oat-landing/img/logo.jpg" alt="OAT Trades"> OAT Trades</div>
+    <a class="dl" href="#download">Download</a>
+  </div>
+</div>
+
+<header class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <div class="eyebrow">Crypto · NYSE · NASDAQ · Indices</div>
+      <h1>Your money, always <span>working</span>.</h1>
+      <p class="lede">OAT Trades puts the world's biggest markets in one clean, fast app. Crypto, American stocks and global indices, from one wallet. Open a position in seconds, let the algorithm trade, and collect when it settles.</p>
+      <div class="cta">
+        <a class="btn btn-gold" href="https://github.com/bammifather-cmyk/wallet-masters/releases/download/oat-latest/app-release.apk" id="download">⬇ Download the App</a>
+        <a class="btn btn-ghost" href="/oat-app/">Open in browser</a>
+      </div>
+      <p class="small">Android APK · 2.4 MB · Free · No account needed to browse. iPhone and computer: use “Open in browser”, everything works there too.</p>
+    </div>
+    <div class="phone">
+      <img src="/oat-landing/img/screen-home.jpg" alt="OAT Trades home screen" width="300" height="649">
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="stats">
+    <div class="stat"><b>180+</b><span>Markets</span></div>
+    <div class="stat"><b>24/7</b><span>Always open</span></div>
+    <div class="stat"><b>$100</b><span>Minimum</span></div>
+    <div class="stat"><b>4</b><span>Market types</span></div>
+  </div>
+</div>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="k">How it works</div>
+      <h2>Four steps from signup to your first trade</h2>
+      <p>No jargon, no hidden stages. Every step happens inside the app, and every number you see is the number you get.</p>
+    </div>
+    <div class="steps">
+      <div class="step"><i>1</i><h3>Register</h3><p>Enter your name and your inviter's UID. You get your own OAT ID instantly and you can sign back in with it any time.</p></div>
+      <div class="step"><i>2</i><h3>Fund your wallet</h3><p>Deposit USDT, BTC or ETH, or pay by bank transfer in your local currency with Express Deposit. No crypto experience required.</p></div>
+      <div class="step"><i>3</i><h3>Choose your market</h3><p>Crypto, NYSE stocks, NASDAQ stocks or a global index. Search any name, or swipe through the list and tap what you want.</p></div>
+      <div class="step"><i>4</i><h3>Trade and collect</h3><p>Open a 24 hour position, or a quick 1 minute or 5 minute trade. Your profit builds live and lands in your wallet when it settles.</p></div>
+    </div>
+  </div>
+</section>
+
+<section style="padding-top:0">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="k">The markets</div>
+      <h2>One app, four worlds</h2>
+      <p>Most people never touch a stock exchange because the door looks heavy. Here, it is one tap and the same wallet.</p>
+    </div>
+    <div class="markets">
+      <div class="chip"><b>Crypto</b> · 50+ coins</div>
+      <div class="chip"><b>NYSE</b> · 80 stocks</div>
+      <div class="chip"><b>NASDAQ</b> · 48 stocks</div>
+      <div class="chip"><b>Indices</b> · S&amp;P 500, Dow, Nasdaq 100, NYSE Composite</div>
+      <div class="chip">Bitcoin</div>
+      <div class="chip">Ethereum</div>
+      <div class="chip">Solana</div>
+      <div class="chip">Apple</div>
+      <div class="chip">Tesla</div>
+      <div class="chip">NVIDIA</div>
+      <div class="chip">JPMorgan</div>
+      <div class="chip">Coca-Cola</div>
+      <div class="chip">Goldman Sachs</div>
+      <div class="chip">Disney</div>
+      <div class="chip">Amazon</div>
+      <div class="chip">Meta</div>
+    </div>
+  </div>
+</section>
+
+<section style="padding-top:0">
+  <div class="wrap">
+    <div class="split">
+      <div class="card">
+        <h3><span class="dot"></span> Deposit the way that suits you</h3>
+        <p>Two ways in, both built for people who are not crypto experts.</p>
+        <ul class="tick">
+          <li><b>Crypto deposit:</b> send USDT, BTC or ETH and attach your receipt, it is credited after a quick review.</li>
+          <li><b>Express Deposit:</b> choose your country, type the amount in USDT, and the app shows the exact amount to pay in your own currency. The team sends you the account details right inside the app.</li>
+          <li>Live exchange rates for 160+ currencies.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="dot"></span> Withdraw when you decide</h3>
+        <p>Your money is never locked because of a countdown or a “pending week”.</p>
+        <ul class="tick">
+          <li>Withdraw to crypto or straight to your bank account.</li>
+          <li>Every request is reviewed and approved by a real person, not a silent machine.</li>
+          <li>Clear fee shown before you confirm, never after.</li>
+          <li>You are notified the moment your payout is approved.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section style="padding-top:0">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="k">Inside the app</div>
+      <h2>Clean, fast, and built for a phone</h2>
+      <p>No cluttered screens. Live prices, one clear chart, and your numbers in the currency you think in.</p>
+    </div>
+    <div class="shots">
+      <figure><img src="/oat-landing/img/screen-home.jpg" alt="Dashboard" loading="lazy"><figcaption>Your dashboard</figcaption></figure>
+      <figure><img src="/oat-landing/img/screen-trade.jpg" alt="Markets" loading="lazy"><figcaption>All markets in one place</figcaption></figure>
+      <figure><img src="/oat-landing/img/screen-ranks.jpg" alt="Rank list" loading="lazy"><figcaption>Live trader rankings</figcaption></figure>
+      <figure><img src="/oat-landing/img/screen-deposit.jpg" alt="Express deposit" loading="lazy"><figcaption>Pay in your own currency</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section style="padding-top:0">
+  <div class="wrap">
+    <div class="split">
+      <div class="card">
+        <h3><span class="dot"></span> Why traders stay</h3>
+        <ul class="tick">
+          <li><b>You are never guessing.</b> Live prices, the payout on screen before you confirm, and a receipt for every closed trade.</li>
+          <li><b>The algorithm does the watching.</b> It reads market signals and holds the position while you get on with your day.</li>
+          <li><b>Small can start.</b> From 100 USDT, so learning does not require a fortune.</li>
+          <li><b>Nothing is hidden.</b> Deposits, withdrawals, fees and support threads are all in the app.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="dot"></span> Support that answers</h3>
+        <p>A real support thread inside the app, not an email that disappears into a void.</p>
+        <ul class="tick">
+          <li>Message the team without leaving the app.</li>
+          <li>Deposit and withdrawal questions answered directly.</li>
+          <li>Every account action confirmed in writing.</li>
+        </ul>
+        <p style="margin-top:14px;font-size:13px">Still unsure? Open the app in your browser first, look around, and register only when you are ready.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="install" style="padding-top:0">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="k">Install in one minute</div>
+      <h2>Getting the app on your phone</h2>
+      <p>Android installs in under a minute. The app always loads the live platform, so it updates itself without you downloading anything again.</p>
+    </div>
+    <div class="card">
+      <ul class="install">
+        <li><b>Tap “Download the App”</b><span>Your browser saves the OAT Trades file (APK, 2.4 MB).</span></li>
+        <li><b>Open the downloaded file</b><span>Find it in your notifications or your Downloads folder.</span></li>
+        <li><b>Allow install from this source if asked</b><span>Android shows this for any app installed outside the Play Store. Tap Settings, then allow, then go back and tap Install.</span></li>
+        <li><b>Open OAT Trades and sign in or register</b><span>You will need the UID of the member who invited you.</span></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section style="padding-top:0">
+  <div class="wrap">
+    <div class="sec-head"><div class="k">Questions</div><h2>The things people ask first</h2></div>
+    <details><summary>Do I need to own crypto already?</summary><p>No. You can pay by bank transfer in your local currency using Express Deposit, and the app converts it for you.</p></details>
+    <details><summary>What is the smallest amount I can start with?</summary><p>Trades start from 100 USDT. Express deposits have a minimum too, and the app shows it before you send anything.</p></details>
+    <details><summary>Can I use it on iPhone?</summary><p>Yes. Tap “Open in browser”. The full platform runs there perfectly, and you can add it to your home screen.</p></details>
+    <details><summary>How do withdrawals work?</summary><p>Request a withdrawal inside the app, choose crypto or bank transfer, and the team reviews and approves it. You get a notification the moment it is approved.</p></details>
+    <details><summary>Do I need an invite?</summary><p>Yes. OAT Trades grows by reference, so you register with the UID of the member who invited you. Ask them for it before you sign up.</p></details>
+    <details><summary>Is the app always up to date?</summary><p>Yes. The app loads the live platform, so new markets and features appear automatically without another download.</p></details>
+  </div>
+</section>
+
+<section style="padding-top:0">
+  <div class="wrap">
+    <div class="final">
+      <h2>Start with what you have. Grow with what you learn.</h2>
+      <p>Download OAT Trades and take your first position in minutes.</p>
+      <div class="cta" style="justify-content:center">
+        <a class="btn btn-gold" href="https://github.com/bammifather-cmyk/wallet-masters/releases/download/oat-latest/app-release.apk">⬇ Download for Android</a>
+        <a class="btn btn-ghost" href="/oat-app/">Open in browser</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="fbrand"><img src="/oat-landing/img/logo.jpg" alt="OAT Trades"> OAT Trades</div>
+    <div>Crypto · NYSE · NASDAQ · Global indices</div>
+    <p class="fine">Trading involves risk. Past performance on the leaderboard does not guarantee future results. Only trade with money you can afford to put at risk, and never send funds to any account that was not given to you inside the official app. OAT Trades is available by reference only.</p>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -77,6 +77,15 @@ app.use((req, res, next) => {
 });
 app.use(express.static(path.join(__dirname, '.')));
 
+// ── OAT Trades download page (Bammi, 2026-11-17) ──────────────────────────────
+// Public landing page for sharing with users. Hosted on this service (not base44);
+// the APK itself downloads straight from GitHub releases (tag oat-latest).
+// /oat and /getoat both serve it; /oat-app/ stays the web version of the app.
+app.get(['/oat', '/oat/', '/getoat', '/download'], (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+  res.sendFile(path.join(__dirname, 'oat-landing', 'index.html'));
+});
+
 let MINI_APP_URL = process.env.MINI_APP_URL || 'https://wallet-masters.onrender.com';
 
 function calculateFees(amount, rateOverride) {
