@@ -3560,7 +3560,10 @@ app.post('/api/oat-app/p2p/status', async (req, res) => {
       .order('id', { ascending: false }).limit(10);
     const list = rows || [];
     const open = list.find(r => ['requested', 'details_sent', 'paid'].includes(r.status)) || null;
-    res.json({ success: true, active: open, history: list.filter(r => r !== open).slice(0, 8), balance: Number(u.balance) });
+    // A cancelled or rejected request is surfaced once so the user reads the team's reason.
+    const closed = open ? null : (list.find(r => (r.status === 'cancelled' || r.status === 'rejected')
+      && r.reviewed_at && (Date.now() - Number(r.reviewed_at) < 7 * 24 * 3600 * 1000)) || null);
+    res.json({ success: true, active: open, closed, history: list.filter(r => r !== open).slice(0, 8), balance: Number(u.balance) });
   } catch (e) { console.error('[P2P] status:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
 });
 

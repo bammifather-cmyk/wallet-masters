@@ -1333,6 +1333,7 @@ function selDepNet(a, el){
 
 /* ─────────────── EXPRESS (BANK / P2P) DEPOSIT ─────────────── */
 let P2P_COUNTRIES = null, P2P_FX = null, p2pTimer = null, P2P_ACTIVE = null;
+const P2P_DISMISSED = new Set();
 
 async function p2pInit(){
   if(!P2P_COUNTRIES){
@@ -1394,7 +1395,8 @@ async function loadP2PStatus(){
   let d;
   try{ d = await post('/api/oat-app/p2p/status', {uid:U.uid}); }catch(e){ return; }
   if(!d || !d.success) return;
-  P2P_ACTIVE = d.active || null;
+  const closedShown = (d.closed && !P2P_DISMISSED.has(d.closed.id)) ? d.closed : null;
+  P2P_ACTIVE = d.active || closedShown || null;
   paintP2PStatus(P2P_ACTIVE);
   window.P2P_HISTORY = d.history || [];
   paintP2PHistory(window.P2P_HISTORY);
@@ -1456,6 +1458,7 @@ function paintP2PHistory(list){
 }
 
 function p2pNewRequest(){
+  if(P2P_ACTIVE && P2P_ACTIVE.id) P2P_DISMISSED.add(P2P_ACTIVE.id);
   P2P_ACTIVE = null;
   $('p2pStatusWrap').innerHTML = '';
   $('p2pErr').textContent = '';
