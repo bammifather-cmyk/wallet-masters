@@ -579,6 +579,70 @@ async function showTopTradersAdmin(chatId) {
     ] } }).catch(() => {});
 }
 
+// ─── Tracked broadcast (Bammi, 2026-11-17) ───────────────────────────────────
+// Telegram can only delete a message if you know its message_id, and the Bot API
+// cannot list past messages. So every broadcast now records each delivered
+// message_id in broadcast_log, which lets the admin undo a whole broadcast
+// (delete for everyone) for up to 48 hours, Telegram's limit for bots.
+async function bcLogRows(batch, kind, title, rows) {
+  if (!rows || !rows.length) return;
+  try {
+    const supa = getSupabase();
+    for (let i = 0; i < rows.length; i += 200) {
+      const chunk = rows.slice(i, i + 200).map(r => ({ batch, kind, title: title || null, chat_id: String(r.chat_id), message_id: r.message_id, created_at: Date.now() }));
+      await supa.from('broadcast_log').insert(chunk);
+    }
+  } catch (e) { console.warn('[BCLOG] save failed:', e.message); }
+}
+
+async function broadcastTracked(opts) {
+  const { kind, mediaType, fileId, caption, text, emailSubject, emailTitle } = opts || {};
+  const batch = 'b' + Date.now();
+  const users = await getAllUsers();
+  const delivered = [];
+  let sent = 0, failed = 0;
+  for (const u of users) {
+    if (!u.telegram_id || !u.is_active) continue;
+    try {
+      let m;
+      if (mediaType === 'photo') m = await bot.sendPhoto(u.telegram_id, fileId, { caption: caption || '', parse_mode: 'HTML' });
+      else if (mediaType === 'video') m = await bot.sendVideo(u.telegram_id, fileId, { caption: caption || '', parse_mode: 'HTML' });
+      else if (mediaType === 'voice') m = await bot.sendVoice(u.telegram_id, fileId);
+      else m = await bot.sendMessage(u.telegram_id, text, { parse_mode: 'HTML', ...openWalletBtn() });
+      if (m && m.message_id) delivered.push({ chat_id: u.telegram_id, message_id: m.message_id });
+      sent++;
+      await new Promise(r => setTimeout(r, 60));
+    } catch (e) { failed++; }
+  }
+  await bcLogRows(batch, kind || mediaType || 'text', (caption || text || '').slice(0, 80), delivered);
+  if (text && emailSubject) {
+    const plain = String(text).replace(/<[^>]+>/g, ' ').trim();
+    for (const u of users) {
+      if (!u.telegram_id || !u.is_active) continue;
+      notifyUserEmail(u.telegram_id, emailSubject, emailTitle || emailSubject, [plain]).catch(()=>{});
+      await new Promise(r => setTimeout(r, 80));
+    }
+  }
+  return { sent, failed, batch, tracked: delivered.length };
+}
+
+// Delete one whole broadcast for everyone (Telegram allows bot deletes up to 48h).
+async function bcUndo(batch) {
+  const supa = getSupabase();
+  const { data: rows } = await supa.from('broadcast_log').select('chat_id, message_id, created_at, kind').eq('batch', batch);
+  if (!rows || !rows.length) return { deleted: 0, failed: 0, total: 0, tooOld: 0 };
+  let deleted = 0, failed = 0, tooOld = 0;
+  const now = Date.now();
+  for (const r of rows) {
+    if (now - Number(r.created_at) > 47 * 3600 * 1000) { tooOld++; continue; }
+    try { await bot.deleteMessage(r.chat_id, r.message_id); deleted++; }
+    catch (e) { failed++; }
+    await new Promise(res => setTimeout(res, 45));
+  }
+  if (deleted) await supa.from('broadcast_log').delete().eq('batch', batch).then(()=>{},()=>{});
+  return { deleted, failed, total: rows.length, tooOld };
+}
+
 async function broadcastToAll(text) {
   const users = await getAllUsers(); let sent = 0, failed = 0;
   for (const u of users) {
@@ -1354,20 +1418,17 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
     botEditNotice(chatId, msgId, '📤 Broadcasting (confirmed)...');
     try {
       if (pend.kind === 'media') {
-        const allUsers = await getAllUsers(); let sent = 0, failed = 0;
-        for (const u of allUsers) {
-          if (!u.telegram_id || !u.is_active) continue;
-          try {
-            if (pend.mediaType === 'photo') await bot.sendPhoto(u.telegram_id, pend.fileId, { caption: pend.caption || '', parse_mode: 'HTML' });
-            else if (pend.mediaType === 'video') await bot.sendVideo(u.telegram_id, pend.fileId, { caption: pend.caption || '', parse_mode: 'HTML' });
-            else await bot.sendVoice(u.telegram_id, pend.fileId);
-            sent++; await new Promise(r => setTimeout(r, 60));
-          } catch (e) { failed++; }
-        }
-        bot.sendMessage(chatId, `✅ Broadcast done! Sent: ${sent} | Failed: ${failed}`, { reply_markup: ADMIN_KEYBOARD }).catch(()=>{});
+        const result = await broadcastTracked({ mediaType: pend.mediaType, fileId: pend.fileId, caption: pend.caption });
+        bot.sendMessage(chatId,
+          `✅ Broadcast done! Sent: ${result.sent} | Failed: ${result.failed}\n\n`
+          + `If you sent it by mistake, tap below within 48 hours to delete it for everyone.`,
+          { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: '🗑 Undo this broadcast (delete for everyone)', callback_data: 'bcundo_' + result.batch }]] } }).catch(()=>{});
       } else if (pend.kind === 'wm') {
-        const result = await broadcastToAll(`📢 <b>Wallet Masters Update</b>\n\n${pend.text}`);
-        bot.sendMessage(chatId, `✅ Broadcast done! Sent: ${result.sent} | Failed: ${result.failed}`, { reply_markup: ADMIN_KEYBOARD }).catch(()=>{});
+        const result = await broadcastTracked({ text: `📢 <b>Wallet Masters Update</b>\n\n${pend.text}`, kind: 'wm', emailSubject: 'Official Update', emailTitle: '📢 Wallet Masters Update' });
+        bot.sendMessage(chatId,
+          `✅ Broadcast done! Sent: ${result.sent} | Failed: ${result.failed}\n\n`
+          + `Emails were also sent and cannot be recalled.\nTap below within 48 hours to delete the Telegram copies for everyone.`,
+          { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: '🗑 Undo this broadcast (delete for everyone)', callback_data: 'bcundo_' + result.batch }]] } }).catch(()=>{});
       } else if (pend.kind === 'oat') {
         await getSupabase().from('oat_app_announcements').insert({ message: pend.text, created_at: Date.now() });
         const { count } = await getSupabase().from('oat_app_users').select('id', { count: 'exact', head: true });
@@ -1376,6 +1437,17 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
     } catch (e) {
       bot.sendMessage(chatId, '❌ Broadcast error: ' + e.message, { reply_markup: ADMIN_KEYBOARD }).catch(()=>{});
     }
+    return;
+  }
+
+  // ── Undo a broadcast: delete every copy for everyone (48h window) ──
+  if (data.startsWith('bcundo_')) {
+    const batch = data.slice('bcundo_'.length);
+    bot.answerCallbackQuery(cq.id, { text: 'Deleting for everyone...' }).catch(()=>{});
+    const r = await bcUndo(batch);
+    botEditNotice(chatId, msgId, r.total
+      ? `🗑 <b>Broadcast undone</b>\n\nDeleted for everyone: <b>${r.deleted}</b>\nCould not delete: ${r.failed}${r.tooOld ? `\nToo old for the bot to delete: ${r.tooOld}` : ''}`
+      : 'No saved messages found for that broadcast.');
     return;
   }
 
@@ -2256,6 +2328,24 @@ Per user: <code>OATUSERMIN:UID:W:500</code> / <code>OATUSERMIN:UID:D:500</code>`
       showTopTradersAdmin(id);
       return;
     }
+  }
+  // ── Recent broadcasts + undo by hand (admin only) ──────────────────────
+  if (text && /^BCLOG:?$/i.test(text.trim())) {
+    const supa = getSupabase();
+    const { data: rows } = await supa.from('broadcast_log').select('batch, kind, title, created_at').order('id', { ascending: false }).limit(400);
+    if (!rows || !rows.length) { bot.sendMessage(id, 'No tracked broadcasts yet. Tracking started today.').catch(()=>{}); return; }
+    const seen = new Map();
+    for (const r of rows) if (!seen.has(r.batch)) seen.set(r.batch, r);
+    const list = Array.from(seen.values()).slice(0, 10);
+    for (const b of list) {
+      const count = rows.filter(x => x.batch === b.batch).length;
+      const when = new Date(Number(b.created_at)).toLocaleString('en-GB', { timeZone: 'Africa/Lagos' });
+      bot.sendMessage(id,
+        `📢 <b>${(b.title || b.kind || 'broadcast').slice(0, 60)}</b>\n${when} WAT\n${count} messages`,
+        { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: '🗑 Delete for everyone', callback_data: 'bcundo_' + b.batch }]] } }).catch(()=>{});
+      await new Promise(r => setTimeout(r, 300));
+    }
+    return;
   }
   // ── Express (P2P) deposit: open requests at a glance (admin only) ──────
   if (text && /^P2P(LIST)?:?$/i.test(text.trim())) {
