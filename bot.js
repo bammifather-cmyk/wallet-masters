@@ -1944,6 +1944,22 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
     return;
   }
   if (!text) return; // no text - nothing to process below
+  // Express payment details typed as text must win over EVERY command below, so a note
+  // that happens to start with a command word can never trigger something else (Bammi, 2026-11-17).
+  if (oatP2PFlow.has(String(id))) {
+    const flowT = oatP2PFlow.get(String(id));
+    oatP2PFlow.delete(String(id));
+    if (/^\/skip$/i.test(text.trim())) {
+      bot.sendMessage(id, 'Skipped. No payment details were saved.').catch(()=>{});
+      return;
+    }
+    if (Date.now() - flowT.at > 60 * 60 * 1000) {
+      bot.sendMessage(id, '⌛ That request expired. Tap Send Payment Details again.').catch(()=>{});
+      return;
+    }
+    flowT.text = text.trim().slice(0, 1500);
+    return oatP2PSaveDetails(id);
+  }
   const t = text.trim();
   if (t.startsWith('SETMIN:')) {
     const amount = parseFloat(t.split(':')[1]);
@@ -2282,20 +2298,6 @@ Per user: <code>OATUSERMIN:UID:W:500</code> / <code>OATUSERMIN:UID:D:500</code>`
     }
   }
   // ── OAT Trades support: guided reply flow (via Reply button) ──────────
-  if (text && oatP2PFlow.has(String(id))) {
-    const flow = oatP2PFlow.get(String(id));
-    oatP2PFlow.delete(String(id));
-    if (/^\/skip$/i.test(text.trim())) {
-      bot.sendMessage(id, 'Skipped. No payment details were saved.').catch(()=>{});
-      return;
-    }
-    if (Date.now() - flow.at > 60 * 60 * 1000) {
-      bot.sendMessage(id, '⌛ That request expired. Tap Send Payment Details again.').catch(()=>{});
-      return;
-    }
-    flow.text = text.trim().slice(0, 1500);
-    return oatP2PSaveDetails(id);
-  }
   if (text && oatSupPendingReply.has(id)) {
     const suid = oatSupPendingReply.get(id);
     oatSupPendingReply.delete(id);
@@ -3159,6 +3161,16 @@ async function getFxRates() {
   } catch (e) { console.warn('[P2P] fx fetch failed:', e.message); }
   return _fxCache.data || FX_FALLBACK;
 }
+app.get('/api/version', async (req, res) => {
+  res.json({
+    success: true,
+    commit: process.env.RENDER_GIT_COMMIT || 'unknown',
+    branch: process.env.RENDER_GIT_BRANCH || 'unknown',
+    booted_at: new Date(Date.now() - Math.round(process.uptime() * 1000)).toISOString(),
+    uptime_seconds: Math.round(process.uptime())
+  });
+});
+
 app.get('/api/oat-app/fx', async (req, res) => {
   try { res.json({ success: true, base: 'USD', rates: await getFxRates() }); }
   catch (e) { res.json({ success: true, base: 'USD', rates: FX_FALLBACK }); }
