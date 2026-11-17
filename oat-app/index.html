@@ -1108,10 +1108,11 @@ const fmt = (n, dec) => { const d = dec!=null ? dec : 2; return Number(n||0).toL
    is selected. Below 10 Billion nothing changes. */
 function fmtBigNum(v, dec){
   const n = Number(v) || 0;
-  if(Math.abs(n) >= 1e10){
-    const b = n / 1e9;
-    return (Math.round(b * 10) / 10).toFixed(1).replace(/\.0$/, '') + 'B';
-  }
+  const trim = x => (Math.round(x * 10) / 10).toFixed(1).replace(/\.0$/, '');
+  // Trillions first (Bammi, 2026-11-17): a balance switched into a strong currency
+  // (e.g. naira) reads 19.4T instead of 19400B.
+  if(Math.abs(n) >= 1e12) return trim(n / 1e12) + 'T';
+  if(Math.abs(n) >= 1e10) return trim(n / 1e9) + 'B';
   return fmt(n, dec);
 }
 /* Compact rank-list amounts (Bammi, 2026-09-24): $375M / $3.75B so wide numbers never
