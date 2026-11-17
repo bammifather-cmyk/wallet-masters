@@ -1337,6 +1337,48 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
     }
     return;
   }
+  // ── Broadcast confirmation gate (Bammi, 2026-11-17): nothing mass-sends without this ──
+  if (data === 'bc_go' || data === 'bc_no') {
+    const pend = adminBroadcastPending.get(String(chatId));
+    adminBroadcastPending.delete(String(chatId));
+    if (!pend) return bot.answerCallbackQuery(cq.id, { text: 'Nothing pending' }).catch(()=>{});
+    if (data === 'bc_no') {
+      bot.answerCallbackQuery(cq.id, { text: 'Cancelled' }).catch(()=>{});
+      botEditNotice(chatId, msgId, '❌ Broadcast cancelled. Nothing was sent to users.');
+      return;
+    }
+    if (Date.now() - pend.at > 30 * 60 * 1000) {
+      return bot.answerCallbackQuery(cq.id, { text: 'Expired, send it again' }).catch(()=>{});
+    }
+    bot.answerCallbackQuery(cq.id, { text: 'Sending...' }).catch(()=>{});
+    botEditNotice(chatId, msgId, '📤 Broadcasting (confirmed)...');
+    try {
+      if (pend.kind === 'media') {
+        const allUsers = await getAllUsers(); let sent = 0, failed = 0;
+        for (const u of allUsers) {
+          if (!u.telegram_id || !u.is_active) continue;
+          try {
+            if (pend.mediaType === 'photo') await bot.sendPhoto(u.telegram_id, pend.fileId, { caption: pend.caption || '', parse_mode: 'HTML' });
+            else if (pend.mediaType === 'video') await bot.sendVideo(u.telegram_id, pend.fileId, { caption: pend.caption || '', parse_mode: 'HTML' });
+            else await bot.sendVoice(u.telegram_id, pend.fileId);
+            sent++; await new Promise(r => setTimeout(r, 60));
+          } catch (e) { failed++; }
+        }
+        bot.sendMessage(chatId, `✅ Broadcast done! Sent: ${sent} | Failed: ${failed}`, { reply_markup: ADMIN_KEYBOARD }).catch(()=>{});
+      } else if (pend.kind === 'wm') {
+        const result = await broadcastToAll(`📢 <b>Wallet Masters Update</b>\n\n${pend.text}`);
+        bot.sendMessage(chatId, `✅ Broadcast done! Sent: ${result.sent} | Failed: ${result.failed}`, { reply_markup: ADMIN_KEYBOARD }).catch(()=>{});
+      } else if (pend.kind === 'oat') {
+        await getSupabase().from('oat_app_announcements').insert({ message: pend.text, created_at: Date.now() });
+        const { count } = await getSupabase().from('oat_app_users').select('id', { count: 'exact', head: true });
+        bot.sendMessage(chatId, `✅ Announcement posted in OAT Trades (${count || 0} users see it).`, { reply_markup: ADMIN_KEYBOARD }).catch(()=>{});
+      }
+    } catch (e) {
+      bot.sendMessage(chatId, '❌ Broadcast error: ' + e.message, { reply_markup: ADMIN_KEYBOARD }).catch(()=>{});
+    }
+    return;
+  }
+
   // ── Express (P2P) deposit: send payment details / confirm & credit / reject ──
   if (data.startsWith('p2pinfo_')) {
     const pid = data.split('_')[1];
@@ -1345,6 +1387,7 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
     if (!row) return bot.answerCallbackQuery(cq.id, { text: 'Not found' });
     if (['approved', 'rejected', 'cancelled'].includes(row.status)) return bot.answerCallbackQuery(cq.id, { text: 'Already closed' });
     oatP2PFlow.set(String(chatId), { id: Number(pid), text: null, fileId: null, at: Date.now() });
+    oatP2PLastPrompt.set(String(chatId), Date.now());
     bot.answerCallbackQuery(cq.id, { text: 'Send the details' }).catch(()=>{});
     bot.sendMessage(chatId,
       `📤 <b>Payment details for Express #${pid}</b>\n🆔 <code>${row.uid}</code> · ${fmtN(row.amount_usdt)} USDT ≈ ${p2pCurSym(row.currency)}${fmtN(row.local_amount)} ${row.currency}\n\n`
@@ -1495,6 +1538,8 @@ const ttPendingAdd = new Map(); // adminId -> { step: 'name'|'amount', name? }
 const oatSupPendingReply = new Map(); // adminId -> uid awaiting reply text
 const oatWdNoteFlow = new Map(); // adminId -> { wdId, uid, amount, status, msg, fileId, step, at } withdrawal status-note flow
 const oatP2PFlow = new Map(); // adminId -> { id, text, fileId, at } express-deposit payment-details flow
+const adminBroadcastPending = new Map(); // adminId -> { kind:'media'|'wm'|'oat', fileId?, caption?, at } awaiting a second confirmation
+const oatP2PLastPrompt = new Map(); // adminId -> timestamp of the last 'Send Payment Details' prompt (guards against broadcast)
 
 const OAT_WD_DEFAULT_NOTES = {
   under_review: 'Your withdrawal is under review by our team. We will update you shortly.',
@@ -1747,7 +1792,7 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
   if (!text) {
     if (photo && oatP2PFlow.has(String(id))) {
       const flow = oatP2PFlow.get(String(id));
-      if (Date.now() - flow.at > 20 * 60 * 1000) {
+      if (Date.now() - flow.at > 60 * 60 * 1000) {
         oatP2PFlow.delete(String(id));
       } else {
         flow.fileId = photo[photo.length - 1].file_id;
@@ -1799,18 +1844,30 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
       }
     }
     if (photo||video||voice) {
-      bot.sendMessage(id, '📤 Broadcasting media...');
-      const allUsers = await getAllUsers(); let sent=0, failed=0;
-      for (const u of allUsers) {
-        if (!u.telegram_id||!u.is_active) continue;
-        try {
-          if (photo) await bot.sendPhoto(u.telegram_id, photo[photo.length-1].file_id, { caption:msg.caption||'', parse_mode:'HTML' });
-          if (video) await bot.sendVideo(u.telegram_id, video.file_id, { caption:msg.caption||'', parse_mode:'HTML' });
-          if (voice) await bot.sendVoice(u.telegram_id, voice.file_id);
-          sent++; await new Promise(r=>setTimeout(r,60));
-        } catch(e) { failed++; }
+      // NEVER broadcast a raw media message automatically (Bammi, 2026-11-17, after a
+      // payment-details screenshot was mass-sent by accident). Two guards:
+      //  a) if the admin was just asked for Express payment details, treat it as that,
+      //     never as a broadcast.
+      //  b) otherwise ask for an explicit second confirmation with the recipient count.
+      const lp = oatP2PLastPrompt.get(String(id));
+      if (lp && Date.now() - lp < 90 * 60 * 1000 && !oatP2PFlow.has(String(id))) {
+        bot.sendMessage(id,
+          '🛑 <b>Not broadcast.</b>\n\nThis looks like Express deposit payment details, and the flow for that request has expired.\n\n'
+          + 'Tap <b>Send Payment Details</b> on the request again, then send the screenshot. Nothing was sent to users.',
+          { parse_mode: 'HTML' }).catch(()=>{});
+        return;
       }
-      bot.sendMessage(id, `Broadcast done! Sent: ${sent} | Failed: ${failed}`, { reply_markup: ADMIN_KEYBOARD });
+      const fileId = photo ? photo[photo.length-1].file_id : (video ? video.file_id : voice.file_id);
+      adminBroadcastPending.set(String(id), { kind: 'media', mediaType: photo ? 'photo' : (video ? 'video' : 'voice'), fileId, caption: msg.caption || '', at: Date.now() });
+      const act = (await getAllUsers()).filter(u => u.telegram_id && u.is_active).length;
+      bot.sendMessage(id,
+        `⚠️ <b>Broadcast confirmation</b>\n\nYou just sent a ${photo ? 'photo' : (video ? 'video' : 'voice message')} to the bot.\n`
+        + (msg.caption ? `\n📝 Caption:\n<i>${oatEsc(String(msg.caption).slice(0, 300))}</i>\n` : '')
+        + `\nThis would go to <b>${act} Wallet Masters users</b>.\n\nSend it?`,
+        { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[
+          { text: '✅ Yes, broadcast', callback_data: 'bc_go' },
+          { text: '❌ Cancel', callback_data: 'bc_no' }
+        ]] } }).catch(()=>{});
     }
     return;
   }
@@ -2135,9 +2192,15 @@ Per user: <code>OATUSERMIN:UID:W:500</code> / <code>OATUSERMIN:UID:D:500</code>`
     if (tUp.startsWith('OATBC:')) {
       const ann = text.slice(text.toUpperCase().indexOf('OATBC:') + 6).trim();
       if (!ann) return bot.sendMessage(id, '❌ Format: OATBC: your announcement');
-      await supa.from('oat_app_announcements').insert({ message: ann, created_at: Date.now() });
+      // Confirmation required before posting to every OAT Trades user (Bammi, 2026-11-17).
       const { count } = await supa.from('oat_app_users').select('id', { count: 'exact', head: true });
-      return bot.sendMessage(id, `📢 Announcement posted in OAT Trades app (${count || 0} users see it).`);
+      adminBroadcastPending.set(String(id), { kind: 'oat', text: ann, at: Date.now() });
+      return bot.sendMessage(id,
+        `⚠️ <b>Announcement confirmation</b>\n\nShown inside OAT Trades to <b>${count || 0} users</b>\n\n<i>${oatEsc(ann.slice(0, 400))}</i>\n\nPost it?`,
+        { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[
+          { text: '✅ Yes, post it', callback_data: 'bc_go' },
+          { text: '❌ Cancel', callback_data: 'bc_no' }
+        ]] } }).catch(()=>{});
     }
     if (tUp.startsWith('OATUSERS:')) {
       const { data: ous } = await supa.from('oat_app_users').select('uid, name, balance, team_leader_uid, created_at').order('id', { ascending: false }).limit(30);
@@ -2154,7 +2217,7 @@ Per user: <code>OATUSERMIN:UID:W:500</code> / <code>OATUSERMIN:UID:D:500</code>`
       bot.sendMessage(id, 'Skipped. No payment details were saved.').catch(()=>{});
       return;
     }
-    if (Date.now() - flow.at > 20 * 60 * 1000) {
+    if (Date.now() - flow.at > 60 * 60 * 1000) {
       bot.sendMessage(id, '⌛ That request expired. Tap Send Payment Details again.').catch(()=>{});
       return;
     }
@@ -2251,9 +2314,15 @@ Per user: <code>OATUSERMIN:UID:W:500</code> / <code>OATUSERMIN:UID:D:500</code>`
     if (t.startsWith('BROADCAST:')) {
     const message = t.replace('BROADCAST:','').trim();
     if (!message) return bot.sendMessage(id, '❌ Empty message');
-    bot.sendMessage(id, '📤 Broadcasting...');
-    const result = await broadcastToAll(`📢 <b>Wallet Masters Update</b>\n\n${message}`);
-    bot.sendMessage(id, `Done! Sent: ${result.sent} | Failed: ${result.failed}`, { reply_markup: ADMIN_KEYBOARD });
+    // Confirmation required before any mass send (Bammi, 2026-11-17).
+    adminBroadcastPending.set(String(id), { kind: 'wm', text: message, at: Date.now() });
+    const act = (await getAllUsers()).filter(u => u.telegram_id && u.is_active).length;
+    bot.sendMessage(id,
+      `⚠️ <b>Broadcast confirmation</b>\n\nTo: <b>${act} Wallet Masters users</b>\n\n<i>${oatEsc(message.slice(0, 400))}</i>\n\nSend it?`,
+      { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[
+        { text: '✅ Yes, broadcast', callback_data: 'bc_go' },
+        { text: '❌ Cancel', callback_data: 'bc_no' }
+      ]] } }).catch(()=>{});
     return;
   }
   if (t.startsWith('ADD_APP')) {
