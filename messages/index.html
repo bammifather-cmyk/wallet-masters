@@ -9,9 +9,9 @@
 <style>
   /* Google Messages (dark, Material You olive palette) replica, matched to Bammi's screen recording */
   :root{
-    --bg:#0f1106; --surf:#1e2015; --surf2:#292b1e; --surf3:#33362a; --line:#35382a;
+    --bg:#101408; --surf:#1e2012; --surf2:#2a2c1f; --surf3:#33362a; --line:#35382a;
     --text:#e4e3d3; --muted:#c7c8b5; --dim:#909181; --pri:#c5cf6b; --priOn:#2b3300; --fab:#c5cf6b;
-    --bub:#2d3023; --bubOn:#e4e3d3; --badge:#c5cf6b; --badgeOn:#2b3300; --link:#a9d1e5; --red:#ffb4ab;
+    --bub:#2b2e1f; --bubOn:#e4e3d3; --badge:#c5cf6b; --badgeOn:#2b3300; --link:#a9d1e5; --red:#ffb4ab;
   }
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
   html,body{height:100%}
@@ -60,7 +60,8 @@
   .chiprow::-webkit-scrollbar{display:none}
   .fchip{flex:0 0 auto;padding:8px 16px;border-radius:99px;border:1px solid var(--line);font-size:13.5px;color:var(--muted);cursor:pointer;white-space:nowrap}
   .fchip.on{background:var(--pri);color:var(--priOn);border-color:var(--pri);font-weight:500}
-  .list{flex:1;overflow-y:auto;padding:2px 0 130px;-webkit-overflow-scrolling:touch}
+  .list{flex:1;overflow-y:auto;padding:6px 0 130px;-webkit-overflow-scrolling:touch}
+  .list::after{content:"";display:block;min-height:1px}
   .conv{display:flex;align-items:center;gap:16px;padding:12px 18px;cursor:pointer;position:relative;user-select:none;-webkit-user-select:none}
   .conv:active{background:rgba(255,255,255,.05)}
   .conv.sel{background:rgba(197,207,107,.14)}
@@ -100,7 +101,7 @@
   .thbar .av{width:42px;height:42px;margin-left:2px}
   .thbar .av svg{width:24px;height:24px}
   .thbar .nm{flex:1;font-size:21px;margin-left:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:6px}
-  .thread{flex:1;overflow-y:auto;padding:6px 12px 24px;display:flex;flex-direction:column;-webkit-overflow-scrolling:touch}
+  .thread{flex:1;overflow-y:auto;padding:6px 14px 24px;display:flex;flex-direction:column;-webkit-overflow-scrolling:touch;background:var(--surf);border-radius:28px 28px 0 0;margin-top:2px}
   .daysep{align-self:center;font-size:13px;color:var(--muted);margin:18px 0 12px}
   .bubwrap{display:flex;flex-direction:column;align-items:flex-start;margin-top:3px;max-width:92%}
   .bubble{background:var(--bub);color:var(--bubOn);border-radius:6px 22px 22px 22px;padding:14px 18px;font-size:16.5px;line-height:1.5;word-break:break-word;white-space:pre-wrap}
@@ -111,7 +112,7 @@
   .bubble u,.bubble a{color:var(--link);text-decoration:underline}
   .carrier{font-size:12.5px;color:#c8a8ff;margin:5px 0 8px 14px;display:flex;align-items:center;gap:5px}
   .carrier i{font-style:normal;color:#c8a8ff}
-  .cantreply{margin:18px 10px 0;background:var(--surf);border-radius:30px 30px 0 0;padding:22px 24px calc(26px + env(safe-area-inset-bottom,0));text-align:center;font-size:15.5px;color:var(--muted);line-height:1.5}
+  .cantreply{margin:0;background:var(--surf);border-top:1px solid rgba(255,255,255,.03);border-radius:0;padding:22px 24px calc(26px + env(safe-area-inset-bottom,0));text-align:center;font-size:15.5px;color:var(--muted);line-height:1.5}
   .cantreply a{color:var(--link);text-decoration:underline;cursor:pointer}
   .newtag{animation:pop .35s ease}
   @keyframes pop{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
@@ -428,10 +429,18 @@ function toggleSearch(){
   $('normalBar').style.display = on ? 'none' : 'flex';
   if(on) setTimeout(()=>$('searchIn').focus(), 60); else { $('searchIn').value=''; renderInbox(); }
 }
+let _lastSt = 0, _fabT = null;
 function onListScroll(){
   const st = $('list').scrollTop;
-  $('fab').classList.toggle('mini', st > 40);
-  $('upfab').classList.toggle('on', st > 520);
+  // Google Messages behaviour (from the recording): "Start chat" collapses to just the
+  // icon as soon as the list scrolls, and expands again when it comes back to the top.
+  if(st > 12 && st >= _lastSt) $('fab').classList.add('mini');
+  if(st <= 12) $('fab').classList.remove('mini');
+  clearTimeout(_fabT);
+  _fabT = setTimeout(() => { if($('list').scrollTop <= 12) $('fab').classList.remove('mini'); }, 250);
+  // the round up-arrow appears once scrolled well down, like the recording
+  $('upfab').classList.toggle('on', st > 360);
+  _lastSt = st;
 }
 function scrollTopList(){ $('list').scrollTo({ top:0, behavior:'smooth' }); }
 
