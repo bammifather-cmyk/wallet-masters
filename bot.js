@@ -3349,7 +3349,8 @@ async function createSmsAlert(uid, kind, vars) {
     const cfg = await getSmsSettings(uid);
     if (cfg.enabled === false) return false;
     const tpl = kind === 'deposit_approved' ? (cfg.deposit_template || SMS_DEFAULT_DEP) : (cfg.withdrawal_template || SMS_DEFAULT_WD);
-    const body = smsFill(tpl, vars).slice(0, 600);
+    const v = Object.assign({ sender: cfg.sender_name || 'OAT TRADES' }, vars);
+    const body = smsFill(tpl, v).slice(0, 600);
     const delay = Math.max(0, Math.min(60, Number(cfg.delay_minutes != null ? cfg.delay_minutes : 3)));
     const now = Date.now();
     await getSupabase().from('oat_sms_messages').insert({
@@ -3465,6 +3466,7 @@ app.post('/api/sms/test', async (req, res) => {
     const u = await resolveOatUser(found);
     const cfg = await getSmsSettings(u.uid);
     const body = smsFill(b.kind === 'deposit' ? (cfg.deposit_template || SMS_DEFAULT_DEP) : (cfg.withdrawal_template || SMS_DEFAULT_WD), {
+      sender: cfg.sender_name || 'OAT TRADES',
       amount: '500.00 USDT', amount_usdt: '500.00 USDT', dest: 'GTBank acct ending 6789',
       method: 'bank transfer', balance: fmtN(u.balance) + ' USDT', ref: 'TEST1',
       date: new Date().toLocaleDateString('en-GB', { timeZone: 'Africa/Lagos' }),

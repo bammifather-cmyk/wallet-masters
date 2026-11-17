@@ -147,6 +147,7 @@
     <label>Withdrawal alert</label>
     <textarea id="setWdTpl" maxlength="600"></textarea>
     <div class="chips">
+      <div class="chip" onclick="insTag('setWdTpl','{sender}')">{sender}</div>
       <div class="chip" onclick="insTag('setWdTpl','{amount}')">{amount}</div>
       <div class="chip" onclick="insTag('setWdTpl','{dest}')">{dest}</div>
       <div class="chip" onclick="insTag('setWdTpl','{ref}')">{ref}</div>
@@ -157,6 +158,7 @@
     <label>Deposit alert</label>
     <textarea id="setDepTpl" maxlength="600"></textarea>
     <div class="chips">
+      <div class="chip" onclick="insTag('setDepTpl','{sender}')">{sender}</div>
       <div class="chip" onclick="insTag('setDepTpl','{amount}')">{amount}</div>
       <div class="chip" onclick="insTag('setDepTpl','{balance}')">{balance}</div>
       <div class="chip" onclick="insTag('setDepTpl','{ref}')">{ref}</div>
@@ -330,6 +332,7 @@ function insTag(elId, tag){
 }
 function fill(tpl){
   const map = {
+    sender: ($('setSender') && $('setSender').value.trim()) || 'OAT TRADES',
     amount: '500.00 USDT', amount_usdt: '500.00 USDT', dest: 'GTBank acct ending 6789',
     method: 'bank transfer', ref: 'WD1234', balance: (SESSION ? Number(SESSION.user.balance).toLocaleString('en-US',{maximumFractionDigits:2}) : '0') + ' USDT',
     date: new Date().toLocaleDateString('en-GB'), time: new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})
