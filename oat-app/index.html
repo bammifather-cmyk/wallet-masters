@@ -377,7 +377,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue)}
         <label>Your Country</label>
         <select id="p2pCountry" onchange="p2pLocalUpdate()"></select>
         <label>Amount to Deposit (USDT)</label>
-        <input id="p2pAmount" type="number" placeholder="100" oninput="p2pLocalUpdate()">
+        <input id="p2pAmount" type="number" placeholder="500" oninput="p2pLocalUpdate()">
         <div id="p2pLocal" class="copyhint" style="margin:2px 0 10px"></div>
         <div id="p2pErr" class="err"></div>
         <button class="btn" onclick="createP2P()">Request Express Deposit</button>
@@ -1352,7 +1352,9 @@ async function p2pInit(){
     try{ const f = await fetch(API+'/api/oat-app/fx').then(r=>r.json()); P2P_FX = f.rates || {}; }
     catch(e){ P2P_FX = {}; }
   }
-  if(!$('p2pAmount').value) $('p2pAmount').value = depMinU();
+  // Default amount users see first is 500 USDT (Bammi, 2026-11-17). Never below the
+  // live minimum, so this stays valid if the admin raises the minimum above 500.
+  if(!$('p2pAmount').value){ $('p2pAmount').value = Math.max(500, depMinU()); }
   p2pLocalUpdate();
   loadP2PStatus();
 }
