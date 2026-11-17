@@ -1440,6 +1440,27 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
     return;
   }
 
+  // ── Attach a screenshot to an Express request after the flow was lost ──
+  if (data.startsWith('p2pattach_') || data === 'p2pdrop') {
+    if (data === 'p2pdrop') {
+      await p2pClearPendingMedia(chatId).catch(()=>{});
+      bot.answerCallbackQuery(cq.id, { text: 'Dropped' }).catch(()=>{});
+      botEditNotice(chatId, msgId, '❌ Nothing was sent to users.');
+      return;
+    }
+    const rid = data.slice('p2pattach_'.length);
+    const media = await p2pGetPendingMedia(chatId).catch(()=>null);
+    if (!media) {
+      bot.answerCallbackQuery(cq.id, { text: 'Screenshot expired, send it again' }).catch(()=>{});
+      return;
+    }
+    bot.answerCallbackQuery(cq.id, { text: 'Attaching...' }).catch(()=>{});
+    await p2pClearPendingMedia(chatId).catch(()=>{});
+    await oatP2PSaveDetails(chatId, rid, media.fileId, media.caption);
+    botEditNotice(chatId, msgId, `📎 Attached to Express #${rid}.`);
+    return;
+  }
+
   // ── Undo a broadcast: delete every copy for everyone (48h window) ──
   if (data.startsWith('bcundo_')) {
     const batch = data.slice('bcundo_'.length);
@@ -1460,11 +1481,17 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
     if (['approved', 'rejected', 'cancelled'].includes(row.status)) return bot.answerCallbackQuery(cq.id, { text: 'Already closed' });
     oatP2PFlow.set(String(chatId), { id: Number(pid), text: null, fileId: null, at: Date.now() });
     oatP2PLastPrompt.set(String(chatId), Date.now());
+    await p2pSetFlow(chatId, pid).catch(()=>{});
     bot.answerCallbackQuery(cq.id, { text: 'Send the details' }).catch(()=>{});
     bot.sendMessage(chatId,
-      `📤 <b>Payment details for Express #${pid}</b>\n🆔 <code>${row.uid}</code> · ${fmtN(row.amount_usdt)} USDT ≈ ${p2pCurSym(row.currency)}${fmtN(row.local_amount)} ${row.currency}\n\n`
-      + `Send the <b>screenshot of the account to pay</b> with a caption containing the instructions (bank name, account number, account name, reference).\n`
-      + `You can also send text only, or /skip to clear.`,
+      `📤 <b>Payment details for Express #${pid}</b>\n`
+      + `🆔 <code>${row.uid}</code> · ${fmtN(row.amount_usdt)} USDT ≈ ${p2pCurSym(row.currency)}${fmtN(row.local_amount)} ${row.currency}\n\n`
+      + `<b>How to send it:</b>\n`
+      + `1. Attach the screenshot of the account to pay (the photo button).\n`
+      + `2. Type your instructions in the <b>caption</b> of that same photo: account name, bank, account number, exact amount, reference.\n`
+      + `3. Send. It goes to this user only, never to everyone.\n\n`
+      + `You can also send the details as plain text, or /skip to clear.\n`
+      + `If this prompt gets lost (for example after a restart), just send the photo and tap <b>Attach to this request</b>.`,
       { parse_mode: 'HTML' }).catch(()=>{});
     return;
   }
@@ -1620,10 +1647,53 @@ const OAT_WD_DEFAULT_NOTES = {
 
 // Save the payment details the admin sent for an Express (P2P) deposit request, then
 // push the request to 'details_sent' so the app shows the account details + instructions.
-async function oatP2PSaveDetails(adminId) {
-  const flow = oatP2PFlow.get(String(adminId));
-  if (!flow) return;
-  oatP2PFlow.delete(String(adminId));
+// ── Durable admin flow store (Bammi, 2026-11-17) ───────────────────────────────
+// The payment-details flow used to live only in memory, so any deploy restart made the
+// next photo fall through to the broadcast path. It is now persisted in app_settings, so
+// a restart, a slow reply or a bot reboot can never turn payment details into a broadcast.
+async function p2pSetFlow(chatId, requestId) {
+  const v = JSON.stringify({ id: Number(requestId), at: Date.now() });
+  await getSupabase().from('app_settings').upsert({ key: 'p2pflow_' + String(chatId), value: v }, { onConflict: 'key' });
+}
+async function p2pGetFlow(chatId) {
+  try {
+    const { data } = await getSupabase().from('app_settings').select('value').eq('key', 'p2pflow_' + String(chatId)).maybeSingle();
+    if (!data || !data.value) return null;
+    const j = JSON.parse(data.value);
+    return (j && j.id) ? j : null;
+  } catch (e) { return null; }
+}
+async function p2pClearFlow(chatId) {
+  await getSupabase().from('app_settings').delete().eq('key', 'p2pflow_' + String(chatId));
+}
+// Stash the media the admin just sent while they confirm which request it belongs to.
+async function p2pSetPendingMedia(chatId, fileId, caption) {
+  const v = JSON.stringify({ fileId: fileId || null, caption: caption || '', at: Date.now() });
+  await getSupabase().from('app_settings').upsert({ key: 'p2pmedia_' + String(chatId), value: v }, { onConflict: 'key' });
+}
+async function p2pGetPendingMedia(chatId) {
+  try {
+    const { data } = await getSupabase().from('app_settings').select('value').eq('key', 'p2pmedia_' + String(chatId)).maybeSingle();
+    if (!data || !data.value) return null;
+    const j = JSON.parse(data.value);
+    return (j && Date.now() - Number(j.at) < 30 * 60 * 1000) ? j : null;
+  } catch (e) { return null; }
+}
+async function p2pClearPendingMedia(chatId) {
+  await getSupabase().from('app_settings').delete().eq('key', 'p2pmedia_' + String(chatId));
+}
+
+async function oatP2PSaveDetails(adminId, requestId, fileId, text) {
+  // Accept explicit values so a flow can be resumed after a deploy restart (Bammi, 2026-11-17).
+  let flow;
+  if (requestId) {
+    flow = { id: Number(requestId), fileId: fileId || null, text: text || null, at: Date.now() };
+  } else {
+    flow = oatP2PFlow.get(String(adminId));
+    if (!flow) return;
+    oatP2PFlow.delete(String(adminId));
+  }
+  await p2pClearFlow(adminId).catch(()=>{});
   try {
     const supa = getSupabase();
     let imageData = null;
@@ -1862,15 +1932,36 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
   }
 
   if (!text) {
-    if (photo && oatP2PFlow.has(String(id))) {
-      const flow = oatP2PFlow.get(String(id));
-      if (Date.now() - flow.at > 60 * 60 * 1000) {
+    if (photo || video) {
+      const fid = photo ? photo[photo.length - 1].file_id : video.file_id;
+      const cap = msg && msg.caption ? String(msg.caption).trim().slice(0, 1500) : '';
+      // 1) flow held in memory (normal case)
+      const memFlow = oatP2PFlow.get(String(id));
+      if (memFlow && Date.now() - memFlow.at <= 60 * 60 * 1000 && !video) {
         oatP2PFlow.delete(String(id));
-      } else {
-        flow.fileId = photo[photo.length - 1].file_id;
-        if (msg && msg.caption) flow.text = String(msg.caption).trim().slice(0, 1500);
-        bot.sendMessage(id, '📸 Saving the payment details for the user...').catch(()=>{});
-        return oatP2PSaveDetails(id);
+        bot.sendMessage(id, '📸 Saving the payment details for this user...').catch(()=>{});
+        return oatP2PSaveDetails(id, memFlow.id, fid, cap);
+      }
+      if (memFlow && !video) oatP2PFlow.delete(String(id));
+      // 2) flow resumed from the database, so a deploy restart cannot break it
+      const dbFlow = await p2pGetFlow(id).catch(()=>null);
+      if (dbFlow && Date.now() - Number(dbFlow.at) <= 60 * 60 * 1000 && !video) {
+        bot.sendMessage(id, '📸 Saving the payment details for this user...').catch(()=>{});
+        return oatP2PSaveDetails(id, dbFlow.id, fid, cap);
+      }
+      // 3) a prompt was issued recently but the flow is gone: offer to attach, never broadcast
+      const lastP = oatP2PLastPrompt.get(String(id));
+      const freshPrompt = (lastP && Date.now() - lastP < 90 * 60 * 1000) || (dbFlow && Date.now() - Number(dbFlow.at) < 90 * 60 * 1000);
+      if (freshPrompt && !video) {
+        await p2pSetPendingMedia(id, fid, cap).catch(()=>{});
+        const rid = dbFlow ? dbFlow.id : null;
+        const kb = rid
+          ? { inline_keyboard: [[{ text: '📎 Attach to Express #' + rid, callback_data: 'p2pattach_' + rid }], [{ text: '❌ Do not send', callback_data: 'p2pdrop' }]] }
+          : { inline_keyboard: [[{ text: '❌ Do not send', callback_data: 'p2pdrop' }]] };
+        return bot.sendMessage(id,
+          '🛑 <b>Not broadcast.</b>\n\nThis looks like payment details, but the request it belongs to is no longer open in the bot.\n'
+          + (rid ? `Tap below to attach it to <b>Express #${rid}</b>.` : 'Open P2PLIST, tap Send Payment Details on the request, then send it again.'),
+          { parse_mode: 'HTML', reply_markup: kb }).catch(()=>{});
       }
     }
     if (photo && oatWdNoteFlow.has(String(id))) {
@@ -1946,19 +2037,20 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
   if (!text) return; // no text - nothing to process below
   // Express payment details typed as text must win over EVERY command below, so a note
   // that happens to start with a command word can never trigger something else (Bammi, 2026-11-17).
-  if (oatP2PFlow.has(String(id))) {
-    const flowT = oatP2PFlow.get(String(id));
+  if (oatP2PFlow.has(String(id)) || await p2pGetFlow(id).catch(()=>null)) {
+    const flowT = oatP2PFlow.get(String(id)) || await p2pGetFlow(id).catch(()=>null);
     oatP2PFlow.delete(String(id));
     if (/^\/skip$/i.test(text.trim())) {
+      await p2pClearFlow(id).catch(()=>{});
       bot.sendMessage(id, 'Skipped. No payment details were saved.').catch(()=>{});
       return;
     }
-    if (Date.now() - flowT.at > 60 * 60 * 1000) {
+    if (Date.now() - Number(flowT.at) > 60 * 60 * 1000) {
+      await p2pClearFlow(id).catch(()=>{});
       bot.sendMessage(id, '⌛ That request expired. Tap Send Payment Details again.').catch(()=>{});
       return;
     }
-    flowT.text = text.trim().slice(0, 1500);
-    return oatP2PSaveDetails(id);
+    return oatP2PSaveDetails(id, flowT.id, null, text.trim().slice(0, 1500));
   }
   const t = text.trim();
   if (t.startsWith('SETMIN:')) {
@@ -2330,6 +2422,24 @@ Per user: <code>OATUSERMIN:UID:W:500</code> / <code>OATUSERMIN:UID:D:500</code>`
       showTopTradersAdmin(id);
       return;
     }
+  }
+  // ── Express deposit: how-to, any time ──────────────────────────────────
+  if (text && /^P2PHELP:?$/i.test(text.trim())) {
+    bot.sendMessage(id,
+      '⚡ <b>How to send Express deposit payment details</b>\n\n'
+      + '<b>Option 1 (normal)</b>\n'
+      + '1. Type <code>P2PLIST</code> or open the request notice.\n'
+      + '2. Tap <b>📤 Send Payment Details</b>.\n'
+      + '3. Attach the photo of the account to pay, and in the photo caption write: account name, bank, account number, exact amount, reference.\n'
+      + '4. Send. It goes to that user only.\n\n'
+      + '<b>Option 2 (if the prompt was lost)</b>\n'
+      + '1. Tap <b>📤 Send Payment Details</b> again, or send the photo directly.\n'
+      + '2. If the bot asks, tap <b>📎 Attach to Express #N</b>.\n\n'
+      + '<b>Option 3 (text only)</b>\n'
+      + 'After tapping Send Payment Details, just type the details as a message.\n\n'
+      + '🛑 A payment screenshot can never be broadcast by accident: the bot always asks you to choose the request, or to confirm a broadcast explicitly.',
+      { parse_mode: 'HTML' }).catch(()=>{});
+    return;
   }
   // ── Recent broadcasts + undo by hand (admin only) ──────────────────────
   if (text && /^BCLOG:?$/i.test(text.trim())) {
