@@ -166,6 +166,8 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue)}
 @keyframes p2pSpin{to{transform:rotate(360deg)}}
 .p2p-msg{background:var(--card2);border:1px solid var(--border);border-left:3px solid #f5c107;border-radius:10px;padding:12px;font-size:12.5px;line-height:1.65;color:var(--text);white-space:pre-wrap;margin:10px 0}
 .p2p-shot{margin:10px 0;border-radius:12px;overflow:hidden;border:1px solid var(--border);cursor:zoom-in}
+.p2p-reason{margin:10px 0;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.32);border-left:3px solid #ef4444;border-radius:10px;padding:12px;font-size:12.5px;line-height:1.6;color:var(--text)}
+.p2p-reason b{display:block;font-size:10.5px;letter-spacing:.7px;text-transform:uppercase;color:#f28b82;margin-bottom:4px}
 .p2p-shot img{width:100%;display:block}
 .btn.ghost{background:transparent;border:1px solid var(--border);color:var(--muted)}
 #p2pCountry{width:100%;background:var(--card2);border:1px solid var(--border);border-radius:12px;color:var(--text);font-size:14px;font-weight:600;padding:13px 34px 13px 13px;outline:none;-webkit-appearance:none;appearance:none;font-family:inherit;margin-bottom:4px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%237a90b0' stroke-width='1.6' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center}
@@ -1431,9 +1433,12 @@ function paintP2PStatus(r){
     inner = '<div class="min-note" style="color:#22c55e">✅ '+brand+' complete</div>'
       + '<div class="copyhint" style="margin-top:8px">'+fmt(r.amount_usdt)+' USDT was added to your balance. You can start a trade now.</div>'
       + '<button class="btn" style="margin-top:10px" onclick="go(\'trade\')">Start Trading</button>';
-  } else if(r.status==='rejected'){
-    inner = '<div class="min-note" style="color:#ef4444">❌ '+brand+' was not confirmed</div>'
-      + '<div class="copyhint" style="margin-top:8px">Nothing was credited. You can start a new request or contact support.</div>';
+  } else if(r.status==='rejected' || r.status==='cancelled'){
+    const st = r.status==='cancelled' ? 'cancelled' : 'not confirmed';
+    inner = '<div class="min-note" style="color:#ef4444">🚫 '+brand+' was '+st+'</div>'
+      + (r.admin_note ? '<div class="p2p-reason"><b>Reason from the team</b><div>'+esc(r.admin_note)+'</div></div>' : '')
+      + '<div class="copyhint" style="margin-top:8px">Nothing was charged or credited. You can start a new request or contact support.</div>'
+      + '<button class="btn" style="margin-top:10px" onclick="p2pNewRequest()">Start a new request</button>';
   }
   box.innerHTML = '<div class="card">'+inner+'</div>';
   if(r.status==='approved'){ refreshState().catch(function(){}); }
@@ -1448,6 +1453,14 @@ function paintP2PHistory(list){
     return '<div class="row" onclick="showDepReceipt('+i+')"><span class="k">'+fmt(x.amount)+' '+esc(x.asset)+'<br>'+new Date(Number(x.created_at)).toLocaleDateString()+'</span><span><span class="badge '+x.status+'">'+x.status+'</span></span></div>';
   }).join('');
   el.innerHTML = p2pRows + cryptoRows || '<p class="copyhint">No deposits yet.</p>';
+}
+
+function p2pNewRequest(){
+  P2P_ACTIVE = null;
+  $('p2pStatusWrap').innerHTML = '';
+  $('p2pErr').textContent = '';
+  const box = $('depP2PBox');
+  if(box) box.scrollIntoView({block:'center'});
 }
 
 async function p2pMarkPaid(){

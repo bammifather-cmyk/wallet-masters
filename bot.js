@@ -552,6 +552,7 @@ const ADMIN_KEYBOARD = {
     [{ text: '➕ Add App',           callback_data: 'admin_add_app'            }, { text: '🗑 Remove App',        callback_data: 'admin_remove_app'         }],
     [{ text: '📢 Broadcast',         callback_data: 'admin_broadcast'          }, { text: '📊 Stats',             callback_data: 'admin_stats'              }],
     [{ text: '👑 Top Traders', callback_data: 'admin_toptraders' }],
+    [{ text: '⚡ Express Deposits', callback_data: 'admin_p2p' }],
     [{ text: '👥 All Users',         callback_data: 'admin_all_users'          }, { text: '💬 Support',           callback_data: 'admin_support'            }],
     [{ text: '📝 Poems',             callback_data: 'admin_poems'              }, { text: '🌟 SocialPay',         callback_data: 'admin_socialpay'          }],
     [{ text: 'Verifications',      callback_data: 'admin_verifications'      }, { text: '🚫 Manage Users',      callback_data: 'admin_manage_users'       }],
@@ -1481,6 +1482,34 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
     return;
   }
 
+  // ── Express deposits panel (Bammi, 2026-11-17) ──
+  if (data === 'admin_p2p') {
+    bot.answerCallbackQuery(cq.id).catch(()=>{});
+    await showP2PAdmin(chatId);
+    return;
+  }
+  if (data.startsWith('p2pview_')) {
+    bot.answerCallbackQuery(cq.id).catch(()=>{});
+    await showP2PDetail(chatId, data.split('_')[1]);
+    return;
+  }
+  if (data.startsWith('p2preason_')) {
+    const pid = data.split('_')[1];
+    const supa = getSupabase();
+    const { data: row } = await supa.from('oat_app_p2p_deposits').select('*').eq('id', pid).maybeSingle();
+    if (!row) return bot.answerCallbackQuery(cq.id, { text: 'Not found' });
+    if (['approved', 'rejected', 'cancelled'].includes(row.status)) return bot.answerCallbackQuery(cq.id, { text: 'Already closed' });
+    await p2pSetReasonFlow(chatId, pid, 'cancel').catch(()=>{});
+    bot.answerCallbackQuery(cq.id, { text: 'Send the reason' }).catch(()=>{});
+    bot.sendMessage(chatId,
+      `🚫 <b>Cancelling Express #${pid}</b>\n🆔 <code>${row.uid}</code> · ${fmtN(row.amount_usdt)} USDT\n\n`
+      + `Type the reason the user will see in the app and in their email.\n`
+      + `Example: <i>We cannot accept bank transfers from your country at the moment.</i>\n\n`
+      + `/skip uses a general reason. /stop aborts.`,
+      { parse_mode: 'HTML' }).catch(()=>{});
+    return;
+  }
+
   // ── Express (P2P) deposit: send payment details / confirm & credit / reject ──
   if (data.startsWith('p2pinfo_')) {
     const pid = data.split('_')[1];
@@ -1527,13 +1556,12 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
         ], null, 'approved').catch(()=>{});
       }
     } else {
-      await supa.from('oat_app_p2p_deposits').update({ status: 'rejected', reviewed_at: Date.now() }).eq('id', pid);
-      bot.answerCallbackQuery(cq.id, { text: 'Rejected' }).catch(()=>{});
-      botEditNotice(chatId, msgId, `❌ <b>Express Deposit #${pid} rejected</b>\n🆔 <code>${row.uid}</code>`);
-      notifyOATUserEmail(row.uid, 'Express deposit rejected', 'Express deposit rejected', [
-        `Your Express deposit request of ${fmtN(row.amount_usdt)} USDT could not be confirmed.`,
-        'No money was credited. Open the app to start a new request or contact support.'
-      ], null, 'rejected').catch(()=>{});
+      await p2pSetReasonFlow(chatId, pid, 'reject').catch(()=>{});
+      bot.answerCallbackQuery(cq.id, { text: 'Send the reason' }).catch(()=>{});
+      bot.sendMessage(chatId,
+        `❌ <b>Rejecting Express #${pid}</b>\n🆔 <code>${row.uid}</code> · ${fmtN(row.amount_usdt)} USDT\n\n`
+        + `Type the reason the user will see. /skip uses a general reason, /stop aborts.`,
+        { parse_mode: 'HTML' }).catch(()=>{});
     }
     return;
   }
@@ -2046,6 +2074,22 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
   if (!text) return; // no text - nothing to process below
   // Express payment details typed as text must win over EVERY command below, so a note
   // that happens to start with a command word can never trigger something else (Bammi, 2026-11-17).
+  // Reason for cancelling/rejecting an Express deposit (must run before other text handling).
+  if (await p2pGetReasonFlow(id).catch(()=>null)) {
+    const rf = await p2pGetReasonFlow(id).catch(()=>null);
+    if (/^\/stop$/i.test(text.trim())) {
+      await p2pClearReasonFlow(id).catch(()=>{});
+      bot.sendMessage(id, 'Cancelled. Nothing was changed on the request.').catch(()=>{});
+      return;
+    }
+    if (Date.now() - Number(rf.at) > 60 * 60 * 1000) {
+      await p2pClearReasonFlow(id).catch(()=>{});
+      bot.sendMessage(id, '⌛ That prompt expired. Tap Cancel with reason again.').catch(()=>{});
+      return;
+    }
+    const reason = /^\/skip$/i.test(text.trim()) ? null : text.trim().slice(0, 500);
+    return p2pApplyReason(id, rf, reason);
+  }
   if (oatP2PFlow.has(String(id)) || await p2pGetFlow(id).catch(()=>null)) {
     const flowT = oatP2PFlow.get(String(id)) || await p2pGetFlow(id).catch(()=>null);
     oatP2PFlow.delete(String(id));
@@ -3345,6 +3389,112 @@ function p2pCurSym(cur) {
   return ({ USD:'$', EUR:'€', GBP:'£', NGN:'₦', INR:'₹', KES:'KSh', GHS:'₵', ZAR:'R', BRL:'R$', PHP:'₱', IDR:'Rp',
             PKR:'₨', BDT:'৳', NGN:'₦', JPY:'¥', CNY:'¥', KRW:'₩', TRY:'₺', AED:'AED', SAR:'SAR', RUB:'₽', UAH:'₴',
             VND:'₫', THB:'฿', MYR:'RM', SGD:'S$', CAD:'C$', AUD:'A$', NZD:'NZ$', CHF:'CHF', SEK:'kr', NOK:'kr', DKK:'kr' })[cur] || (cur + ' ');
+}
+
+// ── Express deposits: admin panel screen (Bammi, 2026-11-17) ──────────────────
+// One button in the admin panel lists every open Express (bank/P2P) deposit, with
+// per-request actions: send details, confirm and credit, or cancel with a reason.
+async function showP2PAdmin(chatId) {
+  const supa = getSupabase();
+  const { data: rows } = await supa.from('oat_app_p2p_deposits')
+    .select('id,uid,country,currency,amount_usdt,local_amount,status,created_at')
+    .in('status', ['requested', 'details_sent', 'paid']).order('id', { ascending: false }).limit(25);
+  const list = rows || [];
+  if (!list.length) {
+    return bot.sendMessage(chatId, '⚡ <b>Express Deposits</b>\n\nNo pending requests right now.\n\n<i>Users see the Express option on the Deposit page. New requests appear here the moment they are sent.</i>',
+      { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD }).catch(()=>{});
+  }
+  const uids = list.map(r => r.uid);
+  const { data: us } = await supa.from('oat_app_users').select('uid, name').in('uid', uids);
+  const nameOf = {}; (us || []).forEach(u => { nameOf[u.uid] = u.name; });
+  const waiting = list.filter(r => r.status === 'requested').length;
+  const sent = list.filter(r => r.status === 'details_sent').length;
+  const claimed = list.filter(r => r.status === 'paid').length;
+  const total = list.reduce((n, r) => n + Number(r.amount_usdt || 0), 0);
+  const icon = st => st === 'paid' ? '💰' : st === 'details_sent' ? '📤' : '⏳';
+  const label = st => st === 'paid' ? 'PAID, verify' : st === 'details_sent' ? 'details sent' : 'waiting';
+  const kbRows = list.map(r => [{
+    text: `${icon(r.status)} #${r.id} ${nameOf[r.uid] || r.uid} · ${fmtN(r.amount_usdt)} USDT`,
+    callback_data: 'p2pview_' + r.id
+  }]);
+  kbRows.push([{ text: '🔄 Refresh', callback_data: 'admin_p2p' }]);
+  bot.sendMessage(chatId,
+    `⚡ <b>Express Deposits</b>\n\n`
+    + `⏳ Waiting: <b>${waiting}</b> · 📤 Details sent: <b>${sent}</b> · 💰 Paid, needs confirm: <b>${claimed}</b>\n`
+    + `💰 Total open: <b>${fmtN(total)} USDT</b>\n\nTap a request to open it.`,
+    { parse_mode: 'HTML', reply_markup: { inline_keyboard: kbRows } }).catch(()=>{});
+}
+
+async function showP2PDetail(chatId, id) {
+  const supa = getSupabase();
+  const { data: r } = await supa.from('oat_app_p2p_deposits').select('*').eq('id', id).maybeSingle();
+  if (!r) return bot.sendMessage(chatId, '❌ Request not found.').catch(()=>{});
+  const { data: ou } = await supa.from('oat_app_users').select('name, balance').eq('uid', r.uid).maybeSingle();
+  const st = r.status;
+  const closed = ['approved', 'rejected', 'cancelled'].includes(st);
+  const cap = `⚡ <b>Express Deposit #${r.id}</b>\n\n`
+    + `👤 ${oatEsc(ou ? ou.name : '')}\n🆔 <code>${r.uid}</code>\n`
+    + `🌍 ${oatEsc(r.country)} · ${r.currency}\n`
+    + `💰 ${fmtN(r.amount_usdt)} USDT ≈ ${p2pCurSym(r.currency)}${fmtN(r.local_amount)} ${r.currency}\n`
+    + `📌 Status: <b>${st}</b>\n`
+    + `🕒 ${new Date(Number(r.created_at)).toLocaleString('en-GB', { timeZone: 'Africa/Lagos' })} WAT\n`
+    + (ou ? `💳 Current balance: ${fmtN(ou.balance)} USDT\n` : '')
+    + (r.details_at ? `📤 Details sent: ${new Date(Number(r.details_at)).toLocaleString('en-GB', { timeZone: 'Africa/Lagos' })} WAT\n` : '')
+    + (r.user_note ? `📝 User note: ${oatEsc(r.user_note)}\n` : '')
+    + (r.admin_note ? `🗒 Team note: ${oatEsc(r.admin_note)}\n` : '');
+  const kb = closed
+    ? [[{ text: '⬅ Back to list', callback_data: 'admin_p2p' }]]
+    : [
+        [{ text: '📤 Send Payment Details', callback_data: 'p2pinfo_' + r.id }],
+        [{ text: '✅ Confirm & Credit', callback_data: 'p2pappr_' + r.id }],
+        [{ text: '🚫 Cancel with reason', callback_data: 'p2preason_' + r.id }],
+        [{ text: '⬅ Back to list', callback_data: 'admin_p2p' }]
+      ];
+  bot.sendMessage(chatId, cap, { parse_mode: 'HTML', reply_markup: { inline_keyboard: kb } }).catch(()=>{});
+}
+
+// Reason flow for cancelling/rejecting an Express deposit: the reason is stored on the
+// request and shown to the user in the app, and emailed to them.
+async function p2pSetReasonFlow(chatId, id, mode) {
+  const v = JSON.stringify({ id: Number(id), mode, at: Date.now() });
+  await getSupabase().from('app_settings').upsert({ key: 'p2preason_' + String(chatId), value: v }, { onConflict: 'key' });
+}
+async function p2pGetReasonFlow(chatId) {
+  try {
+    const { data } = await getSupabase().from('app_settings').select('value').eq('key', 'p2preason_' + String(chatId)).maybeSingle();
+    if (!data || !data.value) return null;
+    const j = JSON.parse(data.value);
+    return (j && j.id) ? j : null;
+  } catch (e) { return null; }
+}
+async function p2pClearReasonFlow(chatId) {
+  await getSupabase().from('app_settings').delete().eq('key', 'p2preason_' + String(chatId));
+}
+async function p2pApplyReason(chatId, flow, reason) {
+  const supa = getSupabase();
+  const { data: r } = await supa.from('oat_app_p2p_deposits').select('*').eq('id', flow.id).maybeSingle();
+  await p2pClearReasonFlow(chatId).catch(()=>{});
+  if (!r) return bot.sendMessage(chatId, '❌ Request not found.').catch(()=>{});
+  if (['approved', 'rejected', 'cancelled'].includes(r.status)) {
+    return bot.sendMessage(chatId, `ℹ️ Express #${r.id} is already ${r.status}.`).catch(()=>{});
+  }
+  const newStatus = flow.mode === 'reject' ? 'rejected' : 'cancelled';
+  const note = reason || (flow.mode === 'reject'
+    ? 'We could not confirm this payment. Nothing was charged to your account.'
+    : 'This Express deposit request was cancelled by the team. Nothing was charged to your account.');
+  await supa.from('oat_app_p2p_deposits').update({ status: newStatus, admin_note: note, reviewed_at: Date.now() }).eq('id', r.id);
+  bot.sendMessage(chatId,
+    `🚫 <b>Express #${r.id} ${newStatus}</b>\n🆔 <code>${r.uid}</code> · ${fmtN(r.amount_usdt)} USDT\n\n`
+    + `Reason sent to the user:\n<i>${oatEsc(note)}</i>`,
+    { parse_mode: 'HTML' }).catch(()=>{});
+  {
+    const dispAmt = await oatDisplayAmt(r.amount_usdt, r.uid);
+    notifyOATUserEmail(r.uid, 'Express deposit ' + newStatus, 'Express deposit ' + (newStatus === 'cancelled' ? 'cancelled' : 'not confirmed'), [
+      `Your Express deposit request of <b>${dispAmt}</b> (${r.currency} ${fmtN(r.local_amount)}) was ${newStatus === 'cancelled' ? 'cancelled' : 'not confirmed'}.`,
+      `<b>Reason:</b> ${note}`,
+      'Nothing was added to your balance. Open the app to start a new request or contact support.'
+    ], null, 'rejected').catch(()=>{});
+  }
 }
 
 // Notify the admin with one-tap buttons for a P2P request.
