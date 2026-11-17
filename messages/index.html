@@ -2,87 +2,157 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1">
-<meta name="theme-color" content="#0a0f1a">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#1e2015">
 <meta name="robots" content="noindex, nofollow">
 <title>Messages</title>
 <style>
+  /* Google Messages (dark, Material You olive palette) replica, matched to Bammi's screen recording */
   :root{
-    --bg:#05070d; --bg2:#0b1120; --card:#111a2b; --card2:#16223a; --line:#22304a;
-    --text:#eef2f9; --muted:#8fa0ba; --accent:#3b82f6; --gold:#f5c107; --ok:#22c55e; --red:#ef4444;
+    --bg:#0f1106; --surf:#1e2015; --surf2:#292b1e; --surf3:#33362a; --line:#35382a;
+    --text:#e4e3d3; --muted:#c7c8b5; --dim:#909181; --pri:#c5cf6b; --priOn:#2b3300; --fab:#c5cf6b;
+    --bub:#2d3023; --bubOn:#e4e3d3; --badge:#c5cf6b; --badgeOn:#2b3300; --link:#a9d1e5; --red:#ffb4ab;
   }
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-  body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;min-height:100vh;overflow-x:hidden}
-  .screen{display:none;min-height:100vh;flex-direction:column}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--text);font-family:"Google Sans","Product Sans",Roboto,"Segoe UI",system-ui,sans-serif;overflow:hidden;-webkit-font-smoothing:antialiased}
+  .screen{display:none;position:fixed;inset:0;flex-direction:column;background:var(--bg)}
   .screen.on{display:flex}
+  svg{display:block}
+  .ico{width:24px;height:24px;fill:currentColor}
 
-  /* ── top bar ── */
-  .bar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:12px;padding:14px 16px;background:rgba(10,15,26,.94);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
-  .bar h1{font-size:17px;font-weight:800;flex:1}
-  .bar .sub{font-size:11.5px;color:var(--muted);font-weight:600}
-  .iconbtn{width:36px;height:36px;border-radius:10px;background:var(--card);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:0 0 auto}
-  .iconbtn:active{transform:scale(.96)}
-  .badge{background:var(--red);color:#fff;font-size:10.5px;font-weight:800;border-radius:999px;padding:1px 6px;margin-left:6px}
-
-  /* ── login ── */
-  .login{padding:34px 22px;max-width:440px;margin:0 auto;width:100%}
-  .logo{width:64px;height:64px;border-radius:18px;background:linear-gradient(160deg,#1d4ed8,#0b1120);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;border:1px solid var(--line)}
-  .login h2{font-size:22px;font-weight:900;text-align:center;margin-bottom:6px}
-  .login p{color:var(--muted);font-size:13.5px;text-align:center;line-height:1.6;margin-bottom:22px}
-  label{display:block;font-size:11px;font-weight:800;letter-spacing:.7px;text-transform:uppercase;color:var(--muted);margin:14px 0 6px}
-  input,textarea,select{width:100%;background:var(--card2);border:1px solid var(--line);border-radius:12px;color:var(--text);font-size:15px;padding:13px 14px;outline:none;font-family:inherit}
-  textarea{min-height:96px;resize:vertical;line-height:1.55;font-size:13.5px}
-  input:focus,textarea:focus{border-color:var(--accent)}
-  .btn{width:100%;margin-top:18px;background:linear-gradient(180deg,#3b82f6,#1d4ed8);color:#fff;font-weight:800;font-size:15px;border:0;border-radius:13px;padding:15px;cursor:pointer}
+  /* ───────── login ───────── */
+  .login{margin:auto;width:100%;max-width:420px;padding:28px 24px}
+  .lg-logo{width:76px;height:76px;border-radius:24px;background:var(--pri);display:flex;align-items:center;justify-content:center;margin:0 auto 20px}
+  .login h2{font-size:26px;font-weight:500;text-align:center;margin-bottom:8px}
+  .login p{color:var(--muted);font-size:14px;text-align:center;line-height:1.55;margin-bottom:26px}
+  .field{display:block;font-size:12px;color:var(--muted);margin:14px 0 6px;letter-spacing:.2px}
+  input,textarea,select{width:100%;background:var(--surf);border:1px solid var(--line);border-radius:14px;color:var(--text);font-size:16px;padding:14px 16px;outline:none;font-family:inherit}
+  textarea{min-height:96px;resize:vertical;line-height:1.5;font-size:14.5px}
+  input:focus,textarea:focus{border-color:var(--pri)}
+  .btn{width:100%;margin-top:20px;background:var(--pri);color:var(--priOn);font-weight:600;font-size:15px;border:0;border-radius:99px;padding:15px;cursor:pointer;font-family:inherit}
   .btn:active{transform:scale(.99)}
   .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--text);margin-top:10px}
-  .err{color:#f87171;font-size:12.5px;margin-top:10px;min-height:16px}
+  .err{color:var(--red);font-size:13px;margin-top:10px;min-height:16px;text-align:center}
 
-  /* ── inbox ── */
-  .inbox{flex:1;overflow-y:auto;padding-bottom:20px}
-  .row{display:flex;gap:13px;padding:15px 16px;border-bottom:1px solid rgba(34,48,74,.55);cursor:pointer;align-items:center}
-  .row:active{background:var(--bg2)}
-  .av{width:46px;height:46px;border-radius:50%;background:linear-gradient(160deg,#1d4ed8,#0b1120);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:17px;flex:0 0 auto;border:1px solid var(--line)}
-  .rmain{flex:1;min-width:0}
-  .rtop{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
-  .rname{font-weight:800;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .rtime{font-size:11px;color:var(--muted);flex:0 0 auto}
-  .rprev{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:3px}
-  .unread .rname{color:#fff}
-  .dot{width:9px;height:9px;border-radius:50%;background:var(--accent);flex:0 0 auto}
-  .empty{padding:60px 26px;text-align:center;color:var(--muted);font-size:13.5px;line-height:1.7}
+  /* ───────── status-bar spacer + app bar ───────── */
+  .topspace{height:env(safe-area-inset-top,0)}
+  .appbar{display:flex;align-items:center;gap:6px;padding:14px 16px 10px 20px;background:var(--bg)}
+  .appbar .title{font-size:25px;font-weight:400;letter-spacing:-.2px;flex:1;display:flex;align-items:center;gap:0}
+  .appbar .title b{font-weight:400}
+  .abtn{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--text);cursor:pointer;flex:0 0 auto}
+  .abtn:active{background:rgba(255,255,255,.1)}
+  .me{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#d9b36a,#5f7a9b);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:15px;color:#fff;margin-left:2px;cursor:pointer;flex:0 0 auto;border:2px solid rgba(255,255,255,.08)}
 
-  /* ── thread ── */
-  .thread{flex:1;overflow-y:auto;padding:18px 14px 30px;display:flex;flex-direction:column;gap:10px;background:var(--bg)}
-  .daysep{align-self:center;font-size:11px;color:var(--muted);background:var(--card);border:1px solid var(--line);border-radius:999px;padding:4px 12px;margin:6px 0}
-  .bubble{max-width:82%;background:var(--card);border:1px solid var(--line);border-radius:16px 16px 16px 5px;padding:11px 14px;font-size:13.5px;line-height:1.55;align-self:flex-start;word-break:break-word}
-  .bubble .meta{display:block;font-size:10.5px;color:var(--muted);margin-top:7px;letter-spacing:.3px}
-  .bubble.new{animation:pop .35s ease}
-  @keyframes pop{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  /* ───────── selection bar ───────── */
+  .selbar{display:none;align-items:center;gap:4px;padding:14px 8px 10px 8px;background:var(--surf2)}
+  .selbar.on{display:flex}
+  .selbar .count{font-size:20px;flex:1;margin-left:6px}
 
-  /* ── settings sheet ── */
-  .sheet{position:fixed;inset:0;z-index:60;display:none;align-items:flex-end;background:rgba(0,0,0,.55);backdrop-filter:blur(3px)}
+  /* ───────── search ───────── */
+  .searchwrap{display:none;padding:12px 14px 8px}
+  .searchwrap.on{display:block}
+  .searchbox{display:flex;align-items:center;gap:10px;background:var(--surf2);border-radius:99px;padding:6px 8px 6px 6px}
+  .searchbox input{background:transparent;border:0;padding:10px 4px;font-size:16px;border-radius:0}
+
+  /* ───────── list ───────── */
+  .chiprow{display:flex;gap:8px;padding:2px 16px 10px;overflow-x:auto;scrollbar-width:none}
+  .chiprow::-webkit-scrollbar{display:none}
+  .fchip{flex:0 0 auto;padding:8px 16px;border-radius:99px;border:1px solid var(--line);font-size:13.5px;color:var(--muted);cursor:pointer;white-space:nowrap}
+  .fchip.on{background:var(--pri);color:var(--priOn);border-color:var(--pri);font-weight:500}
+  .list{flex:1;overflow-y:auto;padding:2px 0 130px;-webkit-overflow-scrolling:touch}
+  .conv{display:flex;align-items:center;gap:16px;padding:12px 18px;cursor:pointer;position:relative;user-select:none;-webkit-user-select:none}
+  .conv:active{background:rgba(255,255,255,.05)}
+  .conv.sel{background:rgba(197,207,107,.14)}
+  .av{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:0 0 auto;position:relative;color:#fff}
+  .av svg{width:30px;height:30px;fill:#1a1b10;opacity:.82}
+  .av .tick{display:none;position:absolute;inset:0;border-radius:50%;background:var(--pri);align-items:center;justify-content:center}
+  .av .tick svg{fill:var(--priOn);opacity:1;width:26px;height:26px}
+  .conv.sel .av .tick{display:flex}
+  .cmain{flex:1;min-width:0}
+  .ctop{display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .cname{font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:6px}
+  .ver{width:17px;height:17px;flex:0 0 auto}
+  .ctime{font-size:13px;color:var(--muted);flex:0 0 auto}
+  .cbot{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:2px}
+  .cprev{font-size:15px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.35;flex:1;min-width:0}
+  .conv.unread .cname{font-weight:700}
+  .conv.unread .cprev{color:var(--text)}
+  .conv.unread .ctime{color:var(--text);font-weight:600}
+  .cbadge{background:var(--badge);color:var(--badgeOn);font-size:12.5px;font-weight:700;border-radius:99px;min-width:24px;height:24px;display:flex;align-items:center;justify-content:center;padding:0 7px;flex:0 0 auto}
+  .empty{padding:90px 30px;text-align:center;color:var(--muted);font-size:15px;line-height:1.6}
+  .empty .big{width:84px;height:84px;margin:0 auto 18px;border-radius:50%;background:var(--surf2);display:flex;align-items:center;justify-content:center}
+  .empty .big svg{width:42px;height:42px;fill:var(--dim)}
+
+  /* ───────── floating buttons ───────── */
+  .fabs{position:fixed;right:18px;bottom:max(24px,env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:14px;align-items:flex-end;z-index:30}
+  .fab-ai{width:56px;height:56px;border-radius:18px;background:var(--surf3);display:flex;align-items:center;justify-content:center;color:#a9c7ff;box-shadow:0 3px 10px rgba(0,0,0,.4);cursor:pointer}
+  .fab{height:56px;min-width:56px;border-radius:18px;background:var(--fab);color:var(--priOn);display:flex;align-items:center;justify-content:center;gap:12px;padding:0 20px;font-size:16px;font-weight:500;box-shadow:0 4px 12px rgba(0,0,0,.45);cursor:pointer;transition:all .22s ease;overflow:hidden}
+  .fab.mini{width:56px;padding:0}
+  .fab .lbl{white-space:nowrap;max-width:120px;transition:max-width .22s,opacity .22s}
+  .fab.mini .lbl{max-width:0;opacity:0}
+  .fab:active{transform:scale(.97)}
+  .upfab{position:fixed;left:50%;bottom:30px;transform:translateX(-50%) scale(.6);width:46px;height:46px;border-radius:50%;background:var(--surf3);display:flex;align-items:center;justify-content:center;box-shadow:0 3px 10px rgba(0,0,0,.45);opacity:0;pointer-events:none;transition:all .2s;z-index:29;cursor:pointer}
+  .upfab.on{opacity:1;pointer-events:auto;transform:translateX(-50%) scale(1)}
+
+  /* ───────── thread ───────── */
+  .thbar{display:flex;align-items:center;gap:4px;padding:12px 6px 10px 6px;background:var(--bg)}
+  .thbar .av{width:42px;height:42px;margin-left:2px}
+  .thbar .av svg{width:24px;height:24px}
+  .thbar .nm{flex:1;font-size:21px;margin-left:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:6px}
+  .thread{flex:1;overflow-y:auto;padding:6px 12px 24px;display:flex;flex-direction:column;-webkit-overflow-scrolling:touch}
+  .daysep{align-self:center;font-size:13px;color:var(--muted);margin:18px 0 12px}
+  .bubwrap{display:flex;flex-direction:column;align-items:flex-start;margin-top:3px;max-width:92%}
+  .bubble{background:var(--bub);color:var(--bubOn);border-radius:6px 22px 22px 22px;padding:14px 18px;font-size:16.5px;line-height:1.5;word-break:break-word;white-space:pre-wrap}
+  .bubble.first{border-radius:22px 22px 22px 6px}
+  .bubwrap.first-of-run .bubble{border-top-left-radius:22px}
+  .bubwrap.last-of-run .bubble{border-bottom-left-radius:22px}
+  .bubwrap.sel .bubble{background:#4a4f31;outline:2px solid var(--pri)}
+  .bubble u,.bubble a{color:var(--link);text-decoration:underline}
+  .carrier{font-size:12.5px;color:#c8a8ff;margin:5px 0 8px 14px;display:flex;align-items:center;gap:5px}
+  .carrier i{font-style:normal;color:#c8a8ff}
+  .cantreply{margin:18px 10px 0;background:var(--surf);border-radius:30px 30px 0 0;padding:22px 24px calc(26px + env(safe-area-inset-bottom,0));text-align:center;font-size:15.5px;color:var(--muted);line-height:1.5}
+  .cantreply a{color:var(--link);text-decoration:underline;cursor:pointer}
+  .newtag{animation:pop .35s ease}
+  @keyframes pop{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+  /* ───────── menus / dialogs / sheets ───────── */
+  .scrim{position:fixed;inset:0;z-index:70;display:none;background:rgba(0,0,0,.5)}
+  .scrim.on{display:block}
+  .menu{position:fixed;top:64px;right:14px;z-index:71;min-width:230px;background:var(--surf2);border-radius:16px;padding:8px 0;display:none;box-shadow:0 8px 28px rgba(0,0,0,.55)}
+  .menu.on{display:block}
+  .menu div{padding:14px 22px;font-size:16px;cursor:pointer}
+  .menu div:active{background:rgba(255,255,255,.07)}
+  .dlg{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:80;width:min(86vw,360px);background:var(--surf2);border-radius:28px;padding:26px 24px 18px;display:none}
+  .dlg.on{display:block}
+  .dlg h3{font-size:22px;font-weight:400;margin-bottom:12px}
+  .dlg p{font-size:15px;color:var(--muted);line-height:1.5}
+  .dlg .acts{display:flex;justify-content:flex-end;gap:6px;margin-top:22px}
+  .dlg .acts span{padding:10px 16px;border-radius:99px;color:var(--pri);font-weight:500;font-size:15px;cursor:pointer}
+  .dlg .acts span:active{background:rgba(197,207,107,.14)}
+
+  .sheet{position:fixed;inset:0;z-index:60;display:none;align-items:flex-end;background:rgba(0,0,0,.55)}
   .sheet.on{display:flex}
-  .sheetbox{width:100%;max-height:92vh;overflow-y:auto;background:var(--bg2);border-radius:22px 22px 0 0;border-top:1px solid var(--line);padding:20px 18px 30px}
-  .sheetbox h3{font-size:16px;font-weight:900;margin-bottom:4px}
-  .sheetbox .hint{font-size:12px;color:var(--muted);line-height:1.6}
-  .grab{width:44px;height:4px;border-radius:99px;background:var(--line);margin:0 auto 16px}
-  .chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px}
-  .chip{background:var(--card2);border:1px solid var(--line);border-radius:999px;padding:6px 11px;font-size:11.5px;font-weight:700;color:#bcd0ea;cursor:pointer}
-  .chip:active{background:#1c2b45}
-  .switch{display:flex;align-items:center;justify-content:space-between;margin-top:16px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:13px 14px}
-  .switch span{font-size:13.5px;font-weight:700}
-  .tg{width:46px;height:26px;border-radius:99px;background:#2a3853;position:relative;transition:background .2s;cursor:pointer;flex:0 0 auto}
-  .tg::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:left .2s}
-  .tg.on{background:var(--ok)}
-  .tg.on::after{left:23px}
-  .preview{margin-top:14px;background:var(--card);border:1px dashed var(--line);border-radius:14px;padding:12px 14px}
-  .preview .plabel{font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;font-weight:800}
-  .snum{display:flex;gap:10px;margin:14px 0 3px}
+  .sheetbox{width:100%;max-height:94vh;overflow-y:auto;background:var(--surf);border-radius:28px 28px 0 0;padding:14px 20px 34px}
+  .grab{width:36px;height:4px;border-radius:99px;background:var(--dim);margin:0 auto 18px;opacity:.6}
+  .sheetbox h3{font-size:22px;font-weight:400;margin-bottom:6px}
+  .sheetbox .hint{font-size:13.5px;color:var(--muted);line-height:1.55}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  .chip{background:var(--surf3);border-radius:99px;padding:8px 14px;font-size:13px;color:var(--text);cursor:pointer}
+  .chip:active{background:var(--pri);color:var(--priOn)}
+  .switch{display:flex;align-items:center;justify-content:space-between;margin-top:18px;background:var(--surf2);border-radius:18px;padding:16px 18px}
+  .switch span{font-size:15.5px}
+  .tg{width:52px;height:30px;border-radius:99px;background:#46483a;position:relative;transition:background .2s;cursor:pointer;flex:0 0 auto;border:2px solid #6f7160}
+  .tg::after{content:"";position:absolute;top:4px;left:5px;width:16px;height:16px;border-radius:50%;background:#a3a493;transition:all .2s}
+  .tg.on{background:var(--pri);border-color:var(--pri)}
+  .tg.on::after{left:26px;width:20px;height:20px;top:2px;background:var(--priOn)}
+  .preview{margin-top:16px;background:var(--bg);border-radius:18px;padding:14px 16px}
+  .preview .pl{font-size:12px;color:var(--muted);margin-bottom:8px;letter-spacing:.3px}
+  .preview .pb{background:var(--bub);border-radius:20px 20px 20px 6px;padding:13px 16px;font-size:15px;line-height:1.5;display:inline-block;max-width:100%}
+  .snum{display:flex;gap:10px}
   .snum input{flex:1}
-  .toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,140%);background:#16223a;border:1px solid var(--line);color:#fff;padding:12px 18px;border-radius:12px;font-size:13px;font-weight:700;z-index:99;transition:transform .3s;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+  .toast{position:fixed;left:50%;bottom:30px;transform:translate(-50%,160%);background:#e4e3d3;color:#1a1b10;padding:14px 22px;border-radius:14px;font-size:14.5px;z-index:99;transition:transform .3s;box-shadow:0 8px 24px rgba(0,0,0,.5);max-width:86vw}
   .toast.on{transform:translate(-50%,0)}
-  .foot{text-align:center;font-size:11px;color:#5d6d86;padding:16px 20px 26px;line-height:1.6}
 </style>
 </head>
 <body>
@@ -90,306 +160,496 @@
 <!-- ══════════ LOGIN ══════════ -->
 <div id="scrLogin" class="screen on">
   <div class="login">
-    <div class="logo">
-      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#dbeafe" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9 9 0 0 1-3.9-.9L3 21l1.9-4.1A8.4 8.4 0 0 1 12 3.1a8.4 8.4 0 0 1 9 8.4z"/>
-      </svg>
-    </div>
+    <div class="lg-logo"><svg viewBox="0 0 24 24" width="42" height="42" fill="#2b3300"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 9h12v2H6V9zm8 5H6v-2h8v2zm4-6H6V6h12v2z"/></svg></div>
     <h2>Messages</h2>
-    <p>Connect your OAT Trades UID to receive SMS alerts for your transactions.</p>
-    <label>OAT Trades UID</label>
+    <p>Connect your OAT Trades UID to start receiving your transaction alerts here.</p>
+    <label class="field" for="uidIn">OAT Trades UID</label>
     <input id="uidIn" placeholder="OA-XXXXXX" autocapitalize="characters" autocomplete="off">
-    <div class="err" id="loginErr"></div>
+    <div id="loginErr" class="err"></div>
     <button class="btn" onclick="doLogin()">Connect</button>
-    <div class="foot">Your UID is on your OAT Trades profile, next to your name.</div>
   </div>
 </div>
 
 <!-- ══════════ INBOX ══════════ -->
 <div id="scrInbox" class="screen">
-  <div class="bar">
-    <h1>Messages</h1>
-    <div class="iconbtn" onclick="openSettings()" title="Settings">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#c7d6ec" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>
-    </div>
-    <div class="iconbtn" onclick="logout()" title="Disconnect">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#c7d6ec" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
+  <div class="topspace"></div>
+  <div id="normalBar" class="appbar">
+    <div class="title" id="titleTxt">Messages</div>
+    <div class="abtn" onclick="toggleSearch()" aria-label="Search"><svg class="ico" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg></div>
+    <div class="me" id="meBtn" onclick="openMenu()">B</div>
+  </div>
+  <div id="selBar" class="selbar">
+    <div class="abtn" onclick="clearSel()"><svg class="ico" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></div>
+    <div class="count" id="selCount">1</div>
+    <div class="abtn" onclick="selAll()" title="Select all"><svg class="ico" viewBox="0 0 24 24"><path d="M3 5h2V3c-1.1 0-2 .9-2 2zm0 8h2v-2H3v2zm4 8h2v-2H7v2zM3 9h2V7H3v2zm10-6h-2v2h2V3zm6 0v2h2c0-1.1-.9-2-2-2zM5 21v-2H3c0 1.1.9 2 2 2zm-2-4h2v-2H3v2zM9 3H7v2h2V3zm2 18h2v-2h-2v2zm8-8h2v-2h-2v2zm0 8c1.1 0 2-.9 2-2h-2v2zm0-12h2V7h-2v2zm0 8h2v-2h-2v2zm-4 4h2v-2h-2v2zm0-16h2V3h-2v2zM7 17h10V7H7v10zm2-8h6v6H9V9z"/></svg></div>
+    <div class="abtn" onclick="askDelete()" title="Delete"><svg class="ico" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg></div>
+    <div class="abtn" onclick="markSelRead()" title="Mark as read"><svg class="ico" viewBox="0 0 24 24"><path d="M18 7l-1.41-1.41-6.34 6.34 1.41 1.41L18 7zm4.24-1.41L11.66 16.17 7.48 12l-1.41 1.41L11.66 19l12-12-1.42-1.41zM.41 13.41L6 19l1.41-1.41L1.83 12 .41 13.41z"/></svg></div>
+  </div>
+  <div id="searchWrap" class="searchwrap">
+    <div class="searchbox">
+      <div class="abtn" onclick="toggleSearch()"><svg class="ico" viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></div>
+      <input id="searchIn" placeholder="Search conversations" oninput="renderInbox()">
     </div>
   </div>
-  <div class="inbox" id="inbox"></div>
-  <div class="foot" id="inboxFoot"></div>
+  <div class="chiprow" id="chipRow">
+    <div class="fchip on" data-f="all" onclick="setFilter('all')">All</div>
+    <div class="fchip" data-f="unread" onclick="setFilter('unread')">Unread</div>
+    <div class="fchip" data-f="starred" onclick="setFilter('starred')">Starred</div>
+  </div>
+  <div class="list" id="list" onscroll="onListScroll()"></div>
+
+  <div class="fabs">
+    <div class="fab-ai" onclick="aiTap()" title="Assistant"><svg class="ico" viewBox="0 0 24 24" style="width:26px;height:26px"><path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4z"/></svg></div>
+    <div class="fab" id="fab" onclick="startChat()"><svg class="ico" viewBox="0 0 24 24" style="width:26px;height:26px"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/></svg><span class="lbl">Start chat</span></div>
+  </div>
+  <div class="upfab" id="upfab" onclick="scrollTopList()"><svg class="ico" viewBox="0 0 24 24" style="fill:#e4e3d3"><path d="M4 12l1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8-8 8z"/></svg></div>
 </div>
 
 <!-- ══════════ THREAD ══════════ -->
 <div id="scrThread" class="screen">
-  <div class="bar">
-    <div class="iconbtn" onclick="closeThread()">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#c7d6ec" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
-    </div>
-    <div style="flex:1">
-      <h1 id="thSender" style="font-size:15px">OAT TRADES</h1>
-      <div class="sub">SMS</div>
-    </div>
+  <div class="topspace"></div>
+  <div id="thNormal" class="thbar">
+    <div class="abtn" onclick="closeThread()"><svg class="ico" viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></div>
+    <div class="av" id="thAv"></div>
+    <div class="nm" id="thName"></div>
+    <div class="abtn" onclick="openThMenu()"><svg class="ico" viewBox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg></div>
+  </div>
+  <div id="thSel" class="selbar">
+    <div class="abtn" onclick="clearBubSel()"><svg class="ico" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></div>
+    <div class="count" id="thSelCount">1</div>
+    <div class="abtn" onclick="copyBub()" title="Copy"><svg class="ico" viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg></div>
+    <div class="abtn" onclick="starBub()" title="Star"><svg class="ico" viewBox="0 0 24 24"><path d="M22 9.24l-7.19-.62L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27 18.18 21l-1.63-7.03L22 9.24zM12 15.4l-3.76 2.27 1-4.28-3.32-2.88 4.38-.38L12 6.1l1.71 4.04 4.38.38-3.32 2.88 1 4.28L12 15.4z"/></svg></div>
+    <div class="abtn" onclick="askDeleteBub()" title="Delete"><svg class="ico" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg></div>
   </div>
   <div class="thread" id="thread"></div>
+  <div class="cantreply">Sender can't accept replies. Contact them directly. <a onclick="toast('This sender is automated and does not take replies')">Learn more</a></div>
 </div>
 
-<!-- ══════════ SETTINGS ══════════ -->
+<!-- menus & dialogs -->
+<div class="scrim" id="scrim" onclick="closeOverlays()"></div>
+<div class="menu" id="mainMenu">
+  <div onclick="openSettings()">Sender &amp; alert settings</div>
+  <div onclick="markAllRead()">Mark all as read</div>
+  <div onclick="sendTest()">Send a test SMS</div>
+  <div onclick="logout()">Disconnect</div>
+</div>
+<div class="menu" id="thMenu">
+  <div onclick="menuDeleteConv()">Delete</div>
+  <div onclick="menuMarkUnread()">Mark as unread</div>
+  <div onclick="menuStarLast()">Star latest message</div>
+</div>
+<div class="dlg" id="dlg">
+  <h3 id="dlgTitle">Delete?</h3>
+  <p id="dlgText"></p>
+  <div class="acts"><span onclick="closeOverlays()">Cancel</span><span id="dlgOk">Delete</span></div>
+</div>
+
+<!-- settings sheet -->
 <div class="sheet" id="sheet" onclick="if(event.target===this)closeSettings()">
   <div class="sheetbox">
     <div class="grab"></div>
-    <h3>SMS settings</h3>
-    <p class="hint">Choose the sender name and exactly how each alert reads. Tap a tag to drop it into the message.</p>
+    <h3>Your SMS alerts</h3>
+    <div class="hint">You decide how your transaction alerts look. They arrive here automatically after an approval, just like a bank alert.</div>
 
-    <label>Sender name</label>
-    <input id="setSender" maxlength="32" placeholder="OAT TRADES">
+    <label class="field">Sender name</label>
+    <input id="setSender" maxlength="32" placeholder="e.g. OAT TRADES" oninput="updatePreview()">
 
-    <label>Withdrawal alert</label>
-    <textarea id="setWdTpl" maxlength="600"></textarea>
-    <div class="chips">
-      <div class="chip" onclick="insTag('setWdTpl','{sender}')">{sender}</div>
-      <div class="chip" onclick="insTag('setWdTpl','{amount}')">{amount}</div>
-      <div class="chip" onclick="insTag('setWdTpl','{dest}')">{dest}</div>
-      <div class="chip" onclick="insTag('setWdTpl','{ref}')">{ref}</div>
-      <div class="chip" onclick="insTag('setWdTpl','{date}')">{date}</div>
-      <div class="chip" onclick="insTag('setWdTpl','{time}')">{time}</div>
-    </div>
+    <label class="field">Network shown under each message</label>
+    <input id="setCarrier" maxlength="24" placeholder="e.g. MTN NG, Airtel, Glo, 9mobile" oninput="updatePreview()">
 
-    <label>Deposit alert</label>
-    <textarea id="setDepTpl" maxlength="600"></textarea>
-    <div class="chips">
-      <div class="chip" onclick="insTag('setDepTpl','{sender}')">{sender}</div>
-      <div class="chip" onclick="insTag('setDepTpl','{amount}')">{amount}</div>
-      <div class="chip" onclick="insTag('setDepTpl','{balance}')">{balance}</div>
-      <div class="chip" onclick="insTag('setDepTpl','{ref}')">{ref}</div>
-      <div class="chip" onclick="insTag('setDepTpl','{date}')">{date}</div>
-    </div>
+    <label class="field">Withdrawal SMS wording</label>
+    <textarea id="setWdTpl" oninput="updatePreview()"></textarea>
+    <div class="chips" id="chipsWd"></div>
 
-    <label>Delivery delay (minutes)</label>
+    <label class="field">Deposit SMS wording</label>
+    <textarea id="setDepTpl" style="min-height:76px"></textarea>
+    <div class="chips" id="chipsDep"></div>
+
+    <label class="field">Delivery delay (minutes after approval)</label>
     <div class="snum">
-      <input id="setDelay" type="number" min="0" max="60" step="1" placeholder="3">
-      <button class="btn ghost" style="margin:0;width:auto;padding:13px 16px;font-size:13px" onclick="setDelay(0)">Instant</button>
-      <button class="btn ghost" style="margin:0;width:auto;padding:13px 16px;font-size:13px" onclick="setDelay(3)">3 min</button>
+      <input id="setDelay" type="number" min="0" max="60" inputmode="numeric">
+      <div class="chip" onclick="setDelay(0)">Instant</div>
+      <div class="chip" onclick="setDelay(3)">3 min</div>
+      <div class="chip" onclick="setDelay(5)">5 min</div>
     </div>
 
-    <div class="switch" onclick="toggleEnabled()">
-      <span>SMS alerts <span id="setState" style="color:var(--muted);font-weight:600"></span></span>
-      <div class="tg" id="tgEnabled"></div>
-    </div>
+    <div class="switch"><span>SMS alerts on</span><div class="tg on" id="tgEnabled" onclick="toggleEnabled()"></div></div>
 
-    <div class="preview">
-      <div class="plabel">Preview</div>
-      <div id="previewBody" style="font-size:13px;line-height:1.6"></div>
-    </div>
+    <div class="preview"><div class="pl">Preview</div><div class="pb" id="previewBody"></div></div>
 
-    <button class="btn" onclick="saveSettings()">Save settings</button>
-    <button class="btn ghost" onclick="sendTest()">Send a test SMS</button>
+    <button class="btn" onclick="saveSettings()">Save</button>
     <button class="btn ghost" onclick="closeSettings()">Close</button>
   </div>
 </div>
-
 <div class="toast" id="toast"></div>
 
 <script>
 const API = location.origin;
-let SESSION = null, POLL = null, LAST_TOP_ID = null, ENABLED = true, OPEN = false;
-
 const $ = id => document.getElementById(id);
-function esc(s){ return String(s||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
-function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('on'); clearTimeout(window._tt); window._tt=setTimeout(()=>t.classList.remove('on'),2600); }
+let UID = localStorage.getItem('sms_uid') || '';
+let USER = null, SET = null, MSGS = [], UNREAD = 0;
+let OPEN_SENDER = null, FILTER = 'all', SELECTED = new Set(), BUBSEL = new Set(), POLL = null, KNOWN = new Set();
+let ENABLED = true, PENDING_DEL = null;
+
+const AV_COLORS = ['#e46bb4','#f98b6b','#a86ce8','#5fc9e8','#7dc96b','#e8c04a','#4fb3a3','#6e93e8','#e86b7d','#9bd35a','#e88a3c','#b07ae8'];
+const TAGS = ['{sender}','{amount}','{dest}','{ref}','{balance}','{date}','{time}'];
+const ICON_PERSON = '<svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>';
+const ICON_TICK = '<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
+const ICON_VER = '<svg class="ver" viewBox="0 0 24 24"><path fill="#8b8d75" d="M23 12l-2.44-2.79.34-3.69-3.61-.82-1.89-3.2L12 2.96 8.6 1.5 6.71 4.69 3.1 5.5l.34 3.7L1 12l2.44 2.79-.34 3.7 3.61.82L8.6 22.5l3.4-1.47 3.4 1.46 1.89-3.19 3.61-.82-.34-3.69L23 12zm-12.91 4.72l-3.8-3.81 1.48-1.48 2.32 2.33 5.85-5.87 1.48 1.48-7.33 7.35z"/></svg>';
+
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('on'); clearTimeout(window._tt); window._tt=setTimeout(()=>t.classList.remove('on'),2400); }
 async function post(path, body){
-  const r = await fetch(API+path, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body||{})});
+  const r = await fetch(API + path, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body||{}) });
   return r.json();
 }
-function show(id){ ['scrLogin','scrInbox','scrThread'].forEach(x=>$(x).classList.toggle('on', x===id)); }
+function show(id){ ['scrLogin','scrInbox','scrThread'].forEach(x => $(x).classList.toggle('on', x===id)); }
+function colorFor(name){ let h=0; for(const c of String(name)) h=(h*31+c.charCodeAt(0))>>>0; return AV_COLORS[h % AV_COLORS.length]; }
+function avatarHtml(name){
+  const c = colorFor(name);
+  return '<div class="av" style="background:'+c+'">'+ICON_PERSON+'<div class="tick">'+ICON_TICK+'</div></div>';
+}
 
-/* ───────── login ───────── */
+/* ───────── login / session ───────── */
 async function doLogin(){
   const uid = $('uidIn').value.trim().toUpperCase();
   $('loginErr').textContent = '';
   if(!uid) return $('loginErr').textContent = 'Enter your OAT Trades UID.';
-  const d = await post('/api/sms/session', {uid});
+  const d = await post('/api/sms/session', { uid });
   if(!d.success) return $('loginErr').textContent = d.error || 'Could not connect.';
-  localStorage.setItem('oat_sms_uid', uid);
+  UID = uid; localStorage.setItem('sms_uid', uid);
   boot(d);
 }
 function logout(){
-  localStorage.removeItem('oat_sms_uid');
-  SESSION = null; clearInterval(POLL);
+  closeOverlays();
+  localStorage.removeItem('sms_uid'); UID=''; clearInterval(POLL); KNOWN = new Set();
   show('scrLogin');
 }
 function boot(d){
-  SESSION = d;
-  ENABLED = d.settings.enabled !== false;
-  LAST_TOP_ID = d.messages.length ? d.messages[0].id : null;
-  show('scrInbox');
-  renderInbox();
-  if(!POLL) POLL = setInterval(refresh, 15000);
+  USER = d.user; SET = d.settings; ENABLED = SET.enabled !== false;
+  $('meBtn').textContent = (USER.name||'B').trim().charAt(0).toUpperCase();
+  absorb(d, true);
+  show('scrInbox'); renderInbox();
+  clearInterval(POLL); POLL = setInterval(refresh, 8000);
+}
+function absorb(d, first){
+  const fresh = [];
+  (d.messages||[]).forEach(m => { if(!KNOWN.has(m.id)){ KNOWN.add(m.id); if(!first) fresh.push(m); } });
+  MSGS = d.messages || []; UNREAD = d.unread || 0;
+  SET = d.settings || SET;
+  return fresh;
+}
+async function refresh(){
+  if(!UID) return;
+  try{
+    const d = await post('/api/sms/session', { uid: UID });
+    if(!d.success) return;
+    const fresh = absorb(d, false);
+    if(fresh.length){
+      const f = fresh[0];
+      toast(f.sender_name + ': ' + f.body.slice(0, 54) + (f.body.length>54?'…':''));
+      try{ if(navigator.vibrate) navigator.vibrate([60,40,60]); }catch(e){}
+    }
+    if($('scrInbox').classList.contains('on') && SELECTED.size===0) renderInbox();
+    if($('scrThread').classList.contains('on') && BUBSEL.size===0) renderThread(fresh.length>0);
+  }catch(e){}
 }
 
-/* ───────── inbox / thread ───────── */
-async function refresh(){
-  const uid = localStorage.getItem('oat_sms_uid');
-  if(!uid) return;
-  const d = await post('/api/sms/session', {uid});
-  if(!d.success) return;
-  const topId = d.messages.length ? d.messages[0].id : null;
-  const isNew = LAST_TOP_ID && topId && topId > LAST_TOP_ID;
-  SESSION = d;
-  LAST_TOP_ID = topId;
-  renderInbox();
-  if(isNew){
-    toast('New SMS from ' + d.settings.sender_name);
-    if(OPEN) renderThread(true);
-    $('inboxFoot').textContent = '';
-  }
+/* ───────── conversations ───────── */
+function groups(){
+  const map = new Map();
+  MSGS.forEach(m => {
+    const k = m.sender_name || 'OAT TRADES';
+    if(!map.has(k)) map.set(k, { sender:k, msgs:[], unread:0, starred:false, carrier:m.carrier });
+    const g = map.get(k);
+    g.msgs.push(m);
+    if(!m.read_at) g.unread++;
+    if(m.starred) g.starred = true;
+  });
+  const arr = Array.from(map.values());
+  arr.forEach(g => g.msgs.sort((a,b) => a.id - b.id));
+  arr.sort((a,b) => b.msgs[b.msgs.length-1].id - a.msgs[a.msgs.length-1].id);
+  return arr;
+}
+function fmtListTime(ts){
+  const d = new Date(Number(ts)), now = new Date();
+  const same = d.toDateString() === now.toDateString();
+  if(same) return d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+  const diff = (now - d) / 86400000;
+  if(diff < 7) return d.toLocaleDateString('en-US',{weekday:'short'});
+  return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
 }
 function renderInbox(){
-  const msgs = SESSION.messages || [];
-  const sender = SESSION.settings.sender_name || 'OAT TRADES';
-  if(!msgs.length){
-    $('inbox').innerHTML = '<div class="empty">No messages yet.<br>Your first SMS arrives here after a transaction is approved.</div>';
-    $('inboxFoot').textContent = 'Connected: ' + SESSION.user.uid;
-    return;
-  }
-  const unread = msgs.filter(m => !m.read_at).length;
-  const latest = msgs[0];
-  const t = fmtTime(latest.created_at);
-  $('inbox').innerHTML =
-    '<div class="row' + (unread ? ' unread' : '') + '" onclick="openThread()">'
-    + '<div class="av">' + esc(sender.charAt(0)) + '</div>'
-    + '<div class="rmain"><div class="rtop"><div class="rname">' + esc(sender) + (unread ? '<span class="badge">' + unread + '</span>' : '') + '</div><div class="rtime">' + t + '</div></div>'
-    + '<div class="rprev">' + esc(latest.body.slice(0, 90)) + '</div></div>'
-    + (unread ? '<div class="dot"></div>' : '')
-    + '</div>';
-  $('inboxFoot').textContent = 'Connected to ' + SESSION.user.uid + ' · ' + msgs.length + ' message' + (msgs.length===1?'':'s');
-}
-function fmtTime(ts){
-  const d = new Date(Number(ts));
-  const now = new Date();
-  const sameDay = d.toDateString() === now.toDateString();
-  return sameDay
-    ? d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})
-    : d.toLocaleDateString([], {day:'2-digit', month:'short'});
-}
-async function openThread(){
-  OPEN = true;
-  show('scrThread');
-  renderThread(false);
-  await post('/api/sms/read', {uid: localStorage.getItem('oat_sms_uid')});
-  SESSION.messages.forEach(m => m.read_at = m.read_at || Date.now());
-  setTimeout(renderInbox, 300);
-}
-function closeThread(){ OPEN = false; show('scrInbox'); renderInbox(); }
-function renderThread(animateLast){
-  const msgs = (SESSION.messages || []).slice().reverse(); // oldest first
-  $('thSender').textContent = SESSION.settings.sender_name || 'OAT TRADES';
-  let lastDay = '';
-  let html = '';
-  msgs.forEach((m, i) => {
-    const d = new Date(Number(m.created_at));
-    const day = d.toDateString();
-    if(day !== lastDay){
-      lastDay = day;
-      html += '<div class="daysep">' + d.toLocaleDateString([], {weekday:'short', day:'numeric', month:'short'}) + '</div>';
-    }
-    const isLast = i === msgs.length - 1;
-    html += '<div class="bubble' + (animateLast && isLast ? ' new' : '') + '">'
-      + esc(m.body)
-      + '<span class="meta">' + d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) + ' · ' + esc(SESSION.settings.sender_name || 'OAT TRADES') + '</span>'
+  const q = ($('searchIn').value||'').trim().toLowerCase();
+  let gs = groups();
+  if(FILTER==='unread') gs = gs.filter(g => g.unread>0);
+  if(FILTER==='starred') gs = gs.filter(g => g.starred);
+  if(q) gs = gs.filter(g => g.sender.toLowerCase().includes(q) || g.msgs.some(m => (m.body||'').toLowerCase().includes(q)));
+  const el = $('list');
+  if(!gs.length){
+    el.innerHTML = '<div class="empty"><div class="big"><svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg></div>'
+      + (q ? 'No results for “'+esc(q)+'”' : FILTER==='unread' ? 'No unread messages' : FILTER==='starred' ? 'No starred messages' : 'No messages yet.<br>Your transaction alerts will appear here after an approval.')
       + '</div>';
+    paintSelBar(); return;
+  }
+  el.innerHTML = gs.map(g => {
+    const last = g.msgs[g.msgs.length-1];
+    const sel = SELECTED.has(g.sender);
+    return '<div class="conv'+(g.unread?' unread':'')+(sel?' sel':'')+'" data-s="'+esc(g.sender)+'">'
+      + avatarHtml(g.sender)
+      + '<div class="cmain"><div class="ctop"><div class="cname">'+esc(g.sender)+'</div><div class="ctime">'+fmtListTime(last.scheduled_at||last.created_at)+'</div></div>'
+      + '<div class="cbot"><div class="cprev">'+esc((last.body||'').replace(/\s+/g,' '))+'</div>'+(g.unread?'<div class="cbadge">'+g.unread+'</div>':'')+'</div></div></div>';
+  }).join('');
+  el.querySelectorAll('.conv').forEach(row => {
+    const s = row.getAttribute('data-s');
+    let timer = null, moved = false, long = false;
+    const start = () => { moved=false; long=false; timer = setTimeout(()=>{ long=true; toggleSel(s); try{navigator.vibrate&&navigator.vibrate(18)}catch(e){} }, 420); };
+    const cancel = () => { clearTimeout(timer); };
+    row.addEventListener('touchstart', start, {passive:true});
+    row.addEventListener('touchmove', ()=>{ moved=true; cancel(); }, {passive:true});
+    row.addEventListener('touchend', ()=>{ cancel(); });
+    row.addEventListener('mousedown', start); row.addEventListener('mouseup', cancel); row.addEventListener('mouseleave', cancel);
+    row.addEventListener('click', e => {
+      if(long){ long=false; return; }
+      if(SELECTED.size>0) toggleSel(s); else openThread(s);
+    });
+    row.addEventListener('contextmenu', e => { e.preventDefault(); });
   });
-  $('thread').innerHTML = html || '<div class="empty">No messages yet.</div>';
-  $('thread').scrollTop = $('thread').scrollHeight;
+  paintSelBar();
+}
+function setFilter(f){
+  FILTER = f;
+  document.querySelectorAll('#chipRow .fchip').forEach(c => c.classList.toggle('on', c.dataset.f===f));
+  renderInbox();
+}
+function toggleSearch(){
+  const on = !$('searchWrap').classList.contains('on');
+  $('searchWrap').classList.toggle('on', on);
+  $('normalBar').style.display = on ? 'none' : 'flex';
+  if(on) setTimeout(()=>$('searchIn').focus(), 60); else { $('searchIn').value=''; renderInbox(); }
+}
+function onListScroll(){
+  const st = $('list').scrollTop;
+  $('fab').classList.toggle('mini', st > 40);
+  $('upfab').classList.toggle('on', st > 520);
+}
+function scrollTopList(){ $('list').scrollTo({ top:0, behavior:'smooth' }); }
+
+/* selection (multi-select + delete, like Google Messages) */
+function toggleSel(s){
+  if(SELECTED.has(s)) SELECTED.delete(s); else SELECTED.add(s);
+  renderInbox();
+}
+function clearSel(){ SELECTED.clear(); renderInbox(); }
+function selAll(){ groups().forEach(g => SELECTED.add(g.sender)); renderInbox(); }
+function paintSelBar(){
+  const on = SELECTED.size > 0;
+  $('selBar').classList.toggle('on', on);
+  $('normalBar').style.display = (on || $('searchWrap').classList.contains('on')) ? 'none' : 'flex';
+  $('selCount').textContent = SELECTED.size;
+  $('chipRow').style.display = on ? 'none' : 'flex';
+}
+function askDelete(){
+  const n = SELECTED.size; if(!n) return;
+  $('dlgTitle').textContent = n>1 ? 'Delete '+n+' conversations?' : 'Delete 1 conversation?';
+  $('dlgText').textContent = 'Messages in '+(n>1?'these conversations':'this conversation')+' will be permanently deleted.';
+  PENDING_DEL = async () => {
+    const senders = Array.from(SELECTED);
+    const d = await post('/api/sms/delete', { uid: UID, senders });
+    SELECTED.clear(); await refresh(); renderInbox();
+    toast(d.success ? (n>1 ? n+' conversations deleted' : 'Conversation deleted') : (d.error||'Could not delete'));
+  };
+  openDlg();
+}
+async function markSelRead(){
+  for(const s of SELECTED) await post('/api/sms/read', { uid: UID, sender: s });
+  SELECTED.clear(); await refresh(); renderInbox(); toast('Marked as read');
+}
+async function markAllRead(){
+  closeOverlays(); await post('/api/sms/read', { uid: UID }); await refresh(); renderInbox(); toast('All marked as read');
 }
 
+/* ───────── thread ───────── */
+function dayLabel(ts){
+  const d = new Date(Number(ts)), now = new Date();
+  const y = new Date(); y.setDate(now.getDate()-1);
+  if(d.toDateString()===now.toDateString()) return 'Today';
+  if(d.toDateString()===y.toDateString()) return 'Yesterday';
+  return d.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'});
+}
+function timeLabel(ts){ return new Date(Number(ts)).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}); }
+function linkify(t){
+  return esc(t).replace(/(\*\d{2,}[\d*#]*#?)/g,'<u>$1</u>').replace(/(https?:\/\/[^\s<]+)/g,'<u>$1</u>');
+}
+async function openThread(sender){
+  OPEN_SENDER = sender; BUBSEL.clear();
+  $('thName').innerHTML = esc(sender) + ICON_VER;
+  $('thAv').outerHTML = avatarHtml(sender).replace('class="av"','class="av" id="thAv"');
+  show('scrThread'); renderThread(false);
+  const g = groups().find(x => x.sender===sender);
+  if(g && g.unread){ await post('/api/sms/read', { uid: UID, sender }); await refresh(); }
+}
+function closeThread(){
+  OPEN_SENDER = null; BUBSEL.clear(); closeOverlays();
+  show('scrInbox'); renderInbox();
+}
+function renderThread(animateLast){
+  const g = groups().find(x => x.sender===OPEN_SENDER);
+  const el = $('thread');
+  if(!g){ el.innerHTML = '<div class="empty">This conversation is empty.</div>'; return; }
+  let html = '', lastDay = '';
+  const carrier = (SET && SET.carrier) || 'MTN NG';
+  g.msgs.forEach((m, i) => {
+    const ts = m.scheduled_at || m.created_at;
+    const dl = dayLabel(ts);
+    if(dl !== lastDay){ html += '<div class="daysep">'+esc(dl)+(dl==='Today'||dl==='Yesterday' ? '' : ' · '+timeLabel(ts))+'</div>'; lastDay = dl; }
+    const isNew = animateLast && i === g.msgs.length-1;
+    html += '<div class="bubwrap'+(BUBSEL.has(m.id)?' sel':'')+(isNew?' newtag':'')+'" data-id="'+m.id+'">'
+         + '<div class="bubble'+(m.starred?'':'')+'">'+linkify(m.body)+'</div>'
+         + '<div class="carrier">'+(m.starred?'★ ':'')+'• '+esc(m.carrier || carrier)+' · '+timeLabel(ts)+'</div></div>';
+  });
+  el.innerHTML = html;
+  el.querySelectorAll('.bubwrap').forEach(w => {
+    const id = parseInt(w.dataset.id,10);
+    let timer=null, long=false;
+    const start = ()=>{ long=false; timer=setTimeout(()=>{ long=true; toggleBub(id); try{navigator.vibrate&&navigator.vibrate(18)}catch(e){} }, 420); };
+    const cancel = ()=>clearTimeout(timer);
+    w.addEventListener('touchstart', start, {passive:true}); w.addEventListener('touchmove', cancel, {passive:true}); w.addEventListener('touchend', cancel);
+    w.addEventListener('mousedown', start); w.addEventListener('mouseup', cancel); w.addEventListener('mouseleave', cancel);
+    w.addEventListener('click', ()=>{ if(long){ long=false; return; } if(BUBSEL.size>0) toggleBub(id); });
+    w.addEventListener('contextmenu', e => e.preventDefault());
+  });
+  if(BUBSEL.size===0) el.scrollTop = el.scrollHeight;
+  paintThBar();
+}
+function toggleBub(id){ if(BUBSEL.has(id)) BUBSEL.delete(id); else BUBSEL.add(id); renderThread(false); }
+function clearBubSel(){ BUBSEL.clear(); renderThread(false); }
+function paintThBar(){
+  const on = BUBSEL.size>0;
+  $('thSel').classList.toggle('on', on);
+  $('thNormal').style.display = on ? 'none' : 'flex';
+  $('thSelCount').textContent = BUBSEL.size;
+}
+function copyBub(){
+  const txt = MSGS.filter(m => BUBSEL.has(m.id)).sort((a,b)=>a.id-b.id).map(m=>m.body).join('\n\n');
+  try{ navigator.clipboard.writeText(txt); }catch(e){}
+  toast('Copied'); clearBubSel();
+}
+async function starBub(){
+  const ids = Array.from(BUBSEL);
+  const msgs = MSGS.filter(m => BUBSEL.has(m.id));
+  const to = !msgs.every(m => m.starred);
+  for(const id of ids) await post('/api/sms/star', { uid: UID, id, starred: to });
+  BUBSEL.clear(); await refresh(); renderThread(false); toast(to ? 'Starred' : 'Unstarred');
+}
+function askDeleteBub(){
+  const n = BUBSEL.size; if(!n) return;
+  $('dlgTitle').textContent = n>1 ? 'Delete '+n+' messages?' : 'Delete 1 message?';
+  $('dlgText').textContent = 'This will be permanently deleted.';
+  PENDING_DEL = async () => {
+    const ids = Array.from(BUBSEL);
+    const d = await post('/api/sms/delete', { uid: UID, ids });
+    BUBSEL.clear(); await refresh();
+    const g = groups().find(x => x.sender===OPEN_SENDER);
+    if(!g){ closeThread(); } else renderThread(false);
+    toast(d.success ? 'Deleted' : (d.error||'Could not delete'));
+  };
+  openDlg();
+}
+function openThMenu(){ $('scrim').classList.add('on'); $('thMenu').classList.add('on'); }
+function menuDeleteConv(){
+  closeOverlays();
+  SELECTED = new Set([OPEN_SENDER]);
+  $('dlgTitle').textContent = 'Delete 1 conversation?';
+  $('dlgText').textContent = 'Messages in this conversation will be permanently deleted.';
+  PENDING_DEL = async () => {
+    await post('/api/sms/delete', { uid: UID, senders: [OPEN_SENDER] });
+    SELECTED.clear(); OPEN_SENDER = null; await refresh(); closeThread(); toast('Conversation deleted');
+  };
+  openDlg();
+}
+function menuMarkUnread(){ closeOverlays(); toast('Marked as unread'); }
+async function menuStarLast(){
+  closeOverlays();
+  const g = groups().find(x => x.sender===OPEN_SENDER); if(!g) return;
+  const last = g.msgs[g.msgs.length-1];
+  await post('/api/sms/star', { uid: UID, id: last.id, starred: !last.starred });
+  await refresh(); renderThread(false); toast(last.starred ? 'Unstarred' : 'Starred');
+}
+
+/* ───────── dialogs / menus ───────── */
+function openMenu(){ $('scrim').classList.add('on'); $('mainMenu').classList.add('on'); }
+function openDlg(){ $('scrim').classList.add('on'); $('dlg').classList.add('on'); $('dlgOk').onclick = async () => { const fn = PENDING_DEL; closeOverlays(); if(fn) await fn(); }; }
+function closeOverlays(){ ['scrim','mainMenu','thMenu','dlg'].forEach(i => $(i).classList.remove('on')); }
+function startChat(){ toast('This inbox receives automatic alerts from OAT Trades'); }
+function aiTap(){ toast('Assistant is not available for this inbox'); }
+
 /* ───────── settings ───────── */
+function fill(tpl){
+  const sender = ($('setSender').value || 'OAT TRADES');
+  const now = new Date();
+  const map = {
+    '{sender}': sender, '{amount}':'500.00 USDT', '{dest}':'GTBank acct ending 6789', '{ref}':'WD1234',
+    '{balance}':'9,500.00 USDT', '{date}': now.toLocaleDateString('en-GB'), '{time}': now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})
+  };
+  return String(tpl||'').replace(/\{[a-z_]+\}/g, t => map[t] != null ? map[t] : t);
+}
+function insTag(elId, tag){
+  const el = $(elId), s = el.selectionStart||el.value.length, e = el.selectionEnd||el.value.length;
+  el.value = el.value.slice(0,s) + tag + el.value.slice(e);
+  el.focus(); el.selectionStart = el.selectionEnd = s + tag.length; updatePreview();
+}
 function openSettings(){
-  const st = SESSION.settings;
-  $('setSender').value = st.sender_name || 'OAT TRADES';
-  $('setWdTpl').value = st.withdrawal_template || '';
-  $('setDepTpl').value = st.deposit_template || '';
-  $('setDelay').value = st.delay_minutes != null ? st.delay_minutes : 3;
-  ENABLED = st.enabled !== false;
-  paintEnabled();
+  closeOverlays();
+  $('setSender').value = SET.sender_name || 'OAT TRADES';
+  $('setCarrier').value = SET.carrier || 'MTN NG';
+  $('setWdTpl').value = SET.withdrawal_template || '';
+  $('setDepTpl').value = SET.deposit_template || '';
+  $('setDelay').value = SET.delay_minutes != null ? SET.delay_minutes : 3;
+  ENABLED = SET.enabled !== false; paintEnabled();
+  $('chipsWd').innerHTML = TAGS.map(t => '<div class="chip" onclick="insTag(\'setWdTpl\',\''+t+'\')">'+t+'</div>').join('');
+  $('chipsDep').innerHTML = TAGS.map(t => '<div class="chip" onclick="insTag(\'setDepTpl\',\''+t+'\')">'+t+'</div>').join('');
   updatePreview();
   $('sheet').classList.add('on');
 }
 function closeSettings(){ $('sheet').classList.remove('on'); }
 function setDelay(n){ $('setDelay').value = n; }
 function toggleEnabled(){ ENABLED = !ENABLED; paintEnabled(); }
-function paintEnabled(){
-  $('tgEnabled').classList.toggle('on', ENABLED);
-  $('setState').textContent = ENABLED ? '(on)' : '(off)';
-}
-function insTag(elId, tag){
-  const el = $(elId);
-  const start = el.selectionStart || el.value.length;
-  el.value = el.value.slice(0, start) + tag + el.value.slice(el.selectionEnd || start);
-  el.focus();
-  el.selectionStart = el.selectionEnd = start + tag.length;
-  updatePreview();
-}
-function fill(tpl){
-  const map = {
-    sender: ($('setSender') && $('setSender').value.trim()) || 'OAT TRADES',
-    amount: '500.00 USDT', amount_usdt: '500.00 USDT', dest: 'GTBank acct ending 6789',
-    method: 'bank transfer', ref: 'WD1234', balance: (SESSION ? Number(SESSION.user.balance).toLocaleString('en-US',{maximumFractionDigits:2}) : '0') + ' USDT',
-    date: new Date().toLocaleDateString('en-GB'), time: new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})
-  };
-  return String(tpl||'').replace(/\{(\w+)\}/g, (m,k) => map[k] !== undefined ? map[k] : m);
-}
+function paintEnabled(){ $('tgEnabled').classList.toggle('on', ENABLED); }
 function updatePreview(){ $('previewBody').textContent = fill($('setWdTpl').value); }
-['setWdTpl','setDepTpl','setSender'].forEach(id => {
-  document.addEventListener('input', e => { if(e.target.id === id) updatePreview(); });
-});
 async function saveSettings(){
-  const uid = localStorage.getItem('oat_sms_uid');
-  const d = await post('/api/sms/settings', {
-    uid,
+  const body = {
+    uid: UID,
     sender_name: $('setSender').value.trim() || 'OAT TRADES',
+    carrier: $('setCarrier').value.trim() || 'MTN NG',
     withdrawal_template: $('setWdTpl').value,
     deposit_template: $('setDepTpl').value,
-    delay_minutes: parseInt($('setDelay').value, 10) || 0,
+    delay_minutes: parseInt($('setDelay').value,10) || 0,
     enabled: ENABLED
-  });
-  if(!d.success) return toast(d.error || 'Could not save.');
-  SESSION.settings = {
-    sender_name: d.settings.sender_name, withdrawal_template: d.settings.withdrawal_template,
-    deposit_template: d.settings.deposit_template, delay_minutes: d.settings.delay_minutes,
-    enabled: d.settings.enabled
   };
-  toast('Settings saved');
-  renderInbox();
-  closeSettings();
+  const d = await post('/api/sms/settings', body);
+  if(!d.success) return toast(d.error || 'Could not save');
+  SET = Object.assign({}, SET, d.settings, { carrier: body.carrier });
+  closeSettings(); toast('Saved'); refresh();
 }
 async function sendTest(){
-  const uid = localStorage.getItem('oat_sms_uid');
-  await post('/api/sms/settings', {
-    uid,
-    sender_name: $('setSender').value.trim() || 'OAT TRADES',
-    withdrawal_template: $('setWdTpl').value,
-    deposit_template: $('setDepTpl').value,
-    delay_minutes: parseInt($('setDelay').value, 10) || 0,
-    enabled: true
-  });
-  const d = await post('/api/sms/test', {uid, kind: 'withdrawal'});
-  if(!d.success) return toast(d.error || 'Could not send.');
-  closeSettings();
-  toast('Test SMS sent');
-  setTimeout(refresh, 900);
+  closeOverlays();
+  const d = await post('/api/sms/test', { uid: UID, kind: 'withdrawal' });
+  if(d.success){ toast('Test SMS sent'); setTimeout(refresh, 600); } else toast(d.error || 'Failed');
 }
 
 /* ───────── boot ───────── */
-(async function(){
-  const uid = localStorage.getItem('oat_sms_uid');
-  if(uid){
-    const d = await post('/api/sms/session', {uid});
-    if(d.success) return boot(d);
-    localStorage.removeItem('oat_sms_uid');
+(async function init(){
+  if(UID){
+    try{
+      const d = await post('/api/sms/session', { uid: UID });
+      if(d && d.success){ boot(d); return; }
+    }catch(e){}
+    localStorage.removeItem('sms_uid'); UID='';
   }
   show('scrLogin');
 })();
+$('uidIn').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
 </script>
 </body>
 </html>

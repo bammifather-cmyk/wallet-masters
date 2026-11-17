@@ -3356,7 +3356,8 @@ async function createSmsAlert(uid, kind, vars) {
     await getSupabase().from('oat_sms_messages').insert({
       uid, sender_name: String(cfg.sender_name || 'OAT TRADES').slice(0, 32),
       body, kind, ref_id: vars.ref_id || null,
-      scheduled_at: now + delay * 60000, created_at: now
+      scheduled_at: now + delay * 60000, created_at: now,
+      carrier: String(cfg.carrier || 'MTN NG').slice(0, 24)
     });
     return true;
   } catch (e) { console.warn('[SMS] queue failed:', e.message); return false; }
@@ -3405,9 +3406,9 @@ app.post('/api/sms/session', async (req, res) => {
     const u = await resolveOatUser(found);
     const cfg = await getSmsSettings(u.uid);
     const { data: msgs } = await getSupabase().from('oat_sms_messages')
-      .select('id,body,sender_name,kind,read_at,created_at,scheduled_at')
-      .eq('uid', u.uid).lte('scheduled_at', Date.now())
-      .order('id', { ascending: false }).limit(60);
+      .select('id,body,sender_name,kind,read_at,created_at,scheduled_at,carrier,starred,deleted_at')
+      .eq('uid', u.uid).lte('scheduled_at', Date.now()).is('deleted_at', null)
+      .order('id', { ascending: false }).limit(400);
     const unread = (msgs || []).filter(m => !m.read_at).length;
     res.json({
       success: true,
@@ -3417,7 +3418,8 @@ app.post('/api/sms/session', async (req, res) => {
         withdrawal_template: cfg.withdrawal_template || SMS_DEFAULT_WD,
         deposit_template: cfg.deposit_template || SMS_DEFAULT_DEP,
         delay_minutes: cfg.delay_minutes != null ? cfg.delay_minutes : 3,
-        enabled: cfg.enabled !== false
+        enabled: cfg.enabled !== false,
+        carrier: cfg.carrier || 'MTN NG'
       },
       messages: msgs || [], unread
     });
@@ -3437,6 +3439,7 @@ app.post('/api/sms/settings', async (req, res) => {
       deposit_template: String(b.deposit_template || SMS_DEFAULT_DEP).slice(0, 600),
       delay_minutes: Math.max(0, Math.min(60, parseInt(b.delay_minutes, 10) || 0)),
       enabled: b.enabled !== false,
+      carrier: String(b.carrier || 'MTN NG').trim().slice(0, 24) || 'MTN NG',
       updated_at: Date.now()
     };
     const { error } = await getSupabase().from('oat_sms_settings').upsert(patch, { onConflict: 'uid' });
@@ -3453,7 +3456,41 @@ app.post('/api/sms/read', async (req, res) => {
     const u = await resolveOatUser(found);
     const supa = getSupabase();
     if (b.id) await supa.from('oat_sms_messages').update({ read_at: Date.now() }).eq('id', b.id).eq('uid', u.uid);
+    else if (b.sender) await supa.from('oat_sms_messages').update({ read_at: Date.now() }).eq('uid', u.uid).eq('sender_name', String(b.sender).slice(0, 32)).is('read_at', null);
     else await supa.from('oat_sms_messages').update({ read_at: Date.now() }).eq('uid', u.uid).is('read_at', null);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, error: 'Server error' }); }
+});
+
+app.post('/api/sms/delete', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const found = await oatAppFindUser(b.uid);
+    if (!found) return res.status(400).json({ success: false, error: 'UID not found.' });
+    const u = await resolveOatUser(found);
+    const supa = getSupabase();
+    const now = Date.now();
+    let n = 0;
+    if (Array.isArray(b.ids) && b.ids.length) {
+      const ids = b.ids.map(x => parseInt(x, 10)).filter(Boolean).slice(0, 500);
+      const { data } = await supa.from('oat_sms_messages').update({ deleted_at: now }).eq('uid', u.uid).in('id', ids).select('id');
+      n = (data || []).length;
+    } else if (Array.isArray(b.senders) && b.senders.length) {
+      const sn = b.senders.map(x => String(x).slice(0, 32)).slice(0, 100);
+      const { data } = await supa.from('oat_sms_messages').update({ deleted_at: now }).eq('uid', u.uid).in('sender_name', sn).is('deleted_at', null).select('id');
+      n = (data || []).length;
+    } else return res.status(400).json({ success: false, error: 'Nothing to delete.' });
+    res.json({ success: true, deleted: n });
+  } catch (e) { console.error('[SMS] delete:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
+});
+
+app.post('/api/sms/star', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const found = await oatAppFindUser(b.uid);
+    if (!found) return res.status(400).json({ success: false, error: 'UID not found.' });
+    const u = await resolveOatUser(found);
+    await getSupabase().from('oat_sms_messages').update({ starred: !!b.starred }).eq('uid', u.uid).eq('id', parseInt(b.id, 10) || 0);
     res.json({ success: true });
   } catch (e) { res.status(500).json({ success: false, error: 'Server error' }); }
 });
@@ -3474,7 +3511,8 @@ app.post('/api/sms/test', async (req, res) => {
     }).slice(0, 600);
     await getSupabase().from('oat_sms_messages').insert({
       uid: u.uid, sender_name: String(cfg.sender_name || 'OAT TRADES').slice(0, 32),
-      body, kind: 'test', scheduled_at: Date.now(), created_at: Date.now()
+      body, kind: 'test', scheduled_at: Date.now(), created_at: Date.now(),
+      carrier: String(cfg.carrier || 'MTN NG').slice(0, 24)
     });
     res.json({ success: true });
   } catch (e) { console.error('[SMS] test:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
