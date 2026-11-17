@@ -2194,6 +2194,31 @@ Per user: <code>OATUSERMIN:UID:W:500</code> / <code>OATUSERMIN:UID:D:500</code>`
       return;
     }
   }
+  // ── Express (P2P) deposit: open requests at a glance (admin only) ──────
+  if (text && /^P2P(LIST)?:?$/i.test(text.trim())) {
+    const supa = getSupabase();
+    const { data: rows } = await supa.from('oat_app_p2p_deposits')
+      .select('id,uid,country,currency,amount_usdt,local_amount,status,created_at')
+      .in('status', ['requested', 'details_sent', 'paid']).order('id', { ascending: false }).limit(20);
+    if (!rows || !rows.length) { bot.sendMessage(id, '⚡ No open Express deposit requests right now.').catch(()=>{}); return; }
+    const uids = rows.map(r => r.uid);
+    const { data: us } = await supa.from('oat_app_users').select('uid, name').in('uid', uids);
+    const nameOf = {}; (us || []).forEach(u => nameOf[u.uid] = u.name);
+    for (const r of rows) {
+      const kb = { inline_keyboard: [
+        [{ text: '📤 Send Payment Details', callback_data: `p2pinfo_${r.id}` }],
+        [{ text: '✅ Confirm & Credit', callback_data: `p2pappr_${r.id}` },
+         { text: '❌ Reject', callback_data: `p2prej_${r.id}` }]
+      ] };
+      const cap = `⚡ <b>Express #${r.id}</b> · ${r.status === 'paid' ? '💰 user says PAID' : r.status === 'details_sent' ? '📤 details sent' : '⏳ waiting'}\n`
+        + `🆔 <code>${r.uid}</code> (${oatEsc(nameOf[r.uid] || '')})\n`
+        + `🌍 ${oatEsc(r.country)} · <b>${fmtN(r.amount_usdt)} USDT</b> ≈ ${p2pCurSym(r.currency)}${fmtN(r.local_amount)} ${r.currency}\n`
+        + `🕒 ${new Date(Number(r.created_at)).toLocaleString('en-GB', { timeZone: 'Africa/Lagos' })} WAT`;
+      bot.sendMessage(id, cap, { parse_mode: 'HTML', reply_markup: kb }).catch(()=>{});
+      await new Promise(res => setTimeout(res, 350));
+    }
+    return;
+  }
   // ── Manual Top Traders management (admin only) ────────────────────────
   if (text) {
     const upTxt = text.trim().toUpperCase();
