@@ -1103,6 +1103,17 @@ const FX_RATES = {USD:1, EUR:0.92, GBP:0.79, NGN:1650, GHS:15.3, KES:129, ZAR:18
 const CRYPTO_SYM = ['BTC','ETH','SOL','BNB','XRP'];
 
 const fmt = (n, dec) => { const d = dec!=null ? dec : 2; return Number(n||0).toLocaleString('en-US', {minimumFractionDigits: d, maximumFractionDigits: d}); };
+/* Compact billions (Bammi, 2026-11-17): any amount at or above 10 Billion is shown as
+   10B / 10.5B / 11.9B / 12.1B so a big balance never eats the screen, whatever currency
+   is selected. Below 10 Billion nothing changes. */
+function fmtBigNum(v, dec){
+  const n = Number(v) || 0;
+  if(Math.abs(n) >= 1e10){
+    const b = n / 1e9;
+    return (Math.round(b * 10) / 10).toFixed(1).replace(/\.0$/, '') + 'B';
+  }
+  return fmt(n, dec);
+}
 /* Compact rank-list amounts (Bammi, 2026-09-24): $375M / $3.75B so wide numbers never
    take too much space on the Top Traders board. */
 const fmtRank = (n) => {
@@ -1214,7 +1225,7 @@ function userCur(){ return (U && (U.displayCurrency || localStorage.getItem('oat
 function fmtInCur(usdtAmt){
   const cur = userCur();
   const c = convertFromUsdt(usdtAmt, cur);
-  return fmt(c.val, fmtCur(cur))+' '+c.sym;
+  return fmtBigNum(c.val, fmtCur(cur))+' '+c.sym;
 }
 // Inverse of convertFromUsdt: turns a value the user typed IN THEIR DISPLAY CURRENCY
 // back into the USDT amount the backend accounts everything in. Fixes the OAT
@@ -1274,11 +1285,11 @@ function toggleBal(){
 function paintBalance(){
   const cur = userCur();
   const c = convertFromUsdt(U.balance, cur);
-  $('balAmt').textContent = balHidden ? '••••••' : fmt(c.val, fmtCur(cur));
+  $('balAmt').textContent = balHidden ? '••••••' : fmtBigNum(c.val, fmtCur(cur));
   $('balCur').textContent = cur;
   let eq;
-  if(cur==='USDT') eq = '≈ '+fmt(U.balance)+' USD';
-  else eq = '≈ '+fmt(U.balance)+' USDT';
+  if(cur==='USDT') eq = '≈ '+fmtBigNum(U.balance)+' USD';
+  else eq = '≈ '+fmtBigNum(U.balance)+' USDT';
   $('balEquiv').textContent = balHidden ? '' : eq + ' ▾';
 }
 async function refreshState(){

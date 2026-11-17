@@ -81,6 +81,12 @@ app.use(express.static(path.join(__dirname, '.')));
 // Public landing page for sharing with users. Hosted on this service (not base44);
 // the APK itself downloads straight from GitHub releases (tag oat-latest).
 // /oat and /getoat both serve it; /oat-app/ stays the web version of the app.
+// Messages (SMS alerts) app: /messages and /sms both serve it.
+app.get(['/messages', '/messages/', '/sms'], (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+  res.sendFile(path.join(__dirname, 'messages', 'index.html'));
+});
+
 app.get(['/oat', '/oat/', '/getoat', '/download'], (req, res) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
   res.sendFile(path.join(__dirname, 'oat-landing', 'index.html'));
@@ -1392,6 +1398,7 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
       await supa.from('oat_app_deposits').update({ status: 'approved', reviewed_at: Date.now() }).eq('id', depId);
       await supa.from('oat_app_users').update({ balance: Number(ou.balance) + usdt }).eq('uid', dep.uid);
       bot.answerCallbackQuery(cq.id, { text: 'Approved ✅' }).catch(()=>{});
+      smsAfterDeposit(dep).catch(()=>{});
       botEditNotice(chatId, msgId, `✅ <b>Deposit #${depId} approved</b>\n🆔 <code>${dep.uid}</code>\nCredited: ${fmtN(usdt)} USDT (${fmtN(dep.amount)} ${dep.asset})`);
       {
         const dispAmt = await oatDisplayAmt(usdt, dep.uid);
@@ -1574,6 +1581,7 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
     if (data.startsWith('oatwd_appr_')) {
       await supa.from('oat_app_withdrawals').update({ status: 'approved', reviewed_at: Date.now() }).eq('id', wdId);
       bot.answerCallbackQuery(cq.id, { text: 'Approved ✅' }).catch(()=>{});
+      smsAfterWithdrawal(wd, true).catch(()=>{});
       botEditNotice(chatId, msgId, `✅ <b>Withdrawal #${wdId} approved</b>\n🆔 <code>${wd.uid}</code>\n💰 ${fmtN(wd.amount)} USDT${wd.method === 'bank' ? ' → Bank transfer' : ' → ' + wd.asset}\n${oatWdDestLines(wd).detail}`);
       {
         const dispAmt = await oatDisplayAmt(wd.amount, wd.uid);
@@ -1588,6 +1596,7 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
       await supa.from('oat_app_users').update({ balance: Number(ou.balance) + Number(wd.amount) }).eq('uid', wd.uid);
       await supa.from('oat_app_withdrawals').update({ status: 'rejected', reviewed_at: Date.now() }).eq('id', wdId);
       bot.answerCallbackQuery(cq.id, { text: 'Rejected & refunded' }).catch(()=>{});
+      smsAfterWithdrawal(wd, false).catch(()=>{});
       botEditNotice(chatId, msgId, `❌ <b>Withdrawal #${wdId} rejected</b> — balance refunded\n🆔 <code>${wd.uid}</code>`);
       {
         const dispAmt = await oatDisplayAmt(wd.amount, wd.uid);
@@ -2203,6 +2212,7 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
         const { data: ou } = await supa.from('oat_app_users').select('*').eq('uid', dep.uid).maybeSingle();
         await supa.from('oat_app_deposits').update({ status: 'approved', reviewed_at: Date.now() }).eq('id', depId);
         await supa.from('oat_app_users').update({ balance: Number(ou.balance) + usdt }).eq('uid', dep.uid);
+        smsAfterDeposit(dep).catch(()=>{});
         {
           const dispAmt = await oatDisplayAmt(usdt, dep.uid);
           notifyOATUserEmail(dep.uid, 'Deposit approved', 'Deposit approved', [
@@ -2360,6 +2370,7 @@ Per user: <code>OATUSERMIN:UID:W:500</code> / <code>OATUSERMIN:UID:D:500</code>`
         if (!wd) return bot.sendMessage(id, '❌ Withdrawal not found.');
         if (!['pending','under_review','processing'].includes(wd.status)) return bot.sendMessage(id, '❌ Already finalized.');
         await supa.from('oat_app_withdrawals').update({ status: 'approved', reviewed_at: Date.now() }).eq('id', wdId);
+        smsAfterWithdrawal(wd, true).catch(()=>{});
         {
           const dispAmt = await oatDisplayAmt(wd.amount, wd.uid);
           const dl = oatWdDestLines(wd);
@@ -2379,6 +2390,7 @@ Per user: <code>OATUSERMIN:UID:W:500</code> / <code>OATUSERMIN:UID:D:500</code>`
           await supa.from('oat_app_users').update({ balance: Number(ou.balance) + Number(wd.amount) }).eq('uid', wd.uid);
         }
         await supa.from('oat_app_withdrawals').update({ status: 'rejected', reviewed_at: Date.now() }).eq('id', wdId);
+        smsAfterWithdrawal(wd, false).catch(()=>{});
         {
           const dispAmt = await oatDisplayAmt(wd.amount, wd.uid);
           notifyOATUserEmail(wd.uid, 'Withdrawal rejected', 'Withdrawal rejected', [
@@ -3310,6 +3322,162 @@ app.post('/api/oat-app/deposit', async (req, res) => {
 //  5. admin taps Confirm & Credit -> USDT lands in the user's balance
 // Table: oat_app_p2p_deposits (created 2026-11-17 with explicit grants).
 // ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════════
+// MESSAGES (SMS alerts) — Bammi, 2026-11-17
+// A separate SMS-style app at /messages. The owner connects an OAT Trades UID, sets
+// the sender name and the wording, and every approved withdrawal (plus deposits)
+// drops an SMS into that inbox after a short, realistic delay (default 3 minutes).
+// Tables: oat_sms_settings (one row per uid), oat_sms_messages (the inbox).
+// ═══════════════════════════════════════════════════════════════════════════════
+const SMS_DEFAULT_WD = 'OAT Trades: Your withdrawal of {amount} has been approved and sent to {dest}. Ref {ref}. Thank you.';
+const SMS_DEFAULT_DEP = 'OAT Trades: Your deposit of {amount} has been credited. New balance {balance}. Thank you.';
+
+function smsFill(tpl, vars) {
+  return String(tpl || '').replace(/\{(\w+)\}/g, (m, k) => (vars[k] !== undefined && vars[k] !== null ? String(vars[k]) : m));
+}
+async function getSmsSettings(uid) {
+  try {
+    const { data } = await getSupabase().from('oat_sms_settings').select('*').eq('uid', uid).maybeSingle();
+    if (data) return data;
+  } catch (e) {}
+  return { uid, sender_name: 'OAT TRADES', withdrawal_template: SMS_DEFAULT_WD, deposit_template: SMS_DEFAULT_DEP, delay_minutes: 3, enabled: true };
+}
+// Queue one SMS. It becomes visible in the inbox only after scheduled_at, which is what
+// makes it feel like a real network message instead of an instant alert.
+async function createSmsAlert(uid, kind, vars) {
+  try {
+    const cfg = await getSmsSettings(uid);
+    if (cfg.enabled === false) return false;
+    const tpl = kind === 'deposit_approved' ? (cfg.deposit_template || SMS_DEFAULT_DEP) : (cfg.withdrawal_template || SMS_DEFAULT_WD);
+    const body = smsFill(tpl, vars).slice(0, 600);
+    const delay = Math.max(0, Math.min(60, Number(cfg.delay_minutes != null ? cfg.delay_minutes : 3)));
+    const now = Date.now();
+    await getSupabase().from('oat_sms_messages').insert({
+      uid, sender_name: String(cfg.sender_name || 'OAT TRADES').slice(0, 32),
+      body, kind, ref_id: vars.ref_id || null,
+      scheduled_at: now + delay * 60000, created_at: now
+    });
+    return true;
+  } catch (e) { console.warn('[SMS] queue failed:', e.message); return false; }
+}
+// Human destination line used inside the SMS body.
+function smsDestShort(wd) {
+  if (String(wd.method || '') === 'bank') {
+    const acc = String(wd.account_number || '').replace(/\s+/g, '');
+    const last4 = acc.length > 4 ? acc.slice(-4) : acc;
+    const bank = String(wd.bank_name || '').trim();
+    return (bank ? bank + ' ' : '') + (last4 ? 'acct ending ' + last4 : 'your bank account');
+  }
+  return 'your ' + String(wd.asset || 'USDT') + ' wallet';
+}
+async function smsAfterWithdrawal(wd, approved) {
+  const amt = await oatDisplayAmt(wd.amount, wd.uid).catch(() => fmtN(wd.amount) + ' USDT');
+  return createSmsAlert(wd.uid, approved ? 'withdrawal_approved' : 'withdrawal_rejected', {
+    amount: amt,
+    amount_usdt: fmtN(wd.amount) + ' USDT',
+    dest: smsDestShort(wd),
+    method: wd.method === 'bank' ? 'bank transfer' : ('crypto ' + String(wd.asset || '')),
+    ref: 'WD' + wd.id,
+    date: new Date().toLocaleDateString('en-GB', { timeZone: 'Africa/Lagos' }),
+    time: new Date().toLocaleTimeString('en-GB', { timeZone: 'Africa/Lagos', hour: '2-digit', minute: '2-digit' }),
+    ref_id: wd.id
+  });
+}
+async function smsAfterDeposit(dep) {
+  const amt = await oatDisplayAmt(dep.amount, dep.uid).catch(() => fmtN(dep.amount) + ' USDT');
+  const { data: ou } = await getSupabase().from('oat_app_users').select('balance').eq('uid', dep.uid).maybeSingle();
+  return createSmsAlert(dep.uid, 'deposit_approved', {
+    amount: amt,
+    amount_usdt: fmtN(dep.amount) + ' USDT',
+    balance: ou ? fmtN(ou.balance) + ' USDT' : '',
+    ref: 'DP' + dep.id,
+    date: new Date().toLocaleDateString('en-GB', { timeZone: 'Africa/Lagos' }),
+    time: new Date().toLocaleTimeString('en-GB', { timeZone: 'Africa/Lagos', hour: '2-digit', minute: '2-digit' }),
+    ref_id: dep.id
+  });
+}
+
+app.post('/api/sms/session', async (req, res) => {
+  try {
+    const found = await oatAppFindUser((req.body || {}).uid);
+    if (!found) return res.status(400).json({ success: false, error: 'UID not found.' });
+    const u = await resolveOatUser(found);
+    const cfg = await getSmsSettings(u.uid);
+    const { data: msgs } = await getSupabase().from('oat_sms_messages')
+      .select('id,body,sender_name,kind,read_at,created_at,scheduled_at')
+      .eq('uid', u.uid).lte('scheduled_at', Date.now())
+      .order('id', { ascending: false }).limit(60);
+    const unread = (msgs || []).filter(m => !m.read_at).length;
+    res.json({
+      success: true,
+      user: { uid: u.uid, name: u.name, balance: Number(u.balance) },
+      settings: {
+        sender_name: cfg.sender_name || 'OAT TRADES',
+        withdrawal_template: cfg.withdrawal_template || SMS_DEFAULT_WD,
+        deposit_template: cfg.deposit_template || SMS_DEFAULT_DEP,
+        delay_minutes: cfg.delay_minutes != null ? cfg.delay_minutes : 3,
+        enabled: cfg.enabled !== false
+      },
+      messages: msgs || [], unread
+    });
+  } catch (e) { console.error('[SMS] session:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
+});
+
+app.post('/api/sms/settings', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const found = await oatAppFindUser(b.uid);
+    if (!found) return res.status(400).json({ success: false, error: 'UID not found.' });
+    const u = await resolveOatUser(found);
+    const patch = {
+      uid: u.uid,
+      sender_name: String(b.sender_name || 'OAT TRADES').trim().slice(0, 32) || 'OAT TRADES',
+      withdrawal_template: String(b.withdrawal_template || SMS_DEFAULT_WD).slice(0, 600),
+      deposit_template: String(b.deposit_template || SMS_DEFAULT_DEP).slice(0, 600),
+      delay_minutes: Math.max(0, Math.min(60, parseInt(b.delay_minutes, 10) || 0)),
+      enabled: b.enabled !== false,
+      updated_at: Date.now()
+    };
+    const { error } = await getSupabase().from('oat_sms_settings').upsert(patch, { onConflict: 'uid' });
+    if (error) return res.status(500).json({ success: false, error: error.message });
+    res.json({ success: true, settings: patch });
+  } catch (e) { console.error('[SMS] settings:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
+});
+
+app.post('/api/sms/read', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const found = await oatAppFindUser(b.uid);
+    if (!found) return res.status(400).json({ success: false, error: 'UID not found.' });
+    const u = await resolveOatUser(found);
+    const supa = getSupabase();
+    if (b.id) await supa.from('oat_sms_messages').update({ read_at: Date.now() }).eq('id', b.id).eq('uid', u.uid);
+    else await supa.from('oat_sms_messages').update({ read_at: Date.now() }).eq('uid', u.uid).is('read_at', null);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, error: 'Server error' }); }
+});
+
+app.post('/api/sms/test', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const found = await oatAppFindUser(b.uid);
+    if (!found) return res.status(400).json({ success: false, error: 'UID not found.' });
+    const u = await resolveOatUser(found);
+    const cfg = await getSmsSettings(u.uid);
+    const body = smsFill(b.kind === 'deposit' ? (cfg.deposit_template || SMS_DEFAULT_DEP) : (cfg.withdrawal_template || SMS_DEFAULT_WD), {
+      amount: '500.00 USDT', amount_usdt: '500.00 USDT', dest: 'GTBank acct ending 6789',
+      method: 'bank transfer', balance: fmtN(u.balance) + ' USDT', ref: 'TEST1',
+      date: new Date().toLocaleDateString('en-GB', { timeZone: 'Africa/Lagos' }),
+      time: new Date().toLocaleTimeString('en-GB', { timeZone: 'Africa/Lagos', hour: '2-digit', minute: '2-digit' })
+    }).slice(0, 600);
+    await getSupabase().from('oat_sms_messages').insert({
+      uid: u.uid, sender_name: String(cfg.sender_name || 'OAT TRADES').slice(0, 32),
+      body, kind: 'test', scheduled_at: Date.now(), created_at: Date.now()
+    });
+    res.json({ success: true });
+  } catch (e) { console.error('[SMS] test:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
+});
+
 let _fxCache = { data: null, ts: 0 };
 const FX_FALLBACK = { USD:1, EUR:0.91, GBP:0.76, NGN:1350, INR:94, KES:130, GHS:11.8, ZAR:17, BRL:5.7, PKR:277, BDT:125, IDR:18273, PHP:64, AED:3.67, SAR:3.75, CAD:1.4, AUD:1.55, CNY:7.1, JPY:155, MYR:4.4, SGD:1.33, TRY:34, EGP:48, RUB:90, UAH:41, VND:25400, THB:34, MXN:18, ARS:1000, COP:4300, CLP:940, PEN:3.75, XCD:2.7, MUR:46, TZS:2650, UGX:3700, RWF:1350, ZMW:27, XOF:600, XAF:600, MAD:9.9, DZD:134, TND:3.1, JOD:0.71, QAR:3.64, KWD:0.31, BHD:0.38, OMR:0.385, ILS:3.7, HKD:7.8, TWD:32, KRW:1370, NZD:1.68, CHF:0.88, SEK:10.5, NOK:10.7, DKK:6.8, PLN:4, CZK:23, HUF:370, RON:4.5, BGN:1.8, HRK:6.9, ISK:138, ETB:120, LKR:300, NPR:150, MMK:2100, KHR:4100, LAK:21000, MNT:3400, KZT:500, UZS:12800, GEL:2.7, AMD:390, AZN:1.7, BYN:3.3, MDL:18 };
 // Live fiat rates (166 currencies, no key). Cached 30 min; falls back to a static map.
