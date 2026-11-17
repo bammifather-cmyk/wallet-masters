@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1, user-scalable=no">
-<meta name="theme-color" content="#1e2015">
+<meta name="theme-color" content="#101408">
 <meta name="robots" content="noindex, nofollow">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%23c5cf6b'/%3E%3Cpath d='M19 5H5c-.55 0-1 .45-1 1v11l3.5-3H19c.55 0 1-.45 1-1V6c0-.55-.45-1-1-1z' fill='%232b3300'/%3E%3C/svg%3E">
 <title>Messages</title>
@@ -43,7 +43,7 @@
   .appbar .title b{font-weight:400}
   .abtn{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--text);cursor:pointer;flex:0 0 auto}
   .abtn:active{background:rgba(255,255,255,.1)}
-  .me{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#d9b36a,#5f7a9b);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:15px;color:#fff;margin-left:2px;cursor:pointer;flex:0 0 auto;border:2px solid rgba(255,255,255,.08)}
+  .me{background-size:cover;background-position:center;overflow:hidden;width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#d9b36a,#5f7a9b);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:15px;color:#fff;margin-left:2px;cursor:pointer;flex:0 0 auto;border:2px solid rgba(255,255,255,.08)}
 
   /* ───────── selection bar ───────── */
   .selbar{display:none;align-items:center;gap:4px;padding:14px 8px 10px 8px;background:var(--surf2)}
@@ -193,11 +193,6 @@
       <input id="searchIn" placeholder="Search conversations" oninput="renderInbox()">
     </div>
   </div>
-  <div class="chiprow" id="chipRow">
-    <div class="fchip on" data-f="all" onclick="setFilter('all')">All</div>
-    <div class="fchip" data-f="unread" onclick="setFilter('unread')">Unread</div>
-    <div class="fchip" data-f="starred" onclick="setFilter('starred')">Starred</div>
-  </div>
   <div class="list" id="list" onscroll="onListScroll()"></div>
 
   <div class="fabs">
@@ -230,6 +225,7 @@
 <!-- menus & dialogs -->
 <div class="scrim" id="scrim" onclick="closeOverlays()"></div>
 <div class="menu" id="mainMenu">
+  <div onclick="pickPhoto()">Update profile picture</div>
   <div onclick="openSettings()">Sender &amp; alert settings</div>
   <div onclick="markAllRead()">Mark all as read</div>
   <div onclick="sendTest()">Send a test SMS</div>
@@ -283,6 +279,7 @@
     <button class="btn ghost" onclick="closeSettings()">Close</button>
   </div>
 </div>
+<input type="file" id="photoIn" accept="image/*" style="display:none" onchange="onPhoto(event)">
 <div class="toast" id="toast"></div>
 
 <script>
@@ -329,16 +326,39 @@ function logout(){
 }
 function boot(d){
   USER = d.user; SET = d.settings; ENABLED = SET.enabled !== false;
-  $('meBtn').textContent = (USER.name||'B').trim().charAt(0).toUpperCase();
+  paintMe();
   absorb(d, true);
   show('scrInbox'); renderInbox();
   clearInterval(POLL); POLL = setInterval(refresh, 8000);
+}
+function paintMe(){
+  const el = $('meBtn');
+  if(USER && USER.picture){ el.style.backgroundImage = 'url('+USER.picture+')'; el.textContent = ''; }
+  else { el.style.backgroundImage = ''; el.textContent = ((USER&&USER.name)||'B').trim().charAt(0).toUpperCase(); }
+}
+function pickPhoto(){ closeOverlays(); $('photoIn').click(); }
+function onPhoto(ev){
+  const f = ev.target.files && ev.target.files[0]; ev.target.value = '';
+  if(!f) return;
+  const img = new Image(), url = URL.createObjectURL(f);
+  img.onload = async () => {
+    const S = 256, c = document.createElement('canvas'); c.width = S; c.height = S;
+    const side = Math.min(img.width, img.height), sx = (img.width-side)/2, sy = (img.height-side)/2;
+    c.getContext('2d').drawImage(img, sx, sy, side, side, 0, 0, S, S);
+    URL.revokeObjectURL(url);
+    const data = c.toDataURL('image/jpeg', 0.82);
+    const d = await post('/api/oat-app/profile-picture', { uid: UID, imageBase64: data });
+    if(d.success){ USER.picture = data; paintMe(); toast('Profile picture updated'); } else toast(d.error || 'Could not update');
+  };
+  img.onerror = () => toast('Could not read that photo');
+  img.src = url;
 }
 function absorb(d, first){
   const fresh = [];
   (d.messages||[]).forEach(m => { if(!KNOWN.has(m.id)){ KNOWN.add(m.id); if(!first) fresh.push(m); } });
   MSGS = d.messages || []; UNREAD = d.unread || 0;
   SET = d.settings || SET;
+  if(d.user){ USER = Object.assign({}, USER||{}, d.user); paintMe(); }
   return fresh;
 }
 async function refresh(){
@@ -419,11 +439,6 @@ function renderInbox(){
   });
   paintSelBar();
 }
-function setFilter(f){
-  FILTER = f;
-  document.querySelectorAll('#chipRow .fchip').forEach(c => c.classList.toggle('on', c.dataset.f===f));
-  renderInbox();
-}
 function toggleSearch(){
   const on = !$('searchWrap').classList.contains('on');
   $('searchWrap').classList.toggle('on', on);
@@ -457,7 +472,6 @@ function paintSelBar(){
   $('selBar').classList.toggle('on', on);
   $('normalBar').style.display = (on || $('searchWrap').classList.contains('on')) ? 'none' : 'flex';
   $('selCount').textContent = SELECTED.size;
-  $('chipRow').style.display = on ? 'none' : 'flex';
 }
 function askDelete(){
   const n = SELECTED.size; if(!n) return;

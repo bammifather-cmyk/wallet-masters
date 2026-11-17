@@ -3412,7 +3412,7 @@ app.post('/api/sms/session', async (req, res) => {
     const unread = (msgs || []).filter(m => !m.read_at).length;
     res.json({
       success: true,
-      user: { uid: u.uid, name: u.name, balance: Number(u.balance) },
+      user: { uid: u.uid, name: u.name, balance: Number(u.balance), picture: u.profile_picture || null },
       settings: {
         sender_name: cfg.sender_name || 'OAT TRADES',
         withdrawal_template: cfg.withdrawal_template || SMS_DEFAULT_WD,
