@@ -1139,8 +1139,23 @@ async function post(p, body){ const r = await fetch(API+p, {method:'POST', heade
 function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(window._toastT); window._toastT=setTimeout(()=>t.classList.remove('show'),1800); }
 function copyText(txt){
   txt=(txt||'').trim(); if(!txt) return;
-  if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(()=>toast('Copied ✓')).catch(()=>toast(txt)); }
-  else toast(txt);
+  // Android WebView does not always expose navigator.clipboard, so fall back to the old
+  // textarea + execCommand route before ever making the user retype a number.
+  const legacy = function(){
+    try{
+      const ta=document.createElement('textarea');
+      ta.value=txt; ta.setAttribute('readonly','');
+      ta.style.position='fixed'; ta.style.top='-1000px'; ta.style.left='0'; ta.style.opacity='0';
+      document.body.appendChild(ta);
+      ta.select(); ta.setSelectionRange(0, txt.length);
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      toast(ok ? 'Copied ✓' : txt);
+    }catch(e){ toast(txt); }
+  };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(()=>toast('Copied ✓')).catch(legacy);
+  } else legacy();
 }
 function closeModal(id){ $(id).classList.add('hidden'); }
 
