@@ -1525,8 +1525,10 @@ function p2pCopyAll(){
   copyText(out);
   toast('Details copied');
 }
-function onP2PProof(ev){
-  const file = ev.target.files && ev.target.files[0];
+function onP2PProof(el){
+  // Called from onchange="onP2PProof(this)", so `el` is the input itself.
+  const input = (el && el.files) ? el : (el && el.target ? el.target : null);
+  const file = input && input.files && input.files[0];
   if(!file) return;
   if(!/^image\//.test(file.type)){ toast('Choose a photo of the receipt'); return; }
   resizeImageFile(file, 1100, function(dataUrl){
