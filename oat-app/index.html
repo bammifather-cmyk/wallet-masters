@@ -271,6 +271,13 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue)}
 @keyframes cashShine{0%{background-position:0% 0}100%{background-position:200% 0}}
 
 .toast.show{opacity:1}
+  .p2p-acct{margin-top:12px;border:1px solid var(--border);border-radius:14px;overflow:hidden;background:rgba(255,255,255,.02)}
+  .p2p-acct-h{padding:10px 12px;font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);background:rgba(255,255,255,.03)}
+  .p2p-field{display:flex;align-items:center;gap:10px;padding:10px 12px;border-top:1px solid rgba(255,255,255,.06)}
+  .p2p-field-k{font-size:11px;color:var(--muted);width:92px;flex:0 0 auto;line-height:1.25}
+  .p2p-field-v{flex:1;font-size:13.5px;font-weight:700;word-break:break-word}
+  .p2p-copy{flex:0 0 auto;background:rgba(59,130,246,.16);border:1px solid rgba(59,130,246,.5);color:#93c5fd;font-size:11.5px;font-weight:700;padding:6px 10px;border-radius:8px;cursor:pointer}
+  .p2p-copy:active{transform:scale(.96)}
 </style>
 </head>
 <body>
@@ -1424,6 +1431,7 @@ async function loadP2PStatus(){
 function paintP2PStatus(r){
   const box = $('p2pStatusWrap');
   if(!r){ box.innerHTML = ''; return; }
+  if(window.P2P_PROOF_REQ !== r.id){ window.P2P_PROOF = null; window.P2P_PROOF_REQ = r.id; }
   const brand = '⚡ Express Deposit #'+r.id;
   let inner = '';
   if(r.status==='requested'){
@@ -1433,16 +1441,23 @@ function paintP2PStatus(r){
       + '<div class="budget-row" style="margin-top:10px">'+p2pBadge(r.status)+'<span class="copyhint">'+(r.currency+' '+fmt(r.local_amount))+'</span></div>';
   } else if(r.status==='details_sent'){
     inner = '<div class="min-note" style="color:#22c55e">'+brand+' · pay '+esc(r.country)+'</div>'
-      + (r.details_text ? '<div class="p2p-msg">'+esc(r.details_text)+'</div>' : '')
+      + p2pDetailsCard(r)
       + (r.details_image ? '<div class="p2p-shot" onclick="p2pViewShot(this)"><img src="'+r.details_image+'" alt="Payment account"></div>' : '')
       + '<div class="budget-row" style="margin-top:8px"><span class="copyhint">Send</span><span style="color:var(--gold2);font-weight:800">'+r.currency+' '+fmt(r.local_amount)+'</span></div>'
       + '<div class="budget-row"><span class="copyhint">You receive</span><span style="font-weight:800">'+fmt(r.amount_usdt)+' USDT</span></div>'
-      + '<label style="margin-top:12px">Payment reference or note (optional)</label>'
+      + '<label style="margin-top:14px">Payment reference or note (optional)</label>'
       + '<input id="p2pNote" placeholder="Your name or transfer reference">'
-      + '<button class="btn" style="margin-top:10px" onclick="p2pMarkPaid()">I have paid</button>'
+      + '<label style="margin-top:14px">Transfer receipt <span style="color:#ef4444">*</span></label>'
+      + '<div class="copyhint" style="margin:0 0 8px">Required. Screenshot the successful transfer, then tap I have paid.</div>'
+      + '<input type="file" id="p2pProofInput" accept="image/*" style="display:none" onchange="onP2PProof(this)">'
+      + '<div id="p2pProofWrap"></div>'
+      + '<button class="btn ghost" id="p2pProofBtn" onclick="document.getElementById(\'p2pProofInput\').click()" style="margin-top:4px">Upload receipt</button>'
+      + '<button class="btn" id="p2pPaidBtn" style="margin-top:10px" onclick="p2pMarkPaid()">I have paid</button>'
+      + '<div class="copyhint" id="p2pPaidHint" style="margin-top:6px;color:var(--gold2)">Upload your receipt to unlock this button.</div>'
       + '<button class="btn ghost" style="margin-top:8px" onclick="p2pCancel()">Cancel request</button>';
   } else if(r.status==='paid'){
     inner = '<div class="min-note" style="color:var(--gold2)">'+brand+' · '+fmt(r.amount_usdt)+' USDT</div>'
+      + (r.proof_image ? '<div class="budget-row" style="margin-top:8px"><span class="copyhint">Receipt</span><span style="color:#22c55e;font-weight:800">Uploaded</span></div>' : '')
       + '<div style="display:flex;align-items:center;gap:10px;margin:14px 0 6px"><div class="p2p-spin"></div>'
       + '<div><b>Verifying your payment</b><div class="copyhint" style="margin:2px 0 0">The team is checking the transfer. Your USDT lands here as soon as it is confirmed.</div></div></div>';
   } else if(r.status==='approved'){
@@ -1458,6 +1473,87 @@ function paintP2PStatus(r){
   }
   box.innerHTML = '<div class="card">'+inner+'</div>';
   if(r.status==='approved'){ refreshState().catch(function(){}); }
+}
+
+/* Express deposit account details (Bammi, 2026-11-18): the admin types the account and
+   each field becomes its own row with a copy button, so numbers are never retyped. */
+window.P2P_PROOF = null;
+window.P2P_PROOF_REQ = null;
+function p2pFields(r){
+  const f = [];
+  if(r.pay_name)    f.push(['Account name', r.pay_name]);
+  if(r.pay_account) f.push(['Account number', r.pay_account]);
+  if(r.pay_code)    f.push(['IFSC / code', r.pay_code]);
+  if(r.pay_bank)    f.push(['Bank', r.pay_bank]);
+  if(r.pay_amount)  f.push(['Amount to send', r.pay_amount]);
+  return f;
+}
+function p2pDetailsCard(r){
+  const fields = p2pFields(r);
+  if(!fields.length){
+    if(!r.details_text) return '';
+    return '<div class="p2p-msg">'+esc(r.details_text)+'</div>'
+      + '<button class="btn ghost" style="margin-top:8px" onclick="p2pCopyAll()">Copy all details</button>';
+  }
+  const rows = fields.map(function(f){
+    return '<div class="p2p-field">'
+      + '<div class="p2p-field-k">'+esc(f[0])+'</div>'
+      + '<div class="p2p-field-v">'+esc(f[1])+'</div>'
+      + '<button class="p2p-copy" onclick="p2pCopyOne(this)" data-v="'+esc(f[1])+'">Copy</button>'
+      + '</div>';
+  }).join('');
+  const extra = r.pay_extra ? '<div class="copyhint" style="padding:8px 12px;white-space:pre-wrap">'+esc(r.pay_extra)+'</div>' : '';
+  return '<div class="p2p-acct">'
+    + '<div class="p2p-acct-h">Account to pay</div>'
+    + rows + extra
+    + '<div style="padding:10px 12px"><button class="btn" onclick="p2pCopyAll()">Copy all details</button></div>'
+    + '</div>';
+}
+function p2pCopyOne(btn){
+  copyText(btn.getAttribute('data-v') || '');
+  const old = btn.textContent;
+  btn.textContent = 'Copied';
+  setTimeout(function(){ btn.textContent = old; }, 1200);
+}
+function p2pCopyAll(){
+  const r = P2P_ACTIVE; if(!r) return;
+  const fields = p2pFields(r);
+  let out = fields.length ? fields.map(function(f){ return f[0] + ': ' + f[1]; }).join('\n') : String(r.details_text || '');
+  if(r.pay_extra) out += '\n' + r.pay_extra;
+  copyText(out);
+  toast('Details copied');
+}
+function onP2PProof(ev){
+  const file = ev.target.files && ev.target.files[0];
+  if(!file) return;
+  if(!/^image\//.test(file.type)){ toast('Choose a photo of the receipt'); return; }
+  resizeImageFile(file, 1100, function(dataUrl){
+    window.P2P_PROOF = dataUrl;
+    paintP2PProof();
+  });
+}
+function paintP2PProof(){
+  const wrap = $('p2pProofWrap'), btn = $('p2pProofBtn'), paid = $('p2pPaidBtn'), hint = $('p2pPaidHint');
+  if(!wrap) return;
+  if(window.P2P_PROOF){
+    wrap.innerHTML = '<div style="position:relative;display:inline-block;margin:4px 0 8px">'
+      + '<img src="'+window.P2P_PROOF+'" style="max-height:130px;border-radius:10px;border:1px solid #1e2d45">'
+      + '<button onclick="clearP2PProof()" style="position:absolute;top:-8px;right:-8px;background:#ef4444;border:none;border-radius:50%;width:22px;height:22px;color:#fff;font-size:12px;cursor:pointer;line-height:22px;text-align:center">✕</button>'
+      + '</div><div class="copyhint" style="color:#22c55e;margin-bottom:6px">Receipt attached</div>';
+    if(btn) btn.textContent = 'Change receipt';
+    if(paid){ paid.disabled = false; paid.style.opacity = '1'; }
+    if(hint) hint.textContent = 'Ready. Tap I have paid and the team verifies it.';
+  } else {
+    wrap.innerHTML = '';
+    if(btn) btn.textContent = 'Upload receipt';
+    if(paid){ paid.disabled = true; paid.style.opacity = '.5'; }
+    if(hint) hint.textContent = 'Upload your receipt to unlock this button.';
+  }
+}
+function clearP2PProof(){
+  window.P2P_PROOF = null;
+  const fi = $('p2pProofInput'); if(fi) fi.value = '';
+  paintP2PProof();
 }
 
 function paintP2PHistory(list){
@@ -1482,9 +1578,14 @@ function p2pNewRequest(){
 
 async function p2pMarkPaid(){
   if(!P2P_ACTIVE) return;
+  if(!window.P2P_PROOF){ toast('Upload your transfer receipt first'); paintP2PProof(); return; }
   const note = $('p2pNote') ? $('p2pNote').value : '';
+  const pbtn = $('p2pPaidBtn');
+  if(pbtn){ pbtn.disabled = true; pbtn.textContent = 'Sending...'; }
   try{
-    const d = await post('/api/oat-app/p2p/paid', {uid:U.uid, id:P2P_ACTIVE.id, note:note});
+    const d = await post('/api/oat-app/p2p/paid', {uid:U.uid, id:P2P_ACTIVE.id, note:note, proof:window.P2P_PROOF});
+    if(d && !d.success){ if(pbtn){ pbtn.disabled = false; pbtn.textContent = 'I have paid'; } throw new Error(d.error || 'Could not send.'); }
+    window.P2P_PROOF = null;
     if(!d.success) throw new Error(d.error || 'Could not send.');
     loadP2PStatus();
   }catch(e){ alert(e.message); }

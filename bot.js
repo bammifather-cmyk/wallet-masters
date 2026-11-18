@@ -1697,6 +1697,49 @@ const OAT_WD_DEFAULT_NOTES = {
 // The payment-details flow used to live only in memory, so any deploy restart made the
 // next photo fall through to the broadcast path. It is now persisted in app_settings, so
 // a restart, a slow reply or a bot reboot can never turn payment details into a broadcast.
+// ── Typed bank details (Bammi, 2026-11-18) ──────────────────────────────────
+// The admin can now type the account instead of sending a screenshot:
+//   Name: Arun Kant Pandey
+//   Account Number: 101398700009462
+//   IFSC Code: YESB0001144
+//   Amount: 40,000
+// Each field is parsed into its own column so the app can render it as a row with
+// its own copy button. Unknown "Label: value" lines are kept in pay_extra so nothing
+// the admin types is ever silently dropped.
+function p2pParseDetails(text) {
+  const out = { name: null, account: null, code: null, bank: null, amount: null, extra: [] };
+  const labelMap = {
+    name: 'name', 'account name': 'name', 'account holder': 'name', 'beneficiary': 'name', 'beneficiary name': 'name',
+    account: 'account', 'account number': 'account', 'account no': 'account', 'acct': 'account', 'acct no': 'account',
+    'a/c': 'account', 'a/c no': 'account', 'ac number': 'account',
+    ifsc: 'code', 'ifsc code': 'code', 'ifsc/code': 'code', swift: 'code', 'swift code': 'code', 'sort code': 'code',
+    'sort/code': 'code', iban: 'code', 'routing number': 'code', routing: 'code', branch: 'code', upi: 'code', 'upi id': 'code',
+    bank: 'bank', 'bank name': 'bank',
+    amount: 'amount', 'amount to send': 'amount', 'amount (inr)': 'amount', total: 'amount'
+  };
+  const lines = String(text || '').split(/\r?\n/);
+  for (const rawLine of lines) {
+    const line = rawLine.trim().replace(/^[-*•]\s*/, '');
+    if (!line) continue;
+    const m = line.match(/^([A-Za-z][A-Za-z \/().]{1,28}?)\s*[:\-]\s*(.+)$/);
+    if (!m) {
+      if (line.length <= 120) out.extra.push(line);
+      continue;
+    }
+    const label = m[1].trim().toLowerCase().replace(/\s+/g, ' ');
+    const value = m[2].trim().replace(/\s{2,}/g, ' ');
+    const key = labelMap[label] || (labelMap[label.replace(/[^a-z ]/g, '')] || null);
+    if (key === 'name' && !out.name) out.name = value.slice(0, 80);
+    else if (key === 'account' && !out.account) out.account = value.slice(0, 60);
+    else if (key === 'code' && !out.code) out.code = value.slice(0, 60);
+    else if (key === 'bank' && !out.bank) out.bank = value.slice(0, 60);
+    else if (key === 'amount' && !out.amount) out.amount = value.slice(0, 40);
+    else out.extra.push(line);
+  }
+  out.extra = out.extra.slice(0, 6);
+  return out;
+}
+
 async function p2pSetFlow(chatId, requestId) {
   const v = JSON.stringify({ id: Number(requestId), at: Date.now() });
   await getSupabase().from('app_settings').upsert({ key: 'p2pflow_' + String(chatId), value: v }, { onConflict: 'key' });
@@ -1768,6 +1811,16 @@ async function oatP2PSaveDetails(adminId, requestId, fileId, text) {
     const { data: row } = await supa.from('oat_app_p2p_deposits').select('*').eq('id', flow.id).maybeSingle();
     if (!row) return bot.sendMessage(adminId, '❌ Request not found.').catch(()=>{});
     const patch = { details_text: flow.text || null, details_at: Date.now() };
+    // Typed details become structured, individually copyable fields.
+    if (flow.text) {
+      const parsed = p2pParseDetails(flow.text);
+      patch.pay_name = parsed.name;
+      patch.pay_account = parsed.account;
+      patch.pay_code = parsed.code;
+      patch.pay_bank = parsed.bank;
+      patch.pay_amount = parsed.amount;
+      patch.pay_extra = parsed.extra.length ? parsed.extra.join('\n') : null;
+    }
     if (imageData) patch.details_image = imageData;
     if (row.status === 'requested') patch.status = 'details_sent';
     const { error } = await supa.from('oat_app_p2p_deposits').update(patch).eq('id', flow.id);
@@ -1776,6 +1829,14 @@ async function oatP2PSaveDetails(adminId, requestId, fileId, text) {
       `✅ <b>Payment details sent to the user</b> for Express #${flow.id}\n🆔 <code>${row.uid}</code>\n`
       + `${fmtN(row.amount_usdt)} USDT ≈ ${p2pCurSym(row.currency)}${fmtN(row.local_amount)} ${row.currency}\n\n`
       + `They now see ${imageData ? 'your screenshot' : 'your text'} in the app and can mark it as paid.\n`
+      + (flow.text ? '\n<b>They will copy these fields:</b>\n' + [
+          ['Name', p2pParseDetails(flow.text).name],
+          ['Account number', p2pParseDetails(flow.text).account],
+          ['IFSC / code', p2pParseDetails(flow.text).code],
+          ['Bank', p2pParseDetails(flow.text).bank],
+          ['Amount', p2pParseDetails(flow.text).amount]
+        ].filter(function (r) { return r[1]; }).map(function (r) { return r[0] + ': <code>' + oatEsc(r[1]) + '</code>'; }).join('\n') + '\n' : '')
+      + `Send the details again any time to change them.\n`
       + `Tap <b>Confirm & Credit</b> on the request notice once the money lands in your account.`,
       { parse_mode: 'HTML' }).catch(()=>{});
     notifyOATUserEmail(row.uid, 'Express deposit details ready', 'Payment details ready', [
@@ -3763,7 +3824,7 @@ app.post('/api/oat-app/p2p/status', async (req, res) => {
     if (!found) return res.status(400).json({ success: false, error: 'UID not found.' });
     const u = await resolveOatUser(found);
     const supa = getSupabase();
-    const COLS = 'id,uid,country,currency,amount_usdt,fx_rate,local_amount,status,details_text,details_image,user_note,admin_note,created_at,details_at,paid_at,reviewed_at';
+    const COLS = 'id,uid,country,currency,amount_usdt,fx_rate,local_amount,status,details_text,details_image,pay_name,pay_account,pay_code,pay_bank,pay_amount,pay_extra,user_note,admin_note,created_at,details_at,paid_at,reviewed_at,proof_image';
     const { data: rows } = await supa.from('oat_app_p2p_deposits').select(COLS).eq('uid', u.uid)
       .order('id', { ascending: false }).limit(10);
     const list = rows || [];
@@ -3800,6 +3861,10 @@ app.post('/api/oat-app/p2p/paid', async (req, res) => {
     const { data: row } = await supa.from('oat_app_p2p_deposits').select('*').eq('id', id).eq('uid', u.uid).maybeSingle();
     if (!row) return res.status(404).json({ success: false, error: 'Request not found.' });
     if (!['requested', 'details_sent'].includes(row.status)) return res.status(400).json({ success: false, error: 'This request is already being processed.' });
+    // The transfer receipt is mandatory (Bammi, 2026-11-18): the admin must be able to see
+    // proof of the transfer before the request reaches the confirm/credit step.
+    const hasProof = !!(proof && typeof proof === 'string' && proof.startsWith('data:image/') && proof.length < 3500000);
+    if (!hasProof) return res.status(400).json({ success: false, error: 'Upload your transaction receipt before you tap I have paid.' });
     const patch = { status: 'paid', paid_at: Date.now(), user_note: note ? String(note).slice(0, 400) : null };
     if (proof && typeof proof === 'string' && proof.startsWith('data:image/') && proof.length < 3500000) patch.proof_image = proof;
     await supa.from('oat_app_p2p_deposits').update(patch).eq('id', row.id);
