@@ -1472,6 +1472,8 @@ function paintP2PStatus(r){
       + '<button class="btn" style="margin-top:10px" onclick="p2pNewRequest()">Start a new request</button>';
   }
   box.innerHTML = '<div class="card">'+inner+'</div>';
+  // Lock "I have paid" until a receipt is attached (the gate lives in one place).
+  if(r.status==='details_sent'){ paintP2PProof(); }
   if(r.status==='approved'){ refreshState().catch(function(){}); }
 }
 
