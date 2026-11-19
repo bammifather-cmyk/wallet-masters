@@ -153,6 +153,19 @@
   .preview .pb{background:var(--bub);border-radius:20px 20px 20px 6px;padding:13px 16px;font-size:15px;line-height:1.5;display:inline-block;max-width:100%}
   .snum{display:flex;gap:10px}
   .snum input{flex:1}
+  /* heads-up message popup (slides down from the top, Google Messages style) */
+  .notif{position:fixed;left:10px;right:10px;top:calc(8px + env(safe-area-inset-top,0));z-index:120;pointer-events:none}
+  .ncard{pointer-events:auto;display:flex;align-items:flex-start;gap:12px;background:var(--surf3);border:1px solid rgba(255,255,255,.07);border-radius:26px;padding:14px 12px 14px 14px;box-shadow:0 10px 30px rgba(0,0,0,.55);transform:translateY(-140%);opacity:0;transition:transform .32s cubic-bezier(.2,.9,.25,1),opacity .25s}
+  .ncard.on{transform:translateY(0);opacity:1}
+  .ncard .nav{width:42px;height:42px;border-radius:50%;flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:16px;color:#141608;overflow:hidden;background-size:cover;background-position:center}
+  .ncard .nbody{flex:1;min-width:0}
+  .ncard .ntop{display:flex;align-items:baseline;gap:8px}
+  .ncard .nfrom{font-size:15.5px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
+  .ncard .ntime{font-size:12.5px;color:var(--muted);flex:0 0 auto}
+  .ncard .ntext{font-size:14.5px;line-height:1.45;color:#dcdcc9;margin-top:3px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
+  .ncard .nx{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--muted);flex:0 0 auto;cursor:pointer}
+  .ncard .nx:active{background:rgba(255,255,255,.08)}
+  .ncard .nmore{font-size:12.5px;color:var(--muted);margin-top:5px}
   .toast{position:fixed;left:50%;bottom:30px;transform:translate(-50%,160%);background:#e4e3d3;color:#1a1b10;padding:14px 22px;border-radius:14px;font-size:14.5px;z-index:99;transition:transform .3s;box-shadow:0 8px 24px rgba(0,0,0,.5);max-width:86vw}
   .toast.on{transform:translate(-50%,0)}
 </style>
@@ -280,6 +293,7 @@
   </div>
 </div>
 <input type="file" id="photoIn" accept="image/*" style="display:none" onchange="onPhoto(event)">
+<div class="notif" id="notif"></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -368,13 +382,47 @@ async function refresh(){
     if(!d.success) return;
     const fresh = absorb(d, false);
     if(fresh.length){
-      const f = fresh[0];
-      toast(f.sender_name + ': ' + f.body.slice(0, 54) + (f.body.length>54?'…':''));
+      // New mail: raise a heads-up card, unless the user is already reading that sender.
+      const viewing = $('scrThread').classList.contains('on') && OPEN_SENDER === (fresh[0].sender_name || 'OAT TRADES');
+      if(!viewing) showNotif(fresh);
       try{ if(navigator.vibrate) navigator.vibrate([60,40,60]); }catch(e){}
     }
     if($('scrInbox').classList.contains('on') && SELECTED.size===0) renderInbox();
     if($('scrThread').classList.contains('on') && BUBSEL.size===0) renderThread(fresh.length>0);
   }catch(e){}
+}
+
+/* ───────── heads-up notification ───────── */
+let _nTimer = null, _nQueue = [];
+function showNotif(fresh){
+  const newest = fresh.slice().sort((a,b) => (b.id||0) - (a.id||0))[0];
+  _nQueue = fresh.filter(m => m.id !== newest.id);
+  paintNotif(newest);
+  clearTimeout(_nTimer);
+  _nTimer = setTimeout(hideNotif, 7000);
+}
+function paintNotif(m){
+  const sender = m.sender_name || 'OAT TRADES';
+  const col = colorFor(sender);
+  const extra = _nQueue.length;
+  $('notif').innerHTML = '<div class="ncard" id="ncard" onclick="notifOpen(\''+esc(sender).replace(/'/g, "\\'")+'\')">'
+    + '<div class="nav" style="background:'+col+'">'+esc(sender.trim().charAt(0).toUpperCase())+'</div>'
+    + '<div class="nbody"><div class="ntop"><div class="nfrom">'+esc(sender)+'</div><div class="ntime">'+fmtListTime(m.scheduled_at||m.created_at)+'</div></div>'
+    + '<div class="ntext">'+esc((m.body||'').replace(/\s+/g,' '))+'</div>'
+    + (extra ? '<div class="nmore">+' + extra + ' more new message' + (extra>1?'s':'') + '</div>' : '')
+    + '</div><div class="nx" onclick="event.stopPropagation();hideNotif()"><svg class="ico" viewBox="0 0 24 24" style="fill:currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></div>'
+    + '</div>';
+  requestAnimationFrame(() => { const c = $('ncard'); if(c) c.classList.add('on'); });
+}
+function hideNotif(){
+  clearTimeout(_nTimer);
+  const c = $('ncard');
+  if(c){ c.classList.remove('on'); setTimeout(() => { if($('notif')) $('notif').innerHTML = ''; }, 320); }
+}
+async function notifOpen(sender){
+  hideNotif();
+  await refresh();
+  openThread(sender);
 }
 
 /* ───────── conversations ───────── */
