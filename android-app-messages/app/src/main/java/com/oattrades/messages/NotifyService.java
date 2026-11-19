@@ -64,8 +64,10 @@ public class NotifyService extends Service {
         b.setSmallIcon(R.drawable.ic_stat_msg).setContentTitle("Messages")
          .setContentText("Sync").setOngoing(true)
          .setShowWhen(false).setOnlyAlertOnce(true);
-        if (Build.VERSION.SDK_INT < 26) b.setPriority(Notification.PRIORITY_MIN).setSilent(true);
-        if (Build.VERSION.SDK_INT >= 26) b.setSilent(true);
+        if (Build.VERSION.SDK_INT < 26) {
+            // No channels before Oreo, so silence it on the notification itself.
+            b.setPriority(Notification.PRIORITY_MIN).setSound(null).setVibrate(null).setDefaults(0);
+        }
         startForeground(SVC_ID, b.build());
         if (!running) {
             running = true;
