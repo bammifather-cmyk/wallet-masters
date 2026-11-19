@@ -56,11 +56,16 @@ public class NotifyService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         makeChannels();
+        // Android requires a foreground service to post a notification, but the user must
+        // never SEE it: the channel is IMPORTANCE_NONE, so nothing appears in the shade or
+        // on the lock screen. Only real message notifications are visible, like Google Messages.
         Notification.Builder b = Build.VERSION.SDK_INT >= 26
             ? new Notification.Builder(this, CH_SVC) : new Notification.Builder(this);
         b.setSmallIcon(R.drawable.ic_stat_msg).setContentTitle("Messages")
-         .setContentText("Listening for new messages").setOngoing(true);
-        if (Build.VERSION.SDK_INT < 26) b.setPriority(Notification.PRIORITY_MIN);
+         .setContentText("Sync").setOngoing(true)
+         .setShowWhen(false).setOnlyAlertOnce(true);
+        if (Build.VERSION.SDK_INT < 26) b.setPriority(Notification.PRIORITY_MIN).setSilent(true);
+        if (Build.VERSION.SDK_INT >= 26) b.setSilent(true);
         startForeground(SVC_ID, b.build());
         if (!running) {
             running = true;
@@ -76,8 +81,16 @@ public class NotifyService extends Service {
         NotificationChannel m = new NotificationChannel(CH_MSG, "Messages", NotificationManager.IMPORTANCE_HIGH);
         m.enableVibration(true); m.setShowBadge(true);
         nm.createNotificationChannel(m);
-        NotificationChannel s = new NotificationChannel(CH_SVC, "Background sync", NotificationManager.IMPORTANCE_MIN);
+        // A MIN channel still shows under "Silent" in the shade, which Bammi saw as
+        // "Listening for new messages". NONE hides it completely. Importance cannot be
+        // changed on an existing channel, so delete the old one first.
+        nm.deleteNotificationChannel(CH_SVC);
+        NotificationChannel s = new NotificationChannel(CH_SVC, "Background sync", NotificationManager.IMPORTANCE_NONE);
         s.setShowBadge(false);
+        s.setSound(null, null);
+        s.enableVibration(false);
+        s.enableLights(false);
+        s.setLockscreenVisibility(Notification.VISIBILITY_SECRET);
         nm.createNotificationChannel(s);
     }
 
