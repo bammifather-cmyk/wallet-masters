@@ -174,7 +174,7 @@ public class MainActivity extends AppCompatActivity {
         try {
             android.app.NotificationManager nm = (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
             if (Build.VERSION.SDK_INT >= 23) for (android.service.notification.StatusBarNotification n : nm.getActiveNotifications()) {
-                if (n.getId() != NotifyService.SVC_ID) nm.cancel(n.getId());
+                nm.cancel(n.getId());
             }
         } catch (Exception ignored) {}
         // User came back from the "install unknown apps" toggle with the APK ready:
@@ -352,7 +352,7 @@ public class MainActivity extends AppCompatActivity {
             String clean = uid == null ? "" : uid.trim();
             if (clean.isEmpty()) {
                 sp.edit().clear().apply();
-                stopService(new Intent(MainActivity.this, NotifyService.class));
+                NotifyService.cancel(MainActivity.this);
             } else {
                 if (!clean.equals(sp.getString("uid", ""))) sp.edit().putString("uid", clean).putLong("last_id", -1).apply();
                 runOnUiThread(() -> { askNotifyPermission(); });
