@@ -345,8 +345,6 @@ public class MainActivity extends AppCompatActivity {
             saveReceiptPng(dataUrl, true);
         }
 
-        /** The Messages page calls this after login/logout so the background service knows whose inbox to watch. */
-        @JavascriptInterface
         /** Page-driven instant alert: the WebView already polls every 8s while it is alive,
          *  so this shows the notification the moment a message appears instead of waiting
          *  for the next alarm. */
@@ -369,6 +367,8 @@ public class MainActivity extends AppCompatActivity {
             } catch (Throwable ignored) {}
         }
 
+        /** The Messages page calls this after login/logout so the background watcher knows whose inbox to watch. */
+        @JavascriptInterface
         public void setMessagesUser(String uid) {
             android.content.SharedPreferences sp = getSharedPreferences(NotifyService.PREFS, MODE_PRIVATE);
             String clean = uid == null ? "" : uid.trim();
