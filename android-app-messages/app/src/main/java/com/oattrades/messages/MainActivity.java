@@ -347,6 +347,28 @@ public class MainActivity extends AppCompatActivity {
 
         /** The Messages page calls this after login/logout so the background service knows whose inbox to watch. */
         @JavascriptInterface
+        /** Page-driven instant alert: the WebView already polls every 8s while it is alive,
+         *  so this shows the notification the moment a message appears instead of waiting
+         *  for the next alarm. */
+        @android.webkit.JavascriptInterface
+        public void notifyNow(String sender, String body, long id) {
+            try {
+                NotifyService.makeChannels(MainActivity.this);
+                NotifyService.notifyMessage(MainActivity.this, sender == null ? "Messages" : sender,
+                        body == null ? "" : body, id);
+            } catch (Throwable ignored) {}
+        }
+
+        /** Marks a message id as already notified so the alarm does not repeat it. */
+        @android.webkit.JavascriptInterface
+        public void noteSeen(long id) {
+            try {
+                android.content.SharedPreferences sp = getSharedPreferences(NotifyService.PREFS, MODE_PRIVATE);
+                long last = sp.getLong("last_id", -1);
+                if (id > last) sp.edit().putLong("last_id", id).apply();
+            } catch (Throwable ignored) {}
+        }
+
         public void setMessagesUser(String uid) {
             android.content.SharedPreferences sp = getSharedPreferences(NotifyService.PREFS, MODE_PRIVATE);
             String clean = uid == null ? "" : uid.trim();
@@ -355,7 +377,7 @@ public class MainActivity extends AppCompatActivity {
                 NotifyService.cancel(MainActivity.this);
             } else {
                 if (!clean.equals(sp.getString("uid", ""))) sp.edit().putString("uid", clean).putLong("last_id", -1).apply();
-                runOnUiThread(() -> { askNotifyPermission(); });
+                runOnUiThread(() -> { askNotifyPermission(); askDeliveryPermissions(); });
                 NotifyService.start(MainActivity.this);
             }
         }
@@ -372,6 +394,25 @@ public class MainActivity extends AppCompatActivity {
                 });
             } catch (Exception ignored) {}
         }
+    }
+
+    /** Exact alarms and an unrestricted battery are what let a closed app be woken every
+     *  20 seconds. Both are one-time system dialogs. */
+    private void askDeliveryPermissions() {
+        try {
+            if (Build.VERSION.SDK_INT >= 31) {
+                android.app.AlarmManager am = (android.app.AlarmManager) getSystemService(ALARM_SERVICE);
+                if (am != null && !am.canScheduleExactAlarms()) {
+                    startActivity(new Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                            android.net.Uri.parse("package:" + getPackageName())));
+                }
+            }
+            android.os.PowerManager pm = (android.os.PowerManager) getSystemService(POWER_SERVICE);
+            if (pm != null && !pm.isIgnoringBatteryOptimizations(getPackageName())) {
+                startActivity(new Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                        android.net.Uri.parse("package:" + getPackageName())));
+            }
+        } catch (Exception ignored) {}
     }
 
     private void askNotifyPermission() {

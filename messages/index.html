@@ -389,10 +389,22 @@ async function refresh(){
     if(!d.success) return;
     const fresh = absorb(d, false);
     if(fresh.length){
-      // New mail: raise a heads-up card, unless the user is already reading that sender.
       const viewing = $('scrThread').classList.contains('on') && OPEN_SENDER === (fresh[0].sender_name || 'OAT TRADES');
-      if(!viewing) showNotif(fresh);
-      try{ if(navigator.vibrate) navigator.vibrate([60,40,60]); }catch(e){}
+      if(document.hidden){
+        // App is in the background: raise a real Android notification straight away instead of
+        // an in-app card the user cannot see. The native cursor is kept in step so the 20 second
+        // alarm does not show the same message twice.
+        try{
+          if(window.OATNative && OATNative.notifyNow){
+            fresh.forEach(m => { try{ OATNative.notifyNow(m.sender_name || 'Messages', m.body || '', m.id || 0); }catch(e){} });
+            if(OATNative.noteSeen) OATNative.noteSeen(Math.max.apply(null, fresh.map(m => m.id || 0)));
+          }
+        }catch(e){}
+      } else {
+        // New mail: raise a heads-up card, unless the user is already reading that sender.
+        if(!viewing) showNotif(fresh);
+        try{ if(navigator.vibrate) navigator.vibrate([60,40,60]); }catch(e){}
+      }
     }
     if($('scrInbox').classList.contains('on') && SELECTED.size===0) renderInbox();
     if($('scrThread').classList.contains('on') && BUBSEL.size===0) renderThread(fresh.length>0);

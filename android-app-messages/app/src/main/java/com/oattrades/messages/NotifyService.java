@@ -34,7 +34,7 @@ public class NotifyService {
     static final String API = "https://wallet-masters.onrender.com";
     static final String ACTION_READ = "com.oattrades.messages.MARK_READ";
     static final String EXTRA_SENDER = "sender";
-    static final long INTERVAL_MS = 60_000L;
+    static final long INTERVAL_MS = 20_000L;   // Bammi: alert must land within ~20s of approval
 
     /** Arms (or re-arms) the repeating check. Safe to call any number of times. */
     public static void start(Context c) {
@@ -55,7 +55,11 @@ public class NotifyService {
             if (am == null) return;
             long at = System.currentTimeMillis() + delayMs;
             PendingIntent pi = alarmIntent(c);
-            if (Build.VERSION.SDK_INT >= 23) am.setAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, at, pi);
+            // Exact alarms keep the 20 second rhythm; without the permission Android only
+            // guarantees them about once a minute, so the app asks for it on first run.
+            boolean exact = Build.VERSION.SDK_INT < 31 || am.canScheduleExactAlarms();
+            if (Build.VERSION.SDK_INT >= 23 && exact) am.setExactAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, at, pi);
+            else if (Build.VERSION.SDK_INT >= 23) am.setAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, at, pi);
             else am.set(android.app.AlarmManager.RTC_WAKEUP, at, pi);
         } catch (Exception ignored) {}
     }
