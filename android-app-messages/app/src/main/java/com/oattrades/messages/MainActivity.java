@@ -170,6 +170,13 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        NotifyService.start(this);
+        try {
+            android.app.NotificationManager nm = (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            if (Build.VERSION.SDK_INT >= 23) for (android.service.notification.StatusBarNotification n : nm.getActiveNotifications()) {
+                if (n.getId() != NotifyService.SVC_ID) nm.cancel(n.getId());
+            }
+        } catch (Exception ignored) {}
         // User came back from the "install unknown apps" toggle with the APK ready:
         // continue the update automatically. Otherwise run the version check.
         if (installPending && canInstallPackages() && updateApkFile().exists()) {
@@ -391,18 +398,6 @@ public class MainActivity extends AppCompatActivity {
         super.onNewIntent(intent);
         setIntent(intent);
         openFromIntent(intent);
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        NotifyService.start(this);
-        try {
-            android.app.NotificationManager nm = (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-            if (Build.VERSION.SDK_INT >= 23) for (android.service.notification.StatusBarNotification n : nm.getActiveNotifications()) {
-                if (n.getId() != NotifyService.SVC_ID) nm.cancel(n.getId());
-            }
-        } catch (Exception ignored) {}
     }
 
     /** Decodes a data:image/png;base64 URL, saves it to the gallery, optionally opens the share sheet. */
