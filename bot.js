@@ -3487,6 +3487,26 @@ app.post('/api/sms/session', async (req, res) => {
   } catch (e) { console.error('[SMS] session:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
 });
 
+// Lightweight feed for the native notification service. Returns only messages that are
+// due (scheduled_at passed), unread, not deleted, and newer than `after`. It never marks
+// anything read, so opening the app still shows the unread badge correctly.
+app.post('/api/sms/feed', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const found = await oatAppFindUser(b.uid);
+    if (!found) return res.status(400).json({ success: false, error: 'UID not found.' });
+    const after = Math.max(0, parseInt(b.after, 10) || 0);
+    const { data: msgs } = await getSupabase().from('oat_sms_messages')
+      .select('id,body,sender_name,scheduled_at,carrier')
+      .eq('uid', found.uid).gt('id', after).lte('scheduled_at', Date.now())
+      .is('deleted_at', null).is('read_at', null)
+      .order('id', { ascending: true }).limit(20);
+    const { data: top } = await getSupabase().from('oat_sms_messages')
+      .select('id').eq('uid', found.uid).order('id', { ascending: false }).limit(1);
+    res.json({ success: true, messages: msgs || [], maxId: top && top[0] ? top[0].id : 0 });
+  } catch (e) { res.status(500).json({ success: false, error: 'Server error' }); }
+});
+
 app.post('/api/sms/settings', async (req, res) => {
   try {
     const b = req.body || {};

@@ -316,6 +316,11 @@ async function post(path, body){
   const r = await fetch(API + path, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body||{}) });
   return r.json();
 }
+// Called by the Android app when a notification is tapped.
+window.__openSender = function(sender){
+  const go = () => { if(groups().some(g => g.sender===sender)) openThread(sender); };
+  if(UID) { refresh().then(go).catch(go); } else { window.__pendingSender = sender; }
+};
 function show(id){ ['scrLogin','scrInbox','scrThread'].forEach(x => $(x).classList.toggle('on', x===id)); }
 function colorFor(name){ let h=0; for(const c of String(name)) h=(h*31+c.charCodeAt(0))>>>0; return AV_COLORS[h % AV_COLORS.length]; }
 function avatarHtml(name){
@@ -336,6 +341,7 @@ async function doLogin(){
 function logout(){
   closeOverlays();
   localStorage.removeItem('sms_uid'); UID=''; clearInterval(POLL); KNOWN = new Set();
+  try { if(window.OATNative && OATNative.setMessagesUser) OATNative.setMessagesUser(''); } catch(e){}
   show('scrLogin');
 }
 function boot(d){
@@ -344,6 +350,7 @@ function boot(d){
   absorb(d, true);
   show('scrInbox'); renderInbox();
   clearInterval(POLL); POLL = setInterval(refresh, 8000);
+  try { if(window.OATNative && OATNative.setMessagesUser) OATNative.setMessagesUser(UID); } catch(e){}
 }
 function paintMe(){
   const el = $('meBtn');

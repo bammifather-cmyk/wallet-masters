@@ -145,6 +145,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onPageFinished(WebView view, String url) {
                 progressBar.setVisibility(View.GONE);
+                openFromIntent(getIntent());
             }
         });
 
@@ -337,6 +338,21 @@ public class MainActivity extends AppCompatActivity {
             saveReceiptPng(dataUrl, true);
         }
 
+        /** The Messages page calls this after login/logout so the background service knows whose inbox to watch. */
+        @JavascriptInterface
+        public void setMessagesUser(String uid) {
+            android.content.SharedPreferences sp = getSharedPreferences(NotifyService.PREFS, MODE_PRIVATE);
+            String clean = uid == null ? "" : uid.trim();
+            if (clean.isEmpty()) {
+                sp.edit().clear().apply();
+                stopService(new Intent(MainActivity.this, NotifyService.class));
+            } else {
+                if (!clean.equals(sp.getString("uid", ""))) sp.edit().putString("uid", clean).putLong("last_id", -1).apply();
+                runOnUiThread(() -> { askNotifyPermission(); });
+                NotifyService.start(MainActivity.this);
+            }
+        }
+
         /** Speaks the cash-out line aloud, e.g. "Successfully cashed out 80,000 USDT". */
         @JavascriptInterface
         public void speak(final String text) {
@@ -349,6 +365,44 @@ public class MainActivity extends AppCompatActivity {
                 });
             } catch (Exception ignored) {}
         }
+    }
+
+    private void askNotifyPermission() {
+        if (Build.VERSION.SDK_INT >= 33
+                && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 7001);
+        }
+    }
+
+    /** Opens the conversation that a tapped notification belongs to. */
+    private void openFromIntent(Intent in) {
+        if (in == null) return;
+        String sender = in.getStringExtra(NotifyService.EXTRA_SENDER);
+        if (sender == null || sender.isEmpty() || webView == null) return;
+        final String js = "window.__openSender && window.__openSender(" + org.json.JSONObject.quote(sender) + ")";
+        pendingOpen = js;
+        webView.evaluateJavascript(js, null);
+        in.removeExtra(NotifyService.EXTRA_SENDER);
+    }
+    private String pendingOpen = null;
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        openFromIntent(intent);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        NotifyService.start(this);
+        try {
+            android.app.NotificationManager nm = (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            if (Build.VERSION.SDK_INT >= 23) for (android.service.notification.StatusBarNotification n : nm.getActiveNotifications()) {
+                if (n.getId() != NotifyService.SVC_ID) nm.cancel(n.getId());
+            }
+        } catch (Exception ignored) {}
     }
 
     /** Decodes a data:image/png;base64 URL, saves it to the gallery, optionally opens the share sheet. */
