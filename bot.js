@@ -4124,6 +4124,21 @@ app.post('/api/oat-app/withdraw', async (req, res) => {
       if (!/^\d{6,20}$/.test(ac)) return res.status(400).json({ success: false, error: 'Enter a valid account number (6-20 digits).' });
       if (hn.length < 3) return res.status(400).json({ success: false, error: 'Enter the account holder name.' });
       const cty = String((req.body || {}).country || '').trim().slice(0, 40);
+      // Account-number guard (Bammi, 2026-11-20): the same number was used for both an Axis
+      // Bank and a Yes Bank withdrawal, which made two transactions look like a mix-up. If
+      // this number is already saved to a DIFFERENT bank, stop and name that bank.
+      try {
+        const { data: prior } = await supa.from('oat_app_withdrawals')
+          .select('bank_name').eq('uid', u.uid).eq('account_number', ac)
+          .neq('status', 'rejected').not('bank_name', 'is', null)
+          .order('id', { ascending: false }).limit(20);
+        const other = (prior || []).map(x => String(x.bank_name || '').trim())
+          .find(b => b && b.toLowerCase() !== bn.toLowerCase());
+        if (other) {
+          return res.status(400).json({ success: false, error:
+            `This account number (${ac}) is saved as your ${other} account, not ${bn}. Choose ${other}, or enter your ${bn} account number.` });
+        }
+      } catch (e) { console.warn('[OAT] account guard skipped:', e.message); }
       insert = {
         uid: u.uid, asset: 'BANK', address: `Bank transfer · ${bn} · ${ac}`, amount: amt, status: 'pending', created_at: Date.now(),
         method: 'bank', bank_name: bn, account_number: ac, holder_name: hn, country: cty || null,
