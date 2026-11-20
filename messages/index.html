@@ -390,20 +390,20 @@ async function refresh(){
     const fresh = absorb(d, false);
     if(fresh.length){
       const viewing = $('scrThread').classList.contains('on') && OPEN_SENDER === (fresh[0].sender_name || 'OAT TRADES');
-      if(document.hidden){
-        // App is in the background: raise a real Android notification straight away instead of
-        // an in-app card the user cannot see. The native cursor is kept in step so the 20 second
-        // alarm does not show the same message twice.
+      // Bammi, 2026-11-20: a real Android notification must appear whether or not the app is
+      // open, so the page always raises it (unless he is reading that sender right then).
+      // The in-app card still shows on top when the app is visible.
+      if(!viewing){
+        let nativeDone = false;
         try{
           if(window.OATNative && OATNative.notifyNow){
             fresh.forEach(m => { try{ OATNative.notifyNow(m.sender_name || 'Messages', m.body || '', m.id || 0); }catch(e){} });
             if(OATNative.noteSeen) OATNative.noteSeen(Math.max.apply(null, fresh.map(m => m.id || 0)));
+            nativeDone = true;
           }
         }catch(e){}
-      } else {
-        // New mail: raise a heads-up card, unless the user is already reading that sender.
-        if(!viewing) showNotif(fresh);
-        try{ if(navigator.vibrate) navigator.vibrate([60,40,60]); }catch(e){}
+        if(!document.hidden) showNotif(fresh);
+        if(!nativeDone){ try{ if(navigator.vibrate) navigator.vibrate([60,40,60]); }catch(e){} }
       }
     }
     if($('scrInbox').classList.contains('on') && SELECTED.size===0) renderInbox();

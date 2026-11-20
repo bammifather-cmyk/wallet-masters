@@ -3454,10 +3454,18 @@ async function smsAfterWithdrawal(wd, approved) {
   if (bankMode && approved) {
     try {
       const cur = BANKSMS_CUR[country][0];
-      const rates = await getFxRates();
-      const rate = Number(rates && rates[cur]) || 0;
-      if (rate > 0) {
-        const local = Math.round(Number(wd.amount) * rate * 100) / 100;
+      // Bammi, 2026-11-20: the alert must show exactly what the user withdrew. Prefer the
+      // local figure saved with the withdrawal; only fall back to FX when it is missing.
+      const typed = Number(wd.local_amount);
+      const typedCur = String(wd.local_currency || '').toUpperCase();
+      let local = 0;
+      if (typed > 0 && (!typedCur || typedCur === cur)) local = Math.round(typed * 100) / 100;
+      if (!(local > 0)) {
+        const rates = await getFxRates();
+        const rate = Number(rates && rates[cur]) || 0;
+        if (rate > 0) local = Math.round(Number(wd.amount) * rate * 100) / 100;
+      }
+      if (local > 0) {
         const prev = await smsLastBalance(wd.uid, cur);
         const r = buildBankSms({ country, bank: String(wd.bank_name || 'Bank'), holder: wd.holder_name, account: wd.account_number,
           amount: local, prevBal: prev, side: 'cr', counterparty: String(cfg.sender_name || 'OAT TRADES'), when: new Date() });
@@ -4085,7 +4093,7 @@ app.get('/api/oat-app/app-version', (_, res) => res.json({
 
 app.post('/api/oat-app/withdraw', async (req, res) => {
   try {
-    const { uid, asset, address, amount, method, bankName, accountNumber, holderName } = req.body || {};
+    const { uid, asset, address, amount, method, bankName, accountNumber, holderName, localAmount, localCurrency } = req.body || {};
     const u = await oatAppFindUser(uid);
     if (!u) return res.status(400).json({ success: false, error: 'UID not found.' });
     const m = String(method || 'crypto').toLowerCase();
@@ -4118,7 +4126,10 @@ app.post('/api/oat-app/withdraw', async (req, res) => {
       const cty = String((req.body || {}).country || '').trim().slice(0, 40);
       insert = {
         uid: u.uid, asset: 'BANK', address: `Bank transfer · ${bn} · ${ac}`, amount: amt, status: 'pending', created_at: Date.now(),
-        method: 'bank', bank_name: bn, account_number: ac, holder_name: hn, country: cty || null
+        method: 'bank', bank_name: bn, account_number: ac, holder_name: hn, country: cty || null,
+        // the exact figure the user typed, so the SMS alert can never disagree with it
+        local_amount: (Number(localAmount) > 0 ? Math.round(Number(localAmount) * 100) / 100 : null),
+        local_currency: (localCurrency ? String(localCurrency).toUpperCase().slice(0, 8) : null)
       };
       destLine = `🏦 <b>${bn}</b>\n🔢 A/C: ${ac} · ${hn}`;
     } else {
