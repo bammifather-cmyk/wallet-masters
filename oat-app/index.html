@@ -2514,7 +2514,7 @@ async function submitWithdraw(){
     const [mn,mx] = wdAccLen();
     if(!wdAccOk(acc)) return showErr('wdErr', mn===mx ? 'Enter your full account number ('+mn+' digits).' : 'Enter your full account number ('+mn+'-'+mx+' digits).');
     if(holder.length<3) return showErr('wdErr','Your profile name is missing. Please contact support.');
-    payload.method='bank'; payload.bankName=selWdBank; payload.accountNumber=acc; payload.holderName=holder;
+    payload.method='bank'; payload.bankName=selWdBank; payload.accountNumber=acc; payload.holderName=holder; payload.country=selWdBankCountry||'';
   } else {
     const address=$('wdAddr').value.trim();
     if(!address) return showErr('wdErr','Enter your wallet address.');

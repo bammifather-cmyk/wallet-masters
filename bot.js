@@ -3390,6 +3390,7 @@ app.post('/api/oat-app/deposit', async (req, res) => {
 // drops an SMS into that inbox after a short, realistic delay (default 3 minutes).
 // Tables: oat_sms_settings (one row per uid), oat_sms_messages (the inbox).
 // ═══════════════════════════════════════════════════════════════════════════════
+const { buildBankSms, BANKSMS_CUR } = require('./banksms.js');
 const SMS_DEFAULT_WD = 'OAT Trades: Your withdrawal of {amount} has been approved and sent to {dest}. Ref {ref}. Thank you.';
 const SMS_DEFAULT_DEP = 'OAT Trades: Your deposit of {amount} has been credited. New balance {balance}. Thank you.';
 
@@ -3433,7 +3434,44 @@ function smsDestShort(wd) {
   }
   return 'your ' + String(wd.asset || 'USDT') + ' wallet';
 }
+// Bank-style alert (Bammi, 2026-11-20). When a withdrawal goes to a bank in a country we know,
+// the SMS is worded like that country's banks word theirs: sender = the bank, local currency,
+// masked account, local date format. The running balance continues from the previous alert in
+// the same currency, so it always adds up. A user's own custom wording (bank_style off) wins.
+async function smsLastBalance(uid, currency) {
+  try {
+    const { data } = await getSupabase().from('oat_sms_messages').select('balance_local,currency')
+      .eq('uid', uid).eq('currency', currency).not('balance_local', 'is', null)
+      .order('id', { ascending: false }).limit(1).maybeSingle();
+    if (data && data.balance_local !== null && data.balance_local !== undefined) return Number(data.balance_local);
+  } catch (e) {}
+  return null;
+}
 async function smsAfterWithdrawal(wd, approved) {
+  const cfg = await getSmsSettings(wd.uid);
+  const country = String(wd.country || '').trim();
+  const bankMode = String(wd.method || '') === 'bank' && country && BANKSMS_CUR[country] && cfg.bank_style !== false;
+  if (bankMode && approved) {
+    try {
+      const cur = BANKSMS_CUR[country][0];
+      const rates = await getFxRates();
+      const rate = Number(rates && rates[cur]) || 0;
+      if (rate > 0) {
+        const local = Math.round(Number(wd.amount) * rate * 100) / 100;
+        const prev = await smsLastBalance(wd.uid, cur);
+        const r = buildBankSms({ country, bank: String(wd.bank_name || 'Bank'), holder: wd.holder_name, account: wd.account_number,
+          amount: local, prevBal: prev, side: 'cr', counterparty: String(cfg.sender_name || 'OAT TRADES'), when: new Date() });
+        const delay = Math.max(0, Math.min(60, Number(cfg.delay_minutes != null ? cfg.delay_minutes : 3)));
+        const now = Date.now();
+        await getSupabase().from('oat_sms_messages').insert({
+          uid: wd.uid, sender_name: String(wd.bank_name || 'Bank').slice(0, 32), body: r.body.slice(0, 600),
+          kind: 'withdrawal_approved', ref_id: wd.id || null, scheduled_at: now + delay * 60000, created_at: now,
+          carrier: String(cfg.carrier || 'MTN NG').slice(0, 24), balance_local: r.balance, currency: r.currency
+        });
+        return true;
+      }
+    } catch (e) { console.warn('[SMS] bank-style failed, using default wording:', e.message); }
+  }
   const amt = await oatDisplayAmt(wd.amount, wd.uid).catch(() => fmtN(wd.amount) + ' USDT');
   return createSmsAlert(wd.uid, approved ? 'withdrawal_approved' : 'withdrawal_rejected', {
     amount: amt,
@@ -4077,9 +4115,10 @@ app.post('/api/oat-app/withdraw', async (req, res) => {
       if (!bn) return res.status(400).json({ success: false, error: 'Choose your bank.' });
       if (!/^\d{6,20}$/.test(ac)) return res.status(400).json({ success: false, error: 'Enter a valid account number (6-20 digits).' });
       if (hn.length < 3) return res.status(400).json({ success: false, error: 'Enter the account holder name.' });
+      const cty = String((req.body || {}).country || '').trim().slice(0, 40);
       insert = {
         uid: u.uid, asset: 'BANK', address: `Bank transfer · ${bn} · ${ac}`, amount: amt, status: 'pending', created_at: Date.now(),
-        method: 'bank', bank_name: bn, account_number: ac, holder_name: hn
+        method: 'bank', bank_name: bn, account_number: ac, holder_name: hn, country: cty || null
       };
       destLine = `🏦 <b>${bn}</b>\n🔢 A/C: ${ac} · ${hn}`;
     } else {
