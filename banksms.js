@@ -78,8 +78,8 @@ const BANKSMS_TZ = {
 const BANKSMS_FMT = {
   'India': {
     mask: 'xx', num: 'in',
-    cr: x => `${x.sym} ${x.n(x.amt)} credited to ${x.bank} A/c ${x.m} on ${x.p.dd}-${x.p.mm}-${x.p.yy} via IMPS from ${x.from}. Ref ${x.utr}. Avl Bal: ${x.sym} ${x.n(x.bal)}.`,
-    dr: x => `${x.sym} ${x.n(x.amt)} debited from ${x.bank} A/c ${x.m} on ${x.p.dd}-${x.p.mm}-${x.p.yy} via IMPS to ${x.from}. Ref ${x.utr}. Avl Bal: ${x.sym} ${x.n(x.bal)}. Not you? Call customer care.`
+    cr: x => `${x.sym} ${x.n(x.amt)} credited to ${x.bank} A/c ${x.m} on ${x.p.dd}-${x.p.mm}-${x.p.yy} at ${x.p.HH}:${x.p.MI} via IMPS from ${x.from}. Ref ${x.utr}. Avl Bal: ${x.sym} ${x.n(x.bal)}.`,
+    dr: x => `${x.sym} ${x.n(x.amt)} debited from ${x.bank} A/c ${x.m} on ${x.p.dd}-${x.p.mm}-${x.p.yy} at ${x.p.HH}:${x.p.MI} via IMPS to ${x.from}. Ref ${x.utr}. Avl Bal: ${x.sym} ${x.n(x.bal)}. Not you? Call customer care.`
   },
   'Nigeria': {
     mask: 'ng', num: 'us',
@@ -103,18 +103,18 @@ const BANKSMS_FMT = {
   },
   'United States': {
     mask: 'x', num: 'us',
-    cr: x => `${x.bank}: A deposit of $${x.n(x.amt)} was posted to your account ending ${x.l4} on ${x.p.mm}/${x.p.dd}/${x.p.yyyy} from ${x.from}. Available balance: $${x.n(x.bal)}. Reply STOP to opt out.`,
-    dr: x => `${x.bank}: A transfer of $${x.n(x.amt)} was sent from your account ending ${x.l4} on ${x.p.mm}/${x.p.dd}/${x.p.yyyy} to ${x.from}. Available balance: $${x.n(x.bal)}. Reply STOP to opt out.`
+    cr: x => `${x.bank}: A deposit of $${x.n(x.amt)} was posted to your account ending ${x.l4} on ${x.p.mm}/${x.p.dd}/${x.p.yyyy} at ${x.p.h12}:${x.p.MI} ${x.p.ampm} from ${x.from}. Available balance: $${x.n(x.bal)}. Reply STOP to opt out.`,
+    dr: x => `${x.bank}: A transfer of $${x.n(x.amt)} was sent from your account ending ${x.l4} on ${x.p.mm}/${x.p.dd}/${x.p.yyyy} at ${x.p.h12}:${x.p.MI} ${x.p.ampm} to ${x.from}. Available balance: $${x.n(x.bal)}. Reply STOP to opt out.`
   },
   'Canada': {
     mask: 'x', num: 'us',
-    cr: x => `${x.bank}: You received a deposit of $${x.n(x.amt)} CAD in account ending ${x.l4} on ${x.p.mon} ${x.p.dd}, ${x.p.yyyy} from ${x.from}. Balance: $${x.n(x.bal)}.`,
-    dr: x => `${x.bank}: An Interac e-Transfer of $${x.n(x.amt)} CAD was sent from account ending ${x.l4} on ${x.p.mon} ${x.p.dd}, ${x.p.yyyy} to ${x.from}. Balance: $${x.n(x.bal)}.`
+    cr: x => `${x.bank}: You received a deposit of $${x.n(x.amt)} CAD in account ending ${x.l4} on ${x.p.mon} ${x.p.dd}, ${x.p.yyyy} at ${x.p.h12}:${x.p.MI} ${x.p.ampm} from ${x.from}. Balance: $${x.n(x.bal)}.`,
+    dr: x => `${x.bank}: An Interac e-Transfer of $${x.n(x.amt)} CAD was sent from account ending ${x.l4} on ${x.p.mon} ${x.p.dd}, ${x.p.yyyy} at ${x.p.h12}:${x.p.MI} ${x.p.ampm} to ${x.from}. Balance: $${x.n(x.bal)}.`
   },
   'United Kingdom': {
     mask: 'x', num: 'us',
-    cr: x => `${x.bank}: £${x.n(x.amt)} received to a/c ending ${x.l4} from ${x.from} on ${x.p.dd}/${x.p.mm}/${x.p.yy}. Ref ${x.ref}. Balance £${x.n(x.bal)}.`,
-    dr: x => `${x.bank}: £${x.n(x.amt)} paid from a/c ending ${x.l4} to ${x.from} on ${x.p.dd}/${x.p.mm}/${x.p.yy}. Ref ${x.ref}. Balance £${x.n(x.bal)}.`
+    cr: x => `${x.bank}: £${x.n(x.amt)} received to a/c ending ${x.l4} from ${x.from} on ${x.p.dd}/${x.p.mm}/${x.p.yy} at ${x.p.HH}:${x.p.MI}. Ref ${x.ref}. Balance £${x.n(x.bal)}.`,
+    dr: x => `${x.bank}: £${x.n(x.amt)} paid from a/c ending ${x.l4} to ${x.from} on ${x.p.dd}/${x.p.mm}/${x.p.yy} at ${x.p.HH}:${x.p.MI}. Ref ${x.ref}. Balance £${x.n(x.bal)}.`
   },
   'China': {
     mask: 'x', num: 'us', zh: true,

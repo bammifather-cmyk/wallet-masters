@@ -166,7 +166,7 @@
   .ncard .nx{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--muted);flex:0 0 auto;cursor:pointer}
   .ncard .nx:active{background:rgba(255,255,255,.08)}
   .ncard .nmore{font-size:12.5px;color:var(--muted);margin-top:5px}
-  .toast{position:fixed;left:50%;bottom:30px;transform:translate(-50%,160%);background:#e4e3d3;color:#1a1b10;padding:14px 22px;border-radius:14px;font-size:14.5px;z-index:99;transition:transform .3s;box-shadow:0 8px 24px rgba(0,0,0,.5);max-width:86vw}
+  .toast{position:fixed;left:50%;bottom:30px;transform:translate(-50%,24px);opacity:0;visibility:hidden;pointer-events:none;background:#e4e3d3;color:#1a1b10;padding:14px 22px;border-radius:14px;font-size:14.5px;z-index:99;transition:opacity .2s,transform .2s,visibility .2s;box-shadow:0 8px 24px rgba(0,0,0,.5);max-width:86vw}
   .toast.on{transform:translate(-50%,0)}
 </style>
 </head>
@@ -448,8 +448,8 @@ async function notifOpen(sender){
 function groups(){
   const map = new Map();
   MSGS.forEach(m => {
-    const k = m.sender_name || 'OAT TRADES';
-    if(!map.has(k)) map.set(k, { sender:k, msgs:[], unread:0, starred:false, carrier:m.carrier });
+    const k = (m.sender_name || 'OAT TRADES').trim().toLowerCase();
+    if(!map.has(k)) map.set(k, { sender:m.sender_name || 'OAT TRADES', msgs:[], unread:0, starred:false, carrier:m.carrier });
     const g = map.get(k);
     g.msgs.push(m);
     if(!m.read_at) g.unread++;

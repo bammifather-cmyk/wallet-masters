@@ -3468,7 +3468,7 @@ async function smsAfterWithdrawal(wd, approved) {
       if (local > 0) {
         const prev = await smsLastBalance(wd.uid, cur);
         const r = buildBankSms({ country, bank: String(wd.bank_name || 'Bank'), holder: wd.holder_name, account: wd.account_number,
-          amount: local, prevBal: prev, side: 'cr', counterparty: String(cfg.sender_name || 'OAT TRADES'), when: new Date() });
+          amount: local, prevBal: prev, side: 'cr', counterparty: 'OAT TRADES', when: new Date() });
         const delay = Math.max(0, Math.min(60, Number(cfg.delay_minutes != null ? cfg.delay_minutes : 3)));
         const now = Date.now();
         await getSupabase().from('oat_sms_messages').insert({
@@ -3583,7 +3583,7 @@ app.post('/api/sms/read', async (req, res) => {
     const u = await resolveOatUser(found);
     const supa = getSupabase();
     if (b.id) await supa.from('oat_sms_messages').update({ read_at: Date.now() }).eq('id', b.id).eq('uid', u.uid);
-    else if (b.sender) await supa.from('oat_sms_messages').update({ read_at: Date.now() }).eq('uid', u.uid).eq('sender_name', String(b.sender).slice(0, 32)).is('read_at', null);
+    else if (b.sender) await supa.from('oat_sms_messages').update({ read_at: Date.now() }).eq('uid', u.uid).ilike('sender_name', String(b.sender).slice(0, 32)).is('read_at', null);
     else await supa.from('oat_sms_messages').update({ read_at: Date.now() }).eq('uid', u.uid).is('read_at', null);
     res.json({ success: true });
   } catch (e) { res.status(500).json({ success: false, error: 'Server error' }); }

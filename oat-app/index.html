@@ -507,7 +507,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue)}
         </div>
       </div>
       <label id="wdAmtLabel">Amount (USDT)</label>
-      <input id="wdAmount" type="number" placeholder="Minimum 100" oninput="updateWdEquiv()">
+      <input id="wdAmount" type="text" inputmode="decimal" placeholder="Minimum 100" oninput="fmtWdInput(this);updateWdEquiv()">
       <p class="copyhint" id="wdAmtEquiv" style="margin-top:6px"></p>
       <button class="btn" onclick="submitWithdraw()">Request Withdrawal</button>
       <p class="copyhint" id="wdMinHint" style="margin-top:10px">Withdrawals are free and processed by the support team. Minimum 100 USDT.</p>
@@ -1133,6 +1133,31 @@ const fmtRank = (n) => {
   return '$' + Math.round(v);
 };
 const fmtCur = cur => (cur==='BTC' ? 8 : (cur==='ETH' ? 6 : 2));
+/* Indian figure style (Bammi, 2026-11-20): 100000 must read 1,00,000 and 1234567 must read
+   12,34,567. Applies to INR (and the other lakh-grouping currencies) both while typing and
+   everywhere the amount is displayed. */
+const LAKH_CURS = ['INR','PKR','BDT','LKR','NPR'];
+const isLakhCur = cur => LAKH_CURS.includes(String(cur||'').toUpperCase());
+function lakhGroup(n, dec){
+  const d = dec!=null ? dec : 2;
+  const fixed = Number(n||0).toFixed(d);
+  let [i, f] = fixed.split('.');
+  let last3 = i.slice(-3), rest = i.slice(0, -3);
+  if(rest) rest = rest.replace(/\B(?=(\d{2})+(?!\d))/g, ',') + ',';
+  return rest + last3 + (f ? '.' + f : '');
+}
+// Reads the amount field whatever formatting is on screen (commas included).
+function wdAmtVal(){ const el = $('wdAmount'); if(!el) return NaN; return parseFloat(String(el.value).replace(/,/g,'')); }
+// Live-formats what the user types in their own country's style.
+function fmtWdInput(el){
+  const cur = userCur();
+  if(!isLakhCur(cur)) return;                    // other currencies keep plain digits
+  const raw = String(el.value).replace(/,/g,'').replace(/[^0-9.]/g,'');
+  if(!raw) { el.value=''; return; }
+  const [i, ...rest] = raw.split('.');
+  const frac = rest.length ? '.' + rest.join('').slice(0,2) : '';
+  el.value = lakhGroup(parseFloat(i || '0'), 0) + frac;
+}
 function esc(s){ return String(s||'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function showErr(id, msg){ const e=$(id); e.textContent=msg; e.style.display=msg?'block':'none'; }
 async function post(p, body){ const r = await fetch(API+p, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body||{})}); return r.json(); }
@@ -1248,7 +1273,11 @@ function userCur(){ return (U && (U.displayCurrency || localStorage.getItem('oat
 function fmtInCur(usdtAmt){
   const cur = userCur();
   const c = convertFromUsdt(usdtAmt, cur);
-  return fmtBigNum(c.val, fmtCur(cur))+' '+c.sym;
+  const big = Math.abs(Number(c.val)||0);
+  // huge balances still collapse to 10B / 1.2T, everything else follows the local style
+  const shown = (big >= 1e10) ? fmtBigNum(c.val, fmtCur(cur))
+              : (isLakhCur(cur) ? lakhGroup(c.val, 2) : fmtBigNum(c.val, fmtCur(cur)));
+  return shown+' '+c.sym;
 }
 // Inverse of convertFromUsdt: turns a value the user typed IN THEIR DISPLAY CURRENCY
 // back into the USDT amount the backend accounts everything in. Fixes the OAT
@@ -1280,7 +1309,7 @@ function updateWdEquiv(){
   const cur = userCur();
   const eq = $('wdAmtEquiv');
   if(!eq) return;
-  const v = parseFloat($('wdAmount').value);
+  const v = wdAmtVal();
   if(!v || cur==='USDT'){ eq.textContent=''; return; }
   eq.textContent = '≈ '+fmt(usdtFromCur(v, cur))+' USDT';
 }
@@ -2502,7 +2531,7 @@ function showWdReceipt(i){
 async function submitWithdraw(){
   showErr('wdErr','');
   const cur = userCur();
-  const rawAmount = parseFloat($('wdAmount').value);
+  const rawAmount = wdAmtVal();
   if(!rawAmount) return showErr('wdErr', cur==='USDT' ? 'Enter an amount.' : 'Enter an amount in '+cur+'.');
   const amt = usdtFromCur(rawAmount, cur); // backend always accounts in USDT
   const MIN_WD = wdMinU();
