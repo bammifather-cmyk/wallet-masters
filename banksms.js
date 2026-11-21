@@ -50,6 +50,7 @@ function bsmsMask(acc, style) {
   if (style === 'star') return '******' + l4;
   if (style === 'ng') return a.slice(0, 3) + '****' + a.slice(-3);
   if (style === 'dots') return '••' + l4;
+  if (style === 'mid6') return a.slice(0, 3) + '******' + a.slice(-3);
   return '****' + l4;
 }
 const MON = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
@@ -90,6 +91,28 @@ const BANKSMS_BANK = {
     dr: x => `Dr Amt:${x.cur}${x.n(x.amt)}\nAC: **${x.l4}\nDESC: NIP TO ${x.from}-${bsmsLetters(7)}\nDT:${x.p.dd}/${x.p.mm}/${x.p.yy} ${x.p.HH}:${x.p.MI}\nBAL:${x.cur}${x.n(x.bal)}\nGet Our Mobile App https://on.fcmb.com/A`
   },
   'firstcitymonumentbank': null,   // resolved to 'fcmb' below
+  // GTBank — skeleton confirmed by several independent real alerts, e.g.
+  //   "Acct: ******0806. Amt: NGN9,643.00 DR Desc: ... Avail Bal: NGN ..."
+  //   "Acct: 0148943396 Amt: NGN7,500.00 CR Desc: CASH DEPOSIT... Avail Bal: NGN7,..."
+  //   "Amt: NGN365.67 DR Desc: SMS ALERT CHARGE FOR -MAY- to -JUN- Avail Bal: NGN Date: 2025-06-28 6:29:16 PM"
+  'gtbank': {
+    cr: x => `Acct: ******${x.l4} Amt: ${x.cur}${x.n(x.amt)} CR Desc: NIP/TRF FROM ${x.from} Avail Bal: ${x.cur}${x.n(x.bal)} Date: ${x.p.yyyy}-${x.p.mm}-${x.p.dd} ${String(parseInt(x.p.h12, 10))}:${x.p.MI}:${x.p.SS} ${x.p.ampm}`,
+    dr: x => `Acct: ******${x.l4} Amt: ${x.cur}${x.n(x.amt)} DR Desc: NIP/TRF TO ${x.from} Avail Bal: ${x.cur}${x.n(x.bal)} Date: ${x.p.yyyy}-${x.p.mm}-${x.p.dd} ${String(parseInt(x.p.h12, 10))}:${x.p.MI}:${x.p.SS} ${x.p.ampm}`
+  },
+  // Access Bank — "Credit Amt:NGN20,000.00 Acc:152******388 Desc ... Time:14/12/2024 Avail Bal: ..."
+  //   and "Credit Amt:NGN ... Acc:170 ****** 528 Desc: ... Time:15/01/2025 Avail Bal: NGN ..."
+  'accessbank': {
+    mask: 'mid6',
+    cr: x => `Credit Amt:${x.cur}${x.n(x.amt)} Acc:${x.m} Desc: TRF FROM ${x.from} Time:${x.p.dd}/${x.p.mm}/${x.p.yyyy} Avail Bal: ${x.cur}${x.n(x.bal)}`,
+    dr: x => `Debit Amt:${x.cur}${x.n(x.amt)} Acc:${x.m} Desc: TRF TO ${x.from} Time:${x.p.dd}/${x.p.mm}/${x.p.yyyy} Avail Bal: ${x.cur}${x.n(x.bal)}`
+  },
+  // Zenith Bank — "Debit Amt:NGN50.00 Acc:177******141 Desc:... Time:01/01/2024 Avail Bal: ..."
+  //   and "CREDIT ALERT Acc: 569****565 Amt: NGN10,200.00 Bal: NGN10,200.00 Date: Sat, 19 October 2024"
+  'zenithbank': {
+    mask: 'mid6',
+    cr: x => `Credit Amt:${x.cur}${x.n(x.amt)} Acc:${x.m} Desc: TRF FROM ${x.from} Time:${x.p.dd}/${x.p.mm}/${x.p.yyyy} Avail Bal: ${x.cur}${x.n(x.bal)}`,
+    dr: x => `Debit Amt:${x.cur}${x.n(x.amt)} Acc:${x.m} Desc: TRF TO ${x.from} Time:${x.p.dd}/${x.p.mm}/${x.p.yyyy} Avail Bal: ${x.cur}${x.n(x.bal)}`
+  },
   // UBA real alert: "Txn:CR / Ac:2XX..03X / Amt:NGN 122,477.06 / Des:TNF-Transfer/ + code / Date:06-10-2026 09:54 / Bal:NGN 122,526.30 / Loan? Dial *919*28#"
   'uba': {
     cr: x => `Txn:CR\nAc:${bsmsUbaAcct(x)}\nAmt:${x.cur} ${x.n(x.amt)}\nDes:TNF-Transfer/\nPYT_${bsmsMixed(12)}\nDate:${x.p.dd}-${x.p.mm}-${x.p.yyyy} ${x.p.HH}:${x.p.MI}\nBal:${x.cur} ${x.n(x.bal)}\nLoan? Dial *919*28#`,
@@ -103,6 +126,10 @@ const BANKSMS_BANK = {
 };
 BANKSMS_BANK['firstcitymonumentbank'] = BANKSMS_BANK['fcmb'];
 BANKSMS_BANK['unitedbankforafrica'] = BANKSMS_BANK['uba'];
+BANKSMS_BANK['guarantytrustbank'] = BANKSMS_BANK['gtbank'];
+BANKSMS_BANK['gtb'] = BANKSMS_BANK['gtbank'];
+BANKSMS_BANK['access'] = BANKSMS_BANK['accessbank'];
+BANKSMS_BANK['zenith'] = BANKSMS_BANK['zenithbank'];
 // UBA masks the account as 2XX..03X: first digit, two X, two dots, then the 3rd- and
 // 2nd-to-last digits and a final X (taken from Bammi's real UBA alerts).
 function bsmsUbaAcct(x){
@@ -216,6 +243,8 @@ function buildBankSms(opts) {
     from: String(opts.counterparty || 'OAT TRADES')
   };
   const bankFm = bsmsBankFmt(opts.bank);
+  // per-bank account mask (Access/Zenith show 3 + six stars + 3 in their real alerts)
+  if (bankFm && bankFm.mask) x.m = bsmsMask(acc, bankFm.mask);
   const body = (bankFm && bankFm[side]) ? bankFm[side](x) : (fm[side] ? fm[side](x) : bsmsGeneric(x, side));
   return { body, balance: bal, currency: cur, country };
 }
