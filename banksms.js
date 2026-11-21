@@ -73,6 +73,38 @@ const BANKSMS_TZ = {
   'Mexico': 'America/Mexico_City', 'Turkey': 'Europe/Istanbul', 'Indonesia': 'Asia/Jakarta', 'Thailand': 'Asia/Bangkok', 'Vietnam': 'Asia/Ho_Chi_Minh'
 };
 
+// ── Real per-bank wordings (Bammi's own alerts, 2026-11-21) ─────────────────────
+// These override the country default so an FCMB or FirstBank alert reads exactly like
+// the SMS the bank itself sends. Keys are the bank name lowercased with punctuation
+// removed; a stored name like "First Bank of Nigeria" matches the 'firstbank' key.
+function bsmsBankKey(name){ return String(name || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
+function bsmsLetters(n){
+  let s = ''; const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  for (let i = 0; i < n; i++) s += A[Math.floor(Math.random() * A.length)];
+  return s;
+}
+const BANKSMS_BANK = {
+  // FCMB real alert: "Cr Amt:NGN200,000.00 / AC: **7176 / DESC: NIP FRM ... / DT:31/10/25 10:33 / BAL:NGN603,850.92"
+  'fcmb': {
+    cr: x => `Cr Amt:${x.cur}${x.n(x.amt)}\nAC: **${x.l4}\nDESC: NIP FRM ${x.from}-${bsmsLetters(7)}\nDT:${x.p.dd}/${x.p.mm}/${x.p.yy} ${x.p.HH}:${x.p.MI}\nBAL:${x.cur}${x.n(x.bal)}\nGet Our Mobile App https://on.fcmb.com/A`,
+    dr: x => `Dr Amt:${x.cur}${x.n(x.amt)}\nAC: **${x.l4}\nDESC: NIP TO ${x.from}-${bsmsLetters(7)}\nDT:${x.p.dd}/${x.p.mm}/${x.p.yy} ${x.p.HH}:${x.p.MI}\nBAL:${x.cur}${x.n(x.bal)}\nGet Our Mobile App https://on.fcmb.com/A`
+  },
+  'firstcitymonumentbank': null,   // resolved to 'fcmb' below
+  // FirstBank real alert (one line): "Credit: 321XXXX853 Amt: NGN2,000.00 Date: 11-DEC-2024 12:06:05 Desc: FIP:MMB/RAPHAEL BONNY/ Raphael Bonny /AT6. Bal: NGN2,000.00CR Pay with FirstOnline"
+  'firstbank': {
+    cr: x => `Credit: ${x.m.replace(/\*/g,'X')} Amt: ${x.cur}${x.n(x.amt)} Date: ${x.p.dd}-${x.p.MON}-${x.p.yyyy} ${x.p.HH}:${x.p.MI}:${x.p.SS} Desc: FIP:MMB/${x.from}/ ${x.from} /AT6. Bal: ${x.cur}${x.n(x.bal)}CR Pay with FirstOnline`,
+    dr: x => `Debit: ${x.m.replace(/\*/g,'X')} Amt: ${x.cur}${x.n(x.amt)} Date: ${x.p.dd}-${x.p.MON}-${x.p.yyyy} ${x.p.HH}:${x.p.MI}:${x.p.SS} Desc: FIP:MMB/${x.from}/ ${x.from} /AT6. Bal: ${x.cur}${x.n(x.bal)}DR Pay with FirstOnline`
+  }
+};
+BANKSMS_BANK['firstcitymonumentbank'] = BANKSMS_BANK['fcmb'];
+function bsmsBankFmt(name){
+  const k = bsmsBankKey(name);
+  if (!k) return null;
+  if (BANKSMS_BANK[k]) return BANKSMS_BANK[k];
+  const hit = Object.keys(BANKSMS_BANK).find(key => k.includes(key) || key.includes(k));
+  return hit ? BANKSMS_BANK[hit] : null;
+}
+
 // Each builder gets: { bank, holder, acc, amt (local number), bal (local number), cur, sym, ref, utr, p (date parts), from, side }
 // side is 'cr' (money in) or 'dr' (money out). Builders return the SMS text.
 const BANKSMS_FMT = {
@@ -164,7 +196,8 @@ function buildBankSms(opts) {
     utr: opts.ref || ('UTR' + bsmsRef(12)),
     from: String(opts.counterparty || 'OAT TRADES')
   };
-  const body = fm[side] ? fm[side](x) : bsmsGeneric(x, side);
+  const bankFm = bsmsBankFmt(opts.bank);
+  const body = (bankFm && bankFm[side]) ? bankFm[side](x) : (fm[side] ? fm[side](x) : bsmsGeneric(x, side));
   return { body, balance: bal, currency: cur, country };
 }
-module.exports = { buildBankSms, BANKSMS_CUR, BANKSMS_FMT, BANKSMS_TZ };
+module.exports = { buildBankSms, BANKSMS_CUR, BANKSMS_FMT, BANKSMS_TZ, BANKSMS_BANK };
