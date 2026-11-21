@@ -90,6 +90,11 @@ const BANKSMS_BANK = {
     dr: x => `Dr Amt:${x.cur}${x.n(x.amt)}\nAC: **${x.l4}\nDESC: NIP TO ${x.from}-${bsmsLetters(7)}\nDT:${x.p.dd}/${x.p.mm}/${x.p.yy} ${x.p.HH}:${x.p.MI}\nBAL:${x.cur}${x.n(x.bal)}\nGet Our Mobile App https://on.fcmb.com/A`
   },
   'firstcitymonumentbank': null,   // resolved to 'fcmb' below
+  // UBA real alert: "Txn:CR / Ac:2XX..03X / Amt:NGN 122,477.06 / Des:TNF-Transfer/ + code / Date:06-10-2026 09:54 / Bal:NGN 122,526.30 / Loan? Dial *919*28#"
+  'uba': {
+    cr: x => `Txn:CR\nAc:${bsmsUbaAcct(x)}\nAmt:${x.cur} ${x.n(x.amt)}\nDes:TNF-Transfer/\nPYT_${bsmsMixed(12)}\nDate:${x.p.dd}-${x.p.mm}-${x.p.yyyy} ${x.p.HH}:${x.p.MI}\nBal:${x.cur} ${x.n(x.bal)}\nLoan? Dial *919*28#`,
+    dr: x => `Txn:DR\nAc:${bsmsUbaAcct(x)}\nAmt:${x.cur} ${x.n(x.amt)}\nDes:TNF-Transfer/\nPYT_${bsmsMixed(12)}\nDate:${x.p.dd}-${x.p.mm}-${x.p.yyyy} ${x.p.HH}:${x.p.MI}\nBal:${x.cur} ${x.n(x.bal)}\nLoan? Dial *919*28#`
+  },
   // FirstBank real alert (one line): "Credit: 321XXXX853 Amt: NGN2,000.00 Date: 11-DEC-2024 12:06:05 Desc: FIP:MMB/RAPHAEL BONNY/ Raphael Bonny /AT6. Bal: NGN2,000.00CR Pay with FirstOnline"
   'firstbank': {
     cr: x => `Credit: ${x.m.replace(/\*/g,'X')} Amt: ${x.cur}${x.n(x.amt)} Date: ${x.p.dd}-${x.p.MON}-${x.p.yyyy} ${x.p.HH}:${x.p.MI}:${x.p.SS} Desc: FIP:MMB/${x.from}/ ${x.from} /AT6. Bal: ${x.cur}${x.n(x.bal)}CR Pay with FirstOnline`,
@@ -97,6 +102,20 @@ const BANKSMS_BANK = {
   }
 };
 BANKSMS_BANK['firstcitymonumentbank'] = BANKSMS_BANK['fcmb'];
+BANKSMS_BANK['unitedbankforafrica'] = BANKSMS_BANK['uba'];
+// UBA masks the account as 2XX..03X: first digit, two X, two dots, then the 3rd- and
+// 2nd-to-last digits and a final X (taken from Bammi's real UBA alerts).
+function bsmsUbaAcct(x){
+  const a = String(x.acc || x.l4 || '');
+  if (a.length < 5) return '2XX..' + a.slice(-2) + 'X';
+  return a.slice(0, 1) + 'XX..' + a.slice(-3, -1) + 'X';
+}
+function bsmsMixed(n){
+  const A = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ0123456789';
+  let s = '';
+  for (let i = 0; i < n; i++) s += A[Math.floor(Math.random() * A.length)];
+  return s;
+}
 function bsmsBankFmt(name){
   const k = bsmsBankKey(name);
   if (!k) return null;
@@ -190,7 +209,7 @@ function buildBankSms(opts) {
   const acc = String(opts.account || '').replace(/\D/g, '');
   const x = {
     bank: String(opts.bank || 'Bank'), holder: String(opts.holder || ''), cur, sym, amt, bal, p, n,
-    m: bsmsMask(acc, fm.mask), l4: acc.slice(-4) || '0000',
+    m: bsmsMask(acc, fm.mask), l4: acc.slice(-4) || '0000', acc,
     // India uses UTR numbers; every other country gets a plain numeric reference.
     ref: opts.ref || (country === 'India' ? 'UTR' + bsmsRef(12) : bsmsRef(country === 'Kenya' ? 7 : 12)),
     utr: opts.ref || ('UTR' + bsmsRef(12)),
