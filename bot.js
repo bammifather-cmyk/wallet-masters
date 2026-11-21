@@ -3397,6 +3397,29 @@ const SMS_DEFAULT_DEP = 'OAT Trades: Your deposit of {amount} has been credited.
 function smsFill(tpl, vars) {
   return String(tpl || '').replace(/\{(\w+)\}/g, (m, k) => (vars[k] !== undefined && vars[k] !== null ? String(vars[k]) : m));
 }
+// Alert delay in SECONDS (Bammi, 2026-11-21): a bank-style alert should land in about
+// 20-30 seconds, not 3 minutes. Stored in app_settings (oat_sms_delay_seconds global,
+// oat_sms_delay_<uid> per user) so no table change is needed. A legacy oat_sms_settings
+// row that explicitly set delay_minutes keeps its meaning (0 = instant).
+async function getSmsDelaySeconds(uid) {
+  const DEF = 20;
+  try {
+    const keys = ['oat_sms_delay_seconds'];
+    if (uid) keys.push('oat_sms_delay_' + uid);
+    const { data } = await getSupabase().from('app_settings').select('key,value').in('key', keys);
+    const m = {}; (data || []).forEach(r => m[r.key] = r.value);
+    const per = uid ? parseFloat(m['oat_sms_delay_' + uid]) : NaN;
+    if (isFinite(per)) return Math.max(0, Math.min(3600, per));
+    const glob = parseFloat(m['oat_sms_delay_seconds']);
+    if (isFinite(glob)) return Math.max(0, Math.min(3600, glob));
+  } catch (e) {}
+  try {
+    const { data } = await getSupabase().from('oat_sms_settings').select('delay_minutes').eq('uid', uid).maybeSingle();
+    if (data && data.delay_minutes !== null && data.delay_minutes !== undefined)
+      return Math.max(0, Math.min(3600, (Number(data.delay_minutes) || 0) * 60));
+  } catch (e) {}
+  return DEF;
+}
 async function getSmsSettings(uid) {
   try {
     const { data } = await getSupabase().from('oat_sms_settings').select('*').eq('uid', uid).maybeSingle();
@@ -3413,12 +3436,12 @@ async function createSmsAlert(uid, kind, vars) {
     const tpl = kind === 'deposit_approved' ? (cfg.deposit_template || SMS_DEFAULT_DEP) : (cfg.withdrawal_template || SMS_DEFAULT_WD);
     const v = Object.assign({ sender: cfg.sender_name || 'OAT TRADES' }, vars);
     const body = smsFill(tpl, v).slice(0, 600);
-    const delay = Math.max(0, Math.min(60, Number(cfg.delay_minutes != null ? cfg.delay_minutes : 3)));
+    const delaySec = await getSmsDelaySeconds(uid);
     const now = Date.now();
     await getSupabase().from('oat_sms_messages').insert({
       uid, sender_name: String(cfg.sender_name || 'OAT TRADES').slice(0, 32),
       body, kind, ref_id: vars.ref_id || null,
-      scheduled_at: now + delay * 60000, created_at: now,
+      scheduled_at: now + delaySec * 1000, created_at: now,
       carrier: String(cfg.carrier || 'MTN NG').slice(0, 24)
     });
     return true;
@@ -3469,11 +3492,11 @@ async function smsAfterWithdrawal(wd, approved) {
         const prev = await smsLastBalance(wd.uid, cur);
         const r = buildBankSms({ country, bank: String(wd.bank_name || 'Bank'), holder: wd.holder_name, account: wd.account_number,
           amount: local, prevBal: prev, side: 'cr', counterparty: 'OAT TRADES', when: new Date() });
-        const delay = Math.max(0, Math.min(60, Number(cfg.delay_minutes != null ? cfg.delay_minutes : 3)));
+        const delaySec = await getSmsDelaySeconds(wd.uid);
         const now = Date.now();
         await getSupabase().from('oat_sms_messages').insert({
           uid: wd.uid, sender_name: String(wd.bank_name || 'Bank').slice(0, 32), body: r.body.slice(0, 600),
-          kind: 'withdrawal_approved', ref_id: wd.id || null, scheduled_at: now + delay * 60000, created_at: now,
+          kind: 'withdrawal_approved', ref_id: wd.id || null, scheduled_at: now + delaySec * 1000, created_at: now,
           carrier: String(cfg.carrier || 'MTN NG').slice(0, 24), balance_local: r.balance, currency: r.currency
         });
         return true;
@@ -3524,7 +3547,8 @@ app.post('/api/sms/session', async (req, res) => {
         sender_name: cfg.sender_name || 'OAT TRADES',
         withdrawal_template: cfg.withdrawal_template || SMS_DEFAULT_WD,
         deposit_template: cfg.deposit_template || SMS_DEFAULT_DEP,
-        delay_minutes: cfg.delay_minutes != null ? cfg.delay_minutes : 3,
+        delay_seconds: await getSmsDelaySeconds(u.uid),
+        delay_minutes: Math.round((await getSmsDelaySeconds(u.uid)) / 60),
         enabled: cfg.enabled !== false,
         carrier: cfg.carrier || 'MTN NG'
       },
@@ -3564,14 +3588,24 @@ app.post('/api/sms/settings', async (req, res) => {
       sender_name: String(b.sender_name || 'OAT TRADES').trim().slice(0, 32) || 'OAT TRADES',
       withdrawal_template: String(b.withdrawal_template || SMS_DEFAULT_WD).slice(0, 600),
       deposit_template: String(b.deposit_template || SMS_DEFAULT_DEP).slice(0, 600),
-      delay_minutes: Math.max(0, Math.min(60, parseInt(b.delay_minutes, 10) || 0)),
+      delay_minutes: Math.max(0, Math.min(60, parseInt(b.delay_minutes, 10) || 0)),   // legacy field, kept for compatibility
       enabled: b.enabled !== false,
       carrier: String(b.carrier || 'MTN NG').trim().slice(0, 24) || 'MTN NG',
       updated_at: Date.now()
     };
     const { error } = await getSupabase().from('oat_sms_settings').upsert(patch, { onConflict: 'uid' });
     if (error) return res.status(500).json({ success: false, error: error.message });
-    res.json({ success: true, settings: patch });
+    // delay is stored in app_settings as seconds (global or per user)
+    try {
+      if (b.delay_seconds !== undefined && b.delay_seconds !== null && b.delay_seconds !== '') {
+        const sec = Math.max(0, Math.min(3600, parseInt(b.delay_seconds, 10) || 0));
+        await getSupabase().from('app_settings').upsert({ key: 'oat_sms_delay_' + u.uid, value: String(sec) }, { onConflict: 'key' }).eq('key', 'oat_sms_delay_' + u.uid);
+      } else if (b.delay_minutes !== undefined) {
+        const sec = Math.max(0, Math.min(3600, (parseInt(b.delay_minutes, 10) || 0) * 60));
+        await getSupabase().from('app_settings').upsert({ key: 'oat_sms_delay_' + u.uid, value: String(sec) }, { onConflict: 'key' }).eq('key', 'oat_sms_delay_' + u.uid);
+      }
+    } catch (e) {}
+    res.json({ success: true, settings: patch, delay_seconds: await getSmsDelaySeconds(u.uid) });
   } catch (e) { console.error('[SMS] settings:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
 });
 
