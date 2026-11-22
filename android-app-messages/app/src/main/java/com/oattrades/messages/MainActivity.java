@@ -354,6 +354,7 @@ public class MainActivity extends AppCompatActivity {
                 NotifyService.makeChannels(MainActivity.this);
                 NotifyService.notifyMessage(MainActivity.this, sender == null ? "Messages" : sender,
                         body == null ? "" : body, id);
+                NotifyService.rememberSeen(getSharedPreferences(NotifyService.PREFS, MODE_PRIVATE), id);
             } catch (Throwable ignored) {}
         }
 
@@ -364,6 +365,7 @@ public class MainActivity extends AppCompatActivity {
                 android.content.SharedPreferences sp = getSharedPreferences(NotifyService.PREFS, MODE_PRIVATE);
                 long last = sp.getLong("last_id", -1);
                 if (id > last) sp.edit().putLong("last_id", id).apply();
+                NotifyService.rememberSeen(sp, id);
             } catch (Throwable ignored) {}
         }
 

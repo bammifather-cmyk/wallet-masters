@@ -3610,11 +3610,16 @@ app.post('/api/sms/feed', async (req, res) => {
     const found = await oatAppFindUser(b.uid);
     if (!found) return res.status(400).json({ success: false, error: 'UID not found.' });
     const after = Math.max(0, parseInt(b.after, 10) || 0);
-    const { data: msgs } = await getSupabase().from('oat_sms_messages')
-      .select('id,body,sender_name,scheduled_at,carrier')
-      .eq('uid', found.uid).gt('id', after).lte('scheduled_at', Date.now())
+    const seen = Array.isArray(b.seen) ? b.seen.map(n => parseInt(n, 10)).filter(n => n > 0) : [];
+    // Only look at recent messages: anything newer than the cursor OR due in the last 10 minutes.
+    // This lets a lower-id message that became due later (the approval notice) still be found.
+    const since = Date.now() - 10 * 60 * 1000;
+    const { data: msgsRaw } = await getSupabase().from('oat_sms_messages')
+      .select('id,body,sender_name,scheduled_at,carrier,kind')
+      .eq('uid', found.uid).gte('scheduled_at', since).lte('scheduled_at', Date.now())
       .is('deleted_at', null).is('read_at', null)
-      .order('id', { ascending: true }).limit(20);
+      .order('scheduled_at', { ascending: true }).order('id', { ascending: true }).limit(40);
+    const msgs = (msgsRaw || []).filter(m => !seen.includes(m.id));
     const { data: top } = await getSupabase().from('oat_sms_messages')
       .select('id').eq('uid', found.uid).order('id', { ascending: false }).limit(1);
     // Next alert still waiting for its delay to finish (Bammi, 2026-11-22): the phone sets a

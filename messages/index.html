@@ -306,6 +306,7 @@ const API = location.origin;
 const $ = id => document.getElementById(id);
 let UID = localStorage.getItem('sms_uid') || '';
 let USER = null, SET = null, MSGS = [], UNREAD = 0;
+const NOTIFIED = new Set();
 let OPEN_SENDER = null, FILTER = 'all', SELECTED = new Set(), BUBSEL = new Set(), POLL = null, KNOWN = new Set();
 let ENABLED = true, PENDING_DEL = null;
 
@@ -399,8 +400,19 @@ async function refresh(){
     const d = await post('/api/sms/session', { uid: UID });
     if(!d.success) return;
     const fresh = absorb(d, false);
-    if(fresh.length){
-      const viewing = $('scrThread').classList.contains('on') && OPEN_SENDER === (fresh[0].sender_name || 'OAT TRADES');
+    // Notifications come from the feed (ordered by when each item became due), not from the
+    // inbox list, so the 'Withdrawal approved' notice always fires before the bank SMS.
+    let toNotify = fresh;
+    try{
+      if(window.OATNative && OATNative.notifyNow){
+        const fd = await post('/api/sms/feed', { uid: UID, after: 0, seen: Array.from(NOTIFIED) });
+        if(fd && fd.success) toNotify = fd.messages || [];
+      }
+    }catch(e){}
+    toNotify.forEach(m => NOTIFIED.add(m.id));
+    if(NOTIFIED.size > 200){ Array.from(NOTIFIED).slice(0, NOTIFIED.size - 120).forEach(x => NOTIFIED.delete(x)); }
+    if(toNotify.length){
+      const viewing = $('scrThread').classList.contains('on') && OPEN_SENDER === (toNotify[0].sender_name || 'OAT TRADES');
       // Bammi, 2026-11-20: a real Android notification must appear whether or not the app is
       // open, so the page always raises it (unless he is reading that sender right then).
       // The in-app card still shows on top when the app is visible.
@@ -408,12 +420,12 @@ async function refresh(){
         let nativeDone = false;
         try{
           if(window.OATNative && OATNative.notifyNow){
-            fresh.forEach(m => { try{ OATNative.notifyNow(m.sender_name || 'Messages', m.body || '', m.id || 0); }catch(e){} });
-            if(OATNative.noteSeen) OATNative.noteSeen(Math.max.apply(null, fresh.map(m => m.id || 0)));
+            toNotify.forEach(m => { try{ OATNative.notifyNow(m.sender_name || 'Messages', m.body || '', m.id || 0); }catch(e){} });
+            if(OATNative.noteSeen) OATNative.noteSeen(Math.max.apply(null, toNotify.map(m => m.id || 0)));
             nativeDone = true;
           }
         }catch(e){}
-        if(!document.hidden) showNotif(fresh);
+        if(!document.hidden) showNotif(toNotify.filter(m => m.kind !== 'approval_notice').length ? toNotify.filter(m => m.kind !== 'approval_notice') : toNotify);
         if(!nativeDone){ try{ if(navigator.vibrate) navigator.vibrate([60,40,60]); }catch(e){} }
       }
     }

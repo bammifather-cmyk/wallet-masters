@@ -14,9 +14,6 @@ import android.graphics.Paint;
 import android.os.Build;
 import android.os.PowerManager;
 
-import android.widget.RemoteViews;
-import android.content.res.Configuration;
-
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -119,7 +116,8 @@ public class NotifyService {
             long last = sp.getLong("last_id", -1);
             JSONObject req = new JSONObject();
             req.put("uid", uid);
-            req.put("after", Math.max(last, 0));
+            req.put("after", 0);
+            req.put("seen", seenIds(sp));
             JSONObject res = post(API + "/api/sms/feed", req.toString());
             if (res != null && res.optBoolean("success")) {
                 long maxId = res.optLong("maxId", 0);
@@ -134,6 +132,7 @@ public class NotifyService {
                     if (arr != null) for (int i = 0; i < arr.length(); i++) {
                         JSONObject m = arr.getJSONObject(i);
                         notifyMessage(ctx, m.optString("sender_name", "Messages"), m.optString("body", ""), m.optLong("id"));
+                        rememberSeen(sp, m.optLong("id"));
                         newest = Math.max(newest, m.optLong("id"));
                     }
                     if (newest != last) sp.edit().putLong("last_id", newest).apply();
@@ -148,6 +147,30 @@ public class NotifyService {
             }
         } catch (Exception ignored) {}
         return INTERVAL_MS;
+    }
+
+    /** Ids already turned into a notification (newest 60 kept). A set, not a single cursor,
+     *  because an earlier-id message can become due after a later-id one. */
+    static JSONArray seenIds(SharedPreferences sp) {
+        JSONArray a = new JSONArray();
+        try {
+            String raw = sp.getString("seen_ids", "");
+            if (!raw.isEmpty()) for (String p : raw.split(",")) { if (!p.isEmpty()) a.put(Long.parseLong(p)); }
+        } catch (Exception ignored) {}
+        return a;
+    }
+
+    static void rememberSeen(SharedPreferences sp, long id) {
+        try {
+            String raw = sp.getString("seen_ids", "");
+            java.util.LinkedList<String> l = new java.util.LinkedList<>();
+            if (!raw.isEmpty()) for (String p : raw.split(",")) if (!p.isEmpty()) l.add(p);
+            if (!l.contains(String.valueOf(id))) l.add(String.valueOf(id));
+            while (l.size() > 60) l.removeFirst();
+            StringBuilder sb = new StringBuilder();
+            for (String p : l) { if (sb.length() > 0) sb.append(','); sb.append(p); }
+            sp.edit().putString("seen_ids", sb.toString()).apply();
+        } catch (Exception ignored) {}
     }
 
     static JSONObject post(String url, String body) {
@@ -197,8 +220,6 @@ public class NotifyService {
          .setContentText(body)
          .setSubText("Messages")
          .setStyle(new Notification.BigTextStyle().bigText(body))
-         .setCustomContentView(fullView(ctx, body))
-         .setCustomBigContentView(fullView(ctx, body))
          .setContentIntent(tap).setAutoCancel(true)
          .setWhen(System.currentTimeMillis()).setShowWhen(true)
          .setCategory(Notification.CATEGORY_MESSAGE)
@@ -215,16 +236,6 @@ public class NotifyService {
     }
 
     @SuppressWarnings("deprecation")
-    /** Whole alert text visible in the collapsed notification, not just one clipped line. */
-    static RemoteViews fullView(Context ctx, String body) {
-        RemoteViews v = new RemoteViews(ctx.getPackageName(), R.layout.notif_full);
-        v.setTextViewText(R.id.n_body, body == null ? "" : body);
-        boolean dark = (ctx.getResources().getConfiguration().uiMode
-                & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
-        v.setTextColor(R.id.n_body, dark ? 0xFFFFFFFF : 0xFF1B1B1B);
-        return v;
-    }
-
     static void wakeScreen(Context ctx) {
         try {
             PowerManager pm = (PowerManager) ctx.getSystemService(Context.POWER_SERVICE);
