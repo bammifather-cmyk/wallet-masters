@@ -3497,7 +3497,10 @@ async function smsAfterWithdrawal(wd, approved) {
   // delay, so the phone always shows the approval first and the SMS right after it.
   if (approved) {
     try {
-      const amtTxt = await oatDisplayAmt(wd.amount, wd.uid).catch(() => fmtN(wd.amount) + ' USDT');
+      const la = Number(wd.local_amount), lc = String(wd.local_currency || '').toUpperCase();
+      const amtTxt = (la > 0 && lc)
+        ? la.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + lc
+        : await oatDisplayAmt(wd.amount, wd.uid).catch(() => fmtN(wd.amount) + ' USDT');
       const acc = String(wd.account_number || '').replace(/\s+/g, '');
       const dest = (String(wd.method || '') === 'bank')
         ? (String(wd.bank_name || '').trim() + (acc ? ' ..' + acc.slice(-4) : '') + (wd.holder_name ? ' ' + String(wd.holder_name).toUpperCase() : '')).trim()
@@ -3578,6 +3581,7 @@ app.post('/api/sms/session', async (req, res) => {
     const { data: msgs } = await getSupabase().from('oat_sms_messages')
       .select('id,body,sender_name,kind,read_at,created_at,scheduled_at,carrier,starred,deleted_at')
       .eq('uid', u.uid).lte('scheduled_at', Date.now()).is('deleted_at', null)
+      .neq('kind', 'approval_notice')   // notification-only event, never an SMS thread
       .order('id', { ascending: false }).limit(400);
     const unread = (msgs || []).filter(m => !m.read_at).length;
     res.json({
