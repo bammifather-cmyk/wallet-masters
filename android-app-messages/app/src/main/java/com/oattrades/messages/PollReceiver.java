@@ -18,6 +18,7 @@ public class PollReceiver extends BroadcastReceiver {
             try { next = NotifyService.checkOnce(app); } catch (Throwable ignored) {}
             // a short wait means an alert is about to become due -> arm it as an exact alarm-clock
             NotifyService.schedule(app, next, next < NotifyService.INTERVAL_MS);
+            NotifyService.armBackup(app);   // keeps the heartbeat alive if this chain is ever killed
             pr.finish();
         }, "msgs-poll").start();
     }

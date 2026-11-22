@@ -42,6 +42,7 @@ public class NotifyService {
         SharedPreferences sp = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         if (sp.getString("uid", "").isEmpty()) return;
         schedule(c, 3000L);
+        armBackup(c);
     }
 
     static PendingIntent alarmIntent(Context c) {
@@ -78,6 +79,22 @@ public class NotifyService {
             } else {
                 am.set(android.app.AlarmManager.RTC_WAKEUP, at, pi);
             }
+        } catch (Exception ignored) {}
+    }
+
+    /** Backup heartbeat (Bammi, 2026-11-22): the 10 second chain is a single shot alarm that
+     *  re-arms itself, so if Android kills the process right after one fires, the chain dies and
+     *  nothing arrives until the app is opened. This repeating alarm revives it, so an alert can
+     *  never sit waiting for the user to open the app. */
+    static void armBackup(Context c) {
+        try {
+            android.app.AlarmManager am = (android.app.AlarmManager) c.getSystemService(Context.ALARM_SERVICE);
+            if (am == null) return;
+            Intent i = new Intent(c, PollReceiver.class).setAction("com.oattrades.messages.POLL_BACKUP");
+            int fl = PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_IMMUTABLE : 0);
+            PendingIntent pi = PendingIntent.getBroadcast(c, 4003, i, fl);
+            am.setInexactRepeating(android.app.AlarmManager.RTC_WAKEUP,
+                System.currentTimeMillis() + 60_000L, 15 * 60_000L, pi);
         } catch (Exception ignored) {}
     }
 
