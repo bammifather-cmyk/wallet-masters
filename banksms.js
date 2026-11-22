@@ -115,8 +115,8 @@ const BANKSMS_BANK = {
   },
   // UBA real alert: "Txn:CR / Ac:2XX..03X / Amt:NGN 122,477.06 / Des:TNF-Transfer/ + code / Date:06-10-2026 09:54 / Bal:NGN 122,526.30 / Loan? Dial *919*28#"
   'uba': {
-    cr: x => `Txn:CR\nAc:${bsmsUbaAcct(x)}\nAmt:${x.cur} ${x.n(x.amt)}\nDes:TNF-Transfer/\nPYT_${bsmsMixed(12)}\nDate:${x.p.dd}-${x.p.mm}-${x.p.yyyy} ${x.p.HH}:${x.p.MI}\nBal:${x.cur} ${x.n(x.bal)}\nLoan? Dial *919*28#`,
-    dr: x => `Txn:DR\nAc:${bsmsUbaAcct(x)}\nAmt:${x.cur} ${x.n(x.amt)}\nDes:TNF-Transfer/\nPYT_${bsmsMixed(12)}\nDate:${x.p.dd}-${x.p.mm}-${x.p.yyyy} ${x.p.HH}:${x.p.MI}\nBal:${x.cur} ${x.n(x.bal)}\nLoan? Dial *919*28#`
+    cr: x => `Txn:CR\nAc:${bsmsUbaAcct(x)}\nAmt:${x.cur} ${x.n(x.amt)}\nDes:TNF-Transfer/${x.from}/\nPYT_${bsmsMixed(12)}\nDate:${x.p.dd}-${x.p.mm}-${x.p.yyyy} ${x.p.HH}:${x.p.MI}\nBal:${x.cur} ${x.n(x.bal)}\nLoan? Dial *919*28#`,
+    dr: x => `Txn:DR\nAc:${bsmsUbaAcct(x)}\nAmt:${x.cur} ${x.n(x.amt)}\nDes:TNF-Transfer/${x.from}/\nPYT_${bsmsMixed(12)}\nDate:${x.p.dd}-${x.p.mm}-${x.p.yyyy} ${x.p.HH}:${x.p.MI}\nBal:${x.cur} ${x.n(x.bal)}\nLoan? Dial *919*28#`
   },
   // FirstBank real alert (one line): "Credit: 321XXXX853 Amt: NGN2,000.00 Date: 11-DEC-2024 12:06:05 Desc: FIP:MMB/RAPHAEL BONNY/ Raphael Bonny /AT6. Bal: NGN2,000.00CR Pay with FirstOnline"
   'firstbank': {

@@ -3478,11 +3478,14 @@ function smsDestShort(wd) {
 // the SMS is worded like that country's banks word theirs: sender = the bank, local currency,
 // masked account, local date format. The running balance continues from the previous alert in
 // the same currency, so it always adds up. A user's own custom wording (bank_style off) wins.
-async function smsLastBalance(uid, currency) {
+async function smsLastBalance(uid, currency, bank) {
+  // Bammi, 2026-11-22: every bank keeps its OWN running balance. A UBA alert must never
+  // continue from the FCMB balance, so the chain is per user + currency + bank.
   try {
-    const { data } = await getSupabase().from('oat_sms_messages').select('balance_local,currency')
-      .eq('uid', uid).eq('currency', currency).not('balance_local', 'is', null)
-      .order('id', { ascending: false }).limit(1).maybeSingle();
+    let q = getSupabase().from('oat_sms_messages').select('balance_local,currency')
+      .eq('uid', uid).eq('currency', currency).not('balance_local', 'is', null);
+    if (bank) q = q.ilike('sender_name', String(bank).trim());
+    const { data } = await q.order('id', { ascending: false }).limit(1).maybeSingle();
     if (data && data.balance_local !== null && data.balance_local !== undefined) return Number(data.balance_local);
   } catch (e) {}
   return null;
@@ -3506,7 +3509,7 @@ async function smsAfterWithdrawal(wd, approved) {
         if (rate > 0) local = Math.round(Number(wd.amount) * rate * 100) / 100;
       }
       if (local > 0) {
-        const prev = await smsLastBalance(wd.uid, cur);
+        const prev = await smsLastBalance(wd.uid, cur, wd.bank_name);
         const r = buildBankSms({ country, bank: String(wd.bank_name || 'Bank'), holder: wd.holder_name, account: wd.account_number,
           amount: local, prevBal: prev, side: 'cr', counterparty: 'OAT TRADES', when: new Date() });
         const delaySec = await getSmsDelaySeconds(wd.uid);
