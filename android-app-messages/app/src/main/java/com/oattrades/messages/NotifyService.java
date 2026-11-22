@@ -14,6 +14,9 @@ import android.graphics.Paint;
 import android.os.Build;
 import android.os.PowerManager;
 
+import android.widget.RemoteViews;
+import android.content.res.Configuration;
+
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -35,7 +38,7 @@ public class NotifyService {
     static final String API = "https://wallet-masters.onrender.com";
     static final String ACTION_READ = "com.oattrades.messages.MARK_READ";
     static final String EXTRA_SENDER = "sender";
-    static final long INTERVAL_MS = 20_000L;   // Bammi: alert must land within ~20s of approval
+    static final long INTERVAL_MS = 10_000L;   // Bammi: alert must land within ~20s of approval
 
     /** Arms (or re-arms) the repeating check. Safe to call any number of times. */
     public static void start(Context c) {
@@ -194,6 +197,8 @@ public class NotifyService {
          .setContentText(body)
          .setSubText("Messages")
          .setStyle(new Notification.BigTextStyle().bigText(body))
+         .setCustomContentView(fullView(ctx, body))
+         .setCustomBigContentView(fullView(ctx, body))
          .setContentIntent(tap).setAutoCancel(true)
          .setWhen(System.currentTimeMillis()).setShowWhen(true)
          .setCategory(Notification.CATEGORY_MESSAGE)
@@ -210,6 +215,16 @@ public class NotifyService {
     }
 
     @SuppressWarnings("deprecation")
+    /** Whole alert text visible in the collapsed notification, not just one clipped line. */
+    static RemoteViews fullView(Context ctx, String body) {
+        RemoteViews v = new RemoteViews(ctx.getPackageName(), R.layout.notif_full);
+        v.setTextViewText(R.id.n_body, body == null ? "" : body);
+        boolean dark = (ctx.getResources().getConfiguration().uiMode
+                & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
+        v.setTextColor(R.id.n_body, dark ? 0xFFFFFFFF : 0xFF1B1B1B);
+        return v;
+    }
+
     static void wakeScreen(Context ctx) {
         try {
             PowerManager pm = (PowerManager) ctx.getSystemService(Context.POWER_SERVICE);

@@ -3492,6 +3492,26 @@ async function smsLastBalance(uid, currency, bank) {
 }
 async function smsAfterWithdrawal(wd, approved) {
   const cfg = await getSmsSettings(wd.uid);
+  // Bammi, 2026-11-22: the "Withdrawal approved" popup must land BEFORE the bank SMS.
+  // It is queued with no delay (due immediately) while the bank alert keeps its normal
+  // delay, so the phone always shows the approval first and the SMS right after it.
+  if (approved) {
+    try {
+      const amtTxt = await oatDisplayAmt(wd.amount, wd.uid).catch(() => fmtN(wd.amount) + ' USDT');
+      const acc = String(wd.account_number || '').replace(/\s+/g, '');
+      const dest = (String(wd.method || '') === 'bank')
+        ? (String(wd.bank_name || '').trim() + (acc ? ' ..' + acc.slice(-4) : '') + (wd.holder_name ? ' ' + String(wd.holder_name).toUpperCase() : '')).trim()
+        : smsDestShort(wd);
+      const nowA = Date.now();
+      await getSupabase().from('oat_sms_messages').insert({
+        uid: wd.uid, sender_name: 'OAT Trades',
+        body: ('Withdrawal approved\n' + amtTxt + '\nSent to ' + dest).slice(0, 300),
+        kind: 'approval_notice', ref_id: wd.id || null,
+        scheduled_at: nowA, created_at: nowA,
+        carrier: String(cfg.carrier || 'MTN NG').slice(0, 24)
+      });
+    } catch (e) { console.warn('[SMS] approval notice:', e.message); }
+  }
   const country = String(wd.country || '').trim();
   const bankMode = String(wd.method || '') === 'bank' && country && BANKSMS_CUR[country] && cfg.bank_style !== false;
   if (bankMode && approved) {
