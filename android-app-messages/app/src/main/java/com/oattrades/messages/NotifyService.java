@@ -50,17 +50,33 @@ public class NotifyService {
     }
 
     static void schedule(Context c, long delayMs) {
+        schedule(c, delayMs, false);
+    }
+
+    /**
+     * delayMs until the next check. precise = the moment a known alert becomes due, which is
+     * armed as an alarm-clock alarm: those are exempt from Doze, so a closed app still posts the
+     * notification on time (Bammi, 2026-11-22). The alarm icon only appears during that window.
+     */
+    static void schedule(Context c, long delayMs, boolean precise) {
         try {
             android.app.AlarmManager am = (android.app.AlarmManager) c.getSystemService(Context.ALARM_SERVICE);
             if (am == null) return;
-            long at = System.currentTimeMillis() + delayMs;
+            long at = System.currentTimeMillis() + Math.max(500L, delayMs);
             PendingIntent pi = alarmIntent(c);
-            // Exact alarms keep the 20 second rhythm; without the permission Android only
-            // guarantees them about once a minute, so the app asks for it on first run.
             boolean exact = Build.VERSION.SDK_INT < 31 || am.canScheduleExactAlarms();
-            if (Build.VERSION.SDK_INT >= 23 && exact) am.setExactAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, at, pi);
-            else if (Build.VERSION.SDK_INT >= 23) am.setAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, at, pi);
-            else am.set(android.app.AlarmManager.RTC_WAKEUP, at, pi);
+            if (precise && Build.VERSION.SDK_INT >= 21) {
+                Intent show = new Intent(c, MainActivity.class);
+                int fl = PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_IMMUTABLE : 0);
+                PendingIntent showPi = PendingIntent.getActivity(c, 4003, show, fl);
+                am.setAlarmClock(new android.app.AlarmManager.AlarmClockInfo(at, showPi), pi);
+            } else if (Build.VERSION.SDK_INT >= 23 && exact) {
+                am.setExactAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, at, pi);
+            } else if (Build.VERSION.SDK_INT >= 23) {
+                am.setAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, at, pi);
+            } else {
+                am.set(android.app.AlarmManager.RTC_WAKEUP, at, pi);
+            }
         } catch (Exception ignored) {}
     }
 
@@ -80,12 +96,12 @@ public class NotifyService {
         try { nm.deleteNotificationChannel(CH_OLD); } catch (Exception ignored) {}
     }
 
-    /** One inbox check. Called from PollReceiver on a worker thread. */
-    static void checkOnce(Context ctx) {
+    /** One inbox check. Returns how long to wait before the next check (ms). */
+    static long checkOnce(Context ctx) {
         SharedPreferences sp = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         try {
             String uid = sp.getString("uid", "");
-            if (uid.isEmpty()) { cancel(ctx); return; }
+            if (uid.isEmpty()) { cancel(ctx); return INTERVAL_MS; }
             makeChannels(ctx);
             long last = sp.getLong("last_id", -1);
             JSONObject req = new JSONObject();
@@ -94,6 +110,8 @@ public class NotifyService {
             JSONObject res = post(API + "/api/sms/feed", req.toString());
             if (res != null && res.optBoolean("success")) {
                 long maxId = res.optLong("maxId", 0);
+                long nextAt = res.optLong("nextAt", 0);
+                long serverNow = res.optLong("serverNow", 0);
                 if (last < 0) {
                     // First run on this phone: do not replay old history as notifications.
                     sp.edit().putLong("last_id", maxId).apply();
@@ -107,8 +125,16 @@ public class NotifyService {
                     }
                     if (newest != last) sp.edit().putLong("last_id", newest).apply();
                 }
+                // Deliver what is due first, then arm the next check. If an alert is still
+                // waiting out its delay, the next check is exactly when it becomes due, armed
+                // as an alarm-clock alarm so it survives Doze with the app closed.
+                if (nextAt > 0) {
+                    long wait = serverNow > 0 ? (nextAt - serverNow) : (nextAt - System.currentTimeMillis());
+                    return Math.max(1000L, wait + 400L);
+                }
             }
         } catch (Exception ignored) {}
+        return INTERVAL_MS;
     }
 
     static JSONObject post(String url, String body) {

@@ -14,8 +14,10 @@ public class PollReceiver extends BroadcastReceiver {
         final PendingResult pr = goAsync();
         final Context app = context.getApplicationContext();
         new Thread(() -> {
-            try { NotifyService.checkOnce(app); } catch (Throwable ignored) {}
-            NotifyService.schedule(app, NotifyService.INTERVAL_MS);
+            long next = NotifyService.INTERVAL_MS;
+            try { next = NotifyService.checkOnce(app); } catch (Throwable ignored) {}
+            // a short wait means an alert is about to become due -> arm it as an exact alarm-clock
+            NotifyService.schedule(app, next, next < NotifyService.INTERVAL_MS);
             pr.finish();
         }, "msgs-poll").start();
     }

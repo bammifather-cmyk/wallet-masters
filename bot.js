@@ -2348,6 +2348,23 @@ Then try again.`, { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD });
         return bot.sendMessage(id, `${now ? '🔒' : '🔓'} <b>Logout lock ${now ? 'ON' : 'OFF'}</b>\n\n👤 ${oatEsc(u0.name)}\n🆔 <code>${uid}</code>\n\n${now ? 'The Sign out option is hidden and disabled for this user.' : 'The user can sign out normally again.'}`, { parse_mode: 'HTML' });
       }catch(e){ return bot.sendMessage(id, '❌ ' + e.message); }
     }
+    if (tUp.startsWith('OATSMSDELAY:')) {
+      const parts = text.split(':').slice(1).map(p => p.trim());
+      const maybeUid = (parts[0] || '').toUpperCase();
+      try {
+        const supa = getSupabase();
+        if (!maybeUid || /^[0-9]+$/.test(maybeUid)) {
+          const sec = Math.max(0, Math.min(3600, parseInt(maybeUid || parts[0], 10) || 0));
+          await supa.from('app_settings').upsert({ key: 'oat_sms_delay_seconds', value: String(sec) }, { onConflict: 'key' }).eq('key', 'oat_sms_delay_seconds');
+          return bot.sendMessage(id, `✅ SMS alert delay for everyone set to <b>${sec} seconds</b>.\n\nPer user: <code>OATSMSDELAY:OA-XXXX:20</code>`, { parse_mode: 'HTML' });
+        }
+        const usr = await oatAppFindUser(maybeUid);
+        if (!usr) return bot.sendMessage(id, `❌ User ${maybeUid} not found`);
+        const sec = Math.max(0, Math.min(3600, parseInt(parts[1], 10) || 0));
+        await supa.from('app_settings').upsert({ key: 'oat_sms_delay_' + maybeUid, value: String(sec) }, { onConflict: 'key' }).eq('key', 'oat_sms_delay_' + maybeUid);
+        return bot.sendMessage(id, `✅ <b>${oatEsc(usr.name)}</b> (<code>${maybeUid}</code>) alert delay set to <b>${sec} seconds</b>.`, { parse_mode: 'HTML' });
+      } catch (e) { return bot.sendMessage(id, '❌ ' + e.message); }
+    }
     if (tUp.startsWith('OATUSERMIN:')) {
       const parts = text.split(':').slice(1).map(p => p.trim());
       const uid = (parts[0] || '').toUpperCase();
@@ -3573,7 +3590,13 @@ app.post('/api/sms/feed', async (req, res) => {
       .order('id', { ascending: true }).limit(20);
     const { data: top } = await getSupabase().from('oat_sms_messages')
       .select('id').eq('uid', found.uid).order('id', { ascending: false }).limit(1);
-    res.json({ success: true, messages: msgs || [], maxId: top && top[0] ? top[0].id : 0 });
+    // Next alert still waiting for its delay to finish (Bammi, 2026-11-22): the phone sets a
+    // precise alarm for this moment so a closed app still notifies exactly on time.
+    const { data: pending } = await getSupabase().from('oat_sms_messages')
+      .select('scheduled_at').eq('uid', found.uid).gt('scheduled_at', Date.now())
+      .is('deleted_at', null).order('scheduled_at', { ascending: true }).limit(1);
+    const nextAt = pending && pending[0] ? Number(pending[0].scheduled_at) : 0;
+    res.json({ success: true, messages: msgs || [], maxId: top && top[0] ? top[0].id : 0, nextAt, serverNow: Date.now() });
   } catch (e) { res.status(500).json({ success: false, error: 'Server error' }); }
 });
 

@@ -276,13 +276,18 @@
     <textarea id="setDepTpl" style="min-height:76px"></textarea>
     <div class="chips" id="chipsDep"></div>
 
-    <label class="field">Delivery delay (minutes after approval)</label>
+    <label class="field">Alert delay (seconds after approval)</label>
     <div class="snum">
-      <input id="setDelay" type="number" min="0" max="60" inputmode="numeric">
+      <input id="setDelay" type="number" min="0" max="3600" inputmode="numeric">
       <div class="chip" onclick="setDelay(0)">Instant</div>
-      <div class="chip" onclick="setDelay(3)">3 min</div>
-      <div class="chip" onclick="setDelay(5)">5 min</div>
+      <div class="chip" onclick="setDelay(10)">10s</div>
+      <div class="chip" onclick="setDelay(20)">20s</div>
+      <div class="chip" onclick="setDelay(30)">30s</div>
+      <div class="chip" onclick="setDelay(60)">60s</div>
     </div>
+
+    <label class="field">Alert delivery on this phone</label>
+    <div id="deliveryBox" class="hint">Checking…</div>
 
     <div class="switch"><span>SMS alerts on</span><div class="tg on" id="tgEnabled" onclick="toggleEnabled()"></div></div>
 
@@ -349,7 +354,13 @@ function boot(d){
   paintMe();
   absorb(d, true);
   show('scrInbox'); renderInbox();
-  clearInterval(POLL); POLL = setInterval(refresh, 8000);
+  clearInterval(POLL); POLL = setInterval(refresh, 5000);
+  // Bammi, 2026-11-22: when he opens the app the list must be current at once, not up to a
+  // poll later. Any of these events triggers an immediate fetch.
+  ['visibilitychange','pageshow','focus','resume'].forEach(ev => {
+    const h = () => { if(!document.hidden) refresh(); };
+    if(ev === 'visibilitychange') document.addEventListener(ev, h); else window.addEventListener(ev, h);
+  });
   try { if(window.OATNative && OATNative.setMessagesUser) OATNative.setMessagesUser(UID); } catch(e){}
 }
 function paintMe(){
@@ -699,7 +710,8 @@ function openSettings(){
   $('setCarrier').value = SET.carrier || 'MTN NG';
   $('setWdTpl').value = SET.withdrawal_template || '';
   $('setDepTpl').value = SET.deposit_template || '';
-  $('setDelay').value = SET.delay_minutes != null ? SET.delay_minutes : 3;
+  $('setDelay').value = (SET.delay_seconds != null ? SET.delay_seconds : 20);
+  paintDelivery();
   ENABLED = SET.enabled !== false; paintEnabled();
   $('chipsWd').innerHTML = TAGS.map(t => '<div class="chip" onclick="insTag(\'setWdTpl\',\''+t+'\')">'+t+'</div>').join('');
   $('chipsDep').innerHTML = TAGS.map(t => '<div class="chip" onclick="insTag(\'setDepTpl\',\''+t+'\')">'+t+'</div>').join('');
@@ -708,6 +720,30 @@ function openSettings(){
 }
 function closeSettings(){ $('sheet').classList.remove('on'); }
 function setDelay(n){ $('setDelay').value = n; }
+// Shows whether this phone can actually wake the app to deliver an alert while it is closed.
+function paintDelivery(){
+  const box = $('deliveryBox'); if(!box) return;
+  let st = null;
+  try{ if(window.OATNative && OATNative.deliveryStatus) st = JSON.parse(OATNative.deliveryStatus()); }catch(e){}
+  if(!st){ box.innerHTML = 'Open the Messages app (APK) to check delivery permissions on this phone.'; return; }
+  const rows = [
+    ['Notifications allowed', st.notifications],
+    ['Exact alarms allowed', st.exact],
+    ['Battery unrestricted', st.battery]
+  ];
+  box.innerHTML = rows.map(r => '<div style="display:flex;justify-content:space-between;padding:3px 0">'
+    + '<span>' + r[0] + '</span><b style="color:' + (r[1] ? '#9ccc65' : '#ff8a80') + '">' + (r[1] ? 'Yes' : 'No') + '</b></div>').join('')
+    + (st.notifications && st.exact && st.battery ? '<div style="margin-top:6px;color:#9ccc65">Alerts will arrive even when the app is closed.</div>'
+      : '<div style="margin-top:8px"><button class="btn" style="padding:8px" onclick="fixDelivery()">Fix delivery permissions</button></div>');
+}
+function fixDelivery(){
+  try{
+    if(window.OATNative){
+      if(OATNative.fixDelivery) OATNative.fixDelivery();
+      setTimeout(paintDelivery, 1500);
+    }
+  }catch(e){}
+}
 function toggleEnabled(){ ENABLED = !ENABLED; paintEnabled(); }
 function paintEnabled(){ $('tgEnabled').classList.toggle('on', ENABLED); }
 function updatePreview(){ $('previewBody').textContent = fill($('setWdTpl').value); }
@@ -718,12 +754,13 @@ async function saveSettings(){
     carrier: $('setCarrier').value.trim() || 'MTN NG',
     withdrawal_template: $('setWdTpl').value,
     deposit_template: $('setDepTpl').value,
-    delay_minutes: parseInt($('setDelay').value,10) || 0,
+    delay_seconds: Math.max(0, Math.min(3600, parseInt($('setDelay').value,10) || 0)),
     enabled: ENABLED
   };
   const d = await post('/api/sms/settings', body);
   if(!d.success) return toast(d.error || 'Could not save');
   SET = Object.assign({}, SET, d.settings, { carrier: body.carrier });
+  if (d.delay_seconds != null) SET.delay_seconds = d.delay_seconds;
   closeSettings(); toast('Saved'); refresh();
 }
 async function sendTest(){

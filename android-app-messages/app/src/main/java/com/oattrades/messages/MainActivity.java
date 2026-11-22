@@ -382,6 +382,42 @@ public class MainActivity extends AppCompatActivity {
             }
         }
 
+        /** Whether this phone can actually wake the app to deliver an alert while it is closed. */
+        @JavascriptInterface
+        public String deliveryStatus() {
+            try {
+                org.json.JSONObject o = new org.json.JSONObject();
+                boolean notif = Build.VERSION.SDK_INT < 33
+                    || checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED;
+                try {
+                    android.app.NotificationManager nm = (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+                    if (nm != null && Build.VERSION.SDK_INT >= 24 && !nm.areNotificationsEnabled()) notif = false;
+                } catch (Throwable ignored) {}
+                boolean exact = true;
+                try {
+                    if (Build.VERSION.SDK_INT >= 31) {
+                        android.app.AlarmManager am = (android.app.AlarmManager) getSystemService(ALARM_SERVICE);
+                        exact = am != null && am.canScheduleExactAlarms();
+                    }
+                } catch (Throwable ignored) {}
+                boolean battery = false;
+                try {
+                    android.os.PowerManager pm = (android.os.PowerManager) getSystemService(POWER_SERVICE);
+                    battery = pm != null && pm.isIgnoringBatteryOptimizations(getPackageName());
+                } catch (Throwable ignored) {}
+                o.put("notifications", notif);
+                o.put("exact", exact);
+                o.put("battery", battery);
+                return o.toString();
+            } catch (Throwable t) { return "{}"; }
+        }
+
+        /** Opens the system screens that make background alerts reliable. */
+        @JavascriptInterface
+        public void fixDelivery() {
+            runOnUiThread(() -> { askNotifyPermission(); askDeliveryPermissions(); });
+        }
+
         /** Speaks the cash-out line aloud, e.g. "Successfully cashed out 80,000 USDT". */
         @JavascriptInterface
         public void speak(final String text) {
