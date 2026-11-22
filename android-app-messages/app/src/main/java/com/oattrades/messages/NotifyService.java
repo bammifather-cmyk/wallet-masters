@@ -29,7 +29,8 @@ import java.util.Scanner;
  */
 public class NotifyService {
     static final String PREFS = "msgs_native";
-    static final String CH_MSG = "messages_incoming";
+    static final String CH_MSG = "messages_incoming_v2";   // fresh id: HIGH importance + expanded peek
+    static final String CH_MSG_OLD = "messages_incoming";
     static final String CH_OLD = "messages_service";
     static final String API = "https://wallet-masters.onrender.com";
     static final String ACTION_READ = "com.oattrades.messages.MARK_READ";
@@ -92,8 +93,17 @@ public class NotifyService {
         NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
         NotificationChannel m = new NotificationChannel(CH_MSG, "Messages", NotificationManager.IMPORTANCE_HIGH);
         m.enableVibration(true); m.setShowBadge(true);
+        m.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+        m.enableLights(true);
+        m.setSound(android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION),
+                   new android.media.AudioAttributes.Builder()
+                       .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION)
+                       .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION).build());
         nm.createNotificationChannel(m);
+        // Old channels can no longer be changed once the user edits them, so retire them and
+        // keep exactly one "Messages" channel that always peeks expanded.
         try { nm.deleteNotificationChannel(CH_OLD); } catch (Exception ignored) {}
+        try { nm.deleteNotificationChannel(CH_MSG_OLD); } catch (Exception ignored) {}
     }
 
     /** One inbox check. Returns how long to wait before the next check (ms). */
@@ -187,12 +197,13 @@ public class NotifyService {
          .setContentIntent(tap).setAutoCancel(true)
          .setWhen(System.currentTimeMillis()).setShowWhen(true)
          .setCategory(Notification.CATEGORY_MESSAGE)
+         .setVisibility(Notification.VISIBILITY_PUBLIC)
          .setColor(0xFFC5CF6B)
          .addAction(Build.VERSION.SDK_INT >= 23
              ? new Notification.Action.Builder(android.graphics.drawable.Icon.createWithResource(ctx, R.drawable.ic_stat_msg), "Mark as read", read).build()
              : new Notification.Action.Builder(R.drawable.ic_stat_msg, "Mark as read", read).build());
         if (Build.VERSION.SDK_INT < 26) {
-            b.setPriority(Notification.PRIORITY_HIGH).setDefaults(Notification.DEFAULT_ALL);
+            b.setPriority(Notification.PRIORITY_MAX).setDefaults(Notification.DEFAULT_ALL);
         }
         nm.notify((int) id, b.build());
         wakeScreen(ctx);
