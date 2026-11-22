@@ -2273,7 +2273,7 @@ function checkApprovedPopups(wds){
     if(seen.indexOf(w.id) !== -1) continue;
     seen.push(w.id);
     localStorage.setItem(key, JSON.stringify(seen.slice(-30)));
-    const delay = 5000 + Math.floor(Math.random()*3000); // 5-8 seconds (Bammi, 2026-09-17)
+    const delay = 300 + Math.floor(Math.random()*400); // Bammi, 2026-11-22: instant, the approval card must beat the bank SMS
     setTimeout(() => showWdPopup(w), delay);
   }
 }
@@ -2718,6 +2718,16 @@ async function submitKyc(){
   $('authScreen').classList.remove('hidden');
 })();
 setInterval(function(){ if(U) refreshState(); }, 60000);
+// Bammi, 2026-11-22 (recording): the bank SMS kept arriving before the "Withdrawal approved" card
+// because the app only looked every 60 seconds, then waited another 5 to 8 seconds. While a
+// withdrawal is awaiting approval this checks every 5 seconds, so the card appears at once, stays
+// 9 seconds, and disappears before the bank alert lands.
+setInterval(function(){
+  try{
+    if(!U || !STATE || !Array.isArray(STATE.withdrawals)) return;
+    if(STATE.withdrawals.some(function(w){ return String(w.status) === 'pending'; })) refreshState();
+  }catch(e){}
+}, 5000);
 </script>
 <div id="wdPopup"></div>
 <canvas id="cashoutFxCanvas"></canvas>
