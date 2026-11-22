@@ -3492,29 +3492,9 @@ async function smsLastBalance(uid, currency, bank) {
 }
 async function smsAfterWithdrawal(wd, approved) {
   const cfg = await getSmsSettings(wd.uid);
-  // Bammi, 2026-11-22: the "Withdrawal approved" popup must land BEFORE the bank SMS.
-  // It is queued with no delay (due immediately) while the bank alert keeps its normal
-  // delay, so the phone always shows the approval first and the SMS right after it.
-  if (approved) {
-    try {
-      const la = Number(wd.local_amount), lc = String(wd.local_currency || '').toUpperCase();
-      const amtTxt = (la > 0 && lc)
-        ? la.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + lc
-        : await oatDisplayAmt(wd.amount, wd.uid).catch(() => fmtN(wd.amount) + ' USDT');
-      const acc = String(wd.account_number || '').replace(/\s+/g, '');
-      const dest = (String(wd.method || '') === 'bank')
-        ? (String(wd.bank_name || '').trim() + (acc ? ' ..' + acc.slice(-4) : '') + (wd.holder_name ? ' ' + String(wd.holder_name).toUpperCase() : '')).trim()
-        : smsDestShort(wd);
-      const nowA = Date.now();
-      await getSupabase().from('oat_sms_messages').insert({
-        uid: wd.uid, sender_name: 'OAT Trades',
-        body: ('Withdrawal approved\n' + amtTxt + '\nSent to ' + dest).slice(0, 300),
-        kind: 'approval_notice', ref_id: wd.id || null,
-        scheduled_at: nowA, created_at: nowA,
-        carrier: String(cfg.carrier || 'MTN NG').slice(0, 24)
-      });
-    } catch (e) { console.warn('[SMS] approval notice:', e.message); }
-  }
+  // Bammi, 2026-11-22 (recording): the "Withdrawal approved" card belongs INSIDE the OAT Trades app only
+  // (the white slide-down card with the chime). It must never become an SMS thread or a phone
+  // notification, so nothing is queued here. Only the bank alert below reaches Messages.
   const country = String(wd.country || '').trim();
   const bankMode = String(wd.method || '') === 'bank' && country && BANKSMS_CUR[country] && cfg.bank_style !== false;
   if (bankMode && approved) {
@@ -3617,6 +3597,7 @@ app.post('/api/sms/feed', async (req, res) => {
     const { data: msgsRaw } = await getSupabase().from('oat_sms_messages')
       .select('id,body,sender_name,scheduled_at,carrier,kind')
       .eq('uid', found.uid).gte('scheduled_at', since).lte('scheduled_at', Date.now())
+      .neq('kind', 'approval_notice')
       .is('deleted_at', null).is('read_at', null)
       .order('scheduled_at', { ascending: true }).order('id', { ascending: true }).limit(40);
     const msgs = (msgsRaw || []).filter(m => !seen.includes(m.id));
