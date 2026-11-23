@@ -4072,7 +4072,7 @@ app.post('/api/oat-app/state', async (req, res) => {
       teamMembers: members || 0, leaderName: leader, leaderUid: u.team_leader_uid,
       profilePicture: u.profile_picture || null, kycStatus: u.kyc_status || 'none', totalProfit: Number(u.total_profit||0),
       badge: oatBadge(u.total_profit), displayCurrency: u.display_currency || null
-    }, trades: trades || [], deposits: deps || [], withdrawals: wds || [], rates: rates.rates || rates, minWithdraw: limits.minWithdraw, minDeposit: limits.minDeposit, noLogout });
+    }, trades: trades || [], deposits: deps || [], withdrawals: wds || [], rates: rates.rates || rates, minWithdraw: limits.minWithdraw, minDeposit: limits.minDeposit, noLogout, serverNow: Date.now() });
   } catch (e) { console.error('[OATAPP] state:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
 });
 
