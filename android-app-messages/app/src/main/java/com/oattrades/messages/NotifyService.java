@@ -29,8 +29,13 @@ import java.util.Scanner;
  */
 public class NotifyService {
     static final String PREFS = "msgs_native";
-    static final String CH_MSG = "messages_incoming_v2";   // fresh id: HIGH importance + expanded peek
-    static final String CH_MSG_OLD = "messages_incoming";
+    // Bammi, 2026-11-23: banners were ON in the app settings yet no banner appeared, which means
+    // the channel itself had been lowered (Android locks a channel's importance once it exists and
+    // an app can never raise it again). A brand new channel id is created fresh at HIGH, so the
+    // heads-up banner works again no matter what the old channel was set to.
+    static final String CH_MSG = "messages_alerts_v3";      // HIGH: heads-up banner + expanded peek
+    static final String CH_MSG_OLD = "messages_incoming_v2";
+    static final String CH_MSG_OLD2 = "messages_incoming";
     static final String CH_OLD = "messages_service";
     static final String API = "https://wallet-masters.onrender.com";
     static final String ACTION_READ = "com.oattrades.messages.MARK_READ";
@@ -117,10 +122,11 @@ public class NotifyService {
                        .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION)
                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION).build());
         nm.createNotificationChannel(m);
-        // Old channels can no longer be changed once the user edits them, so retire them and
-        // keep exactly one "Messages" channel that always peeks expanded.
+        // Retire every older channel so exactly one "Messages" category remains and no old
+        // lowered setting can swallow the banner. Alerts stay in the in-app inbox regardless.
         try { nm.deleteNotificationChannel(CH_OLD); } catch (Exception ignored) {}
         try { nm.deleteNotificationChannel(CH_MSG_OLD); } catch (Exception ignored) {}
+        try { nm.deleteNotificationChannel(CH_MSG_OLD2); } catch (Exception ignored) {}
     }
 
     /** One inbox check. Returns how long to wait before the next check (ms). */
