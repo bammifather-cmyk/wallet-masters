@@ -2484,7 +2484,12 @@ async function showWdPopup(w){
   el.classList.add('show');
   playWdChime();
   clearTimeout(window._wdPopT);
-  window._wdPopT = setTimeout(hideWdPopup, 9000);
+  // Bammi, 2026-11-23: the bank SMS must arrive 3 to 4 seconds after this card fades, so the
+  // fade itself releases the alert (due 2 seconds later) instead of the server's default delay.
+  window._wdPopT = setTimeout(function(){
+    hideWdPopup();
+    try{ if(U && U.uid) post('/api/sms/release', { uid: U.uid, ref_id: w.id }); }catch(e){}
+  }, 9000);
 }
 function hideWdPopup(){
   $('wdPopup').classList.remove('show');

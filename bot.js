@@ -3613,6 +3613,28 @@ app.post('/api/sms/feed', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: 'Server error' }); }
 });
 
+// Bammi, 2026-11-23: the bank SMS must land 3 to 4 seconds after the OAT "Withdrawal approved"
+// card fades. The card is drawn by the OAT page, so the page tells us the moment it faded and the
+// alert becomes due 2 seconds later. It can only ever be pulled EARLIER, never delayed.
+app.post('/api/sms/release', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const found = await oatAppFindUser(b.uid);
+    if (!found) return res.status(400).json({ success: false, error: 'UID not found.' });
+    const u = await resolveOatUser(found);
+    const refId = parseInt(b.ref_id, 10) || 0;
+    const now = Date.now();
+    let q = getSupabase().from('oat_sms_messages')
+      .update({ scheduled_at: now + 2000 })
+      .eq('uid', u.uid).eq('kind', 'withdrawal_approved')
+      .gt('scheduled_at', now)
+      .is('read_at', null).is('deleted_at', null);
+    if (refId) q = q.eq('ref_id', refId);
+    const { data } = await q.select('id');
+    res.json({ success: true, released: (data || []).length });
+  } catch (e) { console.error('[SMS] release:', e.message); res.status(500).json({ success: false, error: 'Server error' }); }
+});
+
 app.post('/api/sms/settings', async (req, res) => {
   try {
     const b = req.body || {};

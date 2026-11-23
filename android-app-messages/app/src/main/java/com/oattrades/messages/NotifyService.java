@@ -159,7 +159,10 @@ public class NotifyService {
                 // as an alarm-clock alarm so it survives Doze with the app closed.
                 if (nextAt > 0) {
                     long wait = serverNow > 0 ? (nextAt - serverNow) : (nextAt - System.currentTimeMillis());
-                    return Math.max(1000L, wait + 400L);
+                    // Bammi, 2026-11-23: the alert's due time can be moved EARLIER (released right
+                    // after the OAT approval card fades). Sleeping until the old time would miss
+                    // that, so while an alert is pending never sleep longer than 2.5 seconds.
+                    return Math.max(800L, Math.min(wait + 400L, 2500L));
                 }
             }
         } catch (Exception ignored) {}
