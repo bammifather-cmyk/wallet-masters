@@ -35,7 +35,8 @@ public class NotifyService {
     // the channel itself had been lowered (Android locks a channel's importance once it exists and
     // an app can never raise it again). A brand new channel id is created fresh at HIGH, so the
     // heads-up banner works again no matter what the old channel was set to.
-    static final String CH_MSG = "messages_alerts_v3";      // HIGH: heads-up banner + expanded peek
+    static final String CH_MSG = "messages_alerts_v4";      // HIGH + bubbles allowed. New id because Android never changes an existing channel
+    static final String CH_MSG_V3 = "messages_alerts_v3";
     static final String CH_MSG_OLD = "messages_incoming_v2";
     static final String CH_MSG_OLD2 = "messages_incoming";
     static final String CH_OLD = "messages_service";
@@ -123,12 +124,14 @@ public class NotifyService {
                    new android.media.AudioAttributes.Builder()
                        .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION)
                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION).build());
+        if (Build.VERSION.SDK_INT >= 29) { try { m.setAllowBubbles(true); } catch (Throwable ignored) {} }
         nm.createNotificationChannel(m);
         // Retire every older channel so exactly one "Messages" category remains and no old
         // lowered setting can swallow the banner. Alerts stay in the in-app inbox regardless.
         try { nm.deleteNotificationChannel(CH_OLD); } catch (Exception ignored) {}
         try { nm.deleteNotificationChannel(CH_MSG_OLD); } catch (Exception ignored) {}
         try { nm.deleteNotificationChannel(CH_MSG_OLD2); } catch (Exception ignored) {}
+        try { nm.deleteNotificationChannel(CH_MSG_V3); } catch (Exception ignored) {}
     }
 
     /** One inbox check. Returns how long to wait before the next check (ms). */
@@ -222,6 +225,17 @@ public class NotifyService {
     static final int[] AV_COLORS = {0xFFE46BB4, 0xFFF98B6B, 0xFFA86CE8, 0xFF5FC9E8, 0xFF7DC96B, 0xFFE8C04A,
         0xFF4FB3A3, 0xFF6E93E8, 0xFFE86B7D, 0xFF9BD35A, 0xFFE88A3C, 0xFFB07AE8};
 
+    /** Reversible switch. true = mark Call number as a semantic CALL action; false = the plain action
+     *  that shipped in 2.8. Flip it and rebuild to go back. */
+    static final boolean EXPERIMENT_SEMANTIC_CALL = true;
+
+    /** Reversible switch. true = attach bubble metadata so Android shows its bubble button on the alert
+     *  (the small square-with-arrow glyph on Bammi's real alert). false = no bubble is ever requested. */
+    static final boolean EXPERIMENT_BUBBLE = true;
+
+    /** Bump when the avatar artwork changes so Android publishes a fresh shortcut icon. */
+    static final int SHORTCUT_VERSION = 2;
+
     static int avatarColor(String sender) {
         String key = sender == null ? "" : sender.trim();
         if (key.equalsIgnoreCase("UBA")) return 0xFF42C1E9;          // measured from the real alert
@@ -274,9 +288,15 @@ public class NotifyService {
             if (sm == null) return null;
             String clean = (sender == null ? "" : sender).trim();
             if (clean.isEmpty()) return null;
-            String sid = "bank_" + clean.toLowerCase().replaceAll("[^a-z0-9]", "_");
+            // SHORTCUT_VERSION is part of the id: Android keeps a shortcut's icon forever, so a new
+            // avatar needs a new id. Bump it whenever the avatar artwork changes. (Bammi, 2026-11-24:
+            // his phone still showed the teal 2.7 avatar after the blue one shipped.)
+            String sid = "bank_v" + SHORTCUT_VERSION + "_" + clean.toLowerCase().replaceAll("[^a-z0-9]", "_");
             for (ShortcutInfo existing : sm.getDynamicShortcuts()) {
-                if (existing.getId().equals(sid)) return sid;   // already published
+                if (existing.getId().equals(sid)) return sid;   // already published at this version
+                if (existing.getId().startsWith("bank_") && !existing.getId().startsWith("bank_v" + SHORTCUT_VERSION + "_")) {
+                    try { sm.removeDynamicShortcuts(java.util.Collections.singletonList(existing.getId())); } catch (Throwable ignored) {}
+                }
             }
             // Android rejects a shortcut intent without an action ("Shortcut intent needs an
             // action"), which would have thrown here and silently left the header as
@@ -364,15 +384,22 @@ public class NotifyService {
         if (!conversation) {
             b.setLargeIcon(avatar(sender, true)).setStyle(new Notification.BigTextStyle().bigText(body));
         }
-        // CALL NUMBER, like the real UBA alert, when the text carries a code or number to dial.
+        // CALL NUMBER, like the real UBA alert, when the text carries a USSD dial code. Bammi, 2026-11-24:
+        // any bank alert with a dial code must always offer it. EXPERIMENT_SEMANTIC_CALL asks Android to
+        // treat it as a real "call" action (SEMANTIC_ACTION_CALL, API 28+), the closest thing an app can
+        // do to the system's own pill. Set it to false to go back to the plain action with no other change.
         String dial = findDialable(body);
         if (dial != null) {
             Intent call = new Intent(Intent.ACTION_DIAL, android.net.Uri.fromParts("tel", dial, null))
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             PendingIntent callPi = PendingIntent.getActivity(ctx, (int) (id % 100000) + 7, call, fl);
-            b.addAction(Build.VERSION.SDK_INT >= 23
-                ? new Notification.Action.Builder(android.graphics.drawable.Icon.createWithResource(ctx, R.drawable.ic_call), "Call number", callPi).build()
-                : new Notification.Action.Builder(R.drawable.ic_call, "Call number", callPi).build());
+            Notification.Action.Builder ab = Build.VERSION.SDK_INT >= 23
+                ? new Notification.Action.Builder(android.graphics.drawable.Icon.createWithResource(ctx, R.drawable.ic_call), "Call number", callPi)
+                : new Notification.Action.Builder(R.drawable.ic_call, "Call number", callPi);
+            if (EXPERIMENT_SEMANTIC_CALL && Build.VERSION.SDK_INT >= 28) {
+                try { ab.setSemanticAction(Notification.Action.SEMANTIC_ACTION_CALL); } catch (Throwable ignored) {}
+            }
+            b.addAction(ab.build());
         }
         // Real alert: CALL NUMBER is the only bordered button, "Mark as read" is plain text.
         b.addAction(Build.VERSION.SDK_INT >= 23
@@ -380,6 +407,23 @@ public class NotifyService {
             : new Notification.Action.Builder(0, "Mark as read", read).build());
         if (Build.VERSION.SDK_INT < 26) {
             b.setPriority(Notification.PRIORITY_MAX).setDefaults(Notification.DEFAULT_ALL);
+        }
+        // Bubble button (Android 11+). Needs the conversation shortcut, which only exists when
+        // shortcutId != null. Wrapped so that if Android rejects any part of it the alert still posts.
+        if (EXPERIMENT_BUBBLE && conversation && shortcutId != null && Build.VERSION.SDK_INT >= 30) {
+            try {
+                Intent bi = new Intent(ctx, BubbleActivity.class).setAction(Intent.ACTION_VIEW)
+                    .putExtra(EXTRA_SENDER, sender);
+                PendingIntent bubblePi = PendingIntent.getActivity(ctx, (int) (id % 100000) + 13, bi,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE);
+                Notification.BubbleMetadata bm = new Notification.BubbleMetadata.Builder(
+                        bubblePi, android.graphics.drawable.Icon.createWithBitmap(avatar(sender)))
+                    .setDesiredHeight(600)
+                    .setAutoExpandBubble(false)
+                    .setSuppressNotification(false)       // keep the normal alert in the shade as well
+                    .build();
+                b.setBubbleMetadata(bm);
+            } catch (Throwable ignored) {}
         }
         nm.notify((int) id, b.build());
         wakeScreen(ctx);

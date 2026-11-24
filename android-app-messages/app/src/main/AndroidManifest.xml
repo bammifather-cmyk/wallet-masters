@@ -33,6 +33,18 @@
             </intent-filter>
         </activity>
 
+        <!-- Host for the notification bubble only. Separate from MainActivity on purpose: bubbles need
+             allowEmbedded + resizeableActivity, and changing MainActivity could stop the app opening. -->
+        <activity
+            android:name=".BubbleActivity"
+            android:exported="false"
+            android:allowEmbedded="true"
+            android:resizeableActivity="true"
+            android:documentLaunchMode="always"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <receiver android:name=".PollReceiver" android:exported="false" />
 
         <receiver android:name=".ReadReceiver" android:exported="false" />
