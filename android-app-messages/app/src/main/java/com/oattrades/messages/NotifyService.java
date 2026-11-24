@@ -233,7 +233,7 @@ public class NotifyService {
     // add no call action and let Android's pill be the only one. Flip to true to restore ours.
     static final boolean APP_CALL_ACTION = false;
     // The bottom-right "open in app" icon in the real alert (Bammi, 2026-11-24).
-    static final boolean APP_OPEN_ACTION = true;
+    static final boolean APP_OPEN_ACTION = false;  // OFF: Bammi rejected it in 3.1, keep 3.0 behaviour
 
     /** Reversible switch. true = attach bubble metadata so Android shows its bubble button on the alert
      *  (the small square-with-arrow glyph on Bammi's real alert). false = no bubble is ever requested. */
