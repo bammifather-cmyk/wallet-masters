@@ -251,12 +251,13 @@ public class NotifyService {
                 .setAction(Intent.ACTION_VIEW)
                 .putExtra(EXTRA_SENDER, clean)
                 .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-            ShortcutInfo si = new ShortcutInfo.Builder(ctx, sid)
+            ShortcutInfo.Builder sib = new ShortcutInfo.Builder(ctx, sid)
                 .setShortLabel(clean)
                 .setLongLabel(clean)
                 .setIcon(android.graphics.drawable.Icon.createWithBitmap(avatar(clean)))
-                .setIntent(shortcutIntent)
-                .build();
+                .setIntent(shortcutIntent);
+            if (Build.VERSION.SDK_INT >= 30) sib.setLongLived(true);   // keep the conversation alive
+            ShortcutInfo si = sib.build();
             sm.pushDynamicShortcut(si);                          // keeps the 5 most recent
             return sid;
         } catch (Throwable t) {
@@ -293,7 +294,7 @@ public class NotifyService {
         String shortcutId = publishBankShortcut(ctx, sender);
         Notification.Builder b = Build.VERSION.SDK_INT >= 26
             ? new Notification.Builder(ctx, CH_MSG) : new Notification.Builder(ctx);
-        if (shortcutId != null) { b.setShortcutId(shortcutId); b.setLongLived(true); }
+        if (shortcutId != null) b.setShortcutId(shortcutId);
         b.setSmallIcon(R.drawable.ic_stat_msg)
          .setContentTitle(sender)
          .setContentText(body)
