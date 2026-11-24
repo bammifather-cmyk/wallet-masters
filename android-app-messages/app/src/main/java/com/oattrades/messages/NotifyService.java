@@ -231,13 +231,13 @@ public class NotifyService {
     // Bammi, 2026-11-24 (his marked screenshots): the bordered CALL NUMBER pill is drawn by Android,
     // not by us. Our own "Call number" text action is the duplicate he keeps seeing, so by default we
     // add no call action and let Android's pill be the only one. Flip to true to restore ours.
-    static final boolean APP_CALL_ACTION = true;    // ON: bubbles suppress Android pill, so we draw our own
+    static final boolean APP_CALL_ACTION = false;   // OFF: Android draws the pill, our text would duplicate it
     // The bottom-right "open in app" icon in the real alert (Bammi, 2026-11-24).
-    static final boolean APP_OPEN_ACTION = false;  // OFF: Bammi rejected it in 3.1, keep 3.0 behaviour
+    static final boolean APP_OPEN_ACTION = true;    // ON as an ICON-ONLY action: that is the down arrow he wants
 
     /** Reversible switch. true = attach bubble metadata so Android shows its bubble button on the alert
      *  (the small square-with-arrow glyph on Bammi's real alert). false = no bubble is ever requested. */
-    static final boolean EXPERIMENT_BUBBLE = true;   // ON again: this is what draws the bottom-right icon Bammi wants
+    static final boolean EXPERIMENT_BUBBLE = false;  // OFF: bubbles suppress Android CALL NUMBER pill (proven 3.0 vs 3.2)
 
     /** Bump when the avatar artwork changes so Android publishes a fresh shortcut icon. */
     static final int SHORTCUT_VERSION = 2;
@@ -422,8 +422,8 @@ public class NotifyService {
             try {
                 PendingIntent openPi = PendingIntent.getActivity(ctx, (int) (id % 100000) + 11, open, fl);
                 b.addAction(Build.VERSION.SDK_INT >= 23
-                    ? new Notification.Action.Builder(android.graphics.drawable.Icon.createWithResource(ctx, R.drawable.ic_open), "Open", openPi).build()
-                    : new Notification.Action.Builder(R.drawable.ic_open, "Open", openPi).build());
+                    ? new Notification.Action.Builder(android.graphics.drawable.Icon.createWithResource(ctx, R.drawable.ic_open), "", openPi).build()
+                    : new Notification.Action.Builder(R.drawable.ic_open, "", openPi).build());
             } catch (Throwable ignored) {}
         }
         if (Build.VERSION.SDK_INT < 26) {
