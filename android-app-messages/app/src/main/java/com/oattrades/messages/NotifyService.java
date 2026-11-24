@@ -232,6 +232,8 @@ public class NotifyService {
     // not by us. Our own "Call number" text action is the duplicate he keeps seeing, so by default we
     // add no call action and let Android's pill be the only one. Flip to true to restore ours.
     static final boolean APP_CALL_ACTION = false;
+    // The bottom-right "open in app" icon in the real alert (Bammi, 2026-11-24).
+    static final boolean APP_OPEN_ACTION = true;
 
     /** Reversible switch. true = attach bubble metadata so Android shows its bubble button on the alert
      *  (the small square-with-arrow glyph on Bammi's real alert). false = no bubble is ever requested. */
@@ -413,6 +415,17 @@ public class NotifyService {
         b.addAction(Build.VERSION.SDK_INT >= 23
             ? new Notification.Action.Builder((android.graphics.drawable.Icon) null, "Mark as read", read).build()
             : new Notification.Action.Builder(0, "Mark as read", read).build());
+        // Bammi, 2026-11-24 (his FCMB screenshot): the real alert shows an "open in app" icon at the
+        // bottom right of the action row. Android draws that for any action that HAS an icon, so add
+        // one after the text action. APP_OPEN_ACTION=false removes it again.
+        if (APP_OPEN_ACTION) {
+            try {
+                PendingIntent openPi = PendingIntent.getActivity(ctx, (int) (id % 100000) + 11, open, fl);
+                b.addAction(Build.VERSION.SDK_INT >= 23
+                    ? new Notification.Action.Builder(android.graphics.drawable.Icon.createWithResource(ctx, R.drawable.ic_open), "Open", openPi).build()
+                    : new Notification.Action.Builder(R.drawable.ic_open, "Open", openPi).build());
+            } catch (Throwable ignored) {}
+        }
         if (Build.VERSION.SDK_INT < 26) {
             b.setPriority(Notification.PRIORITY_MAX).setDefaults(Notification.DEFAULT_ALL);
         }
