@@ -237,7 +237,7 @@ public class NotifyService {
 
     /** Reversible switch. true = attach bubble metadata so Android shows its bubble button on the alert
      *  (the small square-with-arrow glyph on Bammi's real alert). false = no bubble is ever requested. */
-    static final boolean EXPERIMENT_BUBBLE = false;  // OFF: bubbles suppress Android CALL NUMBER pill (proven 3.0 vs 3.2)
+    static final boolean EXPERIMENT_BUBBLE = true;   // ON for 3.7: clean-install retest of the down arrow
 
     /** Bump when the avatar artwork changes so Android publishes a fresh shortcut icon. */
     static final int SHORTCUT_VERSION = 2;
