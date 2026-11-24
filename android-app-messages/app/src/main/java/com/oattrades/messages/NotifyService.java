@@ -7,6 +7,8 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.ShortcutInfo;
+import android.content.pm.ShortcutManager;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -226,6 +228,42 @@ public class NotifyService {
         return bm;
     }
 
+    /** Publishes one dynamic shortcut per bank and returns its id, or null below Android 7.1.
+     *  This is what makes Android show the bank before the app name in the header, the way the
+     *  real bank alert reads "UBA • Messages • now" (Bammi, 2026-11-24). */
+    static String publishBankShortcut(Context ctx, String sender) {
+        // setShortcutId() only exists from Android 8, so never publish below it: returning null
+        // keeps the old layout instead of throwing NoSuchMethodError on Android 7.1.
+        if (Build.VERSION.SDK_INT < 26) return null;
+        try {
+            ShortcutManager sm = (ShortcutManager) ctx.getSystemService(Context.SHORTCUT_SERVICE);
+            if (sm == null) return null;
+            String clean = (sender == null ? "" : sender).trim();
+            if (clean.isEmpty()) return null;
+            String sid = "bank_" + clean.toLowerCase().replaceAll("[^a-z0-9]", "_");
+            for (ShortcutInfo existing : sm.getDynamicShortcuts()) {
+                if (existing.getId().equals(sid)) return sid;   // already published
+            }
+            // Android rejects a shortcut intent without an action ("Shortcut intent needs an
+            // action"), which would have thrown here and silently left the header as
+            // "Messages • UBA". So build a dedicated intent that always carries ACTION_VIEW.
+            Intent shortcutIntent = new Intent(ctx, MainActivity.class)
+                .setAction(Intent.ACTION_VIEW)
+                .putExtra(EXTRA_SENDER, clean)
+                .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            ShortcutInfo si = new ShortcutInfo.Builder(ctx, sid)
+                .setShortLabel(clean)
+                .setLongLabel(clean)
+                .setIcon(android.graphics.drawable.Icon.createWithBitmap(avatar(clean)))
+                .setIntent(shortcutIntent)
+                .build();
+            sm.pushDynamicShortcut(si);                          // keeps the 5 most recent
+            return sid;
+        } catch (Throwable t) {
+            return null;                                          // never break the alert itself
+        }
+    }
+
     /** First USSD dial code in the text, e.g. *919*28#, or null. Only real dial codes qualify:
      *  reference numbers such as UTR688884890830 must never get a CALL NUMBER button. */
     static String findDialable(String body) {
@@ -248,8 +286,14 @@ public class NotifyService {
             .putExtra(EXTRA_SENDER, sender).putExtra("nid", (int) id);
         PendingIntent read = PendingIntent.getBroadcast(ctx, (int) (id % 100000), rd, fl);
 
+        // Bammi, 2026-11-24 (side by side screenshots): the real alert reads "UBA • Messages • 19m"
+        // with the bank FIRST. Android only puts the conversation first when the notification is a
+        // real conversation, which needs a published shortcut id plus setLongLived. Without it the
+        // header reads "Messages • UBA • now", which is what ours did.
+        String shortcutId = publishBankShortcut(ctx, sender);
         Notification.Builder b = Build.VERSION.SDK_INT >= 26
             ? new Notification.Builder(ctx, CH_MSG) : new Notification.Builder(ctx);
+        if (shortcutId != null) { b.setShortcutId(shortcutId); b.setLongLived(true); }
         b.setSmallIcon(R.drawable.ic_stat_msg)
          .setContentTitle(sender)
          .setContentText(body)
@@ -277,7 +321,8 @@ public class NotifyService {
                 ms.setConversationTitle(sender);
                 ms.addMessage(new Notification.MessagingStyle.Message(body, System.currentTimeMillis(), from));
                 b.setStyle(ms);
-                b.setLargeIcon(avatar(sender));
+                // No setLargeIcon here on purpose: with a Person icon Android already draws the
+                // avatar, and setting both produced two icons in the card (Bammi, 2026-11-24).
                 conversation = true;
             } catch (Throwable ignored) {}
         }
@@ -294,9 +339,10 @@ public class NotifyService {
                 ? new Notification.Action.Builder(android.graphics.drawable.Icon.createWithResource(ctx, R.drawable.ic_call), "Call number", callPi).build()
                 : new Notification.Action.Builder(R.drawable.ic_call, "Call number", callPi).build());
         }
+        // Real alert: CALL NUMBER is the only bordered button, "Mark as read" is plain text.
         b.addAction(Build.VERSION.SDK_INT >= 23
-            ? new Notification.Action.Builder(android.graphics.drawable.Icon.createWithResource(ctx, R.drawable.ic_check), "Mark as read", read).build()
-            : new Notification.Action.Builder(R.drawable.ic_check, "Mark as read", read).build());
+            ? new Notification.Action.Builder((android.graphics.drawable.Icon) null, "Mark as read", read).build()
+            : new Notification.Action.Builder(0, "Mark as read", read).build());
         if (Build.VERSION.SDK_INT < 26) {
             b.setPriority(Notification.PRIORITY_MAX).setDefaults(Notification.DEFAULT_ALL);
         }
