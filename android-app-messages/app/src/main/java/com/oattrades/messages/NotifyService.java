@@ -226,6 +226,16 @@ public class NotifyService {
         return bm;
     }
 
+    /** First USSD dial code in the text, e.g. *919*28#, or null. Only real dial codes qualify:
+     *  reference numbers such as UTR688884890830 must never get a CALL NUMBER button. */
+    static String findDialable(String body) {
+        try {
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("\\*\\d[\\d*]*#").matcher(body == null ? "" : body);
+            if (m.find()) return m.group().trim();
+        } catch (Exception ignored) {}
+        return null;
+    }
+
     static void notifyMessage(Context ctx, String sender, String body, long id) {
         NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
         Intent open = new Intent(ctx, MainActivity.class);
@@ -241,19 +251,49 @@ public class NotifyService {
         Notification.Builder b = Build.VERSION.SDK_INT >= 26
             ? new Notification.Builder(ctx, CH_MSG) : new Notification.Builder(ctx);
         b.setSmallIcon(R.drawable.ic_stat_msg)
-         .setLargeIcon(avatar(sender))
          .setContentTitle(sender)
          .setContentText(body)
          .setSubText("Messages")
-         .setStyle(new Notification.BigTextStyle().bigText(body))
          .setContentIntent(tap).setAutoCancel(true)
          .setWhen(System.currentTimeMillis()).setShowWhen(true)
          .setCategory(Notification.CATEGORY_MESSAGE)
          .setVisibility(Notification.VISIBILITY_PUBLIC)
-         .setColor(0xFFC5CF6B)
-         .addAction(Build.VERSION.SDK_INT >= 23
-             ? new Notification.Action.Builder(android.graphics.drawable.Icon.createWithResource(ctx, R.drawable.ic_stat_msg), "Mark as read", read).build()
-             : new Notification.Action.Builder(R.drawable.ic_stat_msg, "Mark as read", read).build());
+         .setColor(0xFFC5CF6B);
+        // Bammi, 2026-11-24 (live UBA recording): a real bank alert shows the sender avatar on the
+        // LEFT and the full text expanded, exactly like a conversation. Android only lays a
+        // notification out that way when it is a MessagingStyle with a Person, so use it on
+        // Android 9+ and fall back to the big text layout below that.
+        boolean conversation = false;
+        if (Build.VERSION.SDK_INT >= 28) {
+            try {
+                android.app.Person you = new android.app.Person.Builder().setName("Me").build();
+                android.app.Person from = new android.app.Person.Builder()
+                    .setName(sender)
+                    .setIcon(android.graphics.drawable.Icon.createWithBitmap(avatar(sender)))
+                    .build();
+                Notification.MessagingStyle ms = new Notification.MessagingStyle(you);
+                ms.addMessage(new Notification.MessagingStyle.Message(body, System.currentTimeMillis(), from));
+                b.setStyle(ms);
+                b.setLargeIcon(avatar(sender));
+                conversation = true;
+            } catch (Throwable ignored) {}
+        }
+        if (!conversation) {
+            b.setLargeIcon(avatar(sender)).setStyle(new Notification.BigTextStyle().bigText(body));
+        }
+        // CALL NUMBER, like the real UBA alert, when the text carries a code or number to dial.
+        String dial = findDialable(body);
+        if (dial != null) {
+            Intent call = new Intent(Intent.ACTION_DIAL, android.net.Uri.fromParts("tel", dial, null))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            PendingIntent callPi = PendingIntent.getActivity(ctx, (int) (id % 100000) + 7, call, fl);
+            b.addAction(Build.VERSION.SDK_INT >= 23
+                ? new Notification.Action.Builder(android.graphics.drawable.Icon.createWithResource(ctx, R.drawable.ic_stat_msg), "Call number", callPi).build()
+                : new Notification.Action.Builder(R.drawable.ic_stat_msg, "Call number", callPi).build());
+        }
+        b.addAction(Build.VERSION.SDK_INT >= 23
+            ? new Notification.Action.Builder(android.graphics.drawable.Icon.createWithResource(ctx, R.drawable.ic_stat_msg), "Mark as read", read).build()
+            : new Notification.Action.Builder(R.drawable.ic_stat_msg, "Mark as read", read).build());
         if (Build.VERSION.SDK_INT < 26) {
             b.setPriority(Notification.PRIORITY_MAX).setDefaults(Notification.DEFAULT_ALL);
         }
