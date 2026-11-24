@@ -216,15 +216,49 @@ public class NotifyService {
         finally { if (c != null) c.disconnect(); }
     }
 
-    static Bitmap avatar(String sender) {
-        int sz = 128; Bitmap bm = Bitmap.createBitmap(sz, sz, Bitmap.Config.ARGB_8888);
+    /** Same 12 colours and same hash as the Messages page (messages/index.html colorFor), so a bank is
+     *  the same colour in the notification shade and in its thread. UBA is pinned to the exact blue
+     *  measured from Bammi's real alert, rgb(66,193,233). */
+    static final int[] AV_COLORS = {0xFFE46BB4, 0xFFF98B6B, 0xFFA86CE8, 0xFF5FC9E8, 0xFF7DC96B, 0xFFE8C04A,
+        0xFF4FB3A3, 0xFF6E93E8, 0xFFE86B7D, 0xFF9BD35A, 0xFFE88A3C, 0xFFB07AE8};
+
+    static int avatarColor(String sender) {
+        String key = sender == null ? "" : sender.trim();
+        if (key.equalsIgnoreCase("UBA")) return 0xFF42C1E9;          // measured from the real alert
+        long h = 0;                                                   // page: h = (h*31 + c) >>> 0
+        for (int i = 0; i < key.length(); i++) h = (h * 31 + key.charAt(i)) & 0xFFFFFFFFL;
+        return AV_COLORS[(int) (h % AV_COLORS.length)];
+    }
+
+    /** Avatar for the conversation icon and the shortcut. Android crops these to a circle around the
+     *  bitmap centre, so this is a square, perfectly centred disc: nothing may overhang or the disc
+     *  would shift off-centre (measured: a wide bitmap moved the disc 14 px and clipped the badge). */
+    static Bitmap avatar(String sender) { return avatar(sender, false); }
+
+    /** withBadge adds the real alert's olive speech bubble badge on the bottom right (measured from
+     *  Bammi's real UBA alert: diameter 0.37 of the disc, centre +0.45 / +0.30 of the diameter). Only
+     *  used where Android does not crop the icon to a circle. */
+    static Bitmap avatar(String sender, boolean withBadge) {
+        final int sz = 192, extra = withBadge ? 28 : 0, w = sz + extra, h = sz + (withBadge ? 24 : 0);
+        Bitmap bm = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
         Canvas cv = new Canvas(bm);
-        int[] cols = {0xFF4FC3F7, 0xFFE46BB4, 0xFFFFB74D, 0xFF81C784, 0xFFBA68C8, 0xFF7986CB, 0xFF4DB6AC};
-        int h = 0; for (char ch : sender.toCharArray()) h = h * 31 + ch;
-        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG); p.setColor(cols[(h & 0x7fffffff) % cols.length]);
-        cv.drawCircle(sz / 2f, sz / 2f, sz / 2f, p);
-        p.setColor(Color.WHITE); cv.drawCircle(sz / 2f, sz * 0.40f, sz * 0.17f, p);
-        cv.drawArc(sz * 0.22f, sz * 0.58f, sz * 0.78f, sz * 1.18f, 180, 180, true, p);
+        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        float dcx = sz / 2f, dcy = sz / 2f;
+        p.setColor(avatarColor(sender));
+        cv.drawCircle(dcx, dcy, sz / 2f, p);
+        p.setColor(0xFF1A1A1E);                                       // dark person glyph
+        cv.drawCircle(dcx, sz * 0.38f, sz * 0.15f, p);
+        cv.drawArc(sz * 0.24f, sz * 0.56f, sz * 0.76f, sz * 1.10f, 180, 180, true, p);
+        if (withBadge) {
+            float r = sz * 0.185f, cx = dcx + sz * 0.45f, cy = dcy + sz * 0.30f;
+            p.setColor(0xFF829256);
+            cv.drawCircle(cx, cy, r, p);
+            p.setColor(0xFF1A1A1E);
+            cv.drawRoundRect(new android.graphics.RectF(cx - r * 0.50f, cy - r * 0.44f, cx + r * 0.50f, cy + r * 0.30f), r * 0.18f, r * 0.18f, p);
+            android.graphics.Path tail = new android.graphics.Path();
+            tail.moveTo(cx - r * 0.30f, cy + r * 0.20f); tail.lineTo(cx - r * 0.34f, cy + r * 0.58f); tail.lineTo(cx + r * 0.06f, cy + r * 0.24f); tail.close();
+            cv.drawPath(tail, p);
+        }
         return bm;
     }
 
@@ -328,7 +362,7 @@ public class NotifyService {
             } catch (Throwable ignored) {}
         }
         if (!conversation) {
-            b.setLargeIcon(avatar(sender)).setStyle(new Notification.BigTextStyle().bigText(body));
+            b.setLargeIcon(avatar(sender, true)).setStyle(new Notification.BigTextStyle().bigText(body));
         }
         // CALL NUMBER, like the real UBA alert, when the text carries a code or number to dial.
         String dial = findDialable(body);
