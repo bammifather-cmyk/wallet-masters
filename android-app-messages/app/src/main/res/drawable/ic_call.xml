@@ -1,14 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- CALL NUMBER icon, drawn to match the real bank alert (Bammi, 2026-11-24 15:36):
-     a GREEN filled box with a WHITE handset inside it. 3.9 had a green handset with no
-     box, which is why it still did not match. No android:tint here on purpose: a tint
-     overrides both colours and forces the whole icon to one shade. -->
+<!-- CALL NUMBER icon, matched to Bammi's real bank alert (2026-11-24 15:59).
+     His alert shows a ROUND green disc with a white handset, like the Google Phone icon.
+     3.10 drew a rounded SQUARE box, which is why it still read as "almost but not quite".
+     Circle now, handset centred at half scale. No android:tint: a tint flattens both
+     colours into one shade and was what made 3.8 white. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp" android:height="24dp"
     android:viewportWidth="24" android:viewportHeight="24">
     <path android:fillColor="#34A853"
-        android:pathData="M6,3h12a3,3 0 0 1 3,3v12a3,3 0 0 1 -3,3h-12a3,3 0 0 1 -3,-3v-12a3,3 0 0 1 3,-3z"/>
-    <group android:scaleX="0.52" android:scaleY="0.52" android:translateX="5.76" android:translateY="5.76">
+        android:pathData="M12,2a10,10 0 1,0 0.001,0z"/>
+    <group android:scaleX="0.5" android:scaleY="0.5" android:translateX="6" android:translateY="6">
         <path android:fillColor="#FFFFFFFF"
             android:pathData="M6.62,10.79c1.44,2.83 3.76,5.14 6.59,6.59l2.2,-2.2c0.27,-0.27 0.67,-0.36 1.02,-0.24 1.12,0.37 2.33,0.57 3.57,0.57 0.55,0 1,0.45 1,1V20c0,0.55 -0.45,1 -1,1 -9.39,0 -17,-7.61 -17,-17 0,-0.55 0.45,-1 1,-1h3.5c0.55,0 1,0.45 1,1 0,1.25 0.2,2.45 0.57,3.57 0.11,0.35 0.03,0.74 -0.25,1.02l-2.2,2.2z"/>
     </group>
