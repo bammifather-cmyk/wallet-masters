@@ -1,4 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@color/ic_launcher_background"/>
     <foreground android:drawable="@mipmap/ic_launcher_fg"/>
+    <!-- Android 13+ draws the corner badge on the alert avatar, and the launcher's themed
+         icon, from this monochrome layer, tinting it with the phone theme colour. Without
+         it the badge renders in full colour (white disc, blue bubble) instead of matching
+         the tinted badge on Bammi's real bank alert. Added 24 Nov 2026. -->
+    <monochrome android:drawable="@mipmap/ic_launcher_fg"/>
 </adaptive-icon>
