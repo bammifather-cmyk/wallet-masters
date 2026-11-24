@@ -237,7 +237,7 @@ public class NotifyService {
 
     /** Reversible switch. true = attach bubble metadata so Android shows its bubble button on the alert
      *  (the small square-with-arrow glyph on Bammi's real alert). false = no bubble is ever requested. */
-    static final boolean EXPERIMENT_BUBBLE = false;  // off for 3.0: test the pill alone first
+    static final boolean EXPERIMENT_BUBBLE = true;   // ON again: this is what draws the bottom-right icon Bammi wants
 
     /** Bump when the avatar artwork changes so Android publishes a fresh shortcut icon. */
     static final int SHORTCUT_VERSION = 2;
