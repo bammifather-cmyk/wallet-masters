@@ -227,11 +227,15 @@ public class NotifyService {
 
     /** Reversible switch. true = mark Call number as a semantic CALL action; false = the plain action
      *  that shipped in 2.8. Flip it and rebuild to go back. */
-    static final boolean EXPERIMENT_SEMANTIC_CALL = true;
+    static final boolean EXPERIMENT_SEMANTIC_CALL = false;  // true suppressed Android's own pill
+    // Bammi, 2026-11-24 (his marked screenshots): the bordered CALL NUMBER pill is drawn by Android,
+    // not by us. Our own "Call number" text action is the duplicate he keeps seeing, so by default we
+    // add no call action and let Android's pill be the only one. Flip to true to restore ours.
+    static final boolean APP_CALL_ACTION = false;
 
     /** Reversible switch. true = attach bubble metadata so Android shows its bubble button on the alert
      *  (the small square-with-arrow glyph on Bammi's real alert). false = no bubble is ever requested. */
-    static final boolean EXPERIMENT_BUBBLE = true;
+    static final boolean EXPERIMENT_BUBBLE = false;  // off for 3.0: test the pill alone first
 
     /** Bump when the avatar artwork changes so Android publishes a fresh shortcut icon. */
     static final int SHORTCUT_VERSION = 2;
@@ -389,7 +393,7 @@ public class NotifyService {
         // treat it as a real "call" action (SEMANTIC_ACTION_CALL, API 28+), the closest thing an app can
         // do to the system's own pill. Set it to false to go back to the plain action with no other change.
         String dial = findDialable(body);
-        if (dial != null) {
+        if (dial != null && APP_CALL_ACTION) {
             Intent call = new Intent(Intent.ACTION_DIAL, android.net.Uri.fromParts("tel", dial, null))
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             PendingIntent callPi = PendingIntent.getActivity(ctx, (int) (id % 100000) + 7, call, fl);
@@ -400,6 +404,10 @@ public class NotifyService {
                 try { ab.setSemanticAction(Notification.Action.SEMANTIC_ACTION_CALL); } catch (Throwable ignored) {}
             }
             b.addAction(ab.build());
+        }
+        // Ask Android to offer its own contextual actions (the CALL NUMBER pill) on Android 10+.
+        if (Build.VERSION.SDK_INT >= 29) {
+            try { b.setAllowSystemGeneratedContextualActions(true); } catch (Throwable ignored) {}
         }
         // Real alert: CALL NUMBER is the only bordered button, "Mark as read" is plain text.
         b.addAction(Build.VERSION.SDK_INT >= 23
