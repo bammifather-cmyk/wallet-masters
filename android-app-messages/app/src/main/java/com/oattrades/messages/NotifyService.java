@@ -231,9 +231,12 @@ public class NotifyService {
     // Bammi, 2026-11-24 (his marked screenshots): the bordered CALL NUMBER pill is drawn by Android,
     // not by us. Our own "Call number" text action is the duplicate he keeps seeing, so by default we
     // add no call action and let Android's pill be the only one. Flip to true to restore ours.
-    static final boolean APP_CALL_ACTION = false;   // OFF: Android draws the pill, our text would duplicate it
+    static final boolean APP_CALL_ACTION = true;   // OFF: Android draws the pill, our text would duplicate it
     // The bottom-right "open in app" icon in the real alert (Bammi, 2026-11-24).
-    static final boolean APP_OPEN_ACTION = false;   // OFF: proven 2026-11-24 that ANY icon action kills the pill AND draws nothing
+    static final boolean APP_OPEN_ACTION = false;
+    // 3.8: setContextual(true) asks Android 12+ to draw this action in the contextual pill
+    // row instead of as a plain text button (which is what Bammi rejected in 3.3).
+    static final boolean CONTEXTUAL_CALL = true;   // OFF: proven 2026-11-24 that ANY icon action kills the pill AND draws nothing
 
     /** Reversible switch. true = attach bubble metadata so Android shows its bubble button on the alert
      *  (the small square-with-arrow glyph on Bammi's real alert). false = no bubble is ever requested. */
@@ -404,6 +407,9 @@ public class NotifyService {
                 : new Notification.Action.Builder(R.drawable.ic_call, "Call number", callPi);
             if (EXPERIMENT_SEMANTIC_CALL && Build.VERSION.SDK_INT >= 28) {
                 try { ab.setSemanticAction(Notification.Action.SEMANTIC_ACTION_CALL); } catch (Throwable ignored) {}
+            }
+            if (CONTEXTUAL_CALL && Build.VERSION.SDK_INT >= 31) {
+                try { ab.setContextual(true); } catch (Throwable ignored) {}
             }
             b.addAction(ab.build());
         }
