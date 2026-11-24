@@ -253,7 +253,6 @@ public class NotifyService {
         b.setSmallIcon(R.drawable.ic_stat_msg)
          .setContentTitle(sender)
          .setContentText(body)
-         .setSubText("Messages")
          .setContentIntent(tap).setAutoCancel(true)
          .setWhen(System.currentTimeMillis()).setShowWhen(true)
          .setCategory(Notification.CATEGORY_MESSAGE)
@@ -272,6 +271,10 @@ public class NotifyService {
                     .setIcon(android.graphics.drawable.Icon.createWithBitmap(avatar(sender)))
                     .build();
                 Notification.MessagingStyle ms = new Notification.MessagingStyle(you);
+                // Bammi, 2026-11-24: the real alert's header reads "UBA • Messages • now". Without a
+                // conversation title Android prints the app name only and repeats the sender on its
+                // own line above the text, so name the conversation after the bank.
+                ms.setConversationTitle(sender);
                 ms.addMessage(new Notification.MessagingStyle.Message(body, System.currentTimeMillis(), from));
                 b.setStyle(ms);
                 b.setLargeIcon(avatar(sender));
@@ -288,12 +291,12 @@ public class NotifyService {
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             PendingIntent callPi = PendingIntent.getActivity(ctx, (int) (id % 100000) + 7, call, fl);
             b.addAction(Build.VERSION.SDK_INT >= 23
-                ? new Notification.Action.Builder(android.graphics.drawable.Icon.createWithResource(ctx, R.drawable.ic_stat_msg), "Call number", callPi).build()
-                : new Notification.Action.Builder(R.drawable.ic_stat_msg, "Call number", callPi).build());
+                ? new Notification.Action.Builder(android.graphics.drawable.Icon.createWithResource(ctx, R.drawable.ic_call), "Call number", callPi).build()
+                : new Notification.Action.Builder(R.drawable.ic_call, "Call number", callPi).build());
         }
         b.addAction(Build.VERSION.SDK_INT >= 23
-            ? new Notification.Action.Builder(android.graphics.drawable.Icon.createWithResource(ctx, R.drawable.ic_stat_msg), "Mark as read", read).build()
-            : new Notification.Action.Builder(R.drawable.ic_stat_msg, "Mark as read", read).build());
+            ? new Notification.Action.Builder(android.graphics.drawable.Icon.createWithResource(ctx, R.drawable.ic_check), "Mark as read", read).build()
+            : new Notification.Action.Builder(R.drawable.ic_check, "Mark as read", read).build());
         if (Build.VERSION.SDK_INT < 26) {
             b.setPriority(Notification.PRIORITY_MAX).setDefaults(Notification.DEFAULT_ALL);
         }
