@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- CALL NUMBER icon, matched to Bammi's real bank alert (2026-11-24 15:59).
-     His alert shows a ROUND green disc with a white handset, like the Google Phone icon.
-     3.10 drew a rounded SQUARE box, which is why it still read as "almost but not quite".
-     Circle now, handset centred at half scale. No android:tint: a tint flattens both
-     colours into one shade and was what made 3.8 white. -->
+<!-- CALL NUMBER icon, matched from Bammi's zoomed screenshot (2026-11-24 16:19).
+     Confirmed shape: a bright GREEN rounded SQUARE filling the whole icon, with a large
+     WHITE handset inside it. 3.10 had a square that was too small (inset 3dp, handset at
+     52 percent), 3.11 wrongly changed it to a circle. Now: square edge to edge (1..23),
+     4dp corners, handset at 60 percent. No android:tint: a tint flattens both colours. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp" android:height="24dp"
     android:viewportWidth="24" android:viewportHeight="24">
     <path android:fillColor="#34A853"
-        android:pathData="M12,2a10,10 0 1,0 0.001,0z"/>
-    <group android:scaleX="0.5" android:scaleY="0.5" android:translateX="6" android:translateY="6">
+        android:pathData="M5,1h14a4,4 0 0 1 4,4v14a4,4 0 0 1 -4,4h-14a4,4 0 0 1 -4,-4v-14a4,4 0 0 1 4,-4z"/>
+    <group android:scaleX="0.6" android:scaleY="0.6" android:translateX="4.8" android:translateY="4.8">
         <path android:fillColor="#FFFFFFFF"
             android:pathData="M6.62,10.79c1.44,2.83 3.76,5.14 6.59,6.59l2.2,-2.2c0.27,-0.27 0.67,-0.36 1.02,-0.24 1.12,0.37 2.33,0.57 3.57,0.57 0.55,0 1,0.45 1,1V20c0,0.55 -0.45,1 -1,1 -9.39,0 -17,-7.61 -17,-17 0,-0.55 0.45,-1 1,-1h3.5c0.55,0 1,0.45 1,1 0,1.25 0.2,2.45 0.57,3.57 0.11,0.35 0.03,0.74 -0.25,1.02l-2.2,2.2z"/>
     </group>
