@@ -2440,6 +2440,26 @@ To change:
 Per user: <code>OATUSERMIN:UID:W:500</code> / <code>OATUSERMIN:UID:D:500</code>`, { parse_mode: 'HTML' });
       }catch(e){ return bot.sendMessage(id, '❌ '+e.message); }
     }
+    if (tUp.startsWith('OATAUTO:')) {
+      const arg = text.split(':').slice(1).join(':').trim();
+      if (/^LIST$/i.test(arg)) {
+        const list = await oatAutoWdList();
+        if (!list.length) return bot.sendMessage(id, 'No users are on auto-approve.');
+        const lines = [];
+        for (const uu of list) {
+          const { data: ou } = await getSupabase().from('oat_app_users').select('name').eq('uid', uu).maybeSingle();
+          lines.push('• <code>' + uu + '</code>' + (ou && ou.name ? ' (' + escHtml(ou.name) + ')' : ''));
+        }
+        return bot.sendMessage(id, '⚡ <b>Auto-approve withdrawals</b>\n\n' + lines.join('\n') + '\n\nToggle with <code>OATAUTO:UID</code>', { parse_mode: 'HTML' });
+      }
+      if (!arg) return bot.sendMessage(id, 'Usage: <code>OATAUTO:UID</code> toggles auto-approve for that user.\n<code>OATAUTO:LIST</code> shows who is on it.', { parse_mode: 'HTML' });
+      const on = !(await oatAutoWdGet(arg));
+      await oatAutoWdSet(arg, on);
+      return bot.sendMessage(id, on
+        ? '⚡ Auto-approve is ON for <code>' + arg + '</code>. Their withdrawals are approved instantly and you will not get a request notice.\nTurn it off with <code>OATAUTO:' + arg + '</code>.'
+        : '✅ Auto-approve is OFF for <code>' + arg + '</code>. Their withdrawals come to you for approval again.',
+        { parse_mode: 'HTML' });
+    }
     if (tUp.startsWith('OATWD:')) {
       const arg = text.split(':').slice(1).join(':').trim();
       if (/^APPROVE\s+\d+$/i.test(arg)) {
@@ -4183,6 +4203,31 @@ app.get('/api/oat-app/app-version', (_, res) => res.json({
   force: true
 }));
 
+
+// ─── Auto-approve withdrawals (Bammi, 2026-11-26) ─────────────────────────────
+// Bammi can flag a trusted user so their withdrawals are approved instantly, the
+// same way tapping Approve does, and he gets no request notice for them. The flag
+// lives in the app_settings KV store as oat_autowd_<uid> = '1' so it needs no new
+// table, and OATAUTO:<uid> toggles it back off whenever he wants the normal flow.
+async function oatAutoWdGet(uid) {
+  try {
+    const { data } = await getSupabase().from('app_settings').select('value').eq('key', 'oat_autowd_' + String(uid)).maybeSingle();
+    return !!(data && String(data.value) === '1');
+  } catch (e) { return false; }
+}
+async function oatAutoWdSet(uid, on) {
+  const key = 'oat_autowd_' + String(uid);
+  const supa = getSupabase();
+  if (on) await supa.from('app_settings').upsert({ key, value: '1' }, { onConflict: 'key' });
+  else await supa.from('app_settings').delete().eq('key', key);
+}
+async function oatAutoWdList() {
+  try {
+    const { data } = await getSupabase().from('app_settings').select('key').like('key', 'oat_autowd_%');
+    return (data || []).map(r => String(r.key).slice('oat_autowd_'.length));
+  } catch (e) { return []; }
+}
+
 app.post('/api/oat-app/withdraw', async (req, res) => {
   try {
     const { uid, asset, address, amount, method, bankName, accountNumber, holderName, localAmount, localCurrency } = req.body || {};
@@ -4256,6 +4301,20 @@ app.post('/api/oat-app/withdraw', async (req, res) => {
     const { data: wdRow, error } = await supa.from('oat_app_withdrawals').insert(insert).select().single();
     if (error) return res.status(500).json({ success: false, error: error.message });
     await supa.from('oat_app_users').update({ balance: Number(u.balance) - amt }).eq('uid', u.uid);
+    // Trusted users skip the admin queue entirely (Bammi, 2026-11-26).
+    if (await oatAutoWdGet(u.uid)) {
+      try {
+        await supa.from('oat_app_withdrawals').update({ status: 'approved', reviewed_at: Date.now() }).eq('id', wdRow.id);
+        smsAfterWithdrawal(Object.assign({}, wdRow, { status: 'approved' }), true).catch(()=>{});
+        const dispAmt = await oatDisplayAmt(wdRow.amount, wdRow.uid);
+        const dl = oatWdDestLines(wdRow);
+        notifyOATUserEmail(wdRow.uid, 'Withdrawal approved', 'Withdrawal approved', [
+          `Your withdrawal of <b>${dispAmt}</b> has been approved${wdRow.method === 'bank' ? ' and is being processed to your bank account:' : ' and sent to:'}`,
+          `<b>${wdRow.method === 'bank' ? dl.short : escHtml(wdRow.address)}</b>`
+        ], null, 'approved').catch(()=>{});
+      } catch (ae) { console.warn('[OAT] auto-approve failed:', ae.message); }
+      return res.json({ success: true, autoApproved: true });
+    }
     bot.sendMessage(ADMIN_CHAT_ID,
       `📤 <b>OAT Trades Withdrawal #${wdRow.id}</b>\n\n🆔 <code>${u.uid}</code> (${oatEsc(u.name)})\n${m === 'bank' ? '💰 ' + fmtN(amt) + ' USDT → Bank account' : destLine}\n${m === 'bank' ? destLine : ''}`,
       { parse_mode: 'HTML', reply_markup: { inline_keyboard: [
