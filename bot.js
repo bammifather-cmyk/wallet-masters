@@ -565,6 +565,7 @@ const ADMIN_KEYBOARD = {
     [{ text: '💬 Community Post',    callback_data: 'admin_community_post'     }, { text: '💰 Resolve Balance',   callback_data: 'admin_resolve_balance'    }],
     [{ text: '🗑️ Delete Testimonials', callback_data: 'admin_del_testimonials' }, { text: '🗑️ Delete Poems',      callback_data: 'admin_del_poems'          }],
     [{ text: '🗑️ Delete Comments',    callback_data: 'admin_del_comments'       }, { text: '📺 Post YT Testimonial', callback_data: 'admin_post_yt_test'      }],
+    [{ text: '📤 OAT Withdrawals', callback_data: 'admin_oat_wd' }, { text: '⚡ Auto-Approve', callback_data: 'admin_oat_auto' }],
     [{ text: '⚙️ Withdrawal Settings', callback_data: 'admin_wd_settings'            }, { text: '📉 OAT Limits', callback_data: 'admin_oat_limits' }]
   ]
 };
@@ -1572,6 +1573,13 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
     }
     return;
   }
+  if (data === 'admin_oat_wd' || data === 'admin_oat_auto') {
+    bot.answerCallbackQuery(cq.id).catch(()=>{});
+    if (data === 'admin_oat_wd') await oatWdListView(chatId);
+    const av = await oatUsersView();
+    bot.sendMessage(chatId, av.text, { parse_mode: 'HTML', reply_markup: av.markup || undefined }).catch(()=>{});
+    return;
+  }
   if (data.startsWith('oatauto_')) {
     const auid = data.slice('oatauto_'.length);
     try {
@@ -2564,6 +2572,29 @@ Per user: <code>OATUSERMIN:UID:W:500</code> / <code>OATUSERMIN:UID:D:500</code>
 // ─── OAT users screen with the auto-approve column (Bammi, 2026-11-26) ───────
 // He asked for a visible column he can tap, not a command he has to remember.
 // Each row shows a dot or a lightning bolt and carries its own toggle button.
+
+// ─── OAT withdrawals screen (Bammi, 2026-11-26) ──────────────────────────────
+// A real menu entry instead of a typed command, so he can approve by hand or
+// jump to the auto-approve switches.
+async function oatWdListView(chatId) {
+  const { data: pend } = await getSupabase().from('oat_app_withdrawals')
+    .select('*').in('status', ['pending','under_review','processing']).order('id', { ascending: true }).limit(20);
+  if (!pend || !pend.length) {
+    await bot.sendMessage(chatId, '📤 No OAT Trades withdrawals waiting for you.').catch(()=>{});
+    return;
+  }
+  await bot.sendMessage(chatId, '📤 <b>OAT Trades withdrawals waiting</b>\nTap Approve or Reject on each one.', { parse_mode: 'HTML' }).catch(()=>{});
+  for (const w of pend) {
+    const st = w.status === 'under_review' ? '🔍 Under Review' : w.status === 'processing' ? '⏳ Processing' : '⏱ Pending';
+    await bot.sendMessage(chatId,
+      `📤 <b>Withdrawal #${w.id}</b> — ${st}\n🆔 <code>${w.uid}</code>\n💰 ${fmtN(w.amount)} USDT${w.method === 'bank' ? ' → Bank transfer' : ' → ' + w.asset}\n${oatWdDestLines(w).detail}`,
+      { parse_mode: 'HTML', reply_markup: { inline_keyboard: [
+        [{ text: '✅ Approve', callback_data: `oatwd_appr_${w.id}` }, { text: '❌ Reject', callback_data: `oatwd_rej_${w.id}` }],
+        [{ text: '🔍 Under Review', callback_data: `oatwd_review_${w.id}` }, { text: '⏳ Processing', callback_data: `oatwd_proc_${w.id}` }]
+      ]}}).catch(()=>{});
+  }
+}
+
 async function oatUsersView() {
   const supa = getSupabase();
   const { data: ous } = await supa.from('oat_app_users')
@@ -2586,7 +2617,7 @@ async function oatUsersView() {
   };
 }
 
-    if (tUp.startsWith('OATUSERS:')) {
+    if (tUp.startsWith('OATUSERS')) {
       const view = await oatUsersView();
       return bot.sendMessage(id, view.text, { parse_mode: 'HTML', reply_markup: view.markup || undefined });
     }
