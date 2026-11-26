@@ -2437,7 +2437,11 @@ To change:
 <code>OATMIN:D 250</code> — set min deposit
 <code>OATMIN:W 250</code> — set min withdrawal
 
-Per user: <code>OATUSERMIN:UID:W:500</code> / <code>OATUSERMIN:UID:D:500</code>`, { parse_mode: 'HTML' });
+Per user: <code>OATUSERMIN:UID:W:500</code> / <code>OATUSERMIN:UID:D:500</code>
+
+⚡ <b>Auto-approve withdrawals</b> (no tap needed)
+<code>OATAUTO:UID</code> turns it on for that user, same command turns it off
+<code>OATAUTO:LIST</code> shows everyone on auto-approve`, { parse_mode: 'HTML' });
       }catch(e){ return bot.sendMessage(id, '❌ '+e.message); }
     }
     if (tUp.startsWith('OATAUTO:')) {
