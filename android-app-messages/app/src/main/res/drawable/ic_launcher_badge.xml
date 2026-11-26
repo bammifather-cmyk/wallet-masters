@@ -1,17 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Corner badge, measured from the pixel map of Bammi's real alert (2026-11-26 11:27).
-     Measurements: outer olive squircle radius is about 0.25 to 0.29 of the badge, so 7 of
-     24 (3.17 had 8, 3.16 had 6). The dark mark is roughly 30 percent of the badge, an OVAL
-     (about 7.0 x 5.6) centred slightly above middle, with its tail at the BOTTOM CENTRE
-     pointing straight down. 3.16 and 3.17 put the tail on the lower LEFT, which is the
-     mismatch Bammi kept seeing. -->
+<!-- Corner badge. Geometry fitted numerically against a pixel crop of Bammi's real alert
+     (2026-11-26): the olive squircle is radius 7 of 24, and the dark mark is a stadium
+     (fully rounded) body from x 7.74 to 15.74 and y 8.65 to 14.35, radius 2.85, with a
+     narrow tail from y 14.15 down to 15.95 centred slightly LEFT of the body centre.
+     Overlap with the real mark measured at IoU 0.887, up from 0.76 in 3.18. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="48dp" android:height="48dp"
     android:viewportWidth="24" android:viewportHeight="24">
     <path android:fillColor="#889B4D"
         android:pathData="M7,0h10a7,7 0 0 1 7,7v10a7,7 0 0 1 -7,7h-10a7,7 0 0 1 -7,-7v-10a7,7 0 0 1 7,-7z"/>
     <path android:fillColor="#1A1A1E"
-        android:pathData="M10.6,8.2h2.8a2.9,2.9 0 0 1 2.9,2.9v0.2a2.9,2.9 0 0 1 -2.9,2.9h-2.8a2.9,2.9 0 0 1 -2.9,-2.9v-0.2a2.9,2.9 0 0 1 2.9,-2.9z"/>
+        android:pathData="M10.59,8.65h2.3a2.85,2.85 0 0 1 0,5.7h-2.3a2.85,2.85 0 0 1 0,-5.7z"/>
     <path android:fillColor="#1A1A1E"
-        android:pathData="M10.9,13.9h2.2l-1.1,2.4z"/>
+        android:pathData="M10,14.15h2.6l-1.6,1.8z"/>
 </vector>
