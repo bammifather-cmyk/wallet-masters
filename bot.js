@@ -1572,6 +1572,17 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
     }
     return;
   }
+  if (data.startsWith('oatauto_')) {
+    const auid = data.slice('oatauto_'.length);
+    try {
+      const on = !(await oatAutoWdGet(auid));
+      await oatAutoWdSet(auid, on);
+      bot.answerCallbackQuery(cq.id, { text: on ? 'Auto-approve ON for ' + auid : 'Auto-approve OFF for ' + auid }).catch(()=>{});
+      const view = await oatUsersView();
+      bot.editMessageText(view.text, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML', reply_markup: view.markup || undefined }).catch(()=>{});
+    } catch (e) { bot.answerCallbackQuery(cq.id, { text: 'Failed: ' + e.message }).catch(()=>{}); }
+    return;
+  }
   if (data.startsWith('oatwd_appr_') || data.startsWith('oatwd_rej_')) {
     const wdId = data.split('_')[2];
     const supa = getSupabase();
@@ -2549,11 +2560,35 @@ Per user: <code>OATUSERMIN:UID:W:500</code> / <code>OATUSERMIN:UID:D:500</code>
           { text: '❌ Cancel', callback_data: 'bc_no' }
         ]] } }).catch(()=>{});
     }
+
+// ─── OAT users screen with the auto-approve column (Bammi, 2026-11-26) ───────
+// He asked for a visible column he can tap, not a command he has to remember.
+// Each row shows a dot or a lightning bolt and carries its own toggle button.
+async function oatUsersView() {
+  const supa = getSupabase();
+  const { data: ous } = await supa.from('oat_app_users')
+    .select('uid, name, balance, team_leader_uid').order('id', { ascending: false }).limit(30);
+  if (!ous || !ous.length) return { text: 'No OAT Trades users yet.', markup: null };
+  const auto = new Set(await oatAutoWdList());
+  const lines = ous.map(o => {
+    const on = auto.has(o.uid);
+    return (on ? '⚡' : '•') + ' <code>' + o.uid + '</code> ' + oatEsc(o.name) + ': '
+      + Number(o.balance).toLocaleString('en-US') + ' USDT' + (on ? '  <b>AUTO</b>' : '');
+  }).join('\n');
+  const kb = ous.map(o => [{
+    text: (auto.has(o.uid) ? '⚡ AUTO ON  ' : '○ AUTO OFF  ') + o.uid,
+    callback_data: 'oatauto_' + o.uid
+  }]);
+  return {
+    text: '📱 <b>OAT Trades users</b>\n\n' + lines
+      + '\n\n⚡ AUTO means their withdrawal is approved instantly and you get no request notice.\nTap any row below to switch it on or off.',
+    markup: { inline_keyboard: kb }
+  };
+}
+
     if (tUp.startsWith('OATUSERS:')) {
-      const { data: ous } = await supa.from('oat_app_users').select('uid, name, balance, team_leader_uid, created_at').order('id', { ascending: false }).limit(30);
-      if (!ous || !ous.length) return bot.sendMessage(id, 'No OAT Trades users yet.');
-      const lines = ous.map(o => `<code>${o.uid}</code> ${oatEsc(o.name)}: ${Number(o.balance).toLocaleString('en-US')} USDT (leader ${o.team_leader_uid})`).join('\n');
-      return bot.sendMessage(id, `📱 <b>OAT Trades users:</b>\n\n${lines}`, { parse_mode: 'HTML' });
+      const view = await oatUsersView();
+      return bot.sendMessage(id, view.text, { parse_mode: 'HTML', reply_markup: view.markup || undefined });
     }
   }
   // ── OAT Trades support: guided reply flow (via Reply button) ──────────
