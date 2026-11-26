@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Corner badge. Geometry fitted numerically against a pixel crop of Bammi's real alert
-     (2026-11-26): the olive squircle is radius 7 of 24, and the dark mark is a stadium
+     (2026-11-26): the olive squircle is radius 10 of 24 (best fit, IoU 0.907 vs 0.842 at 7), and the dark mark is a stadium
      (fully rounded) body from x 7.74 to 15.74 and y 8.65 to 14.35, radius 2.85, with a
      narrow tail from y 14.15 down to 15.95 centred slightly LEFT of the body centre.
      Overlap with the real mark measured at IoU 0.887, up from 0.76 in 3.18. -->
@@ -8,7 +8,7 @@
     android:width="48dp" android:height="48dp"
     android:viewportWidth="24" android:viewportHeight="24">
     <path android:fillColor="#889B4D"
-        android:pathData="M7,0h10a7,7 0 0 1 7,7v10a7,7 0 0 1 -7,7h-10a7,7 0 0 1 -7,-7v-10a7,7 0 0 1 7,-7z"/>
+        android:pathData="M10,0h4a10,10 0 0 1 10,10v4a10,10 0 0 1 -10,10h-4a10,10 0 0 1 -10,-10v-4a10,10 0 0 1 10,-10z"/>
     <path android:fillColor="#1A1A1E"
         android:pathData="M10.59,8.65h2.3a2.85,2.85 0 0 1 0,5.7h-2.3a2.85,2.85 0 0 1 0,-5.7z"/>
     <path android:fillColor="#1A1A1E"

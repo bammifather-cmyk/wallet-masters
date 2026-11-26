@@ -243,7 +243,7 @@ public class NotifyService {
     static final boolean EXPERIMENT_BUBBLE = true;   // ON for 3.7: clean-install retest of the down arrow
 
     /** Bump when the avatar artwork changes so Android publishes a fresh shortcut icon. */
-    static final int SHORTCUT_VERSION = 2;
+    static final int SHORTCUT_VERSION = 3;
 
     static int avatarColor(String sender) {
         String key = sender == null ? "" : sender.trim();
@@ -270,8 +270,8 @@ public class NotifyService {
         p.setColor(avatarColor(sender));
         cv.drawCircle(dcx, dcy, sz / 2f, p);
         p.setColor(0xFF1A1A1E);                                       // dark person glyph
-        cv.drawCircle(dcx, sz * 0.38f, sz * 0.15f, p);
-        cv.drawArc(sz * 0.24f, sz * 0.56f, sz * 0.76f, sz * 1.10f, 180, 180, true, p);
+        cv.drawCircle(dcx, sz * 0.350f, sz * 0.1215f, p);
+        cv.drawOval(new android.graphics.RectF(sz * 0.257f, sz * 0.545f, sz * 0.743f, sz * 0.800f), p);
         if (withBadge) {
             float r = sz * 0.185f, cx = dcx + sz * 0.45f, cy = dcy + sz * 0.30f;
             p.setColor(0xFF829256);
