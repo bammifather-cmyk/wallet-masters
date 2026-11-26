@@ -1,15 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Corner badge, measured from Bammi's real alert pixel map (2026-11-26 10:54).
-     The real olive squircle is much rounder than ours (radius 8 of 24, was 6), and the
-     dark bubble inside is only about 30 percent of the badge, centred, with a small tail
-     at the lower left. Ours was 55 percent, which is why it read as a fat dark box. -->
+<!-- Corner badge, measured from the pixel map of Bammi's real alert (2026-11-26 11:27).
+     Measurements: outer olive squircle radius is about 0.25 to 0.29 of the badge, so 7 of
+     24 (3.17 had 8, 3.16 had 6). The dark mark is roughly 30 percent of the badge, an OVAL
+     (about 7.0 x 5.6) centred slightly above middle, with its tail at the BOTTOM CENTRE
+     pointing straight down. 3.16 and 3.17 put the tail on the lower LEFT, which is the
+     mismatch Bammi kept seeing. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="48dp" android:height="48dp"
     android:viewportWidth="24" android:viewportHeight="24">
     <path android:fillColor="#889B4D"
-        android:pathData="M8,0h8a8,8 0 0 1 8,8v8a8,8 0 0 1 -8,8h-8a8,8 0 0 1 -8,-8v-8a8,8 0 0 1 8,-8z"/>
+        android:pathData="M7,0h10a7,7 0 0 1 7,7v10a7,7 0 0 1 -7,7h-10a7,7 0 0 1 -7,-7v-10a7,7 0 0 1 7,-7z"/>
     <path android:fillColor="#1A1A1E"
-        android:pathData="M12,8a3.6,3.6 0 1,0 0,7.2a3.6,3.6 0 1,0 0,-7.2z"/>
+        android:pathData="M10.6,8.2h2.8a2.9,2.9 0 0 1 2.9,2.9v0.2a2.9,2.9 0 0 1 -2.9,2.9h-2.8a2.9,2.9 0 0 1 -2.9,-2.9v-0.2a2.9,2.9 0 0 1 2.9,-2.9z"/>
     <path android:fillColor="#1A1A1E"
-        android:pathData="M9.2,14.6l-1,2.8l3,-1.8z"/>
+        android:pathData="M10.9,13.9h2.2l-1.1,2.4z"/>
 </vector>
