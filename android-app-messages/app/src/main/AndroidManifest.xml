@@ -14,8 +14,8 @@
 
     <application
         android:allowBackup="true"
-        android:icon="@mipmap/ic_launcher"
-        android:roundIcon="@mipmap/ic_launcher"
+        android:icon="@drawable/ic_launcher_badge"
+        android:roundIcon="@drawable/ic_launcher_badge"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:usesCleartextTraffic="false"
@@ -27,11 +27,22 @@
             android:screenOrientation="portrait"
             android:launchMode="singleTask"
             android:configChanges="orientation|screenSize|keyboardHidden">
+        </activity>
+        <!-- Keeps the REAL logo on the home screen and app drawer while the application
+             icon (which SystemUI uses for the conversation corner badge) is the olive badge. -->
+        <activity-alias
+            android:name=".Launcher"
+            android:targetActivity=".MainActivity"
+            android:icon="@mipmap/ic_launcher"
+            android:roundIcon="@mipmap/ic_launcher"
+            android:exported="true"
+            android:enabled="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
+        </activity-alias>
+
 
         <!-- Host for the notification bubble only. Separate from MainActivity on purpose: bubbles need
              allowEmbedded + resizeableActivity, and changing MainActivity could stop the app opening. -->
