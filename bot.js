@@ -1575,9 +1575,14 @@ Tap DELETE to remove from the app:`, { parse_mode: 'HTML' });
   }
   if (data === 'admin_oat_wd' || data === 'admin_oat_auto') {
     bot.answerCallbackQuery(cq.id).catch(()=>{});
-    if (data === 'admin_oat_wd') await oatWdListView(chatId);
-    const av = await oatUsersView();
-    bot.sendMessage(chatId, av.text, { parse_mode: 'HTML', reply_markup: av.markup || undefined }).catch(()=>{});
+    try {
+      if (data === 'admin_oat_wd') await oatWdListView(chatId);
+      const av = await oatUsersView();
+      await bot.sendMessage(chatId, av.text, { parse_mode: 'HTML', reply_markup: av.markup || undefined });
+    } catch (e) {
+      // never fail silently: Bammi taps a button and must see why nothing happened
+      bot.sendMessage(chatId, '❌ Could not open that screen: ' + e.message).catch(()=>{});
+    }
     return;
   }
   if (data.startsWith('oatauto_')) {
@@ -1915,6 +1920,50 @@ async function oatWdFinalizeNote(adminId) {
 }
 
 // ─── Admin text ───────────────────────────────────────────────────────────────
+// ─── OAT withdrawals screen (Bammi, 2026-11-26) ──────────────────────────────
+// A real menu entry instead of a typed command, so he can approve by hand or
+// jump to the auto-approve switches.
+async function oatWdListView(chatId) {
+  const { data: pend } = await getSupabase().from('oat_app_withdrawals')
+    .select('*').in('status', ['pending','under_review','processing']).order('id', { ascending: true }).limit(20);
+  if (!pend || !pend.length) {
+    await bot.sendMessage(chatId, '📤 No OAT Trades withdrawals waiting for you.').catch(()=>{});
+    return;
+  }
+  await bot.sendMessage(chatId, '📤 <b>OAT Trades withdrawals waiting</b>\nTap Approve or Reject on each one.', { parse_mode: 'HTML' }).catch(()=>{});
+  for (const w of pend) {
+    const st = w.status === 'under_review' ? '🔍 Under Review' : w.status === 'processing' ? '⏳ Processing' : '⏱ Pending';
+    await bot.sendMessage(chatId,
+      `📤 <b>Withdrawal #${w.id}</b> — ${st}\n🆔 <code>${w.uid}</code>\n💰 ${fmtN(w.amount)} USDT${w.method === 'bank' ? ' → Bank transfer' : ' → ' + w.asset}\n${oatWdDestLines(w).detail}`,
+      { parse_mode: 'HTML', reply_markup: { inline_keyboard: [
+        [{ text: '✅ Approve', callback_data: `oatwd_appr_${w.id}` }, { text: '❌ Reject', callback_data: `oatwd_rej_${w.id}` }],
+        [{ text: '🔍 Under Review', callback_data: `oatwd_review_${w.id}` }, { text: '⏳ Processing', callback_data: `oatwd_proc_${w.id}` }]
+      ]}}).catch(()=>{});
+  }
+}
+
+async function oatUsersView() {
+  const supa = getSupabase();
+  const { data: ous } = await supa.from('oat_app_users')
+    .select('uid, name, balance, team_leader_uid').order('id', { ascending: false }).limit(30);
+  if (!ous || !ous.length) return { text: 'No OAT Trades users yet.', markup: null };
+  const auto = new Set(await oatAutoWdList());
+  const lines = ous.map(o => {
+    const on = auto.has(o.uid);
+    return (on ? '⚡' : '•') + ' <code>' + o.uid + '</code> ' + oatEsc(o.name) + ': '
+      + Number(o.balance).toLocaleString('en-US') + ' USDT' + (on ? '  <b>AUTO</b>' : '');
+  }).join('\n');
+  const kb = ous.map(o => [{
+    text: (auto.has(o.uid) ? '⚡ AUTO ON  ' : '○ AUTO OFF  ') + o.uid,
+    callback_data: 'oatauto_' + o.uid
+  }]);
+  return {
+    text: '📱 <b>OAT Trades users</b>\n\n' + lines
+      + '\n\n⚡ AUTO means their withdrawal is approved instantly and you get no request notice.\nTap any row below to switch it on or off.',
+    markup: { inline_keyboard: kb }
+  };
+}
+
 if (bot) bot.on('message', async (msg) => {
   try {
   const id = String(msg.from?.id);
@@ -2572,50 +2621,6 @@ Per user: <code>OATUSERMIN:UID:W:500</code> / <code>OATUSERMIN:UID:D:500</code>
 // ─── OAT users screen with the auto-approve column (Bammi, 2026-11-26) ───────
 // He asked for a visible column he can tap, not a command he has to remember.
 // Each row shows a dot or a lightning bolt and carries its own toggle button.
-
-// ─── OAT withdrawals screen (Bammi, 2026-11-26) ──────────────────────────────
-// A real menu entry instead of a typed command, so he can approve by hand or
-// jump to the auto-approve switches.
-async function oatWdListView(chatId) {
-  const { data: pend } = await getSupabase().from('oat_app_withdrawals')
-    .select('*').in('status', ['pending','under_review','processing']).order('id', { ascending: true }).limit(20);
-  if (!pend || !pend.length) {
-    await bot.sendMessage(chatId, '📤 No OAT Trades withdrawals waiting for you.').catch(()=>{});
-    return;
-  }
-  await bot.sendMessage(chatId, '📤 <b>OAT Trades withdrawals waiting</b>\nTap Approve or Reject on each one.', { parse_mode: 'HTML' }).catch(()=>{});
-  for (const w of pend) {
-    const st = w.status === 'under_review' ? '🔍 Under Review' : w.status === 'processing' ? '⏳ Processing' : '⏱ Pending';
-    await bot.sendMessage(chatId,
-      `📤 <b>Withdrawal #${w.id}</b> — ${st}\n🆔 <code>${w.uid}</code>\n💰 ${fmtN(w.amount)} USDT${w.method === 'bank' ? ' → Bank transfer' : ' → ' + w.asset}\n${oatWdDestLines(w).detail}`,
-      { parse_mode: 'HTML', reply_markup: { inline_keyboard: [
-        [{ text: '✅ Approve', callback_data: `oatwd_appr_${w.id}` }, { text: '❌ Reject', callback_data: `oatwd_rej_${w.id}` }],
-        [{ text: '🔍 Under Review', callback_data: `oatwd_review_${w.id}` }, { text: '⏳ Processing', callback_data: `oatwd_proc_${w.id}` }]
-      ]}}).catch(()=>{});
-  }
-}
-
-async function oatUsersView() {
-  const supa = getSupabase();
-  const { data: ous } = await supa.from('oat_app_users')
-    .select('uid, name, balance, team_leader_uid').order('id', { ascending: false }).limit(30);
-  if (!ous || !ous.length) return { text: 'No OAT Trades users yet.', markup: null };
-  const auto = new Set(await oatAutoWdList());
-  const lines = ous.map(o => {
-    const on = auto.has(o.uid);
-    return (on ? '⚡' : '•') + ' <code>' + o.uid + '</code> ' + oatEsc(o.name) + ': '
-      + Number(o.balance).toLocaleString('en-US') + ' USDT' + (on ? '  <b>AUTO</b>' : '');
-  }).join('\n');
-  const kb = ous.map(o => [{
-    text: (auto.has(o.uid) ? '⚡ AUTO ON  ' : '○ AUTO OFF  ') + o.uid,
-    callback_data: 'oatauto_' + o.uid
-  }]);
-  return {
-    text: '📱 <b>OAT Trades users</b>\n\n' + lines
-      + '\n\n⚡ AUTO means their withdrawal is approved instantly and you get no request notice.\nTap any row below to switch it on or off.',
-    markup: { inline_keyboard: kb }
-  };
-}
 
     if (tUp.startsWith('OATUSERS')) {
       const view = await oatUsersView();
